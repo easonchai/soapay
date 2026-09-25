@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^2.1.1",
+    "@scopelift/stealth-address-sdk": "1.0.0-beta.5",
     "@soapay/sdk": "workspace:*",
     "hono": "^4.13.9",
     "viem": "^2.56.9"

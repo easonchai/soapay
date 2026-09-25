@@ -5,3 +5,4 @@
 - [Gateway mode](decision-gateway-announce.md) — out of scope under the coworker threat model; announce-at-resolve dormant
 - [ScopeLift ESM quirk](scopelift-sdk-esm-quirk.md) — bundle/inline/tsx the SDK; plain Node can't load it
 - [Open questions](prd-open-questions.md) — items not already tracked in CLAUDE.md or contracts/PLAN.md
+- [Frontend M1](decision-frontend-m1.md) — signature-derived keys, relayer in gateway, three sender modes, bounded scanner, UI tokens

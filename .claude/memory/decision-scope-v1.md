@@ -7,4 +7,4 @@ metadata:
 v1 = USDC on Base only (ETH later). Recipient key seed: PRD only says "single seed the employee backs up"; default is a BIP-39 mnemonic with fixed derivation paths, NOT yet confirmed by the team (2026-09-25).
 
 **Why:** USDC matches the USDC paymaster and the payroll wedge.
-**How to apply:** don't build ETH receive/spend paths in M1. Confirm the seed format before shipping key derivation. See [[prd-open-questions]].
+**How to apply:** don't build ETH receive/spend paths in M1. Confirm the seed format before shipping key derivation. The recipient app currently ships signature-derived keys; see [[decision-frontend-m1]]. See [[prd-open-questions]].

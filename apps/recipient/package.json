@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@soapay/sdk": "workspace:*",
+    "@soapay/ui": "workspace:*",
     "@tanstack/react-query": "^5.103.2",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
