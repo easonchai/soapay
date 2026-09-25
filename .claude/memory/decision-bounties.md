@@ -10,7 +10,7 @@ Main track (not Continuity). The owner chose these on 2026-09-25:
   - Proof of Human re-verification gates a meta-address change (salary-redirect protection, same nullifier as enrollment).
   - One sponsored registration and subname per human.
   - Verified server-side. The prize needs an alternative path in the demo and a debrief in the README.
-- **Uniswap API ($6k):**
+- **Uniswap API ($6k):** employee side ONLY (owner decision 2026-09-25; employer treasury-funding swap deferred).
   - Convert salary *in place* inside a stealth address (7702 userOp with approve + swap, USDC paymaster), so no clusters merge.
   - The preference stays local.
   - Needs FEEDBACK.md and the feedback form.
