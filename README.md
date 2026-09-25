@@ -85,6 +85,44 @@ FORK_E2E=1 pnpm --filter @soapay/sdk vitest run test/fork.e2e.test.ts
 
 The Trading API path is covered by mocked tests only so far (`pnpm --filter @soapay/sdk test`), because we have no API key yet. Keep the key server-side: pass `apiUrl` pointing at a backend proxy that adds `x-api-key`.
 
+## ENSv2 integration
+
+**Employees share a name, not an address.** A salary goes to `alice.soapay.eth`. The name is a real ENSv2 subname on Ethereum Sepolia, and its `stealth` text record holds Alice's stealth meta-address. The sender app resolves the name once, pins the meta-address, and derives a fresh stealth address for every payment. The name has no `addr` record, so a plain wallet can't pay a static address by mistake.
+
+ENSv2 is what makes this work without a trusted gateway. Its per-resource access control (EAC) lets us give each actor exactly one power:
+
+- **The employee controls their own record.** Each subname gets its own `PermissionedResolver`. The registrant key holds `ROLE_SET_TEXT` on the `stealth` key and nothing else, so only the employee can rotate their meta-address. Roles are per text key across the whole resolver, which is why every employee needs a separate resolver.
+- **The API can issue names and do nothing else.** Its key holds only `ROLE_REGISTRAR` on the `soapay.eth` subname registry. It can't edit or revoke existing names.
+- **Names are non-transferable and revocable.** The subname token carries an empty role bitmap. The company, which owns `soapay.eth`, keeps `ROLE_UNREGISTER`.
+- **Records land atomically.** The resolver is deployed through the `VerifiableFactory` with its records and roles set in `initialize`, before the name is registered.
+- **Standard resolution.** viem's `getEnsText` through the ENSv2 Universal Resolver, with no custom client code.
+
+A stolen registrant key can rewrite `stealth` but can't redirect pay: the sender app accepts a changed pin only with a World ID re-verification attestation or the employer's approval ([spec §2.1](docs/mvp-spec.md#21-key-rotation-under-option-a-owner-decision-2026-09-25)).
+
+| What | Code |
+| --- | --- |
+| Addresses, roles, call builders, `createEnsV2NameIssuer` | [`packages/sdk/src/ensv2.ts`](packages/sdk/src/ensv2.ts) |
+| Deployment set, role model, exact calls, trust analysis, runbook | [`contracts/ENSV2.md`](contracts/ENSV2.md) |
+| Sepolia fork test against the live ENSv2 contracts | [`contracts/test/ENSv2Names.fork.t.sol`](contracts/test/ENSv2Names.fork.t.sol) |
+| Scripts: register the parent, set it up, issue and rotate | [`contracts/tools/ensv2-*.ts`](contracts/tools) |
+
+The fork test buys the parent through the real `ETHRegistrar`, issues a name, resolves it through the Universal Resolver, rotates the record as the registrant, checks that a coworker and the issuer can't write it, and revokes it:
+
+```bash
+cd contracts
+SEPOLIA_RPC_URL=https://ethereum-sepolia-rpc.publicnode.com forge test --match-contract ENSv2 -vv
+```
+
+The scripts run against real Sepolia or an anvil fork of it. Use fresh keys: the public anvil keys are 7702-delegated on Sepolia and can't receive ENSv2 names. Full runbook in [`contracts/ENSV2.md` §6](contracts/ENSV2.md#6-team-runbook-real-sepolia).
+
+```bash
+cd contracts
+export SEPOLIA_RPC_URL=... PARENT_OWNER_PRIVATE_KEY=0x... ISSUER_ADDRESS=0x...
+pnpm ensv2:register-parent                           # commit/reveal soapay.eth
+pnpm ensv2:setup-parent                              # subname registry + issuer role
+ISSUER_PRIVATE_KEY=0x... pnpm ensv2:issue-demo alice # issue, resolve, rotate, resolve
+```
+
 ## Roadmap
 
 | Milestone | Delivers | Status |

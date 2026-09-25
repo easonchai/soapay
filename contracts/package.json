@@ -9,6 +9,10 @@
     "test:fork": "forge test --match-contract Fork -vv",
     "gas": "forge test --match-contract GasTest -vv",
     "derive": "tsx tools/derive.ts",
+    "test:ensv2": "forge test --match-contract ENSv2 -vv",
+    "ensv2:register-parent": "tsx tools/ensv2-register-parent.ts",
+    "ensv2:setup-parent": "tsx tools/ensv2-setup-parent.ts",
+    "ensv2:issue-demo": "tsx tools/ensv2-issue-demo.ts",
     "clean": "forge clean && rm -rf .turbo"
   },
   "dependencies": {
