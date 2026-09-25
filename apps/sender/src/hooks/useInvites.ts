@@ -31,7 +31,6 @@ export type InvitesState = {
   reinvite(id: string): Promise<InvitedEmployee | null>;
   /** Drops the row locally (the API reservation lapses at expiry). */
   remove(id: string): Promise<void>;
-  pollNow(): Promise<void>;
   dismissCreated(): void;
   clearError(): void;
 };
@@ -39,13 +38,15 @@ export type InvitesState = {
 export const INVITE_POLL_MS = 5_000;
 export const MOCK_INVITE_POLL_MS = 1_000;
 
-export function useInvites(opts: { pollMs?: number } = {}): InvitesState {
-  const { app, services, invites, employees, updateInvites, updateEmployees } = useStore();
+export function useInvites(): InvitesState {
+  const { app, services, invites, employees, updateInvites } = useStore();
   const wagmiConfig = useConfig();
   const { address } = useAccount();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [created, setCreated] = useState<InvitedEmployee | null>(null);
+  // The link card follows the vault: it disappears once the invite is enrolled or removed.
+  const [createdId, setCreatedId] = useState<string | null>(null);
+  const created = (createdId && invites.find((i) => i.id === createdId)) || null;
 
   const api = services.invites;
   const mockSigner = services.mock?.inviteSigner;
@@ -70,7 +71,7 @@ export function useInvites(opts: { pollMs?: number } = {}): InvitesState {
         { invites: invites.filter((i) => i.id !== replaceId), employees },
       );
       await updateInvites((list) => [...list.filter((i) => i.id !== replaceId), inv]);
-      setCreated(inv);
+      setCreatedId(inv.id);
       return inv;
     },
     [api, app.chainId, app.recipientUrl, employees, invites, signer, updateInvites],
@@ -114,12 +115,36 @@ export function useInvites(opts: { pollMs?: number } = {}): InvitesState {
     (id: string) =>
       guard(async () => {
         await updateInvites((list) => list.filter((i) => i.id !== id));
-        setCreated((c) => (c?.id === id ? null : c));
+        setCreatedId((c) => (c === id ? null : c));
       }, undefined),
     [guard, updateInvites],
   );
 
-  // Polling: one pass at a time; enrolls through the normal resolve-and-pin path.
+  return {
+    rows: invites.map((invite) => ({ invite, statusText: inviteStatusText(invite), canReinvite: invite.state.kind === "expired" })),
+    unavailable,
+    busy,
+    error,
+    created,
+    create,
+    reinvite,
+    remove,
+    dismissCreated: () => setCreatedId(null),
+    clearError: () => setError(null),
+  };
+}
+
+/**
+ * Polls GET /invites/:codeHash for every pending (or claimed-but-unverified) invite while the
+ * vault is open. On "claimed" the employee is enrolled through the normal resolve-and-pin
+ * path (lib/invites.ts pollInvite → enrollEmployee); on "expired" the row offers Re-invite.
+ * Mount once (App does), independently of which page is showing.
+ */
+export function useInvitePolling(opts: { pollMs?: number } = {}): { pollNow(): Promise<void> } {
+  const { phase, services, invites, employees, updateInvites, updateEmployees } = useStore();
+  const api = services.invites;
+
+  // One pass at a time; always reads the latest lists.
   const polling = useRef(false);
   const latest = useRef({ invites, employees });
   latest.current = { invites, employees };
@@ -131,23 +156,18 @@ export function useInvites(opts: { pollMs?: number } = {}): InvitesState {
     try {
       const outcomes = await pollInvites(todo, { api, resolve: services.resolve, roster: latest.current.employees });
       if (!outcomes.size) return;
-      let enrolled: ReturnType<typeof applyPollOutcomes>["enrolled"] = [];
-      await updateEmployees((cur) => {
-        const r = applyPollOutcomes([], cur, outcomes);
-        enrolled = r.enrolled;
-        return r.employees;
-      });
+      // Employees first: an enrolled invite must never vanish without its roster row.
+      await updateEmployees((cur) => applyPollOutcomes([], cur, outcomes).employees);
       await updateInvites((cur) => applyPollOutcomes(cur, [], outcomes).invites);
-      if (enrolled.length) setCreated((c) => (c && outcomes.has(c.id) ? null : c));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+    } catch {
+      // Vault locked mid-poll or a write failed: the next tick retries.
     } finally {
       polling.current = false;
     }
   }, [api, services.resolve, updateEmployees, updateInvites]);
 
   const pollMs = opts.pollMs ?? (services.mock ? MOCK_INVITE_POLL_MS : INVITE_POLL_MS);
-  const hasWork = invites.some(needsPolling);
+  const hasWork = phase === "ready" && invites.some(needsPolling);
   useEffect(() => {
     if (!api || !hasWork) return;
     void pollNow();
@@ -155,17 +175,5 @@ export function useInvites(opts: { pollMs?: number } = {}): InvitesState {
     return () => clearInterval(t);
   }, [api, hasWork, pollMs, pollNow]);
 
-  return {
-    rows: invites.map((invite) => ({ invite, statusText: inviteStatusText(invite), canReinvite: invite.state.kind === "expired" })),
-    unavailable,
-    busy,
-    error,
-    created,
-    create,
-    reinvite,
-    remove,
-    pollNow,
-    dismissCreated: () => setCreated(null),
-    clearError: () => setError(null),
-  };
+  return { pollNow };
 }

@@ -306,6 +306,7 @@ export async function pollInvites(
 /**
  * Applies outcomes to the CURRENT lists (which may have changed while polling): enrolled
  * and done invites leave the invite list, enrolled employees join the roster (never twice).
+ * The two lists are independent, so callers may apply them in two separate store updates.
  */
 export function applyPollOutcomes(
   invites: readonly InvitedEmployee[],
@@ -314,19 +315,17 @@ export function applyPollOutcomes(
 ): { invites: InvitedEmployee[]; employees: Employee[]; enrolled: Employee[] } {
   const nextEmployees = [...employees];
   const enrolled: Employee[] = [];
+  for (const o of outcomes.values()) {
+    if (o.kind === "enrolled" && !nextEmployees.some((e) => e.ensName === o.employee.ensName)) {
+      nextEmployees.push(o.employee);
+      enrolled.push(o.employee);
+    }
+  }
   const nextInvites: InvitedEmployee[] = [];
   for (const inv of invites) {
     const o = outcomes.get(inv.id);
-    if (!o) {
-      nextInvites.push(inv);
-    } else if (o.kind === "enrolled") {
-      if (!nextEmployees.some((e) => e.ensName === o.employee.ensName)) {
-        nextEmployees.push(o.employee);
-        enrolled.push(o.employee);
-      }
-    } else if (o.kind !== "done") {
-      nextInvites.push(o.invite);
-    }
+    if (!o) nextInvites.push(inv);
+    else if (o.kind === "updated" || o.kind === "unchanged") nextInvites.push(o.invite);
   }
   return { invites: nextInvites, employees: nextEmployees, enrolled };
 }
