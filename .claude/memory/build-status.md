@@ -103,3 +103,10 @@ metadata:
   - Verified in mock mode: an attested rotation auto-accepts with a badge, an unattested one is blocked with re-approve, the preview excludes blocked lines, and the small-team warning shows.
   - Not yet exercised: a real payment (needs a wallet plus a deployed StealthDisperse or a 5792 wallet). WalletConnect is optional and not installed.
   - Headless browse on this host needs GSTACK_CHROMIUM_NO_SANDBOX=1.
+- Checkpoint 6d: World ID MERGED (rotation-only Selfie Check design).
+  - Totals: SDK 171 / API 95 / sender 103 / contracts 31 tests; the whole monorepo builds and typechecks.
+  - API: optional session at POST /names or POST /names/:label/session (AttachSession signature). Rotation checks the session, rejects replayed nullifiers and nonces, signs the MetaRotation attestation, relays the ERC-6538 re-registration and tops up gas. The Uniswap proxy is at /uniswap/{quote,swap,check_approval}. The real ENSv2 issuer is used when ISSUER_PRIVATE_KEY + L1_RPC_URL are set (it never writes `stealth`).
+  - `@soapay/worldid-react` provides `<HumanCheck mode="create-session"|"rotate">`.
+  - Security decisions by the agent (accepted): a 72 h cooldown before a late-attached session can back a rotation (WORLD_ATTACH_COOLDOWN_SECONDS), and a name's session is never replaceable. Both stop a stolen registrant key from attaching its own session and rotating.
+  - WORLD_ENV accepts `sandbox`, since the World docs test Selfie Check there.
+  - Not yet run against a real simulator or World App.
