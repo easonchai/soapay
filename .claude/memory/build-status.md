@@ -39,3 +39,22 @@ metadata:
       - The stealth-writer role is ROLE_SET_TEXT (1<<4) on resource uint256(keccak256("stealth")); roles are per text key, not per name, hence one resolver per employee.
       - viem's default Sepolia UR routes to UniversalResolverV2, so names.ts is unchanged.
       - Remaining issuer trust: it can register new names with arbitrary roles, but can't touch existing ones.
+  - `worktree-agent-a3a64cc3c96a4e07e` @ 3873bfc, World ID.
+    - Done: hooks (verifier gets label/meta/deadline; the approval's `commit()` runs only after the relay or issue succeeds), a DB migration, deps. Unbuilt; hooks.test needs updating.
+    - Remaining: humanVerifier/worldid.ts, POST /worldid/rp-context and GET /worldid/config, env wiring, denied-path tests, `@soapay/worldid-react` <HumanCheck>, docs/worldid.md.
+    - Facts:
+      - IDKit 4.3.0 and @worldcoin/idkit-server 1.1.1 (JS signRequest).
+      - 4.0 proofs are verifiable on-chain only on World Chain/Arc, so there's NO on-chain guard on Sepolia and the API is the gate.
+      - Sessions support proof_of_human via `constraints` on IDKitSessionWidget.
+      - Use text signals like `soapay:enroll:0x…` (0x-hex signals are hashed as raw bytes).
+  - `worktree-agent-a9dcd3f946c93c07a` @ a427e16, Uniswap.
+    - Done: executeFromStealth, swap.ts (Trading API or UR 2.1.2 V3 fallback; recipient must be the stealth address; slippage ≤ 500 bps), 110 SDK tests passing.
+    - FORK E2E 3/3 on Base: 7702 delegation in the same tx, Circle fee 0.0056 USDC, the stealth address never held ETH, swaps to WETH and to native ETH land at the stealth address.
+    - **The USDC permit via ERC-1271 from a Simple7702Account DOES validate**, so CLAUDE.md's "7702 permits fail" note is wrong for our delegate; update it with this evidence.
+    - The Trading API supports Base AND Base Sepolia (header x-api-key).
+    - Remaining: FEEDBACK.md, a final commit, `export * from "./swap.js"`.
+  - `worktree-agent-adfea39557c51d51f` @ 92700d5, sender app.
+    - Done: lib layer (amount, csv, vault, roster pin/block, paypath, run/retry, execute, safeExport) and tests; nothing has been run yet.
+    - Remaining: the test script, the entire UI (wagmi, pages), build/test/screenshot.
+    - SDK gap: no StealthDisperse address or predicted CREATE2 address in CHAINS.
+- OPEN DESIGN QUESTION (for the owner): who holds the ENSv2 `stealth` writer role, given World ID can't be verified on-chain on Sepolia? See the chat on 2026-09-25; the recommendation is that the registrant keeps it and the sender app is the enforcement point, auto-accepting a changed pin only with an API World ID attestation.
