@@ -10,4 +10,5 @@ export * from './batch/buildCalls.js';
 export * from './batch/sendCalls.js';
 export * from './store/recipientStore.js';
 export * from './store/senderStore.js';
+export * from './store/companyStore.js';
 export * from './format.js';
