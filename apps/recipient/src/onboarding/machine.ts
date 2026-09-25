@@ -9,6 +9,9 @@
  * machine (the vault holds it, encrypted). The seed is shown exactly once, in `backup`.
  */
 import type { Profile } from "../vault/types.js";
+import type { HumanCheckResult } from "../worldid/types.js";
+
+type Proof = HumanCheckResult | undefined;
 
 export type Origin = "create" | "restore";
 
@@ -18,9 +21,9 @@ export type OnboardingState =
   | { step: "confirm"; mnemonic: string; challenge: number[]; error: string | null; attempts: number }
   | { step: "restore"; error: string | null }
   | { step: "passphrase"; mnemonic: string; origin: Origin }
-  | { step: "human"; proof: unknown }
-  | { step: "register"; proof: unknown }
-  | { step: "name"; proof: unknown }
+  | { step: "human"; proof: Proof }
+  | { step: "register"; proof: Proof }
+  | { step: "name"; proof: Proof }
   | { step: "share" }
   | { step: "done" };
 
@@ -32,7 +35,7 @@ export type OnboardingEvent =
   | { type: "RESTORE_SUBMIT"; mnemonic: string; valid: boolean }
   | { type: "BACK" }
   | { type: "VAULT_CREATED" }
-  | { type: "HUMAN_VERIFIED"; proof: unknown }
+  | { type: "HUMAN_VERIFIED"; proof: Proof }
   | { type: "REGISTERED" }
   | { type: "NAMED" }
   | { type: "SKIP_NAME" }

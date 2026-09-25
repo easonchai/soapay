@@ -5,7 +5,7 @@ import { useServices } from "../services/ServicesProvider.js";
 import { useVault } from "../vault/VaultProvider.js";
 import { MIN_PASSPHRASE_LENGTH } from "../vault/crypto.js";
 import { Alert, Button, Card, Checkbox, CopyButton, Field, Input, Textarea, cn, errorMessage } from "../ui/kit.js";
-import { HumanVerification } from "./HumanVerification.js";
+import { HumanCheck, enrollSignal, sessionIdOf, type HumanCheckResult } from "../worldid/index.js";
 import { claimName, fullName, registerMetaAddress } from "./actions.js";
 import { initialState, pickChallenge, progressOf, reduce, resumeState, words, type OnboardingState } from "./machine.js";
 import { useLabelAvailability } from "./useLabelAvailability.js";
@@ -355,32 +355,39 @@ function PassphraseStep({ mnemonic, dispatch, headingRef }: { mnemonic: string }
 
 function HumanStep({ dispatch, headingRef }: Omit<StepProps, "state">) {
   const vault = useVault();
-  const [busy, setBusy] = useState(false);
-  const signal = vault.keys?.registrantAddress ?? "";
+  const svc = useServices();
+  const [error, setError] = useState<string | null>(null);
+  const signal = enrollSignal(vault.keys?.registrantAddress ?? "");
   return (
     <Frame headingRef={headingRef} title="One person, one account" lead="A quick uniqueness check before we pay your registration gas.">
-      <HumanVerification
-        action="soapay-enroll"
+      <HumanCheck
+        mode="enroll"
+        apiUrl={svc.settings.apiUrl}
         signal={signal}
-        busy={busy}
-        onVerified={async (proof) => {
-          setBusy(true);
-          try {
-            await vault.update((d) => ({
-              ...d,
-              profile: { ...d.profile, human: { kind: proof === undefined ? "placeholder" : "world-id", at: Date.now() } },
-            }));
-            dispatch({ type: "HUMAN_VERIFIED", proof });
-          } finally {
-            setBusy(false);
-          }
+        onError={(e) => setError(errorMessage(e))}
+        onResult={async (r: HumanCheckResult) => {
+          setError(null);
+          const sessionId = sessionIdOf(r);
+          await vault.update((d) => ({
+            ...d,
+            profile: {
+              ...d.profile,
+              human: { kind: r.placeholder ? "placeholder" : "world-id", at: Date.now(), ...(sessionId ? { sessionId } : {}) },
+            },
+          }));
+          dispatch({ type: "HUMAN_VERIFIED", proof: r });
         }}
       />
+      {error && (
+        <Alert variant="destructive" title="World ID check failed">
+          {error}
+        </Alert>
+      )}
     </Frame>
   );
 }
 
-function RegisterStep({ proof, dispatch, headingRef }: { proof: unknown } & Omit<StepProps, "state">) {
+function RegisterStep({ proof, dispatch, headingRef }: { proof: HumanCheckResult | undefined } & Omit<StepProps, "state">) {
   const vault = useVault();
   const svc = useServices();
   const [busy, setBusy] = useState(false);
@@ -390,7 +397,7 @@ function RegisterStep({ proof, dispatch, headingRef }: { proof: unknown } & Omit
     setBusy(true);
     setError(null);
     try {
-      const r = await registerMetaAddress({ api: svc.api, client: svc.client, keys, chainId: svc.settings.chainId, proof });
+      const r = await registerMetaAddress({ api: svc.api, client: svc.client, keys, chainId: svc.settings.chainId, human: proof });
       await vault.update((d) => ({
         ...d,
         profile: { ...d.profile, registration: { txHash: r.txHash, status: r.status, chainId: svc.settings.chainId, at: Date.now() } },
@@ -440,7 +447,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function NameStep({ proof, dispatch, headingRef }: { proof: unknown } & Omit<StepProps, "state">) {
+function NameStep({ proof, dispatch, headingRef }: { proof: HumanCheckResult | undefined } & Omit<StepProps, "state">) {
   const vault = useVault();
   const svc = useServices();
   const keys = vault.keys!;
@@ -456,7 +463,7 @@ function NameStep({ proof, dispatch, headingRef }: { proof: unknown } & Omit<Ste
     setBusy(true);
     setError(null);
     try {
-      const rec = await claimName({ api: svc.api, keys, chainId: svc.settings.chainId, label, proof });
+      const rec = await claimName({ api: svc.api, keys, chainId: svc.settings.chainId, label, human: proof });
       await vault.update((d) => ({ ...d, profile: { ...d.profile, name: { label, name: rec.name ?? fullName(label), at: Date.now() } } }));
       dispatch({ type: "NAMED" });
     } catch (err) {

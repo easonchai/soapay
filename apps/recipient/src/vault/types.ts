@@ -14,6 +14,10 @@ export type Settings = {
   stealthDisperse: Address[];
   /** Employer addresses the user recognises. Anything else is flagged "unknown payer". */
   knownPayers: { address: Address; name: string }[];
+  /** Ethereum Sepolia JSON-RPC for the ENSv2 `stealth` record write during rotation. Empty = public RPC. */
+  l1RpcUrl: string;
+  /** Uniswap Trading API key. Optional: without it, swaps route through the Universal Router fallback. */
+  uniswapApiKey: string;
 };
 
 export type StoredAnnouncement = Omit<AnnouncementRecord, "blockNumber"> & { blockNumber: string };
@@ -28,19 +32,49 @@ export type ChainState = {
   balancesAt: number | null;
   /** Consolidation guard state (clusters + labels). */
   graph: ClusterGraphJSON | null;
+  /** Local spend history (never leaves the device). Optional for vaults created before it existed. */
+  spends?: SpendRecord[];
+};
+
+export type SpendRecord = {
+  at: number;
+  to: Address;
+  /** One entry per source that actually sent. */
+  parts: { from: Address; amount: string; txHash?: Hex; userOpHash: Hex }[];
+  /** Set when the run stopped early (SpendManyError). */
+  failed?: { from: Address; message: string };
+  override: boolean;
 };
 
 export type Profile = {
   registration?: { txHash: Hex; status: string; chainId: number; at: number };
   name?: { label: string; name: string; at: number };
-  /** World ID enrollment. `placeholder` until IDKit is wired. */
-  human?: { kind: "world-id" | "placeholder"; at: number };
+  /** World ID enrollment. `placeholder` until IDKit is wired. `sessionId` is needed to rotate keys (§2.1). */
+  human?: { kind: "world-id" | "placeholder"; at: number; sessionId?: string };
+  /** Which derived key set the name currently points at: 0 = the original keys (see features/rotation/keys.ts). */
+  keyGeneration?: number;
+  /** Completed meta-address rotations, oldest first. */
+  rotations?: RotationRecord[];
+  /** A rotation the API accepted whose on-chain `setText` has not landed yet. Resume it from Name settings. */
+  pendingRotation?: PendingRotation;
   /** Set once the user has confirmed the seed backup. The seed is never shown again. */
   backupConfirmedAt?: number;
   /** The user chose to share the raw meta-address instead of claiming a name. */
   nameSkipped?: boolean;
   onboardedAt?: number;
 };
+
+export type RotationRecord = {
+  generation: number;
+  oldMeta: string;
+  newMeta: string;
+  at: number;
+  setTextTx?: Hex;
+  /** MetaRotation attestation from the API, when it returned one. */
+  attestation?: unknown;
+};
+
+export type PendingRotation = Omit<RotationRecord, "at" | "setTextTx"> & { postedAt: number };
 
 export type VaultData = {
   version: 1;
@@ -61,7 +95,14 @@ export function defaultSettings(): Settings {
     useRpcAnnouncements: false,
     stealthDisperse: [],
     knownPayers: [],
+    l1RpcUrl: ENV.l1RpcUrl,
+    uniswapApiKey: ENV.uniswapApiKey,
   };
+}
+
+/** Settings with defaults filled in, so vaults written by older builds keep working. */
+export function settingsOf(data: Pick<VaultData, "settings"> | null | undefined): Settings {
+  return { ...defaultSettings(), ...(data?.settings ?? {}) };
 }
 
 export function emptyChainState(): ChainState {

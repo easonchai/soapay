@@ -21,8 +21,10 @@ export type RegisterBody = {
   registrant: Address;
   metaAddress: string;
   signature: Hex;
-  /** World ID proof (IDKit), passed through to the API's HumanVerifier. */
+  /** World ID uniqueness proof (IDKit), passed through to the API's HumanVerifier. */
   proof?: unknown;
+  /** World ID session result from enrollment (kept by the API to gate rotation, §2.1). */
+  session?: unknown;
 };
 export type RegisterResult = { txHash: Hex; status: string; idempotent?: boolean };
 
@@ -34,6 +36,24 @@ export type NameClaimBody = {
   deadline: string;
   signature: Hex;
   proof?: unknown;
+  session?: unknown;
+};
+
+/** POST /names/:label/rotation (docs/mvp-spec.md §2.1). */
+export type RotationBody = {
+  newMeta: string;
+  /** uint256 unix seconds as a decimal string. */
+  deadline: string;
+  /** EIP-712 RotationClaim signed by the registrant key. */
+  registrantSig: Hex;
+  /** `proveSession` result for the enrolled session. */
+  worldIdResult?: unknown;
+};
+/** The API issues a MetaRotation attestation; the response wrapper may still change, so fields are optional. */
+export type RotationResult = {
+  attestation?: { label: string; oldMeta: string; newMeta: string; verifiedAt: string; signature: Hex };
+  /** Sepolia gas top-up the API sent to the registrant for the setText, if any. */
+  fundingTxHash?: Hex;
 };
 export type NameRecord = {
   label: string;
@@ -91,6 +111,8 @@ export function createApi(apiUrl: string, fetchFn: ApiFetch = (i, init) => fetch
   return {
     register: (body: RegisterBody) => call<RegisterResult>(fetchFn, `${root}/register`, json(body)),
     claimName: (body: NameClaimBody) => call<NameRecord>(fetchFn, `${root}/names`, json(body)),
+    rotate: (label: string, body: RotationBody) =>
+      call<RotationResult>(fetchFn, `${root}/names/${encodeURIComponent(label)}/rotation`, json(body)),
     /** null when the label is free. */
     async getName(label: string): Promise<NameRecord | null> {
       try {

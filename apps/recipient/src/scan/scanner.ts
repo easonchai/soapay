@@ -26,7 +26,7 @@ import {
 } from "@soapay/sdk";
 import type { Address } from "viem";
 import { annKey, storeAnnouncement, toScanMatch, type ChainState, type StoredBalance } from "../vault/types.js";
-import type { PoolProgress, ScanPool } from "./pool.js";
+import type { PoolProgress, PoolResult, ScanPool } from "./pool.js";
 
 export type ScanPhase =
   | { phase: "head" }
@@ -44,7 +44,8 @@ export type ScanDeps = {
   fetch: FetchLike;
   client: ScanClient;
   pool: Pick<ScanPool, "scan">;
-  keys: ScanKeys;
+  /** One key set, or every generation after a rotation (old payments still arrive at old meta-addresses). */
+  keys: ScanKeys | readonly ScanKeys[];
   signal?: AbortSignal;
   onPhase?: (p: ScanPhase) => void;
   /** RPC getLogs range per request. */
@@ -126,11 +127,24 @@ export async function runScan(prev: ChainState, deps: ScanDeps, opts: { full?: b
   let fetched: AnnouncementRecord[] = [];
   if (head === null || start <= head) fetched = await fetchRange(deps, start, head);
 
-  deps.onPhase?.({ phase: "scanning", progress: { scanned: 0, total: fetched.length } });
-  const scan = await deps.pool.scan(fetched, deps.keys, {
-    onProgress: (progress) => deps.onPhase?.({ phase: "scanning", progress }),
-    ...(deps.signal ? { signal: deps.signal } : {}),
-  });
+  const keySets: readonly ScanKeys[] = Array.isArray(deps.keys) ? deps.keys : [deps.keys as ScanKeys];
+  const total = fetched.length * keySets.length;
+  deps.onPhase?.({ phase: "scanning", progress: { scanned: 0, total } });
+  const scan: PoolResult = { matches: [], stats: { scanned: 0, malformed: 0, fullChecks: 0, matches: 0 }, ms: 0, workers: 0 };
+  for (const [i, keys] of keySets.entries()) {
+    const offset = i * fetched.length;
+    const r = await deps.pool.scan(fetched, keys, {
+      onProgress: (p) => deps.onPhase?.({ phase: "scanning", progress: { scanned: offset + p.scanned, total } }),
+      ...(deps.signal ? { signal: deps.signal } : {}),
+    });
+    scan.matches.push(...r.matches);
+    scan.stats.scanned += r.stats.scanned;
+    scan.stats.malformed += r.stats.malformed;
+    scan.stats.fullChecks += r.stats.fullChecks;
+    scan.stats.matches += r.stats.matches;
+    scan.ms += r.ms;
+    scan.workers = Math.max(scan.workers, r.workers);
+  }
 
   // Merge with what we already had; dedupe by (txHash, logIndex).
   const merged = new Map(base.matches.map((a) => [annKey(a), a]));

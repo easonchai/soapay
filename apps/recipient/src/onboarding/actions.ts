@@ -7,6 +7,16 @@ import {
   type SoapayKeys,
 } from "@soapay/sdk";
 import { ApiError, type Api, type NameRecord, type RegisterResult } from "../api/client.js";
+import type { HumanCheckResult } from "../worldid/types.js";
+
+/** Enrollment World ID fields for POST /register and POST /names: `proof` (uniqueness) + `session`. */
+export function humanFields(human: HumanCheckResult | undefined): { proof?: unknown; session?: unknown } {
+  if (!human || human.placeholder) return {};
+  return {
+    ...(human.proof !== undefined ? { proof: human.proof } : {}),
+    ...(human.session !== undefined ? { session: human.session } : {}),
+  };
+}
 
 /**
  * Gasless ERC-6538 registration: the throwaway registrant signs EIP-712 locally; the API's relayer
@@ -18,21 +28,24 @@ export async function registerMetaAddress(p: {
   client: RegistryReader;
   keys: SoapayKeys;
   chainId: number;
-  proof?: unknown;
+  human?: HumanCheckResult | undefined;
+  /** Register a different meta-address for the same registrant (key rotation). Default: the keys' own. */
+  metaAddressURI?: string;
 }): Promise<RegisterResult> {
+  const metaAddressURI = p.metaAddressURI ?? p.keys.metaAddressURI;
   const nonce = await getRegistryNonce(p.client, p.keys.registrantAddress);
   const signature = await signRegisterKeysOnBehalf({
     registrantKey: p.keys.registrantKey,
-    metaAddressURI: p.keys.metaAddressURI,
+    metaAddressURI,
     chainId: p.chainId,
     nonce,
   });
   try {
     return await p.api.register({
       registrant: p.keys.registrantAddress,
-      metaAddress: p.keys.metaAddressURI,
+      metaAddress: metaAddressURI,
       signature,
-      ...(p.proof !== undefined ? { proof: p.proof } : {}),
+      ...humanFields(p.human),
     });
   } catch (e) {
     // Restoring a seed that is already registered is fine.
@@ -49,7 +62,7 @@ export async function claimName(p: {
   keys: SoapayKeys;
   chainId: number;
   label: string;
-  proof?: unknown;
+  human?: HumanCheckResult | undefined;
   now?: number;
 }): Promise<NameRecord> {
   const deadline = BigInt(Math.floor((p.now ?? Date.now()) / 1000)) + CLAIM_TTL_SECONDS;
@@ -67,7 +80,7 @@ export async function claimName(p: {
     metaAddress: p.keys.metaAddressURI,
     deadline: deadline.toString(),
     signature,
-    ...(p.proof !== undefined ? { proof: p.proof } : {}),
+    ...humanFields(p.human),
   });
 }
 
