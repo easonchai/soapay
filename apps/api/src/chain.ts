@@ -11,6 +11,8 @@ export type ReadClient = {
   waitForTransactionReceipt(args: { hash: Hash; timeout?: number }): Promise<{ status: "success" | "reverted"; blockNumber: bigint }>;
   getBlockNumber(args?: any): Promise<bigint>;
   getLogs(args: any): Promise<Log[]>;
+  /** EIP-712 check that also covers ERC-1271 / ERC-6492 smart wallets (invites). */
+  verifyTypedData(args: any): Promise<boolean>;
 };
 
 /** The slice of a viem WalletClient (with a local relayer account) the API uses. */

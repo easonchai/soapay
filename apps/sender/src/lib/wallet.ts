@@ -10,6 +10,7 @@ import {
   readContract,
   sendCalls,
   sendTransaction,
+  signTypedData,
   waitForCallsStatus,
   waitForTransactionReceipt,
 } from "wagmi/actions";
@@ -18,6 +19,7 @@ import { erc20Abi, parseAbi, type Address, type Hash } from "viem";
 import type { BatchOutcome, ExecDeps, RecheckDeps } from "./execute.js";
 import { classifyAccountCode, selectPayPath, type AccountKind, type PayPath } from "./paypath.js";
 import type { AppConfig } from "../config.js";
+import type { InviteSigner } from "@soapay/sdk";
 
 const safeProbeAbi = parseAbi(["function getThreshold() view returns (uint256)"]);
 
@@ -110,4 +112,9 @@ export async function readFunding(config: Config, app: AppConfig, account: Addre
     getGasPrice(config, { chainId }).catch(() => null),
   ]);
   return { usdcBalance, allowance, ethBalance: eth?.value ?? null, gasPrice };
+}
+
+/** EIP-712 signer over the connected wagmi wallet (invites; smart wallets sign via ERC-1271). */
+export function wagmiTypedDataSigner(config: Config): InviteSigner {
+  return { signTypedData: (args) => signTypedData(config, args as Parameters<typeof signTypedData>[1]) };
 }

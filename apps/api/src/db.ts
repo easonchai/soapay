@@ -119,6 +119,21 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX attestations_label ON attestations(label, id);
   `,
+  // Employer invite links (docs/mvp-spec.md §7). The code itself is never stored, only its hash.
+  `
+  CREATE TABLE invites (
+    code_hash     TEXT PRIMARY KEY,       -- keccak256(code), lowercase 0x hex
+    label         TEXT NOT NULL,
+    employer      TEXT NOT NULL,          -- checksummed address that signed the Invite
+    org           TEXT,                   -- display name, optional
+    expires_at    INTEGER NOT NULL,       -- unix seconds
+    signature     TEXT NOT NULL,
+    created_at    INTEGER NOT NULL,
+    claimed_at    INTEGER,
+    claimed_by    TEXT                    -- registrant that claimed the label
+  );
+  CREATE INDEX invites_label ON invites(label, expires_at);
+  `,
 ];
 
 export function migrate(db: Db): void {

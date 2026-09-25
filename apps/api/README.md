@@ -57,6 +57,7 @@ docker run -p 8787:8787 -v soapay-data:/data --env-file apps/api/.env soapay-api
 | `RATE_LIMIT_WINDOW_SECONDS` | `3600` | Fixed window |
 | `RATE_LIMIT_REGISTER_PER_IP` / `_PER_REGISTRANT` | `3` / `3` | |
 | `RATE_LIMIT_NAMES_PER_IP` | `10` | Also covers `/names/:label/session` and `/rotation` |
+| `RATE_LIMIT_INVITES_PER_EMPLOYER` / `_PER_IP` | `50` / `20` | `POST /invites`. The employer bucket counts only validly signed invites |
 | `INDEXER_ENABLED` | `true` | |
 | `INDEXER_START_BLOCK` | Announcer start block for the chain | |
 | `INDEXER_CHUNK_SIZE` | `10000` | Max `getLogs` range, halved on provider range errors (persisted) |
@@ -108,6 +109,21 @@ Body: `{label, registrant, metaAddress, deadline, signature, worldIdSession?, pr
 - **Hooks.** The `HumanVerifier` runs with `action: "name"` for a new label and `"update-meta"` for an update, and any nullifier it returns is stored. `NameIssuer.issue` runs for a new label and `NameIssuer.updateMeta?` for an update. If the issuer throws, the response is 502 and nothing is stored.
 - **World ID (optional).** `worldIdSession` is an IDKit Selfie Check session result (created with `signal = sessionSignal(label, registrant)`). It's verified with the Developer Portal before anything is issued, and its `session_id` is bound to the name. Not allowed on updates; use `POST /names/:label/session`.
 - **Responses.** 201 when a label is created, 200 on update or an identical retry: `{label, name, registrant, metaAddress, deadline, txHash, createdAt, updatedAt, worldIdSession: {attachedAt} | null}`. The session id itself is never served.
+
+- **Invites (§7).** Optional `inviteCode` (0x-hex, 32 bytes). A new label reserved by an unexpired invite needs the code whose `keccak256` matches: no code → 403 `label_reserved`, another code → 403 `invalid_invite_code`. The invite is marked claimed in the same transaction as the name insert, so a failed issuance leaves it pending. A code for an expired invite → 409 `invite_expired` (the label is free again; claim it without the code), a claimed one → 409 `invite_claimed`, a code for another label → 403 `invite_label_mismatch`. Unreserved labels need no code; updates of an existing name ignore invites.
+
+### `POST /invites`
+
+Body: `{label, employer, codeHash, expiresAt, signature, org?}`. The employer's connected wallet signs EIP-712 `Invite(string label,address employer,bytes32 codeHash,uint256 expiresAt)` in the NameClaim domain (`{name: "Soapay Names", version: "1", chainId: CHAIN_ID}`); `codeHash = keccak256(code)` for 32 random bytes the sender app keeps. The API only ever sees the hash until the claim.
+
+- **Signature.** Checked with `@soapay/sdk` `verifyInvite` through the public client's `verifyTypedData`, so ERC-1271 smart wallets and ERC-6492 counterfactual ones work as well as EOAs. Invalid → 401 `bad_signature`.
+- **Checks.** Label rules as for names; `now < expiresAt <= now + 30 days` (400 `expired` / `expiry_too_far`; the SDK default is 14 days); `org` at most 64 printable characters. The label must not be a name (409 `label_taken`) or reserved by another unexpired invite (409 `label_reserved`). A reused `codeHash` → 409 `code_exists`; an identical retry → 200.
+- **Rate limits.** Per IP before the signature check, per employer after it (so junk signatures can't burn an employer's quota).
+- **Response.** 201 `{codeHash, expiresAt}`.
+
+### `GET /invites/:codeHash`
+
+`{codeHash, label, employer, org?, expiresAt, status: "pending" | "claimed" | "expired", name?}`; `name` (`<label>.<parent>`) once claimed. 404 when unknown. The sender app polls this; the recipient app reads it from the code in the link (the link's `label` and `org` are display hints only).
 
 ### `GET /worldid/config`
 
