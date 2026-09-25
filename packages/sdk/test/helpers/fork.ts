@@ -29,12 +29,14 @@ export const env = (globalThis as unknown as { process: { env: Record<string, st
 
 export type Anvil = { url: string; stop: () => void };
 
-export async function startAnvil(): Promise<Anvil> {
+/** Starts anvil forking `upstream` (default: FORK_RPC_URL or Base mainnet) and waits for `chain`. */
+export async function startAnvil(opts: { upstream?: string; chain?: Chain } = {}): Promise<Anvil> {
+  const chain = opts.chain ?? base;
   const { spawn } = (await import("node:child_process" as string)) as {
     spawn: (cmd: string, args: string[], opts: object) => { kill: () => void; on: (e: string, f: (...a: unknown[]) => void) => void };
   };
   const port = 20_000 + Math.floor(Math.random() * 20_000);
-  const upstream = env.FORK_RPC_URL ?? "https://mainnet.base.org";
+  const upstream = opts.upstream ?? env.FORK_RPC_URL ?? "https://mainnet.base.org";
   const child = spawn("anvil", ["--fork-url", upstream, "--port", String(port), "--silent"], { stdio: "ignore" });
   let exited = false;
   child.on("exit", () => (exited = true));
@@ -43,7 +45,7 @@ export async function startAnvil(): Promise<Anvil> {
   for (let i = 0; i < 120; i++) {
     if (exited) throw new Error("anvil exited early (is Foundry installed?)");
     try {
-      if ((await probe.getChainId()) === base.id) return { url, stop: () => child.kill() };
+      if ((await probe.getChainId()) === chain.id) return { url, stop: () => child.kill() };
     } catch {
       /* not up yet */
     }
@@ -54,10 +56,10 @@ export async function startAnvil(): Promise<Anvil> {
 }
 
 /** Minimal in-process bundler: fixed gas estimates, handleOps via a type-4 tx, receipts from logs. */
-export function selfBundler(publicClient: PublicClient<Transport, Chain>, anvilUrl: string) {
+export function selfBundler(publicClient: PublicClient<Transport, Chain>, anvilUrl: string, chain: Chain = base) {
   const bundlerKey = generatePrivateKey();
   const bundler = privateKeyToAccount(bundlerKey);
-  const wallet = createWalletClient({ account: bundler, chain: base, transport: http(anvilUrl) });
+  const wallet = createWalletClient({ account: bundler, chain, transport: http(anvilUrl) });
   const receipts = new Map<string, unknown>();
   const txs: { hash: Hex; authorization: boolean }[] = [];
 
@@ -66,7 +68,7 @@ export function selfBundler(publicClient: PublicClient<Transport, Chain>, anvilU
       const p = (params ?? []) as unknown[];
       switch (method) {
         case "eth_chainId":
-          return numberToHex(base.id);
+          return numberToHex(chain.id);
         case "eth_supportedEntryPoints":
           return [ENTRYPOINT_V08];
         case "eth_estimateUserOperationGas":

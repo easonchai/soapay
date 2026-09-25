@@ -12,3 +12,4 @@ coverage/
 .claude/worktrees/
 .gstack/
 apps/mcp/.state/
+.exit-live.json
