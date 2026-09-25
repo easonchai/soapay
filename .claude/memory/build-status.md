@@ -147,3 +147,4 @@ metadata:
   - Fixed: the sender app now waits for the approval to be visible before `pay` (the same load-balanced RPC lag).
   - **Tailscale demo:** `scripts/build-demo.sh <origin>` + `node scripts/serve-demo.mjs` (:4300) + `tailscale serve --bg --https=9443 http://127.0.0.1:4300`, giving https://yudhishthra-eth.taila3275f.ts.net:9443/ (recipient), /sender/, /api. Ports 443, 8443 and 8445 belong to other services; don't touch them.
   - The API must run as `node --env-file=.env dist/index.js` in apps/api; local .env rate limits are relaxed for the demo.
+- Checkpoint 11 (2026-09-26): `main` has CK's frontend (#2, #3, #5): his own apps, `packages/ui`, duplicate SDK modules, wallet-signature keys, the old StealthDisperse ABI. A trial merge conflicts in about 20 files. The owner said to push and leave a divergence note (docs/DIVERGENCE.md) and a PR for CK instead of force-merging. Merge direction proposed: our SDK/API as the base plus CK's visual layer.
