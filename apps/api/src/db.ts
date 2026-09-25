@@ -77,6 +77,53 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (bucket, key)
   );
   `,
+  // World ID (src/worldid/*). Nullifiers and session ids only, never identity.
+  `
+  -- Every RP context we signed. A proof must echo one of our nonces, of the right kind,
+  -- and each nonce is accepted at most once.
+  CREATE TABLE worldid_requests (
+    nonce         TEXT PRIMARY KEY,       -- lowercase 0x hex field element
+    kind          TEXT NOT NULL,          -- uniqueness | session
+    action        TEXT,                   -- uniqueness only
+    created_at    INTEGER NOT NULL,
+    expires_at    INTEGER NOT NULL,
+    used_at       INTEGER
+  );
+
+  -- One row per verified human: the enroll uniqueness proof. The nullifier is a 256-bit
+  -- field element stored as a canonical decimal string (SQLite has no NUMERIC(78,0)).
+  CREATE TABLE worldid_humans (
+    action          TEXT NOT NULL,
+    nullifier       TEXT NOT NULL,
+    registrant      TEXT NOT NULL UNIQUE,  -- the key the proof's signal is bound to
+    session_id      TEXT NOT NULL UNIQUE,  -- the session created at enrollment
+    verified_at     INTEGER NOT NULL,
+    registered_at   INTEGER,               -- set by commit() after the sponsored /register tx
+    label           TEXT UNIQUE,           -- set by commit() after the one subname is stored
+    UNIQUE (action, nullifier)
+  );
+
+  -- Per-proof replay protection for session proofs (create and prove).
+  CREATE TABLE worldid_session_nullifiers (
+    session_nullifier TEXT PRIMARY KEY,   -- decimal string
+    session_id        TEXT NOT NULL,
+    at                INTEGER NOT NULL
+  );
+
+  -- MetaRotation attestations (docs/mvp-spec.md §2.1), signed by ATTESTER_PRIVATE_KEY.
+  CREATE TABLE attestations (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    label        TEXT NOT NULL,
+    old_meta     TEXT NOT NULL,
+    new_meta     TEXT NOT NULL,
+    verified_at  INTEGER NOT NULL,
+    attester     TEXT NOT NULL,
+    signature    TEXT NOT NULL,
+    session_nullifier TEXT NOT NULL,
+    topup_tx     TEXT
+  );
+  CREATE INDEX attestations_label ON attestations(label, id);
+  `,
 ];
 
 export function migrate(db: Db): void {

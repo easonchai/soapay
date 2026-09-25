@@ -25,15 +25,38 @@ export class NoopNameIssuer implements NameIssuer {
 
 export type HumanAction = "register" | "name" | "update-meta";
 
-export type HumanVerdict = { ok: true; nullifier?: string } | { ok: false; reason: string };
+export type HumanCheck = {
+  action: HumanAction;
+  registrant: Address;
+  /** The raw `proof` field of the request body, passed through untouched. */
+  proof?: unknown;
+  /** POST /names only: the label being claimed or updated. */
+  label?: string;
+  /** POST /names only: the canonical meta-address URI being set. */
+  metaAddress?: string;
+  /** POST /names only: the NameClaim deadline. */
+  deadline?: bigint;
+};
+
+export type HumanVerdict =
+  | {
+      ok: true;
+      nullifier?: string;
+      /**
+       * Records that the scarce benefit was actually granted (relayer tx sent, name stored).
+       * The route calls it only after success, so a failed send or issuance never burns
+       * the human's one-time allowance. Must be synchronous (it runs inside a DB transaction).
+       */
+      commit?: () => void;
+    }
+  | { ok: false; reason: string; code?: string };
 
 /**
- * Proof-of-personhood hook (World ID later). Called by POST /register and POST /names
- * after input validation and before anything is sent or stored. `proof` is the raw
- * `proof` field of the request body, passed through untouched.
+ * Proof-of-personhood hook (World ID: `humanVerifier/worldid.ts`). Called by POST /register
+ * and POST /names after input validation and before anything is sent or stored.
  */
 export interface HumanVerifier {
-  verify(args: { action: HumanAction; registrant: Address; proof?: unknown }): Promise<HumanVerdict>;
+  verify(args: HumanCheck): Promise<HumanVerdict>;
 }
 
 export const allowAllVerifier: HumanVerifier = {
@@ -42,13 +65,15 @@ export const allowAllVerifier: HumanVerifier = {
   },
 };
 
-/** Runs the verifier; throws 403 on refusal, returns the nullifier (if any) to store. */
+/** Runs the verifier; throws 403 on refusal, returns the nullifier (if any) to store and the commit hook. */
 export async function requireHuman(
   verifier: HumanVerifier,
-  args: { action: HumanAction; registrant: Address; proof?: unknown },
-): Promise<string | null> {
+  args: HumanCheck,
+): Promise<{ nullifier: string | null; commit: () => void }> {
   const v = await verifier.verify(args);
-  if (!v.ok) throw new ApiError(403, "human_verification_failed", v.reason || "human verification failed");
-  if (v.nullifier === undefined) return null;
-  return String(v.nullifier).slice(0, 256);
+  if (!v.ok) throw new ApiError(403, v.code ?? "human_verification_failed", v.reason || "human verification failed");
+  return {
+    nullifier: v.nullifier === undefined ? null : String(v.nullifier).slice(0, 256),
+    commit: v.commit ?? (() => {}),
+  };
 }
