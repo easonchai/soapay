@@ -8,12 +8,14 @@ import type { AppConfig } from "../config.js";
 import { executeAttempt, normalizeInterrupted } from "../lib/execute.js";
 import { runStatus, type RunPlan, type RunRecord } from "../lib/run.js";
 import type { Employee } from "../lib/roster.js";
+import type { InvitedEmployee } from "../lib/invites.js";
 import type { Services } from "../lib/services.js";
 import { idbKV, Vault, VaultError, type KV, type VaultMode } from "../lib/vault.js";
 import { wagmiExecDeps } from "../lib/wallet.js";
 
 const ROSTER = "roster";
 const RUNS = "runs";
+const INVITES = "invites";
 
 export type VaultPhase = "loading" | "new" | "locked" | "ready";
 
@@ -23,6 +25,8 @@ export type Store = {
   phase: VaultPhase;
   vaultMode: VaultMode | null;
   employees: Employee[];
+  /** Pending invites (docs/mvp-spec.md §7), codes included; vault only. */
+  invites: InvitedEmployee[];
   runs: RunRecord[];
   /** Run ids with an attempt executing in this tab. */
   executing: ReadonlySet<string>;
@@ -31,6 +35,7 @@ export type Store = {
   lock(): void;
   destroyVault(): Promise<void>;
   updateEmployees(fn: (e: Employee[]) => Employee[]): Promise<void>;
+  updateInvites(fn: (i: InvitedEmployee[]) => InvitedEmployee[]): Promise<void>;
   upsertRun(run: RunRecord): Promise<void>;
   /** Executes one attempt; resolves when it stops (landed, failed or unknown). */
   executeRun(run: RunRecord, attemptIndex: number, plan: RunPlan, payer: Address): Promise<RunRecord>;
@@ -51,11 +56,13 @@ export function StoreProvider(props: { app: AppConfig; services: Services; kv?: 
   const [phase, setPhase] = useState<VaultPhase>("loading");
   const [vaultMode, setVaultMode] = useState<VaultMode | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [invites, setInvites] = useState<InvitedEmployee[]>([]);
   const [runs, setRuns] = useState<RunRecord[]>([]);
   const [executing, setExecuting] = useState<ReadonlySet<string>>(new Set());
 
   const vault = useRef<Vault | null>(null);
   const employeesRef = useRef<Employee[]>([]);
+  const invitesRef = useRef<InvitedEmployee[]>([]);
   const runsRef = useRef<RunRecord[]>([]);
   // Serialize writes so an older snapshot never lands after a newer one.
   const writes = useRef<Promise<void>>(Promise.resolve());
@@ -80,11 +87,14 @@ export function StoreProvider(props: { app: AppConfig; services: Services; kv?: 
     async (v: Vault) => {
       vault.current = v;
       const roster = (await v.read<Employee[]>(ROSTER)) ?? [];
+      const inv = (await v.read<InvitedEmployee[]>(INVITES)) ?? [];
       // After a reload nothing executes: in-flight steps become "unknown" (recheck them).
       const stored = ((await v.read<RunRecord[]>(RUNS)) ?? []).map(normalizeInterrupted);
       employeesRef.current = roster;
+      invitesRef.current = inv;
       runsRef.current = stored;
       setEmployees(roster);
+      setInvites(inv);
       setRuns(stored);
       await v.write(RUNS, stored);
       setVaultMode(v.mode);
@@ -98,8 +108,10 @@ export function StoreProvider(props: { app: AppConfig; services: Services; kv?: 
   const lock = useCallback(() => {
     vault.current = null;
     employeesRef.current = [];
+    invitesRef.current = [];
     runsRef.current = [];
     setEmployees([]);
+    setInvites([]);
     setRuns([]);
     setPhase("locked");
   }, []);
@@ -107,6 +119,7 @@ export function StoreProvider(props: { app: AppConfig; services: Services; kv?: 
     vault.current = null;
     await Vault.destroy(kv);
     setEmployees([]);
+    setInvites([]);
     setRuns([]);
     setVaultMode(null);
     setPhase("new");
@@ -118,6 +131,16 @@ export function StoreProvider(props: { app: AppConfig; services: Services; kv?: 
       employeesRef.current = next;
       setEmployees(next);
       await persist(ROSTER, next);
+    },
+    [persist],
+  );
+
+  const updateInvites = useCallback(
+    async (fn: (i: InvitedEmployee[]) => InvitedEmployee[]) => {
+      const next = fn(invitesRef.current);
+      invitesRef.current = next;
+      setInvites(next);
+      await persist(INVITES, next);
     },
     [persist],
   );
@@ -176,6 +199,7 @@ export function StoreProvider(props: { app: AppConfig; services: Services; kv?: 
     phase,
     vaultMode,
     employees,
+    invites,
     runs,
     executing,
     createVault,
@@ -183,6 +207,7 @@ export function StoreProvider(props: { app: AppConfig; services: Services; kv?: 
     lock,
     destroyVault,
     updateEmployees,
+    updateInvites,
     upsertRun,
     executeRun,
   };

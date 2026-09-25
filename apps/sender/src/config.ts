@@ -32,6 +32,8 @@ export type AppConfig = {
   apiUrl: string | undefined;
   /** PINNED MetaRotation attester (VITE_ATTESTER). Never taken from an API response. */
   attester: Address | undefined;
+  /** Recipient app base URL for invite links (VITE_RECIPIENT_URL). */
+  recipientUrl: string;
 };
 
 const SETTINGS_KEY = "soapay.sender.settings.v1";
@@ -118,6 +120,7 @@ export function resolveConfig(settings: Settings = loadSettings()): AppConfig {
     mockEns: isMockEns(),
     apiUrl: envString(import.meta.env.VITE_API_URL),
     attester: pinnedAttester(),
+    recipientUrl: envString(import.meta.env.VITE_RECIPIENT_URL) ?? "http://localhost:5173",
   };
 }
 

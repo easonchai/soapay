@@ -23,6 +23,9 @@ export type Config = {
     registerPerIp: number;
     registerPerRegistrant: number;
     namesPerIp: number;
+    /** POST /invites, per employer address and per IP (docs/mvp-spec.md §7). */
+    invitesPerEmployer: number;
+    invitesPerIp: number;
   };
   indexer: {
     enabled: boolean;
@@ -199,6 +202,8 @@ export function loadConfig(env: Env = process.env): Config {
       registerPerIp: int(env, "RATE_LIMIT_REGISTER_PER_IP", 3, 1),
       registerPerRegistrant: int(env, "RATE_LIMIT_REGISTER_PER_REGISTRANT", 3, 1),
       namesPerIp: int(env, "RATE_LIMIT_NAMES_PER_IP", 10, 1),
+      invitesPerEmployer: int(env, "RATE_LIMIT_INVITES_PER_EMPLOYER", 50, 1),
+      invitesPerIp: int(env, "RATE_LIMIT_INVITES_PER_IP", 20, 1),
     },
     indexer: {
       enabled: bool(env, "INDEXER_ENABLED", true),

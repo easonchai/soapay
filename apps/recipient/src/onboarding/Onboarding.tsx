@@ -10,6 +10,8 @@ import { claimName, fullName, registerMetaAddress } from "./actions.js";
 import { initialState, pickChallenge, progressOf, reduce, resumeState, words, type OnboardingState } from "./machine.js";
 import { useLabelAvailability } from "./useLabelAvailability.js";
 import { useInvite } from "../hooks/useInvite.js";
+import { settingsOf } from "../vault/types.js";
+import { withInvitePayer } from "./invite.js";
 
 /** "Invited by <org>", or why the invite can't be used. Renders nothing without an invite link. */
 export function InviteBanner() {
@@ -400,8 +402,11 @@ function RecoveryStep({ label, inviteCode, dispatch, headingRef }: { label: stri
     try {
       const rec = await claimName({ api: svc.api, keys, chainId: svc.settings.chainId, label, session, inviteCode });
       const sessionId = sessionIdOf(session);
+      // The inviting employer becomes a known payer (its payroll isn't "Unknown payer").
+      const inv = invite.state.kind === "pending" && inviteCode && invite.state.code === inviteCode ? invite.state : null;
       await vault.update((d) => ({
         ...d,
+        ...(inv ? { settings: withInvitePayer(settingsOf(d), inv) } : {}),
         profile: {
           ...d.profile,
           name: { label, name: rec.name ?? fullName(label), at: Date.now() },

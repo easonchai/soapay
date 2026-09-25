@@ -2,17 +2,19 @@
 // and hands its result to a props-only page. Swap the pages (or this file) to plug in
 // another UI; see README "How to plug in another UI".
 import { useState, type ReactNode } from "react";
-import { CHAINS } from "@soapay/sdk";
+import { CHAINS, PARENT_NAME } from "@soapay/sdk";
 import { txUrl } from "./config.js";
 import { useStore } from "./hooks/store.js";
 import { usePayPath, useWallet } from "./hooks/usePayPath.js";
 import { usePayRun } from "./hooks/usePayRun.js";
 import { useRoster } from "./hooks/useRoster.js";
 import { useRoute, type Route } from "./hooks/useRoute.js";
+import { useInvitePolling, useInvites } from "./hooks/useInvites.js";
 import { useHistory, useRunActions } from "./hooks/useRunActions.js";
 import { useSettings } from "./hooks/useSettings.js";
 import { MIN_PASSPHRASE_LENGTH, type VaultMode } from "./lib/vault.js";
 import { HistoryPage } from "./pages/HistoryPage.js";
+import { InvitesPanel } from "./pages/InvitesPanel.js";
 import { PayRunPage } from "./pages/PayRunPage.js";
 import { RosterPage } from "./pages/RosterPage.js";
 import { RunDetailPage } from "./pages/RunDetailPage.js";
@@ -91,7 +93,7 @@ function Shell({ route, go, children }: { route: Route; go(r: Route): void; chil
             plain EOA wallets can't pay. Connect a smart wallet with atomic batching, or export the run for a Safe.
           </Banner>
         )}
-        {app.mockEns && <Banner tone="info">Dev mock mode: names resolve to generated demo keys; the demo wallet can't sign.</Banner>}
+        {app.mockEns && <Banner tone="info">Dev mock mode: names resolve to generated demo keys; the demo wallet can't sign. Invites are signed by a throwaway key and flip to claimed after a few seconds.</Banner>}
         {children}
       </main>
     </div>
@@ -99,7 +101,20 @@ function Shell({ route, go, children }: { route: Route; go(r: Route): void; chil
 }
 
 function RosterContainer() {
-  return <RosterPage {...useRoster()} />;
+  const roster = useRoster();
+  const invites = useInvites();
+  return (
+    <div className="flex flex-col gap-4">
+      <InvitesPanel {...invites} parentName={PARENT_NAME} />
+      <RosterPage {...roster} />
+    </div>
+  );
+}
+
+/** Polls pending invites on every page and auto-enrolls claimed ones (resolve-and-pin). */
+function InvitePoller() {
+  useInvitePolling();
+  return null;
 }
 
 function PayRunContainer({ go }: { go(r: Route): void }) {
@@ -168,6 +183,7 @@ export function App() {
   else page = <RosterContainer />;
   return (
     <Shell route={route} go={go}>
+      {phase === "ready" && <InvitePoller />}
       {page}
     </Shell>
   );

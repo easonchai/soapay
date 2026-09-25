@@ -77,7 +77,9 @@ looks up `GET /invites/keccak256(code)` (`onboarding/invite.ts`), and keeps the 
 session, so it survives onboarding steps and an unlock:
 
 - **pending**: onboarding shows "Invited by <org>", the label is prefilled and locked, and POST /names
-  carries `inviteCode`.
+  carries `inviteCode`. Once the claim succeeds, the invite's `employer` address is added to Settings →
+  Known payers under the org name (`withInvitePayer`), so that employer's payroll isn't flagged "Unknown payer".
+  Known payers can be added or removed by hand in Settings.
 - **expired / claimed / unknown**: a clear message, then normal onboarding with the employee's own label.
 - **existing vault**: unlock first; an onboarded account without a name then goes straight to the claim.
 

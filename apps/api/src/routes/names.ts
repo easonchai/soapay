@@ -6,6 +6,7 @@ import { readStealthMetaAddress } from "../chain.js";
 import { tx, type Db } from "../db.js";
 import { requireHuman } from "../hooks.js";
 import type { VerifiedSession } from "../worldid/verifier.js";
+import { checkInviteForClaim, markInviteClaimed, parseInviteCode } from "./invites.js";
 import { ApiError, enforceRateLimits, parseMetaAddress, redactSig, requireHex, sameBytes } from "../util.js";
 
 const UINT256_MAX = (1n << 256n) - 1n;
@@ -75,6 +76,7 @@ export function nameRoutes(deps: AppDeps): Hono {
     const { bytes: metaBytes, uri: metaAddress } = parseMetaAddress(body.metaAddress);
     const deadline = parseDeadline(body.deadline);
     const signature = requireHex(body.signature, "signature", 65);
+    const inviteCode = parseInviteCode(body.inviteCode);
 
     if (deadline <= BigInt(deps.now())) throw new ApiError(400, "expired", "deadline has passed");
 
@@ -102,6 +104,9 @@ export function nameRoutes(deps: AppDeps): Hono {
     if (existing && deadline <= BigInt(existing.deadline)) {
       throw new ApiError(409, "stale_claim", "an update needs a later deadline than the stored claim");
     }
+    // A label reserved by an unexpired invite needs the matching code (docs/mvp-spec.md §7).
+    // Updates of an existing name ignore invites: the label already belongs to the registrant.
+    if (!existing) checkInviteForClaim(db, label, inviteCode, deps.now());
 
     enforceRateLimits(
       db,
@@ -154,6 +159,7 @@ export function nameRoutes(deps: AppDeps): Hono {
       if (cur && deadline <= BigInt(cur.deadline)) {
         throw new ApiError(409, "stale_claim", "an update needs a later deadline than the stored claim");
       }
+      const inviteHash = cur ? undefined : checkInviteForClaim(db, label, inviteCode, deps.now());
 
       const args = { label, registrant, metaAddress };
       try {
@@ -166,6 +172,8 @@ export function nameRoutes(deps: AppDeps): Hono {
 
       const now = deps.now();
       tx(db, () => {
+        // Claimed in the same transaction as the insert; throws (and rolls back) if it lost a race.
+        if (inviteHash) markInviteClaimed(db, inviteHash, registrant, now);
         if (cur) {
           db.prepare(
             `UPDATE names SET meta_address = ?, meta_bytes = ?, deadline = ?, signature = ?,

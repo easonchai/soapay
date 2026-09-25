@@ -31,6 +31,27 @@ only the **pinned** meta-address is paid. A changed meta-address is auto-accepte
 attestation signed by the pinned `VITE_ATTESTER` (docs/mvp-spec.md §2.1); otherwise the line is blocked until
 the employer re-approves. Retries re-verify and re-derive; stored stealth addresses are records, never inputs.
 
+## Invite links
+
+docs/mvp-spec.md §7. On the Roster page, **Invite employee** takes a label, an amount and an optional
+organisation name. The app generates a 32-byte code, has the connected wallet sign the `Invite` typed data
+(`signInvite` from `@soapay/sdk`; smart wallets sign through ERC-1271), POSTs `/invites` (which reserves the
+label) and shows `${VITE_RECIPIENT_URL}/#/join?code=…&label=…&org=…` with a copy button and a QR code.
+
+- The code is stored only in the encrypted vault (`invites` slot). The API only ever sees `keccak256(code)`.
+- The row shows **Invited (pending)** while `useInvitePolling` (mounted once in `App.tsx`, every page)
+  polls `GET /invites/:codeHash` every 5 s.
+- On `claimed` the employee is enrolled through the **same resolve-and-pin path** as a manual enrollment
+  (`enrollEmployee`); the API's answer is never trusted as a meta-address. If resolution fails (records not
+  written yet) the row shows "Claimed, waiting to verify" and is retried on the next poll.
+- On `expired` (or an unknown code) the row offers **Re-invite**: a new code and signature replace the old row.
+- Needs `VITE_API_URL` (and a connected wallet). In mock mode (`VITE_MOCK_ENS=1`) an in-memory API flips each
+  invite to claimed after ~4 s and a throwaway key signs, so the whole flow can be clicked through offline.
+
+Logic: `src/lib/invites.ts` (create, poll, apply outcomes, HTTP and mock APIs); hooks: `useInvites()` (form
+actions, rows, the link just created) and `useInvitePolling()`; view: `src/pages/InvitesPanel.tsx`,
+`src/ui/QrCode.tsx`.
+
 ## How to plug in another UI
 
 The app is three layers. Only the last one is visual, and it is deliberately plain.
@@ -40,6 +61,7 @@ The app is three layers. Only the last one is visual, and it is deliberately pla
 2. **`src/hooks/*`**: React hooks that own all state and side effects. They render nothing.
    - `StoreProvider` / `useStore()` (`store.tsx`): vault phase, roster, run history, `executeRun`.
    - `useRoster()`: enroll, CSV import, re-verify, re-approve, pause, amount edit, mock rotation.
+   - `useInvites()` / `useInvitePolling()`: invite links (create, re-invite, remove) and claimed → auto-enroll.
    - `usePayRun()`: `verify()` → `preview(denomination)` → `execute()` or `exportSafe(safe)`.
    - `useRunActions(id)` / `useHistory()`: status, names → amounts report, `recheck`, `retry`, `confirmNotSent`.
    - `useWallet()` / `usePayPath()`: connectors, account probe, chosen path, funding.

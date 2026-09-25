@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { generateMnemonic, keysFromMnemonic } from "@soapay/sdk";
-import { keccak256 } from "viem";
+import { getAddress, keccak256 } from "viem";
 import { createApi } from "../src/api/client.js";
 import { InviteProvider } from "../src/hooks/useInvite.js";
 import { claimName, registerMetaAddress } from "../src/onboarding/actions.js";
-import { inviteCodeHash, parseJoinLink, resolveInvite } from "../src/onboarding/invite.js";
+import { inviteCodeHash, parseJoinLink, resolveInvite, withInvitePayer } from "../src/onboarding/invite.js";
 import { InviteBanner } from "../src/onboarding/Onboarding.js";
-import { MOCK_INVITES, createMockFetch, createMockPublicClient } from "../src/services/mock.js";
+import { MOCK_EMPLOYER, MOCK_INVITES, createMockFetch, createMockPublicClient } from "../src/services/mock.js";
 import { ServicesProvider, buildServices } from "../src/services/ServicesProvider.js";
 import { VaultProvider } from "../src/vault/VaultProvider.js";
 import { defaultSettings } from "../src/vault/types.js";
@@ -38,7 +38,8 @@ describe("resolveInvite", () => {
 
   it("pending: returns the reserved label and the org from the API, not the URL", async () => {
     const s = await resolveInvite(api, { code: MOCK_INVITES.pending.code, labelHint: "someone-else", orgHint: "Fake Org" });
-    expect(s).toMatchObject({ kind: "pending", label: "jordan", org: "Acme Robotics", code: MOCK_INVITES.pending.code });
+    // The employer address comes along too: on claim it becomes a known payer.
+    expect(s).toMatchObject({ kind: "pending", label: "jordan", org: "Acme Robotics", code: MOCK_INVITES.pending.code, employer: getAddress(MOCK_EMPLOYER) });
   });
 
   it("expired: unusable with a clear message", async () => {
@@ -96,5 +97,21 @@ describe("InviteBanner", () => {
   it("renders nothing without a join link", () => {
     const { container } = mount("#/");
     expect(container.textContent).toBe("");
+  });
+});
+
+describe("claimed invite → employer becomes a known payer", () => {
+  it("withInvitePayer adds the employer under the org name, once", () => {
+    const base = defaultSettings();
+    const inv = { employer: MOCK_EMPLOYER, org: "Acme Robotics" };
+    const once = withInvitePayer(base, inv);
+    expect(once.knownPayers).toEqual([{ address: getAddress(MOCK_EMPLOYER), name: "Acme Robotics" }]);
+    expect(base.knownPayers).toEqual([]);
+    expect(withInvitePayer(once, inv)).toBe(once);
+    // A name the user already gave this payer is kept.
+    const named = { ...base, knownPayers: [{ address: getAddress(MOCK_EMPLOYER), name: "My job" }] };
+    expect(withInvitePayer(named, { employer: MOCK_EMPLOYER.toLowerCase() as `0x${string}`, org: "Acme" }).knownPayers).toEqual(named.knownPayers);
+    expect(withInvitePayer(base, { employer: MOCK_EMPLOYER, org: null }).knownPayers[0]!.name).toBe("Employer");
+    expect(withInvitePayer(base, { employer: null, org: "Acme" })).toBe(base);
   });
 });

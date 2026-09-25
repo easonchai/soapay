@@ -1,6 +1,6 @@
 import { vi } from "vitest";
 import type { Hono } from "hono";
-import type { Address, Hash, Hex } from "viem";
+import { verifyTypedData, type Address, type Hash, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { buildApp, type BuildAppDeps } from "../src/app.js";
 import type { HumanVerifier, NameIssuer } from "../src/hooks.js";
@@ -79,6 +79,8 @@ export function makeTestApp(
     waitForTransactionReceipt: vi.fn(async (_args: any): Promise<{ status: string; blockNumber: bigint }> => ({ status: "success", blockNumber: 123n })),
     getBlockNumber: vi.fn(async (): Promise<bigint> => 1000n),
     getLogs: vi.fn(async (_args: any): Promise<any[]> => []),
+    // EOA-only ECDSA by default; tests override it to stand in for ERC-1271 / 6492 wallets.
+    verifyTypedData: vi.fn(async (args: any): Promise<boolean> => verifyTypedData(args)),
   };
   let n = 0;
   const relayer = {
