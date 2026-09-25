@@ -16,6 +16,20 @@ export const OTHER_APP_URL: string =
 
 export const GITHUB = 'https://github.com/easonchai/soapay';
 
-/** Hero background from the design brief. External asset; replace with our own before launch. */
-export const HERO_VIDEO =
-  'https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260405_074625_a81f018a-956b-43fb-9aee-4d1508e30e6a.mp4';
+
+const ORG_KEY = 'soapay:org';
+export function getOrgName(): string {
+  try {
+    return localStorage.getItem(ORG_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+export function setOrgName(v: string) {
+  try {
+    if (v.trim()) localStorage.setItem(ORG_KEY, v.trim());
+    else localStorage.removeItem(ORG_KEY);
+  } catch {
+    /* ignore */
+  }
+}

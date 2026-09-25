@@ -1,65 +1,11 @@
-import { useEffect, useRef } from 'react';
-import { AtSign, BookOpen, Droplets, GitBranch } from 'lucide-react';
 import { useConnect } from 'wagmi';
-import { GITHUB, HERO_VIDEO } from './config.js';
+import { Dots, Lockup } from '@soapay/ui';
+import { GITHUB } from './config.js';
 
-/** Fade-in on play, fade-out just before the end, restart from black: a seamless loop with no hard cut. */
-function useCrossfadeLoop(ref: React.RefObject<HTMLVideoElement | null>) {
-  useEffect(() => {
-    const v = ref.current;
-    if (!v) return;
-    let raf = 0;
-    let fading = false;
-    const fade = (from: number, to: number, ms: number, done?: () => void) => {
-      cancelAnimationFrame(raf);
-      const t0 = performance.now();
-      const step = (t: number) => {
-        const k = Math.min(1, (t - t0) / ms);
-        v.style.opacity = String(from + (to - from) * k);
-        if (k < 1) raf = requestAnimationFrame(step);
-        else done?.();
-      };
-      raf = requestAnimationFrame(step);
-    };
-    const onCanPlay = () => {
-      void v.play().catch(() => {});
-      fade(Number(v.style.opacity || 0), 1, 500);
-    };
-    const onTime = () => {
-      if (!fading && v.duration && v.duration - v.currentTime <= 0.55) {
-        fading = true;
-        fade(Number(v.style.opacity || 1), 0, 500);
-      }
-    };
-    const onEnded = () => {
-      v.style.opacity = '0';
-      window.setTimeout(() => {
-        v.currentTime = 0;
-        void v.play().catch(() => {});
-        fading = false;
-        fade(0, 1, 500);
-      }, 100);
-    };
-    v.addEventListener('canplay', onCanPlay, { once: true });
-    v.addEventListener('timeupdate', onTime);
-    v.addEventListener('ended', onEnded);
-    return () => {
-      cancelAnimationFrame(raf);
-      v.removeEventListener('canplay', onCanPlay);
-      v.removeEventListener('timeupdate', onTime);
-      v.removeEventListener('ended', onEnded);
-    };
-  }, [ref]);
-}
-
-/** Hero-only landing. "Login" connects the wallet; App switches to the dashboard once connected. */
+/** Hero-only landing (Marketing 5a). Login connects the wallet; App switches to the dashboard. */
 export function Landing({ connected, onLogin }: { connected: boolean; onLogin: () => void }) {
   const { connect, connectors, isPending, error } = useConnect();
   const connector = connectors[0];
-  // Only an explicit Login click counts as busy; wagmi's background reconnect must not grey the button.
-  const busy = isPending;
-  const videoRef = useRef<HTMLVideoElement>(null);
-  useCrossfadeLoop(videoRef);
 
   function login() {
     onLogin();
@@ -67,71 +13,55 @@ export function Landing({ connected, onLogin }: { connected: boolean; onLogin: (
   }
 
   return (
-    <section className="l-hero">
-      <video
-        ref={videoRef}
-        className="l-hero-video"
-        src={HERO_VIDEO}
-        muted
-        autoPlay
-        playsInline
-        preload="auto"
-        aria-hidden
-        style={{ opacity: 0 }}
-      />
-      <div className="l-nav-wrap">
-        <nav className="l-nav liquid-glass" aria-label="Main">
-          <div className="l-nav-left">
-            <Droplets size={22} color="#fff" aria-hidden />
-            <span className="wordmark">Soapay</span>
-            <div className="l-nav-links">
-              <a href={`${GITHUB}/blob/main/PRD.md`} target="_blank" rel="noreferrer">
-                How it works
-              </a>
-              <a href={GITHUB} target="_blank" rel="noreferrer">
-                GitHub
-              </a>
-            </div>
-          </div>
-          <div className="l-nav-right">
-            <button className="l-pill liquid-glass" onClick={login} disabled={busy || !connector}>
-              {busy ? 'Connecting…' : 'Login'}
-            </button>
-          </div>
-        </nav>
-      </div>
-
-      <div className="l-hero-body">
-        <h1 className="l-h1">
-          One name, <em>infinite</em> addresses.
-        </h1>
-        <p className="l-sub">
-          Pay your team on-chain without publishing the payroll. Every payment lands on a fresh address that only the
-          employee can open.
-        </p>
-        <div className="l-cta">
-          <button className="l-pill l-pill-white" onClick={login} disabled={busy || !connector}>
-            {busy ? 'Connecting…' : connector ? 'Login with wallet' : 'Install a wallet to continue'}
-          </button>
-          <a className="l-pill liquid-glass" href={GITHUB} target="_blank" rel="noreferrer">
-            View on GitHub
+    <div className="land">
+      <div className="land-bar">
+        <div className="brand">
+          <Lockup height={22} />
+        </div>
+        <div className="links">
+          <a href={`${GITHUB}/blob/main/PRD.md`} target="_blank" rel="noreferrer">
+            How it works
+          </a>
+          <a href={GITHUB} target="_blank" rel="noreferrer">
+            GitHub
           </a>
         </div>
-        {error && <p className="l-hint">{error.message.split('\n')[0]}</p>}
-        {!error && <p className="l-hint">Your wallet is your login. Nothing to sign up for.</p>}
+        <button className="btn-primary" style={{ height: 36, padding: '0 16px' }} onClick={login} disabled={isPending || !connector}>
+          {isPending ? 'Connecting…' : 'Login'}
+        </button>
       </div>
-
-      <div className="l-social">
-        <a className="liquid-glass" href={GITHUB} target="_blank" rel="noreferrer" aria-label="GitHub">
-          <GitBranch size={20} />
-        </a>
-        <a className="liquid-glass" href="https://x.com" target="_blank" rel="noreferrer" aria-label="X">
-          <AtSign size={20} />
-        </a>
-        <a className="liquid-glass" href={`${GITHUB}/blob/main/PRD.md`} target="_blank" rel="noreferrer" aria-label="Product spec">
-          <BookOpen size={20} />
-        </a>
+      <section className="land-hero">
+        <Dots mode="diamond" className="dots l" />
+        <Dots mode="diamond" className="dots r" />
+        <span className="eyebrow" style={{ fontSize: 13 }}>
+          Privacy infrastructure for payments on chain
+        </span>
+        <h1 className="land-h1">Every wallet address is a public bank statement.</h1>
+        <p className="land-sub">
+          Soapay gives your team one name each. Every salary lands on a fresh address only they can open, and the payroll
+          never shows up on a block explorer.
+        </p>
+        <div className="land-cta">
+          <button className="btn-primary btn-xl" onClick={login} disabled={isPending || !connector}>
+            {isPending ? 'Connecting…' : connector ? 'Login with wallet' : 'Install a wallet to continue'}
+          </button>
+          <a className="btn btn-xl" href={`${GITHUB}/blob/main/PRD.md`} target="_blank" rel="noreferrer">
+            Read the docs
+          </a>
+        </div>
+        <p className="hint">{error ? error.message.split('\n')[0] : 'Your wallet is your login. Nothing to sign up for.'}</p>
+      </section>
+      <div className="land-foot">
+        <span>© 2026 Soapay</span>
+        <div className="links">
+          <a href={`${GITHUB}/blob/main/PRD.md`} target="_blank" rel="noreferrer">
+            Docs
+          </a>
+          <a href={GITHUB} target="_blank" rel="noreferrer">
+            GitHub
+          </a>
+        </div>
       </div>
-    </section>
+    </div>
   );
 }

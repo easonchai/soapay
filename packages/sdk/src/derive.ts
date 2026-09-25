@@ -2,10 +2,22 @@ import type { Hex } from 'viem';
 import { generateStealthAddress, buildMetadataForERC20, VALID_SCHEME_ID } from '@scopelift/stealth-address-sdk';
 import { metaAddressToURI } from './keys.js';
 
-export type PlannedRow = {
-  input: string;
-  metaAddress: Hex;
-  amount: bigint;
+/** contracts/PLAN.md: ~42k gas per line; 350 keeps margin under the per-tx cap. */
+export const MAX_LINES_PER_RUN = 350;
+
+export type RecipientAmount = { input: string; metaAddress: Hex; amount: bigint };
+
+/** One line to pay: a recipient, possibly one chunk of their amount. */
+export type PayLine = RecipientAmount & {
+  /** 0-based position among this recipient's lines. */
+  chunkIndex: number;
+  /** Total lines this recipient has in the run. */
+  chunkCount: number;
+  /** True for the single smaller final line when the amount is not a multiple of the chunk. */
+  isRemainder: boolean;
+};
+
+export type PlannedRow = PayLine & {
   stealthAddress: Hex;
   ephemeralPublicKey: Hex;
   viewTag: Hex;
@@ -24,28 +36,49 @@ export class DuplicateEphemeralKeyError extends Error {
   }
 }
 
+export class TooManyLinesError extends Error {
+  constructor(public readonly lines: number) {
+    super(`This run has ${lines} lines; the cap is ${MAX_LINES_PER_RUN} per transaction. Raise the chunk size or split the run.`);
+  }
+}
+
 /**
- * Fresh stealth address per row with ERC-20 metadata. Output is sorted strictly ascending
+ * Denominated payouts: each amount becomes floor(amount / chunk) lines of `chunk`, plus one
+ * smaller final line for the remainder. On chain the batch then reads as many identical
+ * transfers to unrelated addresses. With no chunk, each recipient is one line.
+ */
+export function expandDenominated(rows: RecipientAmount[], chunk?: bigint): PayLine[] {
+  if (chunk !== undefined && chunk <= 0n) throw new Error('Chunk size must be greater than zero');
+  const out: PayLine[] = [];
+  for (const r of rows) {
+    if (chunk === undefined || r.amount <= chunk) {
+      out.push({ ...r, chunkIndex: 0, chunkCount: 1, isRemainder: chunk !== undefined && r.amount < chunk });
+      continue;
+    }
+    const full = Number(r.amount / chunk);
+    const rem = r.amount % chunk;
+    const count = full + (rem > 0n ? 1 : 0);
+    for (let i = 0; i < full; i++) out.push({ ...r, amount: chunk, chunkIndex: i, chunkCount: count, isRemainder: false });
+    if (rem > 0n) out.push({ ...r, amount: rem, chunkIndex: full, chunkCount: count, isRemainder: true });
+  }
+  return out;
+}
+
+/**
+ * Fresh stealth address per line with ERC-20 metadata. Output is sorted strictly ascending
  * by stealth address (StealthDisperse requires it); duplicates and repeated ephemeral keys throw.
  */
-export function deriveRows(
-  rows: { input: string; metaAddress: Hex; amount: bigint }[],
-  token: Hex,
-): PlannedRow[] {
-  const planned: PlannedRow[] = rows.map((r) => {
+export function deriveRows(rows: RecipientAmount[], token: Hex, opts: { chunk?: bigint | undefined } = {}): PlannedRow[] {
+  const lines = expandDenominated(rows, opts.chunk);
+  if (lines.length > MAX_LINES_PER_RUN) throw new TooManyLinesError(lines.length);
+  const planned: PlannedRow[] = lines.map((l) => {
     const g = generateStealthAddress({
-      stealthMetaAddressURI: metaAddressToURI(r.metaAddress),
+      stealthMetaAddressURI: metaAddressToURI(l.metaAddress),
       schemeId: VALID_SCHEME_ID.SCHEME_ID_1,
     });
     // Lowercase so byte equality holds against ABI-decoded values.
-    const metadata = buildMetadataForERC20({ viewTag: g.viewTag, tokenAddress: token, amount: r.amount }).toLowerCase() as Hex;
-    return {
-      ...r,
-      stealthAddress: g.stealthAddress,
-      ephemeralPublicKey: g.ephemeralPublicKey,
-      viewTag: g.viewTag,
-      metadata,
-    };
+    const metadata = buildMetadataForERC20({ viewTag: g.viewTag, tokenAddress: token, amount: l.amount }).toLowerCase() as Hex;
+    return { ...l, stealthAddress: g.stealthAddress, ephemeralPublicKey: g.ephemeralPublicKey, viewTag: g.viewTag, metadata };
   });
   planned.sort((a, b) => (BigInt(a.stealthAddress) < BigInt(b.stealthAddress) ? -1 : 1));
   const seenKeys = new Set<string>();
