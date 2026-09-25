@@ -24,7 +24,7 @@ export type OnboardingState =
   | { step: "passphrase"; mnemonic: string; origin: Origin }
   | { step: "register" }
   | { step: "name" }
-  | { step: "recovery"; label: string }
+  | { step: "recovery"; label: string; inviteCode?: `0x${string}` }
   | { step: "share" }
   | { step: "done" };
 
@@ -37,7 +37,7 @@ export type OnboardingEvent =
   | { type: "BACK" }
   | { type: "VAULT_CREATED" }
   | { type: "REGISTERED" }
-  | { type: "NAME_CHOSEN"; label: string }
+  | { type: "NAME_CHOSEN"; label: string; inviteCode?: `0x${string}` }
   | { type: "NAMED" }
   | { type: "SKIP_NAME" }
   | { type: "FINISH" };
@@ -122,7 +122,9 @@ export function reduce(state: OnboardingState, event: OnboardingEvent): Onboardi
       return state;
 
     case "name":
-      if (event.type === "NAME_CHOSEN") return { step: "recovery", label: event.label };
+      if (event.type === "NAME_CHOSEN") {
+        return event.inviteCode ? { step: "recovery", label: event.label, inviteCode: event.inviteCode } : { step: "recovery", label: event.label };
+      }
       if (event.type === "SKIP_NAME") return { step: "share" };
       return state;
 

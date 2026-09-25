@@ -9,11 +9,42 @@ import { HumanCheck, sessionIdOf, sessionSignal, type HumanCheckResult } from ".
 import { claimName, fullName, registerMetaAddress } from "./actions.js";
 import { initialState, pickChallenge, progressOf, reduce, resumeState, words, type OnboardingState } from "./machine.js";
 import { useLabelAvailability } from "./useLabelAvailability.js";
+import { useInvite } from "../hooks/useInvite.js";
 
-export function Onboarding() {
+/** "Invited by <org>", or why the invite can't be used. Renders nothing without an invite link. */
+export function InviteBanner() {
+  const { state } = useInvite();
+  if (state.kind === "loading") {
+    return (
+      <Alert variant="info">
+        <Loader2 className="mr-1 inline size-3 animate-spin" aria-hidden /> Checking your invite…
+      </Alert>
+    );
+  }
+  if (state.kind === "pending") {
+    return (
+      <Alert variant="success" title={state.org ? `Invited by ${state.org}` : "You've been invited"}>
+        <span data-testid="invite-banner">
+          Your pay name will be <span className="font-mono">{fullName(state.label)}</span>.
+        </span>
+      </Alert>
+    );
+  }
+  if (state.kind === "unusable") {
+    return (
+      <Alert variant="warning" title="This invite can't be used">
+        <span data-testid="invite-banner">{state.message}</span>
+      </Alert>
+    );
+  }
+  return null;
+}
+
+/** `claimInvite`: an existing, onboarded vault opened an invite link: go straight to the name step. */
+export function Onboarding({ claimInvite = false }: { claimInvite?: boolean } = {}) {
   const vault = useVault();
   const [state, dispatch] = useReducer(reduce, undefined, (): OnboardingState =>
-    vault.data ? resumeState(vault.data.profile) : initialState,
+    claimInvite ? { step: "name" } : vault.data ? resumeState(vault.data.profile) : initialState,
   );
   const [cur, total] = progressOf(state);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -100,6 +131,7 @@ function Step({ state, dispatch, headingRef }: StepProps) {
           title="Get paid without broadcasting your balance"
           lead="Your employer pays a fresh address every time. Only you can find and spend those payments, from this device, with one recovery phrase."
         >
+          <InviteBanner />
           <div className="grid gap-3">
             <Button size="lg" onClick={() => dispatch({ type: "CREATE", mnemonic: generateMnemonic() })}>
               <Sparkles className="size-4" aria-hidden /> Create a new account
@@ -126,7 +158,7 @@ function Step({ state, dispatch, headingRef }: StepProps) {
     case "name":
       return <NameStep dispatch={dispatch} headingRef={headingRef} />;
     case "recovery":
-      return <RecoveryStep label={state.label} dispatch={dispatch} headingRef={headingRef} />;
+      return <RecoveryStep label={state.label} inviteCode={state.inviteCode} dispatch={dispatch} headingRef={headingRef} />;
     case "share":
     case "done":
       return <ShareStep dispatch={dispatch} headingRef={headingRef} />;
@@ -353,8 +385,9 @@ function PassphraseStep({ mnemonic, dispatch, headingRef }: { mnemonic: string }
   );
 }
 
-function RecoveryStep({ label, dispatch, headingRef }: { label: string } & Omit<StepProps, "state">) {
+function RecoveryStep({ label, inviteCode, dispatch, headingRef }: { label: string; inviteCode?: `0x${string}` | undefined } & Omit<StepProps, "state">) {
   const vault = useVault();
+  const invite = useInvite();
   const svc = useServices();
   const keys = vault.keys!;
   const [error, setError] = useState<string | null>(null);
@@ -365,7 +398,7 @@ function RecoveryStep({ label, dispatch, headingRef }: { label: string } & Omit<
     setBusy(true);
     setError(null);
     try {
-      const rec = await claimName({ api: svc.api, keys, chainId: svc.settings.chainId, label, session });
+      const rec = await claimName({ api: svc.api, keys, chainId: svc.settings.chainId, label, session, inviteCode });
       const sessionId = sessionIdOf(session);
       await vault.update((d) => ({
         ...d,
@@ -377,6 +410,7 @@ function RecoveryStep({ label, dispatch, headingRef }: { label: string } & Omit<
             : { recoverySkipped: true }),
         },
       }));
+      if (inviteCode) invite.dismiss();
       dispatch({ type: "NAMED" });
     } catch (e) {
       setError(errorMessage(e));
@@ -484,16 +518,18 @@ function NameStep({ dispatch, headingRef }: Omit<StepProps, "state">) {
   const vault = useVault();
   const svc = useServices();
   const keys = vault.keys!;
-  const [label, setLabel] = useState("");
-  const status = useLabelAvailability(svc.api, label, keys.registrantAddress);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const canClaim = status.kind === "available" || status.kind === "yours";
+  const invite = useInvite().state;
+  const invited = invite.kind === "pending" ? invite : null;
+  const [typed, setLabel] = useState("");
+  // An invite's label is reserved for us: locked, and no availability check (it looks taken to others).
+  const label = invited ? invited.label : typed;
+  const status = useLabelAvailability(svc.api, invited ? "" : label, keys.registrantAddress);
+  const canClaim = invited !== null || status.kind === "available" || status.kind === "yours";
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!canClaim) return;
-    dispatch({ type: "NAME_CHOSEN", label });
+    dispatch(invited ? { type: "NAME_CHOSEN", label, inviteCode: invited.code } : { type: "NAME_CHOSEN", label });
   };
   const skip = async () => {
     await vault.update((d) => ({ ...d, profile: { ...d.profile, nameSkipped: true } }));
@@ -521,9 +557,14 @@ function NameStep({ dispatch, headingRef }: Omit<StepProps, "state">) {
     status.kind === "invalid" ? status.message : status.kind === "taken" ? "That name is taken. Try another." : status.kind === "error" ? status.message : null;
 
   return (
-    <Frame headingRef={headingRef} title="Pick your pay name" lead="Something your employer can type. It points to your meta-address, not to any wallet.">
+    <Frame
+      headingRef={headingRef}
+      title={invited ? "Your pay name" : "Pick your pay name"}
+      lead={invited ? "Your employer reserved this name for you. It points to your meta-address, not to any wallet." : "Something your employer can type. It points to your meta-address, not to any wallet."}
+    >
+      <InviteBanner />
       <form onSubmit={submit} className="space-y-4" noValidate>
-        <Field label="Name" hint={hint} error={fieldError}>
+        <Field label="Name" hint={invited ? "Set by your invite." : hint} error={invited ? null : fieldError}>
           {({ id, describedBy, invalid }) => (
             <div className="flex items-stretch">
               <Input
@@ -536,6 +577,9 @@ function NameStep({ dispatch, headingRef }: Omit<StepProps, "state">) {
                 inputMode="text"
                 placeholder="alex"
                 value={label}
+                readOnly={invited !== null}
+                aria-readonly={invited !== null || undefined}
+                data-testid="label-input"
                 onChange={(e) => setLabel(e.target.value.toLowerCase().trim())}
                 className="rounded-r-none font-mono"
                 maxLength={32}
@@ -546,8 +590,7 @@ function NameStep({ dispatch, headingRef }: Omit<StepProps, "state">) {
             </div>
           )}
         </Field>
-        {error && <Alert variant="destructive">{error}</Alert>}
-        <Button type="submit" size="lg" className="w-full" disabled={!canClaim} loading={busy}>
+        <Button type="submit" size="lg" className="w-full" disabled={!canClaim}>
           Continue
         </Button>
         <Button variant="ghost" className="w-full" onClick={skip}>

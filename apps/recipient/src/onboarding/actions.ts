@@ -7,6 +7,7 @@ import {
   type SoapayKeys,
 } from "@soapay/sdk";
 import { ApiError, type Api, type NameRecord, type RegisterResult } from "../api/client.js";
+import type { Hex } from "viem";
 import type { HumanCheckResult } from "../worldid/types.js";
 
 /** The optional World ID session for POST /names, forwarded unchanged. */
@@ -58,6 +59,8 @@ export async function claimName(p: {
   label: string;
   /** Optional World ID session (self-service recovery, §5). */
   session?: HumanCheckResult | undefined;
+  /** Invite code when the employer reserved this label (§7). */
+  inviteCode?: Hex | undefined;
   now?: number;
 }): Promise<NameRecord> {
   const deadline = BigInt(Math.floor((p.now ?? Date.now()) / 1000)) + CLAIM_TTL_SECONDS;
@@ -76,6 +79,7 @@ export async function claimName(p: {
     deadline: deadline.toString(),
     signature,
     ...sessionFields(p.session),
+    ...(p.inviteCode ? { inviteCode: p.inviteCode } : {}),
   });
 }
 

@@ -51,9 +51,17 @@ const state: {
   rotations: { label: string; oldMeta: string; newMeta: string; verifiedAt: string }[];
   /** label → World ID session id (mock of the API's session binding). */
   sessions: Map<string, string>;
+  /** Invite code hashes already used. */
+  claimedInvites: Set<string>;
   registered: Set<string>;
   bornAt: number;
-} = { meta: null, world: null, names: new Map(), rotations: [], sessions: new Map(), registered: new Set(), bornAt: Date.now() };
+} = { meta: null, world: null, names: new Map(), rotations: [], sessions: new Map(), claimedInvites: new Set(), registered: new Set(), bornAt: Date.now() };
+
+/** Demo invite links (docs/mvp-spec.md §7): open `#/join?code=<code>` in mock mode. */
+export const MOCK_INVITES = {
+  pending: { code: `0x${"1".repeat(64)}` as Hex, label: "jordan", org: "Acme Robotics" },
+  expired: { code: `0x${"2".repeat(64)}` as Hex, label: "sam", org: "Acme Robotics" },
+} as const;
 
 /**
  * Demo trigger for the partial-failure path: sending to an address that starts with this prefix makes
@@ -188,7 +196,26 @@ export function createMockFetch(chainId: number): ApiFetch {
     await latency();
     const url = new URL(input, "http://mock.local");
     const method = (init?.method ?? "GET").toUpperCase();
-    const path = url.pathname.replace(/^.*?(\/(announcements|register|names|health))/, "$1");
+    const path = url.pathname.replace(/^.*?(\/(announcements|register|names|invites|health))/, "$1");
+
+    const invite = /^\/invites\/(0x[0-9a-fA-F]{64})$/.exec(path);
+    if (method === "GET" && invite) {
+      const hash = invite[1]!.toLowerCase();
+      const now = Math.floor(Date.now() / 1000);
+      for (const [kind, inv] of Object.entries(MOCK_INVITES)) {
+        if (keccak256(inv.code).toLowerCase() !== hash) continue;
+        const claimed = state.claimedInvites.has(hash);
+        return respond(200, {
+          label: inv.label,
+          employer: MOCK_EMPLOYER,
+          org: inv.org,
+          expiresAt: kind === "expired" ? now - 86_400 : now + 14 * 86_400,
+          status: kind === "expired" ? "expired" : claimed ? "claimed" : "pending",
+          ...(claimed ? { name: `${inv.label}.soapay.eth` } : {}),
+        });
+      }
+      return err(404, "not_found", "invite not found");
+    }
 
     const attach = /^\/names\/([^/]+)\/session$/.exec(path);
     if (method === "POST" && attach) {
@@ -281,6 +308,7 @@ export function createMockFetch(chainId: number): ApiFetch {
           metaAddress: string;
           deadline: string;
           worldIdSession?: { session_id?: string };
+          inviteCode?: Hex;
         };
         if (!isValidLabel(body.label)) return err(400, "invalid_label", "label must be 3-32 of [a-z0-9-]");
         if (!state.registered.has(body.registrant.toLowerCase())) {
@@ -291,6 +319,13 @@ export function createMockFetch(chainId: number): ApiFetch {
           return err(409, "label_taken", "label is already taken");
         }
         const row = { label: body.label, registrant: body.registrant, metaAddress: body.metaAddress, deadline: body.deadline };
+        const reserved = Object.values(MOCK_INVITES).find((i) => i.label === body.label);
+        if (reserved && !state.claimedInvites.has(keccak256(reserved.code).toLowerCase())) {
+          if (!body.inviteCode || keccak256(body.inviteCode).toLowerCase() !== keccak256(reserved.code).toLowerCase()) {
+            return err(409, "label_reserved", "this label is reserved by an invite");
+          }
+          state.claimedInvites.add(keccak256(reserved.code).toLowerCase());
+        }
         state.names.set(body.label, row);
         if (body.worldIdSession?.session_id) state.sessions.set(body.label, body.worldIdSession.session_id);
         return respond(201, present(row));

@@ -70,6 +70,20 @@ Rules any UI must keep: never display or log keys except the one-time seed backu
 `ledger[].balance` only (never `claimedAmount`); disable Send when `canSend(plan)` is false unless the user
 ticks the override; keep conversion history local.
 
+## Invite links
+
+`#/join?code=<0x…>&label=<label>&org=<org>` (docs/mvp-spec.md §7). `InviteProvider` reads the link once,
+looks up `GET /invites/keccak256(code)` (`onboarding/invite.ts`), and keeps the result for the whole
+session, so it survives onboarding steps and an unlock:
+
+- **pending**: onboarding shows "Invited by <org>", the label is prefilled and locked, and POST /names
+  carries `inviteCode`.
+- **expired / claimed / unknown**: a clear message, then normal onboarding with the employee's own label.
+- **existing vault**: unlock first; an onboarded account without a name then goes straight to the claim.
+
+Mock mode serves two demo invites (`MOCK_INVITES` in `services/mock.ts`): `#/join?code=0x1111…` (64 ones,
+pending, label `jordan`) and `#/join?code=0x2222…` (expired).
+
 ## Integrations
 
 - **World ID**: `src/worldid/index.ts` picks `@soapay/worldid-react`'s `<HumanCheck>` (IDKit session

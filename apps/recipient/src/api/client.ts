@@ -33,6 +33,19 @@ export type NameClaimBody = {
   signature: Hex;
   /** Optional World ID Selfie Check session result (§5), unchanged from IDKit. Only on a new name. */
   worldIdSession?: unknown;
+  /** Invite code (0x, 32 bytes) for a label the employer reserved (§7). */
+  inviteCode?: Hex;
+};
+
+/** GET /invites/:codeHash (docs/mvp-spec.md §7). */
+export type InviteRecord = {
+  label: string;
+  employer: Address;
+  org?: string | null;
+  /** Unix seconds (number or decimal string). */
+  expiresAt: number | string;
+  status: "pending" | "claimed" | "expired";
+  name?: string;
 };
 
 /**
@@ -138,6 +151,15 @@ export function createApi(apiUrl: string, fetchFn: ApiFetch = (i, init) => fetch
       call<AttachSessionResult>(fetchFn, `${root}/names/${encodeURIComponent(label)}/session`, json(body)),
     rotate: (label: string, body: RotationBody) =>
       call<RotationResult>(fetchFn, `${root}/names/${encodeURIComponent(label)}/rotation`, json(body)),
+    /** null when no invite has this code hash. */
+    async getInvite(codeHash: Hex): Promise<InviteRecord | null> {
+      try {
+        return await call<InviteRecord>(fetchFn, `${root}/invites/${codeHash}`);
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 404) return null;
+        throw e;
+      }
+    },
     /** null when the label is free. */
     async getName(label: string): Promise<NameRecord | null> {
       try {

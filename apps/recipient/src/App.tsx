@@ -1,6 +1,7 @@
 import { HashRouter, Navigate, Route, Routes } from "react-router";
 import { Loader2 } from "lucide-react";
 import { ScannerProvider } from "./hooks/scanner.js";
+import { InviteProvider, useInvite } from "./hooks/useInvite.js";
 import { Onboarding } from "./onboarding/Onboarding.js";
 import { Convert } from "./screens/Convert.js";
 import { Home } from "./screens/Home.js";
@@ -14,9 +15,13 @@ import { ServicesProvider } from "./services/ServicesProvider.js";
 import { Alert } from "./ui/kit.js";
 import { VaultProvider, useVault } from "./vault/VaultProvider.js";
 
-/** Vault gate: loading → onboarding (no vault / unfinished) → unlock (locked) → the app. */
+/**
+ * Vault gate: loading → onboarding (no vault / unfinished) → unlock (locked) → the app.
+ * An invite link (`#/join?code=…`) is read once by InviteProvider and followed through any of these.
+ */
 function Gate() {
   const vault = useVault();
+  const invite = useInvite().state;
   switch (vault.status) {
     case "loading":
       return (
@@ -38,6 +43,8 @@ function Gate() {
       return <Unlock />;
     case "unlocked":
       if (!vault.data?.profile.onboardedAt) return <Onboarding />;
+      // An existing account opened an invite link: unlock (above), then claim the reserved name.
+      if (invite.kind === "pending" && !vault.data.profile.name) return <Onboarding claimInvite />;
       return (
         <ScannerProvider>
           <HashRouter>
@@ -62,7 +69,9 @@ export function App() {
   return (
     <VaultProvider>
       <ServicesProvider>
-        <Gate />
+        <InviteProvider>
+          <Gate />
+        </InviteProvider>
       </ServicesProvider>
     </VaultProvider>
   );
