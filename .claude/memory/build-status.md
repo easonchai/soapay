@@ -155,3 +155,9 @@ metadata:
   - ENSIP-25 needs a live registry such as ERC-8004, so it isn't set by default.
   - The :8787 API was restarted on the merged code. Totals: SDK 202 · API 122 · sender 118 · recipient 62 · mcp 54 · contracts 31.
 - Checkpoint 14 (2026-09-26): the owner put the **compliant exit back IN scope** (the coworker knows the main wallet, so the guard blocks cash-out without an exit), and gateway mode is DEFERRED to the roadmap. CLAUDE.md threat model updated. A research spike on exit feasibility on testnet (Privacy Pools / Railgun / CCTP V2 / paymaster on L1) is running and will write docs/exit-research.md.
+- Checkpoint 15 (2026-09-26): exit research DONE (docs/exit-research.md).
+  - **0xbow Privacy Pools USDC pool on Ethereum Sepolia**: Entrypoint 0x34A2…21cB, pool 0x0b06…4C0f. Minimum 10 USDC, 1% fee. The testnet ASP approves in about 10–12 minutes, and the testnet relayer charges 0.1%. SDK @0xbow/privacy-pools-core-sdk 1.5.0.
+  - No USDC pool on Base. Railgun has no usable testnet.
+  - Route: CCTP V2 Base Sepolia→Sepolia (same addresses), minting back to the SAME stealth address through Circle's Forwarding Service (about 1.5–2.2 USDC fee, no ETH); then approve + deposit through a 7702 userOp with the Circle paymaster on Sepolia (the Pimlico public bundler works); then withdraw through the relayer to the destination.
+  - Risks: the paymaster's 1271 path is unproven on Sepolia (fork test it first); testnet service uptime; about 15 USDC per line (the faucet gives 20 per 2 h).
+  - Production chain decision pending: Optimism (cheap) vs Ethereum (large anonymity set).
