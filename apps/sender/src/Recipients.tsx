@@ -14,8 +14,8 @@ import {
   type PaymentRecord,
   type SpendStatus,
 } from '@soapay/sdk';
-import { Copy, NavyPanel, Pill, FreshMark, Skeleton, Stagger, StaggerItem, toast } from '@soapay/ui';
-import { AnimatePresence, motion } from 'framer-motion';
+import { Copy, NavyPanel, Pill, FreshMark, Skeleton, Stagger, StaggerItem, Presence, toast } from '@soapay/ui';
+import { motion } from 'framer-motion';
 import { chainConfig } from './config.js';
 
 export function Recipients({ onPay }: { onPay: (prefill: string) => void }) {
@@ -123,7 +123,7 @@ export function Recipients({ onPay }: { onPay: (prefill: string) => void }) {
         </NavyPanel>
       </div>
 
-      <AnimatePresence mode="wait" initial={false}>
+      <Presence mode="wait" initial={false}>
       {!open ? (
         <motion.div key="list" className="stack" initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }} transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}>
           <div className="between" style={{ alignItems: 'flex-end', borderBottom: '1px solid var(--line)', paddingBottom: 16 }}>
@@ -300,7 +300,7 @@ export function Recipients({ onPay }: { onPay: (prefill: string) => void }) {
           </div>
         </motion.div>
       )}
-      </AnimatePresence>
+      </Presence>
     </div>
   );
 }

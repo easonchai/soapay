@@ -1,10 +1,12 @@
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
+import { Presence, motionOff } from './Presence.js';
 import type { ReactNode } from 'react';
 
 /** Height auto <-> 0 with a fade. Children unmount when closed. */
 export function Collapse({ open, children, className }: { open: boolean; children: ReactNode; className?: string }) {
+  if (motionOff()) return open ? <div {...(className ? { className } : {})}>{children}</div> : null;
   return (
-    <AnimatePresence initial={false}>
+    <Presence initial={false}>
       {open && (
         <motion.div
           key="c"
@@ -18,6 +20,6 @@ export function Collapse({ open, children, className }: { open: boolean; childre
           {children}
         </motion.div>
       )}
-    </AnimatePresence>
+    </Presence>
   );
 }

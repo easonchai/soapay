@@ -19,8 +19,8 @@ import {
   type Resolved,
   type PlannedRow,
 } from '@soapay/sdk';
-import { PageHead, NavyPanel, Toggle, ErrorLine, Pill, Collapse, CountUp, Dots, Stagger, StaggerItem, toast } from '@soapay/ui';
-import { AnimatePresence, motion } from 'framer-motion';
+import { PageHead, NavyPanel, Toggle, ErrorLine, Pill, Collapse, CountUp, Dots, Stagger, StaggerItem, Presence, toast } from '@soapay/ui';
+import { motion } from 'framer-motion';
 import { chainConfig } from './config.js';
 
 export type RunMeta = { title: string; chunk?: bigint | undefined };
@@ -417,11 +417,11 @@ export function PayRun({
           </NavyPanel>
 
           <button className="btn-primary btn-lg" onClick={review} disabled={!canReview} style={{ position: 'relative', overflow: 'hidden' }}>
-            <AnimatePresence mode="wait" initial={false}>
+            <Presence mode="wait" initial={false}>
               <motion.span key={reviewLabel} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.16 }}>
                 {reviewLabel}
               </motion.span>
-            </AnimatePresence>
+            </Presence>
           </button>
           <p className="hint">Nothing is cached between runs; every Resolve reads the chain. Sending from {address ? short(address) : 'your wallet'}.</p>
         </div>
