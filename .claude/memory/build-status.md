@@ -118,3 +118,14 @@ metadata:
   5. the guard allows a fresh destination and blocks a coworker-known one, then a 7702 + Circle paymaster spend succeeds and no stealth address ever held ETH.
   The fork harness is extracted to test/helpers/fork.ts. Not covered by this E2E: ENSv2 name resolution (Sepolia; covered by the contracts fork test) and the API services (unit-tested).
 - Checkpoint 7b: **invite links** added (owner decision; spec §7). The employer signs an EIP-712 Invite reserving a label (codeHash = keccak(random code)). The link `#/join?code&label&org` lets only the link holder claim the name. The sender roster auto-enrolls when the invite is claimed. The SDK/API/sender part is with a new agent; the recipient join route was added to the recipient agent's scope.
+- Checkpoint 7c: recipient app MERGED.
+  - 61 tests, build and typecheck pass.
+  - Screens (Payments, Send, Convert, Labels, Name, Settings) with all logic in hooks, plus a README seam for CK.
+  - Onboarding: register → name → optional Selfie Check session → share. The invite `#/join` route is done.
+  - Rotation: with a session, the attested path; without one, a manual path relayed through /register (UNTESTED against the real API's "superseded" handling).
+  - Convert goes through the /uniswap proxy.
+  - Worker scan: 3,139 announcements in about 2.1 s on 4 workers (mock).
+  - Follow-ups:
+    1. Auto-add the inviting employer to knownPayers when an invite is claimed (currently every row shows "Unknown payer").
+    2. Verify viem getEnsResolver against ENSv2 on Sepolia.
+    3. Verify /register accepts re-registration for manual rotation.
