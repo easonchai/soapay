@@ -11,3 +11,4 @@ coverage/
 .claude/settings.local.json
 .claude/worktrees/
 .gstack/
+apps/mcp/.state/
