@@ -130,3 +130,8 @@ metadata:
     2. Verify viem getEnsResolver against ENSv2 on Sepolia.
     3. Verify /register accepts re-registration for manual rotation.
 - Checkpoint 7d: the invite agent was cut off by an account rate limit mid-task. Its uncommitted sender work was saved as WIP commit 5213483 on `worktree-agent-aeda4302f49ccea41` (the SDK invites.ts and API invite routes were already committed there). A finisher agent is resuming from that branch; it also adds the inviting employer as a recipient known payer.
+
+**Checkpoint 8 (2026-09-25): feature-complete on `yudhishthra`, all green**
+- Invite links MERGED: the sender's "Invite employee" (sign, link and QR, pending row, auto-enroll through resolve-and-pin on claim, re-invite on expiry), and recipient `#/join` adds the employer as a known payer.
+- Test totals: SDK 183 (+11 fork/live skipped) · API 112 · sender 117 · recipient 62 · contracts 31 (+2 fork skipped). The fork E2Es (payroll 5/5, spend/swap 3/3) pass with FORK_E2E=1.
+- NEXT: the testnet deploy (the owner runs the broadcasts), a live demo run, then compare with CK's UI and open the PR yudhishthra → main.
