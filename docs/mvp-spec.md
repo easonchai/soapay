@@ -140,6 +140,18 @@ Owner decision (2026-09-25, supersedes the earlier two-moment design):
 - The conversion preference is **local** to the recipient app (never a public record, which could fingerprint someone).
 - `FEEDBACK.md` at the repo root, and the Uniswap feedback form, are required for the prize.
 
+## 7. Invite links (owner decision, 2026-09-25)
+
+Lets the employer pre-assign the label so the employee's onboarding is: open the link, back up the seed, tap Create.
+
+- **Invite typed data** (signed by the employer's connected wallet; verified with viem `verifyTypedData` through a public client, so ERC-1271/6492 smart wallets work too): domain `{name:"Soapay Names", version:"1", chainId: API CHAIN_ID}`, type `Invite(string label, address employer, bytes32 codeHash, uint256 expiresAt)`. `code` is 32 random bytes generated in the sender app; `codeHash = keccak256(code)`. The default expiry is 14 days and the maximum is 30.
+- **`POST /invites`** `{label, employer, codeHash, expiresAt, signature, org?}` checks the signature and label validity, and that the label is neither claimed nor reserved by an unexpired invite. It **reserves** the label, returns `{codeHash, expiresAt}` and is rate-limited per employer and per IP.
+- **`GET /invites/:codeHash`** → `{label, employer, org?, expiresAt, status: "pending"|"claimed"|"expired", name?}`.
+- **`POST /names`** accepts an optional `inviteCode` (0x-hex 32 bytes). A label reserved by an unexpired invite can only be claimed with a code whose keccak256 matches; the invite is then marked claimed. An unreserved label works as before, with no code needed.
+- **Link format:** `${RECIPIENT_URL}/#/join?code=<0x…>&label=<label>&org=<org>`. `label` and `org` are display hints; the truth comes from `GET /invites/:codeHash`.
+- **Sender app:** "Invite employee" (label, amount, optional org name) → sign → POST /invites → show the link plus a QR code. The roster row stays "Invited (pending)" until the invite is claimed, then auto-enrolls by resolving and pinning with the normal checks. The code is kept only in the employer's encrypted vault.
+- **Recipient app:** on `#/join?...`, prefill and lock the label and show "Invited by <org>". POST /names includes `inviteCode`. Expired or claimed invites show a clear error and let the employee pick their own label.
+
 ## Actions only the team can do
 
 - Broadcast deploys with your own keystore; agents never handle deployer keys.
