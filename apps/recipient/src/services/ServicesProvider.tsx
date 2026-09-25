@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { getChainConfig } from "@soapay/sdk";
 import { createPublicClient, getAddress, http, type Address, type Chain, type PublicClient, type Transport } from "viem";
 import { createApi, type Api, type ApiFetch } from "../api/client.js";
@@ -88,10 +88,9 @@ export function ServicesProvider({ children, override }: { children: ReactNode; 
   const key = JSON.stringify(settings);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const services = useMemo(() => override ?? buildServices(settings, ENV.mockApi), [override, key]);
+  // Set during render, not in an effect: child effects (the scanner's first scan) run before ours.
   const meta = vault.keys?.metaAddressURI;
-  useEffect(() => {
-    if (ENV.mockApi && meta) setMockIdentity(meta);
-  }, [meta]);
+  if (ENV.mockApi && meta) setMockIdentity(meta);
   return <ServicesContext.Provider value={services}>{children}</ServicesContext.Provider>;
 }
 

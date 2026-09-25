@@ -36,7 +36,8 @@ export function ScannerProvider({ children, autoScan = true }: { children: React
 
   const scan = useCallback(
     async (opts: { full?: boolean } = {}) => {
-      if (abort.current) return;
+      // One live scan at a time. An aborted one (e.g. StrictMode's effect re-run) doesn't block a new one.
+      if (abort.current && !abort.current.signal.aborted) return;
       const ctrl = new AbortController();
       abort.current = ctrl;
       setRunning(true);
@@ -57,6 +58,7 @@ export function ScannerProvider({ children, autoScan = true }: { children: React
           },
           opts,
         );
+        if (ctrl.signal.aborted) return;
         await updateChain((latest) => mergeScanResult(latest, outcome.state));
         const { state: _s, ...rest } = outcome;
         setLast({ ...rest, at: Date.now() });
@@ -64,9 +66,11 @@ export function ScannerProvider({ children, autoScan = true }: { children: React
       } catch (e) {
         if (!(e instanceof ScanAborted) && !(e instanceof DOMException && e.name === "AbortError")) setError(errorMessage(e));
       } finally {
-        abort.current = null;
-        setRunning(false);
-        setPhase(null);
+        if (abort.current === ctrl) {
+          abort.current = null;
+          setRunning(false);
+          setPhase(null);
+        }
       }
     },
     [chainId, settings.apiUrl, settings.useRpcAnnouncements, svc, keys, updateChain],
