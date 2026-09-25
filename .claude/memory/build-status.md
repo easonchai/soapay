@@ -58,3 +58,5 @@ metadata:
     - Remaining: the test script, the entire UI (wagmi, pages), build/test/screenshot.
     - SDK gap: no StealthDisperse address or predicted CREATE2 address in CHAINS.
 - OPEN DESIGN QUESTION (for the owner): who holds the ENSv2 `stealth` writer role, given World ID can't be verified on-chain on Sepolia? See the chat on 2026-09-25; the recommendation is that the registrant keeps it and the sender app is the enforcement point, auto-accepting a changed pin only with an API World ID attestation.
+  - `worktree-agent-a6e83ae904bb96dd0` @ 55f9635, recipient app: vault crypto, scanner worker pool, mock services, onboarding UI (see the commit body for remaining work).
+  RESUME PLAN after restart: re-spawn one agent per WIP branch (with the new World/ENS/Uniswap MCPs and skills), each starting from its branch; merge them into `yudhishthra` as they finish; then wire the apps and run E2E.
