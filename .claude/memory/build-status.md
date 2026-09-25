@@ -149,3 +149,8 @@ metadata:
   - The API must run as `node --env-file=.env dist/index.js` in apps/api; local .env rate limits are relaxed for the demo.
 - Checkpoint 11 (2026-09-26): `main` has CK's frontend (#2, #3, #5): his own apps, `packages/ui`, duplicate SDK modules, wallet-signature keys, the old StealthDisperse ABI. A trial merge conflicts in about 20 files. The owner said to push and leave a divergence note (docs/DIVERGENCE.md) and a PR for CK instead of force-merging. Merge direction proposed: our SDK/API as the base plus CK's visual layer.
 - Checkpoint 12 (2026-09-26): MCP server (spec §8) started in parallel to the CK merge (no file overlap). Agents get *.soapay.eth names with ENSIP-25/26 records; guardrails include caps, dry-run then confirm, and guard enforcement.
+- Checkpoint 13 (2026-09-26): MCP server MERGED (`apps/mcp`, 54 tests).
+  - Live: an agent created `mcp-agent-7c1e.soapay.eth` with ENSIP-26 `agent-context` / `agent-endpoint[web]`, received 0.3 USDC, scanned it and spent 0.1 USDC by name; a guard `block` was confirmed.
+  - The SDK issue() and POST /names accept an optional `agent` object; the records are written once at issuance.
+  - ENSIP-25 needs a live registry such as ERC-8004, so it isn't set by default.
+  - The :8787 API was restarted on the merged code. Totals: SDK 202 · API 122 · sender 118 · recipient 62 · mcp 54 · contracts 31.
