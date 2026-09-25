@@ -31,8 +31,8 @@ export function Landing({ connected, onLogin }: { connected: boolean; onLogin: (
         </button>
       </div>
       <section className="land-hero">
-        <Dots mode="diamond" className="dots l" />
-        <Dots mode="diamond" className="dots r" />
+        <Dots mode="diamond" animate className="dots l" />
+        <Dots mode="diamond" animate className="dots r" />
         <span className="eyebrow" style={{ fontSize: 13 }}>
           Privacy infrastructure for payments on chain
         </span>
