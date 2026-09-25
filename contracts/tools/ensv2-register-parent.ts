@@ -11,7 +11,7 @@
  */
 import { encodeFunctionData, keccak256, parseAbi, zeroAddress, zeroHash, type Address, type Hex } from 'viem';
 import { generatePrivateKey } from 'viem/accounts';
-import { D, clients, env, keyFromEnv, main, parentLabel, send } from './ensv2-common.ts';
+import { D, assertCanHoldNames, clients, env, keyFromEnv, main, parentLabel, send } from './ensv2-common.ts';
 import { permissionedRegistryAbi, labelId, REGISTRY_STATUS, type RegistryState } from '../../packages/sdk/src/ensv2.ts';
 
 const registrarAbi = parseAbi([
@@ -51,6 +51,8 @@ main(async () => {
     }
     throw new Error(`${label}.eth is not available (owner ${st.latestOwner}); set PARENT_LABEL to another label`);
   }
+
+  await assertCanHoldNames(c, owner.address, 'PARENT_OWNER');
 
   const minDuration = await read<bigint>('MIN_REGISTER_DURATION');
   let duration = BigInt(env('REGISTER_DAYS', '365')) * 86_400n;

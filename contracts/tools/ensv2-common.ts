@@ -11,6 +11,7 @@ import {
   http,
   isHex,
   type Account,
+  type Address,
   type Hex,
   type PublicClient,
   type WalletClient,
@@ -53,6 +54,22 @@ export async function clients(): Promise<Clients> {
     publicClient,
     wallet: (account) => createWalletClient({ account, chain: sepolia, transport }),
   };
+}
+
+/**
+ * ENSv2 names are ERC-1155 tokens minted with a safe transfer, so an owner that has code must
+ * implement onERC1155Received. Well-known test keys (anvil/hardhat key 0 and 1) carry EIP-7702
+ * delegations on Sepolia that do not, and the mint reverts with no reason. Fail early instead.
+ */
+export async function assertCanHoldNames(c: Clients, who: Address, role: string): Promise<void> {
+  const code = await c.publicClient.getCode({ address: who });
+  if (code && code !== '0x') {
+    throw new Error(
+      `${role} ${who} has code (${code.slice(0, 50)}...). ENSv2 mints names with an ERC-1155 safe transfer, ` +
+        'which reverts unless the account implements onERC1155Received. Use a plain EOA key ' +
+        '(not a public anvil/hardhat test key: those carry 7702 delegations on Sepolia).',
+    );
+  }
 }
 
 /** Send one call, wait for it, throw on revert. */
