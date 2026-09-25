@@ -11,8 +11,11 @@ export type EnvConfig = {
   mockApi: boolean;
   /** Ethereum Sepolia RPC, for the ENSv2 record write on rotation. */
   l1RpcUrl: string;
-  /** Optional Uniswap Trading API key (VITE_UNISWAP_API_KEY). */
-  uniswapApiKey: string;
+  /**
+   * Route Convert quotes through the Soapay API's Uniswap proxy (`${apiUrl}/uniswap`), which adds
+   * UNISWAP_API_KEY server-side. Off = the SDK's Universal Router fallback. The key is never in the bundle.
+   */
+  swapViaApi: boolean;
 };
 
 export const SUPPORTED_CHAIN_IDS = Object.keys(CHAINS).map(Number);
@@ -38,7 +41,7 @@ export function readEnv(env: Record<string, string | boolean | undefined> = impo
     stealthDisperse: parseAddressList(str("VITE_STEALTH_DISPERSE")),
     mockApi: str("VITE_MOCK_API") === "1" || str("VITE_MOCK_API") === "true",
     l1RpcUrl: str("VITE_L1_RPC_URL"),
-    uniswapApiKey: str("VITE_UNISWAP_API_KEY"),
+    swapViaApi: str("VITE_SWAP_VIA_API") !== "0" && str("VITE_SWAP_VIA_API") !== "false",
   };
 }
 

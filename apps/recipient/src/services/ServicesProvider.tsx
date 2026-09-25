@@ -6,8 +6,18 @@ import { ENV } from "../config.js";
 import { ScanPool, browserWorkerFactory } from "../scan/pool.js";
 import type { ScanClient } from "../scan/scanner.js";
 import { useVault } from "../vault/VaultProvider.js";
-import { defaultSettings, type Settings } from "../vault/types.js";
-import { MOCK_DISPERSE, createMockFetch, createMockPublicClient, createMockSpendService, setMockIdentity } from "./mock.js";
+import { settingsOf, swapProxyUrl, type Settings } from "../vault/types.js";
+import { createEnsWriter, type EnsWriter } from "../features/rotation/ens.js";
+import { createSdkSwapService, type SwapService } from "../features/convert/swap.js";
+import {
+  MOCK_DISPERSE,
+  createMockEnsWriter,
+  createMockFetch,
+  createMockPublicClient,
+  createMockSpendService,
+  createMockSwapService,
+  setMockIdentity,
+} from "./mock.js";
 import { createSdkSpendService, type SpendService } from "./spend.js";
 
 export type Services = {
@@ -18,6 +28,10 @@ export type Services = {
   /** Reads: block number, logs, balances, registry nonce. */
   client: ScanClient & { readContract: PublicClient["readContract"] };
   spend: SpendService;
+  /** Convert in place (Uniswap via the SDK). */
+  swap: SwapService;
+  /** ENSv2 `stealth` record writer for rotation (Sepolia). */
+  ens: EnsWriter;
   pool: ScanPool;
   /** StealthDisperse deployments whose metadata payer we trust. */
   stealthDisperse: Address[];
@@ -42,6 +56,8 @@ export function buildServices(settings: Settings, mock: boolean): Services {
       fetch: fetchFn,
       client: createMockPublicClient(chainId) as unknown as Services["client"],
       spend: createMockSpendService(),
+      swap: createMockSwapService(chainId),
+      ens: createMockEnsWriter(),
       pool: pool(),
       stealthDisperse: disperse,
     };
@@ -59,6 +75,8 @@ export function buildServices(settings: Settings, mock: boolean): Services {
     fetch: fetchFn,
     client: publicClient as unknown as Services["client"],
     spend: createSdkSpendService({ chainId, bundlerUrl: settings.bundlerUrl, publicClient }),
+    swap: createSdkSwapService({ chainId, bundlerUrl: settings.bundlerUrl, publicClient, proxyUrl: swapProxyUrl(settings) }),
+    ens: createEnsWriter({ l1RpcUrl: settings.l1RpcUrl }),
     pool: pool(),
     stealthDisperse: disperse,
   };
@@ -66,7 +84,7 @@ export function buildServices(settings: Settings, mock: boolean): Services {
 
 export function ServicesProvider({ children, override }: { children: ReactNode; override?: Services }) {
   const vault = useVault();
-  const settings = vault.data?.settings ?? defaultSettings();
+  const settings = settingsOf(vault.data);
   const key = JSON.stringify(settings);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const services = useMemo(() => override ?? buildServices(settings, ENV.mockApi), [override, key]);

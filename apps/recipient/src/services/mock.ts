@@ -8,6 +8,7 @@
  * (seeded by the meta-address), so a reload yields the same payments.
  */
 import {
+  SpendManyError,
   buildMetadata77,
   derivePayRun,
   getChainConfig,
@@ -20,7 +21,9 @@ import { keccak_256 } from "@noble/hashes/sha3.js";
 import { bytesToHex, getAddress, keccak256, toHex, type Address, type Hex } from "viem";
 import type { ApiFetch } from "../api/client.js";
 import type { SendProgress, SpendQuote, SpendService } from "./spend.js";
-import type { SpendParams, SpendResult } from "@soapay/sdk";
+import type { SpendParams, SpendResult, SwapQuote } from "@soapay/sdk";
+import type { EnsWriter } from "../features/rotation/ens.js";
+import { NATIVE_ETH, type SwapService } from "../features/convert/swap.js";
 import { privateKeyToAccount } from "viem/accounts";
 
 export const MOCK_EMPLOYER: Address = "0x5ca1ab1e00000000000000000000000000000e3e";
@@ -45,9 +48,16 @@ const state: {
   meta: string | null;
   world: World | null;
   names: Map<string, { label: string; registrant: Address; metaAddress: string; deadline: string }>;
+  rotations: { label: string; oldMeta: string; newMeta: string; verifiedAt: string }[];
   registered: Set<string>;
   bornAt: number;
-} = { meta: null, world: null, names: new Map(), registered: new Set(), bornAt: Date.now() };
+} = { meta: null, world: null, names: new Map(), rotations: [], registered: new Set(), bornAt: Date.now() };
+
+/**
+ * Demo trigger for the partial-failure path: sending to an address that starts with this prefix makes
+ * the SECOND userOp of the run fail (SpendManyError), so the first one lands and the rest don't.
+ */
+export const MOCK_FAIL_PREFIX = "0xfa11";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const latency = () => sleep(120 + Math.random() * 250);
@@ -177,6 +187,38 @@ export function createMockFetch(chainId: number): ApiFetch {
     const url = new URL(input, "http://mock.local");
     const method = (init?.method ?? "GET").toUpperCase();
     const path = url.pathname.replace(/^.*?(\/(announcements|register|names|health))/, "$1");
+
+    const attach = /^\/names\/([^/]+)\/session$/.exec(path);
+    if (method === "POST" && attach) {
+      const label = decodeURIComponent(attach[1]!);
+      if (!state.names.has(label)) return err(404, "not_found", "name not found");
+      const body = JSON.parse(String(init?.body ?? "{}")) as { sessionId?: string; registrantSig?: string };
+      if (!body.sessionId || !body.registrantSig) return err(400, "invalid_body", "sessionId and registrantSig are required");
+      return respond(200, { ok: true });
+    }
+
+    const rotation = /^\/names\/([^/]+)\/rotation$/.exec(path);
+    if (method === "POST" && rotation) {
+      const label = decodeURIComponent(rotation[1]!);
+      const row = state.names.get(label);
+      if (!row) return err(404, "not_found", "name not found");
+      const body = JSON.parse(String(init?.body ?? "{}")) as { newMeta?: string; deadline?: string; registrantSig?: string; registerSig?: string };
+      if (!body.newMeta || !body.deadline || !body.registrantSig || !body.registerSig) {
+        return err(400, "invalid_body", "newMeta, deadline, registrantSig and registerSig are required");
+      }
+      if (BigInt(body.deadline) <= BigInt(Math.floor(Date.now() / 1000))) return err(400, "expired", "deadline has passed");
+      const oldMeta = row.metaAddress.toLowerCase();
+      const newMeta = body.newMeta.toLowerCase();
+      if (oldMeta === newMeta) return err(409, "no_change", "newMeta equals the current meta-address");
+      const verifiedAt = String(Math.floor(Date.now() / 1000));
+      state.names.set(label, { ...row, metaAddress: newMeta });
+      state.rotations.push({ label, oldMeta, newMeta, verifiedAt });
+      return respond(200, {
+        attestation: { label, oldMeta, newMeta, verifiedAt, signature: fakeTxHash(`attest:${label}:${verifiedAt}`) + "00" },
+        fundingTxHash: fakeTxHash(`fund:${label}:${verifiedAt}`),
+        registerTxHash: fakeTxHash(`reregister:${label}:${verifiedAt}`),
+      });
+    }
 
     if (method === "GET" && path === "/health") return respond(200, { ok: true, chainId, mock: true });
 
@@ -309,7 +351,11 @@ export function createMockSpendService(): SpendService {
         const from = privateKeyToAccount(s.stealthKey).address;
         const bal = balanceOf(from);
         const amount = s.amount === "max" ? bal - MOCK_FEE : s.amount;
-        if (amount + MOCK_FEE > bal) throw new Error(`mock: insufficient balance in ${from}`);
+        // Same contract as the SDK's spendMany: stop at the first failure, report what already landed.
+        if (i === 1 && s.to.toLowerCase().startsWith(MOCK_FAIL_PREFIX)) {
+          throw new SpendManyError(out, i, new Error("mock: bundler rejected the userOp (AA21 didn't pay prefund)"));
+        }
+        if (amount + MOCK_FEE > bal) throw new SpendManyError(out, i, new Error(`mock: insufficient balance in ${from}`));
         state.world?.balances.set(from.toLowerCase(), bal - amount - MOCK_FEE);
         delegated.add(from.toLowerCase());
         out.push({
@@ -323,6 +369,67 @@ export function createMockSpendService(): SpendService {
         onProgress?.(i + 1, spends.length);
       }
       return out;
+    },
+  };
+}
+
+/** Stands in for the ENSv2 `setText(stealth)` on Sepolia. */
+export function createMockEnsWriter(): EnsWriter {
+  return {
+    ready: true,
+    async setStealthRecord({ name, metaAddress }) {
+      await sleep(900);
+      return { txHash: fakeTxHash(`setText:${name}:${metaAddress}`) };
+    },
+  };
+}
+
+/** Rough mock price, USDC base units per whole ETH. */
+const MOCK_USDC_PER_ETH = 3_000n * USDC_UNIT;
+const MOCK_ROUTER: Address = "0x000000000000000000000000000000000000c0de";
+
+/** Quotes and "executes" swaps in place against the mock balances (USDC in, fee in USDC). */
+export function createMockSwapService(chainId: number): SwapService {
+  const usdc = getChainConfig(chainId).usdc;
+  const quote = async (r: { stealthKey: Hex; tokenOut: Address; amountIn: bigint; slippageBps: number }): Promise<SwapQuote> => {
+    await latency();
+    const stealthAddress = privateKeyToAccount(r.stealthKey).address;
+    const amountOut = (r.amountIn * 10n ** 18n) / MOCK_USDC_PER_ETH;
+    return {
+      source: "universal-router",
+      chainId,
+      stealthAddress,
+      tokenIn: usdc,
+      tokenOut: r.tokenOut,
+      amountIn: r.amountIn,
+      amountOut,
+      minOut: (amountOut * BigInt(10_000 - r.slippageBps)) / 10_000n,
+      slippageBps: r.slippageBps,
+      route: `USDC -[v3 0.05%]-> ${r.tokenOut === NATIVE_ETH ? "ETH" : "WETH"}`,
+      router: MOCK_ROUTER,
+      deadline: BigInt(Math.floor(Date.now() / 1000) + 1800),
+      calls: [],
+    };
+  };
+  return {
+    ready: true,
+    route: "Mock Uniswap (1 ETH = 3,000 USDC)",
+    quote,
+    async swap(r) {
+      const q = await quote(r);
+      await sleep(1_200);
+      const from = q.stealthAddress;
+      const bal = state.world?.balances.get(from.toLowerCase()) ?? 0n;
+      if (r.amountIn + MOCK_FEE > bal) throw new Error("mock: amount plus fee exceeds the USDC balance");
+      state.world?.balances.set(from.toLowerCase(), bal - r.amountIn - MOCK_FEE);
+      return {
+        from,
+        userOpHash: fakeTxHash(`swapop:${from}:${Date.now()}`),
+        txHash: fakeTxHash(`swaptx:${from}:${Date.now()}`),
+        delegated: true,
+        feeEstimate: MOCK_FEE,
+        quote: q,
+      };
     },
   };
 }

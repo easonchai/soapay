@@ -2,8 +2,11 @@
  * Onboarding state machine (PRD Flow 1). Pure: no I/O, no randomness (callers pass the mnemonic and
  * the challenge indices in), so every transition is unit-testable.
  *
- *   welcome ─create→ backup ─→ confirm ─ok→ passphrase ─vault→ human → register → name → share
- *          └restore→ restore ─valid→ passphrase ─┘                                 └skip┘
+ *   welcome ─create→ backup ─→ confirm ─ok→ passphrase ─vault→ register → recovery → name → share
+ *          └restore→ restore ─valid→ passphrase ─┘                    (optional)  └skip┘
+ *
+ * `recovery` is OPTIONAL (docs/mvp-spec.md §5): a World ID Selfie Check session for self-service key
+ * rotation later. Its result rides along to `name`, which posts it with the claim.
  *
  * The mnemonic lives only in the pre-vault states; once the vault is created it is dropped from the
  * machine (the vault holds it, encrypted). The seed is shown exactly once, in `backup`.
@@ -11,7 +14,7 @@
 import type { Profile } from "../vault/types.js";
 import type { HumanCheckResult } from "../worldid/types.js";
 
-type Proof = HumanCheckResult | undefined;
+type Session = HumanCheckResult | undefined;
 
 export type Origin = "create" | "restore";
 
@@ -21,9 +24,9 @@ export type OnboardingState =
   | { step: "confirm"; mnemonic: string; challenge: number[]; error: string | null; attempts: number }
   | { step: "restore"; error: string | null }
   | { step: "passphrase"; mnemonic: string; origin: Origin }
-  | { step: "human"; proof: Proof }
-  | { step: "register"; proof: Proof }
-  | { step: "name"; proof: Proof }
+  | { step: "register" }
+  | { step: "recovery" }
+  | { step: "name"; session: Session }
   | { step: "share" }
   | { step: "done" };
 
@@ -35,8 +38,9 @@ export type OnboardingEvent =
   | { type: "RESTORE_SUBMIT"; mnemonic: string; valid: boolean }
   | { type: "BACK" }
   | { type: "VAULT_CREATED" }
-  | { type: "HUMAN_VERIFIED"; proof: Proof }
   | { type: "REGISTERED" }
+  | { type: "SESSION_CREATED"; session: HumanCheckResult }
+  | { type: "SKIP_RECOVERY" }
   | { type: "NAMED" }
   | { type: "SKIP_NAME" }
   | { type: "FINISH" };
@@ -46,9 +50,10 @@ export const initialState: OnboardingState = { step: "welcome" };
 /** Where to resume after an unlock, from what the vault already records. */
 export function resumeState(profile: Profile): OnboardingState {
   if (profile.onboardedAt) return { step: "done" };
-  if (!profile.human) return { step: "human", proof: undefined };
-  if (!profile.registration) return { step: "register", proof: undefined };
-  if (!profile.name && !profile.nameSkipped) return { step: "name", proof: undefined };
+  if (!profile.registration) return { step: "register" };
+  if (!profile.recovery && !profile.recoverySkipped) return { step: "recovery" };
+  // The session result itself isn't persisted: after a reload it is attached later from Name settings.
+  if (!profile.name && !profile.nameSkipped) return { step: "name", session: undefined };
   return { step: "share" };
 }
 
@@ -107,16 +112,17 @@ export function reduce(state: OnboardingState, event: OnboardingEvent): Onboardi
       return state;
 
     case "passphrase":
-      if (event.type === "VAULT_CREATED") return { step: "human", proof: undefined };
+      if (event.type === "VAULT_CREATED") return { step: "register" };
       if (event.type === "BACK") return state.origin === "create" ? { step: "backup", mnemonic: state.mnemonic } : { step: "restore", error: null };
       return state;
 
-    case "human":
-      if (event.type === "HUMAN_VERIFIED") return { step: "register", proof: event.proof };
+    case "register":
+      if (event.type === "REGISTERED") return { step: "recovery" };
       return state;
 
-    case "register":
-      if (event.type === "REGISTERED") return { step: "name", proof: state.proof };
+    case "recovery":
+      if (event.type === "SESSION_CREATED") return { step: "name", session: event.session };
+      if (event.type === "SKIP_RECOVERY") return { step: "name", session: undefined };
       return state;
 
     case "name":
@@ -134,7 +140,7 @@ export function reduce(state: OnboardingState, event: OnboardingEvent): Onboardi
 
 /** Progress indicator: [current index, total], counting the steps a user sees. */
 export function progressOf(state: OnboardingState): [number, number] {
-  const order = ["welcome", "backup", "confirm", "passphrase", "human", "register", "name", "share"];
+  const order = ["welcome", "backup", "confirm", "passphrase", "register", "recovery", "name", "share"];
   const step = state.step === "restore" ? "backup" : state.step === "done" ? "share" : state.step;
   return [order.indexOf(step), order.length - 1];
 }

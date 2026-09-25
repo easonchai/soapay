@@ -1,84 +1,110 @@
 /**
  * Meta-address rotation under option A (docs/mvp-spec.md §2.1), framework-free:
  *
- *   1. new keys: the next key generation (./keys.ts)          ← caller
- *   2. World ID: `proveSession(saved session_id)`              ← caller (<HumanCheck mode="rotate">)
- *   3. `submitRotation`: sign the RotationClaim with the registrant key, POST /names/:label/rotation
- *   4. `finishRotation`: registrant `setText(stealth)` on Sepolia, then re-register the new meta-address
- *      in ERC-6538 (names.ts cross-checks the ENS record against `stealthMetaAddressOf(registrant, 1)`,
- *      so a changed record without it would fail resolution with MetaMismatch).
+ *   1. `prepareRotation`: the next key generation (./keys.ts), a deadline, and the World ID signal
+ *   2. World ID: `<HumanCheck mode="rotate" sessionId signal>` (proveSession)   ← caller
+ *   3. `submitRotation`: sign the RotationClaim AND a `registerKeysOnBehalf` for the new meta with the
+ *      registrant key, POST /names/:label/rotation. The API attests, tops up Sepolia gas, and relays
+ *      the ERC-6538 re-registration on Base (step 3 of §2.1).
+ *   4. `finishRotation`: the registrant's `setText(stealth)` on its ENSv2 resolver on Sepolia.
  *
- * Between 3 and 4 the caller persists a `PendingRotation`, so a failed or interrupted on-chain step can
- * be retried without a second World ID proof.
+ * Between 3 and 4 the caller persists a `PendingRotation`, so a failed or interrupted `setText` can be
+ * retried without a second World ID proof.
  */
-import type { RegistryReader, SoapayKeys } from "@soapay/sdk";
+import { getRegistryNonce, signRegisterKeysOnBehalf, type RegistryReader, type SoapayKeys } from "@soapay/sdk";
 import type { Hex } from "viem";
 import type { Api, RotationResult } from "../../api/client.js";
-import { registerMetaAddress } from "../../onboarding/actions.js";
-import type { HumanCheckResult } from "../../worldid/types.js";
+import { rotateSignal, type HumanCheckResult } from "../../worldid/types.js";
 import { canonicalMeta, signRotationClaim } from "./claim.js";
 import type { EnsWriter } from "./ens.js";
+import { keysForGeneration } from "./keys.js";
 
 export const ROTATION_TTL_SECONDS = 1_800n;
 
-export type RotationStage = "sign" | "post" | "setText" | "register" | "done";
+export type RotationStage = "sign" | "post" | "setText" | "done";
+
+export type RotationDraft = {
+  label: string;
+  generation: number;
+  oldMeta: string;
+  newMeta: string;
+  deadline: bigint;
+  /** What the World ID proof must commit to. */
+  signal: string;
+};
+
+/** Everything the World ID step needs, computed before the proof so the signal binds this rotation. */
+export function prepareRotation(p: {
+  mnemonic: string;
+  label: string;
+  currentGeneration: number;
+  oldMeta: string;
+  now?: number;
+}): RotationDraft {
+  const generation = p.currentGeneration + 1;
+  const newMeta = canonicalMeta(keysForGeneration(p.mnemonic, generation).metaAddressURI);
+  const deadline = BigInt(Math.floor((p.now ?? Date.now()) / 1000)) + ROTATION_TTL_SECONDS;
+  return {
+    label: p.label,
+    generation,
+    oldMeta: canonicalMeta(p.oldMeta),
+    newMeta,
+    deadline,
+    signal: rotateSignal(p.label, newMeta, deadline),
+  };
+}
 
 export async function submitRotation(p: {
   api: Api;
+  registry: RegistryReader;
   chainId: number;
-  label: string;
-  oldMeta: string;
-  newMeta: string;
-  registrantKey: Hex;
+  draft: RotationDraft;
+  /** Generation 0's registrant (KeyRing.current carries it). */
+  registrant: Pick<SoapayKeys, "registrantKey" | "registrantAddress">;
   worldId: HumanCheckResult;
-  now?: number;
   onStage?: (s: RotationStage) => void;
 }): Promise<RotationResult> {
-  if (canonicalMeta(p.oldMeta) === canonicalMeta(p.newMeta)) throw new Error("The new meta-address is the same as the old one.");
+  const { draft } = p;
+  if (draft.oldMeta === draft.newMeta) throw new Error("The new meta-address is the same as the old one.");
   p.onStage?.("sign");
-  const deadline = BigInt(Math.floor((p.now ?? Date.now()) / 1000)) + ROTATION_TTL_SECONDS;
-  const { signature } = await signRotationClaim({
-    label: p.label,
-    oldMeta: p.oldMeta,
-    newMeta: p.newMeta,
-    deadline,
+  const { signature: registrantSig } = await signRotationClaim({
+    label: draft.label,
+    oldMeta: draft.oldMeta,
+    newMeta: draft.newMeta,
+    deadline: draft.deadline,
     chainId: p.chainId,
-    registrantKey: p.registrantKey,
+    registrantKey: p.registrant.registrantKey,
+  });
+  const nonce = await getRegistryNonce(p.registry, p.registrant.registrantAddress);
+  const registerSig = await signRegisterKeysOnBehalf({
+    registrantKey: p.registrant.registrantKey,
+    metaAddressURI: draft.newMeta,
+    chainId: p.chainId,
+    nonce,
   });
   p.onStage?.("post");
-  return p.api.rotate(p.label, {
-    newMeta: canonicalMeta(p.newMeta),
-    deadline: deadline.toString(),
-    registrantSig: signature,
+  return p.api.rotate(draft.label, {
+    newMeta: draft.newMeta,
+    deadline: draft.deadline.toString(),
+    registrantSig,
+    registerSig,
     ...(p.worldId.placeholder ? {} : { worldIdResult: p.worldId.session }),
   });
 }
 
 export async function finishRotation(p: {
-  api: Api;
   ens: EnsWriter;
-  registry: RegistryReader;
-  chainId: number;
   name: string;
   newMeta: string;
-  /** Any key set whose registrant fields are generation 0's (KeyRing.current). */
-  registrant: SoapayKeys;
+  registrantKey: Hex;
   onStage?: (s: RotationStage) => void;
-}): Promise<{ setTextTx: Hex; registerTx: Hex }> {
+}): Promise<{ setTextTx: Hex }> {
   p.onStage?.("setText");
-  const { txHash: setTextTx } = await p.ens.setStealthRecord({
+  const { txHash } = await p.ens.setStealthRecord({
     name: p.name,
     metaAddress: canonicalMeta(p.newMeta),
-    registrantKey: p.registrant.registrantKey,
-  });
-  p.onStage?.("register");
-  const reg = await registerMetaAddress({
-    api: p.api,
-    client: p.registry,
-    keys: p.registrant,
-    chainId: p.chainId,
-    metaAddressURI: p.newMeta,
+    registrantKey: p.registrantKey,
   });
   p.onStage?.("done");
-  return { setTextTx, registerTx: reg.txHash };
+  return { setTextTx: txHash };
 }

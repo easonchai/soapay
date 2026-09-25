@@ -16,8 +16,8 @@ export type Settings = {
   knownPayers: { address: Address; name: string }[];
   /** Ethereum Sepolia JSON-RPC for the ENSv2 `stealth` record write during rotation. Empty = public RPC. */
   l1RpcUrl: string;
-  /** Uniswap Trading API key. Optional: without it, swaps route through the Universal Router fallback. */
-  uniswapApiKey: string;
+  /** Convert via the Soapay API's Uniswap proxy (`${apiUrl}/uniswap`); off = Universal Router fallback. */
+  swapViaApi: boolean;
 };
 
 export type StoredAnnouncement = Omit<AnnouncementRecord, "blockNumber"> & { blockNumber: string };
@@ -49,8 +49,14 @@ export type SpendRecord = {
 export type Profile = {
   registration?: { txHash: Hex; status: string; chainId: number; at: number };
   name?: { label: string; name: string; at: number };
-  /** World ID enrollment. `placeholder` until IDKit is wired. `sessionId` is needed to rotate keys (§2.1). */
-  human?: { kind: "world-id" | "placeholder"; at: number; sessionId?: string };
+  /**
+   * Optional self-service recovery (§5): a World ID Selfie Check session. With it, a key rotation is
+   * attested by the API and auto-accepted by the employer; without it, the employer approves by hand.
+   * `attachedTo` is the label the API has the session on (set with the name claim or attached later).
+   */
+  recovery?: { kind: "world-id" | "placeholder"; at: number; sessionId?: string; attachedTo?: string };
+  /** The user chose not to set up recovery during onboarding. */
+  recoverySkipped?: boolean;
   /** Which derived key set the name currently points at: 0 = the original keys (see features/rotation/keys.ts). */
   keyGeneration?: number;
   /** Completed meta-address rotations, oldest first. */
@@ -66,6 +72,8 @@ export type Profile = {
 
 export type RotationRecord = {
   generation: number;
+  /** Whether the API attested it (World ID) or the employer has to approve it by hand. */
+  path?: "attested" | "manual";
   oldMeta: string;
   newMeta: string;
   at: number;
@@ -74,7 +82,14 @@ export type RotationRecord = {
   attestation?: unknown;
 };
 
-export type PendingRotation = Omit<RotationRecord, "at" | "setTextTx"> & { postedAt: number };
+export type PendingRotation = Omit<RotationRecord, "at" | "setTextTx"> & {
+  postedAt: number;
+  /** "attested": the API accepted a World ID rotation (and relays the registry update itself).
+   *  "manual": no session; the employer must approve, and we relay the registry update via /register. */
+  path: "attested" | "manual";
+  /** Manual path: the ERC-6538 re-registration went through. */
+  registered?: boolean;
+};
 
 export type VaultData = {
   version: 1;
@@ -96,13 +111,14 @@ export function defaultSettings(): Settings {
     stealthDisperse: [],
     knownPayers: [],
     l1RpcUrl: ENV.l1RpcUrl,
-    uniswapApiKey: ENV.uniswapApiKey,
+    swapViaApi: ENV.swapViaApi,
   };
 }
 
 /** Settings with defaults filled in, so vaults written by older builds keep working. */
 export function settingsOf(data: Pick<VaultData, "settings"> | null | undefined): Settings {
-  return { ...defaultSettings(), ...(data?.settings ?? {}) };
+  const { uniswapApiKey: _legacy, ...rest } = (data?.settings ?? {}) as Settings & { uniswapApiKey?: string };
+  return { ...defaultSettings(), ...rest };
 }
 
 export function emptyChainState(): ChainState {
@@ -136,6 +152,11 @@ export const loadAnnouncement = (a: StoredAnnouncement): AnnouncementRecord => (
 
 export function annKey(a: Pick<AnnouncementRecord, "txHash" | "logIndex">): string {
   return `${a.txHash.toLowerCase()}:${a.logIndex}`;
+}
+
+/** The Trading API proxy base for the SDK's `apiUrl`, or "" for the Universal Router fallback. */
+export function swapProxyUrl(s: Pick<Settings, "apiUrl" | "swapViaApi">): string {
+  return s.swapViaApi && s.apiUrl ? `${s.apiUrl.replace(/\/+$/, "")}/uniswap` : "";
 }
 
 export function toScanMatch(a: StoredAnnouncement, parse: (m: Hex) => MetadataHints | null): ScanMatch {

@@ -9,13 +9,10 @@ import {
 import { ApiError, type Api, type NameRecord, type RegisterResult } from "../api/client.js";
 import type { HumanCheckResult } from "../worldid/types.js";
 
-/** Enrollment World ID fields for POST /register and POST /names: `proof` (uniqueness) + `session`. */
-export function humanFields(human: HumanCheckResult | undefined): { proof?: unknown; session?: unknown } {
-  if (!human || human.placeholder) return {};
-  return {
-    ...(human.proof !== undefined ? { proof: human.proof } : {}),
-    ...(human.session !== undefined ? { session: human.session } : {}),
-  };
+/** The optional World ID session for POST /names. Placeholder results are never sent. */
+export function sessionFields(r: HumanCheckResult | undefined): { session?: unknown } {
+  if (!r || r.placeholder || r.session === undefined) return {};
+  return { session: r.session };
 }
 
 /**
@@ -28,7 +25,6 @@ export async function registerMetaAddress(p: {
   client: RegistryReader;
   keys: SoapayKeys;
   chainId: number;
-  human?: HumanCheckResult | undefined;
   /** Register a different meta-address for the same registrant (key rotation). Default: the keys' own. */
   metaAddressURI?: string;
 }): Promise<RegisterResult> {
@@ -45,7 +41,6 @@ export async function registerMetaAddress(p: {
       registrant: p.keys.registrantAddress,
       metaAddress: metaAddressURI,
       signature,
-      ...humanFields(p.human),
     });
   } catch (e) {
     // Restoring a seed that is already registered is fine.
@@ -62,7 +57,8 @@ export async function claimName(p: {
   keys: SoapayKeys;
   chainId: number;
   label: string;
-  human?: HumanCheckResult | undefined;
+  /** Optional World ID session (self-service recovery, §5). */
+  session?: HumanCheckResult | undefined;
   now?: number;
 }): Promise<NameRecord> {
   const deadline = BigInt(Math.floor((p.now ?? Date.now()) / 1000)) + CLAIM_TTL_SECONDS;
@@ -80,7 +76,7 @@ export async function claimName(p: {
     metaAddress: p.keys.metaAddressURI,
     deadline: deadline.toString(),
     signature,
-    ...humanFields(p.human),
+    ...sessionFields(p.session),
   });
 }
 

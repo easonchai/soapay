@@ -5,8 +5,8 @@ import { useServices } from "../services/ServicesProvider.js";
 import { useVault } from "../vault/VaultProvider.js";
 import { MIN_PASSPHRASE_LENGTH } from "../vault/crypto.js";
 import { Alert, Button, Card, Checkbox, CopyButton, Field, Input, Textarea, cn, errorMessage } from "../ui/kit.js";
-import { HumanCheck, enrollSignal, sessionIdOf, type HumanCheckResult } from "../worldid/index.js";
-import { claimName, fullName, registerMetaAddress } from "./actions.js";
+import { HumanCheck, sessionIdOf, sessionSignal, type HumanCheckResult } from "../worldid/index.js";
+import { claimName, fullName, registerMetaAddress, sessionFields } from "./actions.js";
 import { initialState, pickChallenge, progressOf, reduce, resumeState, words, type OnboardingState } from "./machine.js";
 import { useLabelAvailability } from "./useLabelAvailability.js";
 
@@ -121,12 +121,12 @@ function Step({ state, dispatch, headingRef }: StepProps) {
       return <RestoreStep error={state.error} dispatch={dispatch} headingRef={headingRef} />;
     case "passphrase":
       return <PassphraseStep mnemonic={state.mnemonic} dispatch={dispatch} headingRef={headingRef} />;
-    case "human":
-      return <HumanStep dispatch={dispatch} headingRef={headingRef} />;
     case "register":
-      return <RegisterStep proof={state.proof} dispatch={dispatch} headingRef={headingRef} />;
+      return <RegisterStep dispatch={dispatch} headingRef={headingRef} />;
+    case "recovery":
+      return <RecoveryStep dispatch={dispatch} headingRef={headingRef} />;
     case "name":
-      return <NameStep proof={state.proof} dispatch={dispatch} headingRef={headingRef} />;
+      return <NameStep session={state.session} dispatch={dispatch} headingRef={headingRef} />;
     case "share":
     case "done":
       return <ShareStep dispatch={dispatch} headingRef={headingRef} />;
@@ -353,15 +353,23 @@ function PassphraseStep({ mnemonic, dispatch, headingRef }: { mnemonic: string }
   );
 }
 
-function HumanStep({ dispatch, headingRef }: Omit<StepProps, "state">) {
+function RecoveryStep({ dispatch, headingRef }: Omit<StepProps, "state">) {
   const vault = useVault();
   const svc = useServices();
   const [error, setError] = useState<string | null>(null);
-  const signal = enrollSignal(vault.keys?.registrantAddress ?? "");
+  const signal = sessionSignal(vault.keys?.registrantAddress ?? "");
+  const skip = async () => {
+    await vault.update((d) => ({ ...d, profile: { ...d.profile, recoverySkipped: true } }));
+    dispatch({ type: "SKIP_RECOVERY" });
+  };
   return (
-    <Frame headingRef={headingRef} title="One person, one account" lead="A quick uniqueness check before we pay your registration gas.">
+    <Frame
+      headingRef={headingRef}
+      title="Enable self-service key recovery"
+      lead="Optional. If you ever lose this device or your keys leak, a World ID Selfie Check lets you move your pay name to new keys without asking your employer."
+    >
       <HumanCheck
-        mode="enroll"
+        mode="create-session"
         apiUrl={svc.settings.apiUrl}
         signal={signal}
         onError={(e) => setError(errorMessage(e))}
@@ -372,10 +380,10 @@ function HumanStep({ dispatch, headingRef }: Omit<StepProps, "state">) {
             ...d,
             profile: {
               ...d.profile,
-              human: { kind: r.placeholder ? "placeholder" : "world-id", at: Date.now(), ...(sessionId ? { sessionId } : {}) },
+              recovery: { kind: r.placeholder ? "placeholder" : "world-id", at: Date.now(), ...(sessionId ? { sessionId } : {}) },
             },
           }));
-          dispatch({ type: "HUMAN_VERIFIED", proof: r });
+          dispatch({ type: "SESSION_CREATED", session: r });
         }}
       />
       {error && (
@@ -383,11 +391,17 @@ function HumanStep({ dispatch, headingRef }: Omit<StepProps, "state">) {
           {error}
         </Alert>
       )}
+      <Alert variant="info">
+        Without it you can still change keys later, but your employer has to approve the change by hand before paying you again.
+      </Alert>
+      <Button variant="ghost" className="w-full" onClick={skip}>
+        Skip for now
+      </Button>
     </Frame>
   );
 }
 
-function RegisterStep({ proof, dispatch, headingRef }: { proof: HumanCheckResult | undefined } & Omit<StepProps, "state">) {
+function RegisterStep({ dispatch, headingRef }: Omit<StepProps, "state">) {
   const vault = useVault();
   const svc = useServices();
   const [busy, setBusy] = useState(false);
@@ -397,7 +411,7 @@ function RegisterStep({ proof, dispatch, headingRef }: { proof: HumanCheckResult
     setBusy(true);
     setError(null);
     try {
-      const r = await registerMetaAddress({ api: svc.api, client: svc.client, keys, chainId: svc.settings.chainId, human: proof });
+      const r = await registerMetaAddress({ api: svc.api, client: svc.client, keys, chainId: svc.settings.chainId });
       await vault.update((d) => ({
         ...d,
         profile: { ...d.profile, registration: { txHash: r.txHash, status: r.status, chainId: svc.settings.chainId, at: Date.now() } },
@@ -447,7 +461,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function NameStep({ proof, dispatch, headingRef }: { proof: HumanCheckResult | undefined } & Omit<StepProps, "state">) {
+function NameStep({ session, dispatch, headingRef }: { session: HumanCheckResult | undefined } & Omit<StepProps, "state">) {
   const vault = useVault();
   const svc = useServices();
   const keys = vault.keys!;
@@ -463,8 +477,16 @@ function NameStep({ proof, dispatch, headingRef }: { proof: HumanCheckResult | u
     setBusy(true);
     setError(null);
     try {
-      const rec = await claimName({ api: svc.api, keys, chainId: svc.settings.chainId, label, human: proof });
-      await vault.update((d) => ({ ...d, profile: { ...d.profile, name: { label, name: rec.name ?? fullName(label), at: Date.now() } } }));
+      const rec = await claimName({ api: svc.api, keys, chainId: svc.settings.chainId, label, session });
+      const attached = session && !session.placeholder && sessionFields(session).session !== undefined;
+      await vault.update((d) => ({
+        ...d,
+        profile: {
+          ...d.profile,
+          name: { label, name: rec.name ?? fullName(label), at: Date.now() },
+          ...(attached && d.profile.recovery ? { recovery: { ...d.profile.recovery, attachedTo: label } } : {}),
+        },
+      }));
       dispatch({ type: "NAMED" });
     } catch (err) {
       setError(errorMessage(err));

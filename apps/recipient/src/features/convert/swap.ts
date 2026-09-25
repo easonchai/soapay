@@ -1,82 +1,38 @@
 /**
- * Convert-in-place seam (docs/mvp-spec.md §6): swap part of ONE stealth address's USDC into another
- * asset that stays in the SAME address. One 7702 userOp (approve + swap), gas in USDC via the paymaster.
- * No funds move between addresses, so no clusters merge and the guard has nothing to decide.
+ * Convert in place (docs/mvp-spec.md §6): swap part of ONE stealth address's USDC into another asset
+ * that stays in the SAME address. One 7702 userOp (approve + swap + balance guard), gas in USDC via the
+ * paymaster. No funds move between addresses, so no clusters merge and the guard has nothing to decide.
  *
- * The SDK functions `quoteSwapInPlace` / `swapInPlace` (packages/sdk/src/swap.ts) are not in this tree
- * yet. The types below mirror their exact signatures.
- * TODO(swap): when swap.ts is exported from @soapay/sdk, make `loadSdkSwap` return
- *     { quoteSwapInPlace, swapInPlace }   (imported from "@soapay/sdk")
- * and delete the mirrored types in favour of the SDK's `SwapQuoteParams`, `SwapQuote`,
- * `SwapInPlaceParams`, `SwapInPlaceResult`.
+ * All swap logic is the SDK's (`quoteSwapInPlace` / `swapInPlace`, packages/sdk/src/swap.ts). Routing:
+ * - `proxyUrl` set (default `${VITE_API_URL}/uniswap`): Trading API through the Soapay API proxy, which
+ *   adds UNISWAP_API_KEY server-side. The key never ships in this bundle.
+ * - no proxy: the SDK's Universal Router V3 fallback, priced by QuoterV2 over the public client.
  */
-import { createSpendClient, type SpendClient, type SpendOptions } from "@soapay/sdk";
-import { zeroAddress, type Address, type Chain, type Hex, type PublicClient, type Transport } from "viem";
+import {
+  MAX_SLIPPAGE_BPS,
+  NATIVE_ETH,
+  WETH_BASE,
+  createSpendClient,
+  getChainConfig,
+  quoteSwapInPlace,
+  swapInPlace,
+  type SpendClient,
+  type SwapFetch,
+  type SwapInPlaceResult,
+  type SwapQuote,
+} from "@soapay/sdk";
+import { getAddress, isAddress, type Address, type Chain, type Hex, type PublicClient, type Transport } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
-// ---- Mirrors of packages/sdk/src/swap.ts ------------------------------------------------------
-
-export const NATIVE_ETH: Address = zeroAddress;
-export const WETH_BASE: Address = "0x4200000000000000000000000000000000000006";
-/** The SDK rejects slippage above this. */
-export const MAX_SLIPPAGE_BPS = 500;
-
-export type SwapSource = "trading-api" | "universal-router";
-
-export type SwapQuoteParams = {
-  chainId: number;
-  /** Must be the address that holds the funds; the SDK throws SwapRecipientError otherwise. */
-  stealthAddress: Address;
-  /** Defaults to the chain's USDC. */
-  tokenIn?: Address;
-  tokenOut: Address;
-  amountIn: bigint;
-  slippageBps: number;
-  /** Uniswap Trading API key. Without it the SDK routes via the Universal Router V3 fallback. */
-  apiKey?: string;
-  source?: SwapSource;
-  publicClient?: PublicClient<Transport, Chain>;
-};
-
-export type SwapQuote = {
-  source: SwapSource;
-  chainId: number;
-  stealthAddress: Address;
-  tokenIn: Address;
-  tokenOut: Address;
-  amountIn: bigint;
-  amountOut: bigint;
-  minOut: bigint;
-  slippageBps: number;
-  route: string;
-  router: Address;
-  deadline: bigint;
-};
-
-export type SwapInPlaceParams = Omit<SwapQuoteParams, "chainId" | "stealthAddress" | "publicClient"> & {
-  stealthKey: Hex;
-  /** Fee cap in USDC base units. Default 1 USDC. */
-  maxFeeUsdc?: bigint;
-};
-
-export type SwapInPlaceResult = { from: Address; userOpHash: Hex; txHash?: Hex; quote: SwapQuote };
-
-export type SdkSwap = {
-  quoteSwapInPlace(params: SwapQuoteParams): Promise<SwapQuote>;
-  swapInPlace(client: SpendClient, params: SwapInPlaceParams, options?: SpendOptions): Promise<SwapInPlaceResult>;
-};
-
-export function loadSdkSwap(): SdkSwap | null {
-  return null; // TODO(swap): return { quoteSwapInPlace, swapInPlace } from "@soapay/sdk"
-}
-
-// ---- App-facing service -----------------------------------------------------------------------
+export { MAX_SLIPPAGE_BPS, NATIVE_ETH, WETH_BASE, type SwapInPlaceResult, type SwapQuote };
 
 export type ConvertRequest = { stealthKey: Hex; tokenOut: Address; amountIn: bigint; slippageBps: number };
 
 export interface SwapService {
   readonly ready: boolean;
   readonly unavailableReason?: string;
+  /** "trading-api (proxy)" or "universal-router", for display. */
+  readonly route: string;
   quote(req: ConvertRequest): Promise<SwapQuote>;
   swap(req: ConvertRequest): Promise<SwapInPlaceResult>;
 }
@@ -85,42 +41,81 @@ export function unavailableSwapService(reason: string): SwapService {
   return {
     ready: false,
     unavailableReason: reason,
+    route: "none",
     quote: () => Promise.reject(new Error(reason)),
     swap: () => Promise.reject(new Error(reason)),
   };
+}
+
+export type ConvertTarget = { symbol: string; address: Address; decimals: number };
+
+/** Assets offered in the UI. USDC is the input, so it is never a target. */
+export function convertTargets(): ConvertTarget[] {
+  return [
+    { symbol: "ETH", address: NATIVE_ETH, decimals: 18 },
+    { symbol: "WETH", address: WETH_BASE, decimals: 18 },
+  ];
+}
+
+export type ConvertInput = { amountIn: bigint | null; balance: bigint | null; slippageBps: number; tokenOut: string; chainId: number };
+
+/** Validates a convert form before quoting. Returns a user-facing error, or null when OK. */
+export function validateConvert(i: ConvertInput): string | null {
+  if (i.amountIn === null || i.amountIn <= 0n) return "Enter an amount above zero.";
+  if (i.balance !== null && i.amountIn >= i.balance) return "Leave some USDC in the address to pay the network fee.";
+  if (!Number.isInteger(i.slippageBps) || i.slippageBps <= 0) return "Slippage must be a positive number of basis points.";
+  if (i.slippageBps > MAX_SLIPPAGE_BPS) return `Slippage can't exceed ${MAX_SLIPPAGE_BPS / 100}%.`;
+  if (!isAddress(i.tokenOut, { strict: false })) return "Pick an asset to convert to.";
+  if (getAddress(i.tokenOut) === getAddress(getChainConfig(i.chainId).usdc)) return "That's already USDC.";
+  return null;
+}
+
+/**
+ * Sanity checks on a quote before the user can confirm it. The SDK already rejects quotes that pay
+ * anyone but the stealth address; these catch a quote that doesn't match what the user asked for.
+ */
+export function checkQuote(q: SwapQuote, req: { stealthAddress: Address; amountIn: bigint; tokenOut: Address; slippageBps: number }): string | null {
+  if (getAddress(q.stealthAddress) !== getAddress(req.stealthAddress)) return "The quote is for a different address.";
+  if (q.amountIn !== req.amountIn) return "The quote is for a different amount.";
+  if (getAddress(q.tokenOut) !== getAddress(req.tokenOut)) return "The quote is for a different asset.";
+  if (q.slippageBps > req.slippageBps) return "The quote allows more slippage than you set.";
+  if (q.amountOut <= 0n || q.minOut <= 0n || q.minOut > q.amountOut) return "The quote's output looks wrong. Try again.";
+  return null;
 }
 
 export function createSdkSwapService(opts: {
   chainId: number;
   bundlerUrl: string;
   publicClient: PublicClient<Transport, Chain>;
-  /** Optional (VITE_UNISWAP_API_KEY or Settings). */
-  apiKey: string;
-  sdk?: SdkSwap | null;
+  /** Trading API proxy (adds the API key server-side). Empty = Universal Router fallback. */
+  proxyUrl: string;
+  fetch?: SwapFetch;
 }): SwapService {
-  const sdk = opts.sdk === undefined ? loadSdkSwap() : opts.sdk;
-  if (!sdk) return unavailableSwapService("Converting isn't in this build yet (the SDK swap module hasn't landed).");
   if (!opts.bundlerUrl) return unavailableSwapService("Add a bundler URL in Settings to convert.");
   let client: SpendClient | null = null;
   const spendClient = () =>
     (client ??= createSpendClient({ chainId: opts.chainId, bundlerUrl: opts.bundlerUrl, publicClient: opts.publicClient }));
-  const key = opts.apiKey ? { apiKey: opts.apiKey } : {};
+  const proxyUrl = opts.proxyUrl.replace(/\/+$/, "");
+  const routing = proxyUrl
+    ? { apiUrl: proxyUrl, source: "trading-api" as const, ...(opts.fetch ? { fetch: opts.fetch } : {}) }
+    : { source: "universal-router" as const };
   return {
     ready: true,
+    route: proxyUrl ? "Uniswap Trading API (via Soapay API)" : "Uniswap Universal Router (direct)",
     quote: (r) =>
-      sdk.quoteSwapInPlace({
+      quoteSwapInPlace({
         chainId: opts.chainId,
         stealthAddress: privateKeyToAccount(r.stealthKey).address,
         tokenOut: r.tokenOut,
         amountIn: r.amountIn,
         slippageBps: r.slippageBps,
         publicClient: opts.publicClient,
-        ...key,
+        ...routing,
       }),
     swap: (r) =>
-      sdk.swapInPlace(
+      swapInPlace(
         spendClient(),
-        { stealthKey: r.stealthKey, tokenOut: r.tokenOut, amountIn: r.amountIn, slippageBps: r.slippageBps, ...key },
+        { stealthKey: r.stealthKey, tokenOut: r.tokenOut, amountIn: r.amountIn, slippageBps: r.slippageBps, ...routing },
         { wait: true },
       ),
   };
