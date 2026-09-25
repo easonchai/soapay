@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Soapay deck</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Archivo:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* Eight 16:9 slides, 2000x1125 each, in the reference style: beige canvas, soft blobs, heavy uppercase lines. */
+  :root {
+    --bg: #efe8e1; --ink: #1c1c1c; --red: #e0392b; --blue: #1e4db7; --purple: #6b3fd8;
+    --muted: #8a8079; --card: rgba(255,255,255,.55); --line: rgba(28,28,28,.12);
+  }
+  @page { size: 2000px 1125px; margin: 0; }
+  html, body { margin: 0; padding: 0; background: #fff; }
+  body { font-family: "Archivo", "Helvetica Neue", Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .slide { position: relative; width: 2000px; height: 1125px; overflow: hidden; background: var(--bg); page-break-after: always; break-after: page; }
+  .slide:last-child { page-break-after: auto; break-after: auto; }
+  .blob { position: absolute; border-radius: 50%; filter: blur(70px); opacity: .85; }
+  .blob.orange { width: 720px; height: 520px; left: 330px; top: -320px; background: #f0a25a; }
+  .blob.pink { width: 620px; height: 620px; left: -330px; top: 60px; background: #f1a9a0; }
+  .ring { position: absolute; left: -260px; top: 120px; width: 560px; height: 560px; border-radius: 50%;
+          border: 120px solid #f1b0a8; box-sizing: border-box; filter: blur(18px); opacity: .7; }
+  /* Print only: the blurred blobs rasterize to huge bitmaps in PDF, so print uses vector gradients of the same shape and color. */
+  @media print {
+    .blob, .ring { filter: none; }
+    .blob.orange { width: 860px; height: 660px; left: 260px; top: -390px; background: radial-gradient(closest-side, rgba(240,162,90,.85) 0%, rgba(240,162,90,.8) 38%, rgba(240,162,90,0) 100%); }
+    .blob.pink { width: 760px; height: 760px; left: -400px; top: -10px; background: radial-gradient(closest-side, rgba(241,169,160,.85) 0%, rgba(241,169,160,.8) 38%, rgba(241,169,160,0) 100%); }
+    .ring { border: none; width: 600px; height: 600px; left: -280px; top: 100px; background: radial-gradient(circle closest-side, rgba(241,176,168,0) 0%, rgba(241,176,168,0) 50%, rgba(241,176,168,.7) 57%, rgba(241,176,168,.7) 90%, rgba(241,176,168,0) 100%); }
+  }
+  .tag { position: absolute; top: 44px; left: 64px; font-weight: 800; font-size: 26px; letter-spacing: 3px; color: var(--muted); text-transform: uppercase; }
+  .num { position: absolute; bottom: 40px; right: 64px; font-weight: 800; font-size: 24px; color: var(--muted); }
+  .stage { position: relative; height: 100%; box-sizing: border-box; padding: 110px 110px 90px; display: flex; flex-direction: column; }
+  .center { align-items: center; justify-content: center; text-align: center; }
+  .wordmark { font-family: "Archivo Black", "Arial Black", sans-serif; font-size: 190px; line-height: .95; letter-spacing: -6px; color: var(--ink); margin-bottom: 44px; }
+  .line { font-weight: 800; text-transform: uppercase; font-size: 54px; line-height: 1.18; letter-spacing: .5px; max-width: 1760px; margin: 0 0 30px; }
+  .k { color: var(--ink); font-size: 50px; }
+  .red { color: var(--red); } .blue { color: var(--blue); } .purple { color: var(--purple); } .ink { color: var(--ink); }
+  h1.head { font-weight: 800; text-transform: uppercase; font-size: 62px; line-height: 1.1; margin: 0 0 36px; color: var(--red); letter-spacing: .5px; }
+  h1.head span { color: var(--ink); }
+  .sub { font-weight: 700; font-size: 30px; color: var(--muted); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 18px; }
+  .grid { display: grid; gap: 26px; }
+  .card { background: var(--card); border: 2px solid var(--line); border-radius: 20px; padding: 30px 34px; box-sizing: border-box; }
+  .card .who { font-weight: 800; text-transform: uppercase; font-size: 28px; color: var(--blue); letter-spacing: 1.5px; margin-bottom: 12px; }
+  .card .q { font-weight: 600; font-size: 31px; line-height: 1.3; color: var(--ink); }
+  .card .fact { font-weight: 800; font-size: 24px; color: var(--purple); margin-top: 14px; text-transform: uppercase; letter-spacing: 1px; }
+  .small .who { font-size: 22px; margin-bottom: 8px; } .small .q { font-size: 24px; line-height: 1.28; } .small { padding: 22px 26px; }
+  .foot { margin-top: auto; font-weight: 800; text-transform: uppercase; font-size: 44px; color: var(--purple); text-align: center; letter-spacing: .5px; }
+  /* Team */
+  .person { display: flex; gap: 34px; align-items: flex-start; }
+  .avatar { flex: 0 0 200px; width: 200px; height: 200px; border-radius: 50%; background: #e3d9cf; border: 3px dashed rgba(28,28,28,.25);
+            display: flex; align-items: center; justify-content: center; font-weight: 800; color: var(--muted); font-size: 22px; text-transform: uppercase; }
+  .person .name { font-family: "Archivo Black", sans-serif; font-size: 52px; color: var(--ink); margin-bottom: 10px; }
+  .person .bio { font-weight: 600; font-size: 30px; line-height: 1.35; color: var(--ink); }
+  .placeholder { color: var(--muted); font-style: italic; }
+  /* Architecture */
+  .flow { display: grid; grid-template-columns: 1fr 60px 1fr 60px 1fr 60px 1fr; align-items: stretch; gap: 0; }
+  .box { background: var(--card); border: 2px solid var(--line); border-radius: 20px; padding: 30px 32px; box-sizing: border-box; }
+  .box .t { font-weight: 800; text-transform: uppercase; font-size: 30px; color: var(--blue); letter-spacing: 1.5px; margin-bottom: 14px; }
+  .box .d { font-weight: 600; font-size: 27px; line-height: 1.32; color: var(--ink); }
+  .arrow { display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 44px; color: var(--muted); }
+  .three { margin-top: 44px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 26px; }
+  .three div { font-weight: 800; text-transform: uppercase; font-size: 30px; line-height: 1.25; color: var(--purple); letter-spacing: .5px; padding-top: 22px; border-top: 4px solid var(--purple); }
+  /* Steps */
+  .steps { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }
+  .step { display: flex; gap: 26px; background: var(--card); border: 2px solid var(--line); border-radius: 20px; padding: 28px 32px; box-sizing: border-box; }
+  .step .n { font-family: "Archivo Black", sans-serif; font-size: 64px; line-height: 1; color: var(--red); flex: 0 0 70px; }
+  .step .t { font-weight: 800; text-transform: uppercase; font-size: 30px; color: var(--blue); letter-spacing: 1px; margin-bottom: 10px; }
+  .step .d { font-weight: 600; font-size: 27px; line-height: 1.3; color: var(--ink); }
+  .beats .step { padding: 20px 28px; } .beats .step .n { font-size: 50px; flex-basis: 56px; } .beats .step .d { font-size: 26px; }
+  /* Future plan use-case grid: tighter cards so the closing line gets air. */
+  /* Visual problem slides: cropped screenshots, pull quote, logo strip. */
+  .shot { position: relative; overflow: hidden; border-radius: 18px; border: 2px solid var(--line); background: #fff; box-shadow: 0 18px 40px rgba(0,0,0,.10); }
+  .shot img { position: absolute; display: block; }
+  .cap { font-weight: 700; font-size: 24px; line-height: 1.3; color: var(--muted); margin-top: 14px; }
+  .quote { font-weight: 800; font-size: 40px; line-height: 1.22; color: var(--ink); }
+  .attr { font-weight: 800; font-size: 22px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--purple); margin-top: 14px; }
+  .brands { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 22px; }
+  .brand { display: flex; align-items: center; gap: 14px; background: var(--card); border: 2px solid var(--line); border-radius: 14px; padding: 10px 16px; min-height: 56px; box-sizing: border-box; }
+  .brand img { flex: 0 0 auto; max-width: 96px; object-fit: contain; }
+  .brand b { font-weight: 800; font-size: 22px; color: var(--ink); white-space: nowrap; }
+  .brand span { font-weight: 700; font-size: 20px; line-height: 1.2; color: var(--ink); }
+  /* Proof slides, OpenVerdict pattern: text with highlighted facts left, source line, screenshot right, optional strip. */
+  .proof { display: grid; grid-template-columns: 720px 1010px; gap: 50px; align-items: start; }
+  .proof .txt { font-weight: 700; font-size: 33px; line-height: 1.32; color: var(--ink); }
+  .src { font-family: ui-monospace, Menlo, monospace; font-size: 19px; line-height: 1.5; color: var(--muted); margin-top: 28px; word-break: break-all; }
+  .strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: auto; }
+  .strip .brand { min-height: 54px; padding: 8px 14px; } .strip .brand span { font-size: 19px; }
+  /* Future plan: three numbered additions. */
+  .card.next { padding: 44px 40px; min-height: 420px; }
+  .card.next .n { font-family: "Archivo Black", sans-serif; font-size: 96px; line-height: 1; color: var(--red); margin-bottom: 26px; }
+  .card.next .who { font-size: 40px; line-height: 1.15; margin-bottom: 18px; }
+  .card.next .q { font-size: 30px; }
+  .uses .card.use { padding: 34px 30px; min-height: 200px; display: flex; flex-direction: column; justify-content: center; }
+  .uses .card.use .fact { margin: 0 0 12px; } .uses .card.use .who { font-size: 32px; line-height: 1.2; margin: 0; }
+</style>
+</head>
+<body>
+
+<!-- 1. Title -->
+<section class="slide" id="s1">
+  <div class="blob orange"></div><div class="blob pink"></div><div class="ring"></div>
+  <div class="tag">ETHGlobal Tokyo 2026</div>
+  <div class="stage center">
+    <div class="wordmark">Soapay</div>
+    <div class="line red" style="font-size:70px">One name, infinite addresses.</div>
+    <div class="line ink" style="font-size:44px; margin-top:10px">Get paid on-chain without publishing your bank statement.</div>
+  </div>
+  <div class="num"></div>
+</section>
+
+<!-- 2. Team -->
+<section class="slide" id="s2">
+  <div class="blob orange"></div><div class="blob pink"></div><div class="ring"></div>
+  <div class="tag">Our team</div>
+  <div class="stage">
+    <h1 class="head">We build for web3 companies. <span>They pay us on&#8209;chain.</span></h1>
+    <div class="grid" style="grid-template-columns:1fr 1fr; gap:40px; margin-top:20px">
+      <div class="card person">
+        <div class="avatar">photo</div>
+        <div>
+          <div class="name">Eason Chai</div>
+          <div class="bio">Six ETHGlobal projects, ten sponsor prizes, including ENS Best Use, first place, at ETHBogotá.<br><span class="placeholder">[role and one-line bio placeholder]</span></div>
+        </div>
+      </div>
+      <div class="card person">
+        <div class="avatar">photo</div>
+        <div>
+          <div class="name">Marcus</div>
+          <div class="bio"><span class="placeholder">[bio placeholder: TacitPay, private invoicing with eleven tested privacy invariants; prediction-market infrastructure; the ETHGlobal dataset analysis behind this pitch]</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="foot" style="color:var(--ink); font-size:38px; line-height:1.25; max-width:1700px; margin-left:auto; margin-right:auto">
+      Prizes, grants, contractor invoices, salaries. All received on-chain, to the wallet behind our ENS names. <span class="red">One problem we all share: everyone can see it.</span>
+    </div>
+  </div>
+  <div class="num"></div>
+</section>
+
+<!-- 3. Problem statement, words only -->
+<section class="slide" id="s3">
+  <div class="blob orange"></div><div class="blob pink"></div><div class="ring"></div>
+  <div class="tag">The problem</div>
+  <div class="stage center">
+    <div class="line ink" style="font-size:110px; line-height:1.04; max-width:1760px">Who sees what you earn?</div>
+  </div>
+  <div class="num"></div>
+</section>
+
+<!-- 4. Proof 1: a live payout batch -->
+<section class="slide" id="s4">
+  <div class="blob orange"></div><div class="blob pink"></div><div class="ring"></div>
+  <div class="tag">Problem 01 / 05 · Who sees what you earn?</div>
+  <div class="stage">
+    <h1 class="head">Everyone with a browser.</h1>
+    <div class="proof">
+      <div>
+        <div class="txt">One Disperse batch on Base. Four recipients. <span class="red">$17,585 · $55,177 · $16,629 · $31,268.</span><br><br>Five minutes old when captured. <span class="red">Readable forever.</span></div>
+        <div class="src">base.blockscout.com · Sep 25 2026<br>base.blockscout.com/address/0xD152f549545093347A162Dce210e7293f1452150</div>
+      </div>
+      <!-- Crop x540..2800 y330..1760 of 2880x1800 at s=0.447 -->
+      <div class="shot" style="width:1010px; height:639px"><img src="assets/blockscout-disperse.png" style="width:1287px; left:-241px; top:-148px"></div>
+    </div>
+  </div>
+  <div class="num"></div>
+</section>
+
+<!-- 7. Proof 4: colleagues read each other's pay -->
+<section class="slide" id="s7">
+  <div class="blob orange"></div><div class="blob pink"></div><div class="ring"></div>
+  <div class="tag">Problem 02 / 05 · Who sees what you earn?</div>
+  <div class="stage">
+    <h1 class="head">Your colleagues.</h1>
+    <div class="proof">
+      <div>
+        <div class="txt">Gitcoin DAO. A contributor started from their own pay address and found <span class="red">15 colleagues' exact salaries.</span><br><br>The DAO dropped individual pay disclosure over <span class="red">"contributor privacy concerns."</span></div>
+        <div class="src">gov.gitcoin.co · Jun 2022, Feb 2023<br>gov.gitcoin.co/t/a-compensation-commitment/10830/24<br>gov.gitcoin.co/t/contributor-compensation-audit/12750</div>
+      </div>
+      <!-- Crop x330..1900 y640..1600 of 2880x2000 at s=0.643 -->
+      <div class="shot" style="width:1010px; height:618px"><img src="assets/gitcoin-audit.png" style="width:1852px; left:-212px; top:-412px"></div>
+    </div>
+    <div class="strip">
+      <div class="brand"><img src="assets/si-optimism.svg" style="height:32px"><span>grantees traced, judged by name</span></div>
+      <div class="brand"><img src="assets/logo-sushi.com.png" style="height:36px"><span>two public pay fights</span></div>
+      <div class="brand"><b>MakerDAO</b><span>$205k average, published</span></div>
+      <div class="brand"><img src="assets/logo-lido.fi.png" style="height:36px"><span>$132k average, published</span></div>
+    </div>
+  </div>
+  <div class="num"></div>
+</section>
+
+<!-- 5. Proof 2: CFOs walk away -->
+<section class="slide" id="s5">
+  <div class="blob orange"></div><div class="blob pink"></div><div class="ring"></div>
+  <div class="tag">Problem 03 / 05 · So what happens</div>
+  <div class="stage">
+    <h1 class="head">So companies walk away.</h1>
+    <div class="proof">
+      <div>
+        <div class="txt">"Every public company CFO we talk to gets excited about stablecoins until they realize <span class="red">their payroll would be public.</span> That's where the conversation ends."<br><br>Toku, over <span class="red">$1B</span> in payroll processed. Compliance "was never the blocker."</div>
+        <div class="src">aleo.org · Jul 29 2026<br>aleo.org/post/toku-case-study</div>
+      </div>
+      <!-- Crop x560..2320 y380..1350 of 2880x1800 at s=0.574 -->
+      <div class="shot" style="width:1010px; height:557px"><img src="assets/aleo-toku.png" style="width:1653px; left:-321px; top:-218px"></div>
+    </div>
+    <div class="strip">
+      <div class="brand"><img src="assets/si-visa.svg" style="height:32px"><span>"a dealbreaker" for banks</span></div>
+      <div class="brand"><img src="assets/si-stripe.svg" style="height:34px"><span>"would publish every salary"</span></div>
+      <div class="brand"><b>Circle</b><span>"payroll should not be market data"</span></div>
+      <div class="brand"><b>J.P. Morgan</b><span>"transparent by design"</span></div>
+    </div>
+  </div>
+  <div class="num"></div>
+</section>
+
+<!-- 6. Proof 3: Deel moved -->
+<section class="slide" id="s6">
+  <div class="blob orange"></div><div class="blob pink"></div><div class="ring"></div>
+  <div class="tag">Problem 04 / 05 · So what happens</div>
+  <div class="stage">
+    <h1 class="head">Even the ones who wanted to.</h1>
+    <div class="proof">
+      <div>
+        <div class="txt">Deel pays for <span class="red">40,000+</span> businesses and sent <span class="red">$250M</span> in crypto payouts in 2025.<br><br>It chose a private zone "to keep contractor wallet balances and payout history <span class="red">confidential from public view.</span>"</div>
+        <div class="src">tempo.xyz · Jun 2 2026<br>tempo.xyz/blog/deel-stablecoin-wallet-global-contractors-tempo</div>
+      </div>
+      <!-- Crop x100..2100 y330..1500 of 2880x2000 at s=0.505 -->
+      <div class="shot" style="width:1010px; height:591px"><img src="assets/tempo-deel.png" style="width:1454px; left:-50px; top:-167px"></div>
+    </div>
+  </div>
+  <div class="num"></div>
+</section>
+
+<!-- 8. Proof 5: private ledgers, enterprise only -->
+<section class="slide" id="s8">
+  <div class="blob orange"></div><div class="blob pink"></div><div class="ring"></div>
+  <div class="tag">Problem 05 / 05 · The fix so far</div>
+  <div class="stage">
+    <h1 class="head">The only fix is <span>enterprise only.</span></h1>
+    <div class="proof">
+      <div>
+        <div class="txt">Coinbase built Base Ledgers: "Onchain payroll without publishing what every employee or contractor earns."<br><br><span class="red">Request a demo. Early access.</span> An operator runs the ledger and <span class="red">sees everything.</span></div>
+        <div class="src">base.org · Jun 2026<br>base.org/ledgers · docs.base.org/ledger/overview</div>
+      </div>
+      <!-- Crop x700..2300 y330..1195 of 2880x1800 at s=0.631 -->
+      <div class="shot" style="width:1010px; height:546px"><img src="assets/base-ledgers.png" style="width:1817px; left:-442px; top:-208px"></div>
+    </div>
+    <div class="strip" style="grid-template-columns:repeat(4,1fr)">
+      <div class="brand"><img src="assets/si-stripe.svg" style="height:34px"><span>Tempo Zones, design partners only</span></div>
+      <div class="brand"><b>Circle</b><span>Arc privacy, not yet available</span></div>
+      <div class="brand"><b>J.P. Morgan</b><span>JPMD, institutional clients only</span></div>
+      <div class="brand"><img src="assets/logo-aleo.org.png" style="height:36px"><span>Toku on Aleo, enterprise clients only</span></div>
+    </div>
+    <div class="foot" style="font-size:40px; margin-top:26px">Everyone else still pays in public.</div>
+  </div>
+  <div class="num"></div>
+</section>
+
+<!-- 4. Solution, locked sentence -->
+<section class="slide" id="s5">
+  <div class="blob orange"></div><div class="blob pink"></div><div class="ring"></div>
+  <div class="tag">Solution</div>
+  <div class="stage center">
+    <div class="wordmark">Soapay</div>
+    <div class="line k">is</div>
+    <div class="line red">Privacy infrastructure for payments on chain</div>
+    <div class="line k">where</div>
+    <div class="line blue">Every payment lands on a fresh address that only you can open</div>
+    <div class="line k">and</div>
+    <div class="line purple">You can spend it without a trace</div>
+  </div>
+  <div class="num"></div>
+</section>
+
+<!-- 5. Architecture, high level -->
+<section class="slide" id="s6">
+  <div class="blob orange"></div><div class="blob pink"></div><div class="ring"></div>
+  <div class="tag">Architecture</div>
+  <div class="stage">
+    <h1 class="head">Three apps on open standards. <span>Nothing of ours holds money.</span></h1>
+    <div class="flow" style="margin-top:30px">
+      <div class="box"><div class="t">Recipient app</div><div class="d">Your keys, your ledger, your guard. Nothing leaves the browser.</div></div>
+      <div class="arrow">›</div>
+      <div class="box"><div class="t">Sender app</div><div class="d">Paste names and amounts. One transaction pays everyone on fresh addresses.</div></div>
+      <div class="arrow">›</div>
+      <div class="box"><div class="t">Optional gateway</div><div class="d">For wallets that cannot derive. Self-host it or use ours. The app checks its work.</div></div>
+      <div class="arrow">›</div>
+      <div class="box"><div class="t">Chain</div><div class="d">ENS name. Stealth address registry and announcer. Gasless spend. Screened exit.</div></div>
+    </div>
+    <div class="three">
+      <div>Every contract we touch is a public standard someone else already audited.</div>
+      <div>The only thing you ever share is a name.</div>
+      <div>Everything rebuilds from your seed with every server off.</div>
+    </div>
+  </div>
+  <div class="num"></div>
+</section>
+
+<!-- 6a. Use cases: what the rail already handles, labels only -->
+<section class="slide" id="s11">
+  <div class="blob orange"></div><div class="blob pink"></div><div class="ring"></div>
+  <div class="tag">Use cases</div>
+  <div class="stage">
+    <h1 class="head">Built for payroll. <span>Ready for any payout.</span></h1>
+    <div class="grid uses" style="grid-template-columns:repeat(4,1fr); gap:24px; margin-top:30px">
+      <div class="card use"><div class="who">Salaries and contractor pay</div></div>
+      <div class="card use"><div class="who">DAO contributors and grants</div></div>
+      <div class="card use"><div class="who">Dividends and revenue share</div></div>
+      <div class="card use"><div class="who">Token and equity allocations</div></div>
+      <div class="card use"><div class="who">Vendor and supplier payments</div></div>
+      <div class="card use"><div class="who">Invoices and freelancers</div></div>
+      <div class="card use"><div class="who">Prizes, bounties, airdrops</div></div>
+      <div class="card use"><div class="who">Tips, donations, creators</div></div>
+    </div>
+    <div class="foot" style="font-size:44px">One sender. Many names. One transaction.</div>
+  </div>
+  <div class="num"></div>
+</section>
+
+<!-- 6b. Future plan: three additions -->
+<section class="slide" id="s12">
+  <div class="blob orange"></div><div class="blob pink"></div><div class="ring"></div>
+  <div class="tag">Future plan</div>
+  <div class="stage">
+    <h1 class="head">What we add <span>next.</span></h1>
+    <div class="grid" style="grid-template-columns:repeat(3,1fr); gap:30px; margin-top:40px">
+      <div class="card next"><div class="n">1</div><div class="who">Shielded amounts</div><div class="q">Hide the number, not just the name.</div></div>
+      <div class="card next"><div class="n">2</div><div class="who">Any wallet</div><div class="q">The guard and pay-by-name as an SDK wallets embed.</div></div>
+      <div class="card next"><div class="n">3</div><div class="who">Agents paying agents</div><div class="q">Pay by name with ERC-8004 identity. No public revenue feed.</div></div>
+    </div>
+  </div>
+  <div class="num"></div>
+</section>
+
+<!-- 7. Demo: one word, the demo itself is live -->
+<section class="slide" id="s12">
+  <div class="blob orange"></div><div class="blob pink"></div><div class="ring"></div>
+  <div class="tag">Demo</div>
+  <div class="stage center">
+    <div class="wordmark" style="font-size:220px; margin:0">Demo</div>
+  </div>
+  <div class="num"></div>
+</section>
+
+<script>
+  // ?only=N renders a single slide, used to screenshot each page for visual checks. No param prints all eight.
+  const all = document.querySelectorAll(".slide"); all.forEach((sl, i) => { const n = sl.querySelector(".num"); if (n) n.textContent = (i + 1) + " / " + all.length; });
+  const only = new URLSearchParams(location.search).get("only");
+  if (only) document.querySelectorAll(".slide").forEach((s, i) => { if (String(i + 1) !== only) s.style.display = "none"; });
+</script>
+</body>
+</html>
