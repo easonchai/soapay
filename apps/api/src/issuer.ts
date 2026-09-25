@@ -17,8 +17,8 @@ import type { Logger } from "./util.js";
  */
 export function ensV2NameIssuer(inner: EnsV2NameIssuer): NameIssuer {
   return {
-    async issue({ label, registrant, metaAddress }) {
-      const out = await inner.issue({ label, registrant, metaAddress });
+    async issue({ label, registrant, metaAddress, agent }) {
+      const out = await inner.issue({ label, registrant, metaAddress, ...(agent ? { agent } : {}) });
       return { txHash: out.txHash };
     },
   };

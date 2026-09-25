@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { isValidLabel, sessionSignal, verifyNameClaim } from "@soapay/sdk";
+import { AgentMetadataError, agentTextRecords, type AgentMetadata } from "@soapay/sdk/ensv2";
 import { getAddress, isAddress, type Address } from "viem";
 import { jsonBody, type AppDeps } from "../app.js";
 import { readStealthMetaAddress } from "../chain.js";
@@ -57,6 +58,23 @@ export function parseDeadline(v: unknown): bigint {
   return d;
 }
 
+/**
+ * Optional `agent` body field (docs/mvp-spec.md §8): ENSIP-26 `agent-context` /
+ * `agent-endpoint[...]` and ENSIP-25 `agent-registration[...]` records, written once by the
+ * issuer in the new name's resolver. Not covered by the NameClaim signature, so it only
+ * describes the agent; it never touches `stealth` or `soapay:registrant`.
+ */
+export function parseAgent(v: unknown): AgentMetadata | undefined {
+  if (v === undefined || v === null) return undefined;
+  try {
+    agentTextRecords(v as AgentMetadata);
+  } catch (e) {
+    if (e instanceof AgentMetadataError) throw new ApiError(400, "invalid_agent", e.message);
+    throw e;
+  }
+  return v as AgentMetadata;
+}
+
 export function nameRoutes(deps: AppDeps): Hono {
   const r = new Hono();
   const { db, config, logger } = deps;
@@ -77,6 +95,7 @@ export function nameRoutes(deps: AppDeps): Hono {
     const deadline = parseDeadline(body.deadline);
     const signature = requireHex(body.signature, "signature", 65);
     const inviteCode = parseInviteCode(body.inviteCode);
+    const agent = parseAgent(body.agent);
 
     if (deadline <= BigInt(deps.now())) throw new ApiError(400, "expired", "deadline has passed");
 
@@ -100,6 +119,9 @@ export function nameRoutes(deps: AppDeps): Hono {
     if (existing && existing.registrant !== registrant) throw new ApiError(409, "label_taken", "label is already taken");
     if (existing && BigInt(existing.deadline) === deadline && existing.meta_address === metaAddress) {
       return c.json(present(existing, config.parentName, db)); // idempotent retry
+    }
+    if (existing && agent) {
+      throw new ApiError(400, "agent_immutable", "agent records are set once, when the name is issued");
     }
     if (existing && deadline <= BigInt(existing.deadline)) {
       throw new ApiError(409, "stale_claim", "an update needs a later deadline than the stored claim");
@@ -185,7 +207,7 @@ export function nameRoutes(deps: AppDeps): Hono {
 
       const args = { label, registrant, metaAddress };
       try {
-        if (!cur) issueTx = (await deps.nameIssuer.issue(args)).txHash;
+        if (!cur) issueTx = (await deps.nameIssuer.issue({ ...args, ...(agent ? { agent } : {}) })).txHash;
         else if (deps.nameIssuer.updateMeta) issueTx = (await deps.nameIssuer.updateMeta(args)).txHash;
       } catch (e) {
         logger.error("names: issuer failed", { label, registrant, error: (e as Error).message?.split("\n")[0] });

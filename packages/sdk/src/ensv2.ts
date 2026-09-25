@@ -235,8 +235,10 @@ export function nameResolverSalt(args: {
   stealthWriter: Address;
   metaAddress: string;
   registryResource: bigint;
+  /** Extra text records set at issuance (ENSIP-26 agent records). Absent/empty: the original salt. */
+  textRecords?: readonly TextRecord[];
 }): bigint {
-  return BigInt(
+  const base = BigInt(
     keccak256(
       encodeAbiParameters(
         [
@@ -255,6 +257,15 @@ export function nameResolverSalt(args: {
           keccak256(stringToHex(formatMetaAddressURI(args.metaAddress))),
           args.registryResource,
         ],
+      ),
+    ),
+  );
+  if (!args.textRecords || args.textRecords.length === 0) return base;
+  return BigInt(
+    keccak256(
+      encodeAbiParameters(
+        [{ type: "uint256" }, { type: "bytes32" }],
+        [base, textRecordsHash(args.textRecords)],
       ),
     ),
   );
@@ -388,6 +399,8 @@ export function buildNameResolverInit(args: {
   stealthWriter: Address;
   metaAddress: string;
   admin: Address;
+  /** Extra text records written once at issuance (ENSIP-25/26 agent records). */
+  textRecords?: readonly TextRecord[];
   deployment?: Deployment;
 }): Hex {
   const d = args.deployment ?? ENSV2_SEPOLIA;
@@ -395,6 +408,7 @@ export function buildNameResolverInit(args: {
   const calls: Hex[] = [
     setTextData(dnsName, TEXT_KEY_STEALTH, formatMetaAddressURI(args.metaAddress)),
     setTextData(dnsName, TEXT_KEY_REGISTRANT, getAddress(args.registrant)),
+    ...assertExtraTextRecords(args.textRecords ?? []).map((r) => setTextData(dnsName, r.key, r.value)),
     encodeFunctionData({
       abi: permissionedResolverAbi,
       functionName: "grantSetterRoles",
@@ -427,6 +441,7 @@ export function buildDeployNameResolverCall(args: {
   metaAddress: string;
   admin: Address;
   registryResource: bigint;
+  textRecords?: readonly TextRecord[];
   deployment?: Deployment;
 }): Call & { salt: bigint } {
   const d = args.deployment ?? ENSV2_SEPOLIA;
@@ -437,6 +452,7 @@ export function buildDeployNameResolverCall(args: {
     stealthWriter,
     metaAddress: args.metaAddress,
     registryResource: args.registryResource,
+    ...(args.textRecords ? { textRecords: args.textRecords } : {}),
   });
   const init = buildNameResolverInit({ ...args, stealthWriter, deployment: d });
   return {
@@ -619,6 +635,11 @@ export type IssueArgs = {
   metaAddress: string;
   /** Who may rewrite `stealth`. Defaults to the registrant (or the issuer's `defaultStealthWriter`). */
   stealthWriter?: string;
+  /**
+   * Optional agent metadata (ENSIP-26 `agent-context` / `agent-endpoint[...]`, ENSIP-25
+   * `agent-registration[...]`), written once by the issuer in the resolver's `initialize`.
+   */
+  agent?: AgentMetadata;
 };
 
 export type IssueResult = {
@@ -696,6 +717,7 @@ export function createEnsV2NameIssuer(opts: {
       if (!isAddress(writerInput)) throw new Error("Soapay ENSv2: stealthWriter must be an address");
       const stealthWriter = getAddress(writerInput);
       const metaAddress = formatMetaAddressURI(args.metaAddress); // validates both points
+      const textRecords = args.agent ? agentTextRecords(args.agent) : [];
       const name = `${label}.${parent}`;
 
       const { registry, admin, proxyLogic } = await loadSetup();
@@ -709,6 +731,7 @@ export function createEnsV2NameIssuer(opts: {
         metaAddress,
         admin,
         registryResource: state.resource,
+        ...(textRecords.length ? { textRecords } : {}),
         deployment: d,
       });
       const resolver = predictProxyAddress({
@@ -724,4 +747,138 @@ export function createEnsV2NameIssuer(opts: {
       return { txHash, name, resolver, registry, ...(resolverTxHash ? { resolverTxHash } : {}) };
     },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Agent records (ENSIP-25 / ENSIP-26), set once at issuance
+// ---------------------------------------------------------------------------
+
+/** One text record `key = value` on a name's resolver. */
+export type TextRecord = { key: string; value: string };
+
+/** ENSIP-26: the agent's entry point (plain text, Markdown, YAML or JSON). */
+export const TEXT_KEY_AGENT_CONTEXT = "agent-context";
+
+/** ENSIP-26 `agent-endpoint[<protocol>]` key. */
+export function agentEndpointKey(protocol: string): string {
+  return `agent-endpoint[${protocol}]`;
+}
+
+/** ENSIP-25 `agent-registration[<ERC-7930 registry>][<agentId>]` key. */
+export function agentRegistrationKey(registry: Hex, agentId: string): string {
+  return `agent-registration[${registry.toLowerCase()}][${agentId}]`;
+}
+
+/** Agent metadata for a subname (docs/mvp-spec.md §8). Validated by `agentTextRecords`. */
+export type AgentMetadata = {
+  /** ENSIP-26 `agent-context`: what the agent is and does. 1-2000 characters. */
+  context: string;
+  /** ENSIP-26 `agent-endpoint[<protocol>]` URLs, e.g. `{ mcp: "https://…", web: "https://…" }`. */
+  endpoints?: Readonly<Record<string, string>>;
+  /**
+   * ENSIP-25 bindings to agent registries (e.g. ERC-8004): `registry` is the ERC-7930
+   * interoperable address (hex), `agentId` the registry's id. Each becomes
+   * `agent-registration[registry][agentId] = "1"`. It only verifies once the registry
+   * lists this name for that id.
+   */
+  registrations?: readonly { registry: Hex; agentId: string }[];
+};
+
+export const AGENT_CONTEXT_MAX = 2000;
+export const AGENT_ENDPOINTS_MAX = 8;
+export const AGENT_REGISTRATIONS_MAX = 4;
+const AGENT_URL_MAX = 512;
+const PROTOCOL_RE = /^[a-z0-9][a-z0-9-]{0,31}$/;
+const AGENT_ID_RE = /^[A-Za-z0-9._:-]{1,78}$/;
+/** ERC-7930 v1 interoperable address: version 0x0001, then chain type, lengths and bytes. */
+const ERC7930_RE = /^0x0001[0-9a-f]{8,}$/;
+/** Keys that only the base issuance writes; extra records must never touch them. */
+const RESERVED_KEYS = new Set<string>([TEXT_KEY_STEALTH, TEXT_KEY_REGISTRANT]);
+
+export class AgentMetadataError extends Error {
+  override name = "AgentMetadataError";
+}
+
+function isAgentUrl(v: string): boolean {
+  if (v.length > AGENT_URL_MAX || /\s/.test(v)) return false;
+  const m = /^(https?|ipfs):\/\/([^/?#]+)/i.exec(v);
+  return m !== null && (m[2] ?? "").length > 0;
+}
+
+/**
+ * Validates `meta` and returns its text records in a stable order: `agent-context`, the
+ * endpoints sorted by protocol, then the registrations. Throws AgentMetadataError.
+ */
+export function agentTextRecords(meta: AgentMetadata): TextRecord[] {
+  if (typeof meta !== "object" || meta === null || Array.isArray(meta)) {
+    throw new AgentMetadataError("agent must be an object");
+  }
+  const allowed = new Set(["context", "endpoints", "registrations"]);
+  for (const k of Object.keys(meta)) if (!allowed.has(k)) throw new AgentMetadataError(`agent: unknown field "${k}"`);
+  const { context, endpoints, registrations } = meta;
+  if (typeof context !== "string" || context.trim().length === 0) throw new AgentMetadataError("agent.context is required");
+  if (context.length > AGENT_CONTEXT_MAX) throw new AgentMetadataError(`agent.context is over ${AGENT_CONTEXT_MAX} characters`);
+  const out: TextRecord[] = [{ key: TEXT_KEY_AGENT_CONTEXT, value: context }];
+
+  if (endpoints !== undefined) {
+    if (typeof endpoints !== "object" || endpoints === null || Array.isArray(endpoints)) {
+      throw new AgentMetadataError("agent.endpoints must be an object of protocol → URL");
+    }
+    const entries = Object.entries(endpoints);
+    if (entries.length > AGENT_ENDPOINTS_MAX) throw new AgentMetadataError(`agent.endpoints: at most ${AGENT_ENDPOINTS_MAX}`);
+    for (const [protocol, url] of entries.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
+      if (!PROTOCOL_RE.test(protocol)) throw new AgentMetadataError(`agent.endpoints: bad protocol "${protocol}"`);
+      if (typeof url !== "string" || !isAgentUrl(url)) {
+        throw new AgentMetadataError(`agent.endpoints.${protocol} must be an http(s) or ipfs URL`);
+      }
+      out.push({ key: agentEndpointKey(protocol), value: url });
+    }
+  }
+
+  if (registrations !== undefined) {
+    if (!Array.isArray(registrations)) throw new AgentMetadataError("agent.registrations must be an array");
+    if (registrations.length > AGENT_REGISTRATIONS_MAX) {
+      throw new AgentMetadataError(`agent.registrations: at most ${AGENT_REGISTRATIONS_MAX}`);
+    }
+    const seen = new Set<string>();
+    for (const r of registrations as readonly { registry: unknown; agentId: unknown }[]) {
+      if (typeof r !== "object" || r === null) throw new AgentMetadataError("agent.registrations: bad entry");
+      const registry = typeof r.registry === "string" ? r.registry.toLowerCase() : "";
+      if (!ERC7930_RE.test(registry) || registry.length % 2 !== 0 || registry.length > 2 + 2 * 96) {
+        throw new AgentMetadataError("agent.registrations: registry must be an ERC-7930 v1 address (0x0001…)");
+      }
+      if (typeof r.agentId !== "string" || !AGENT_ID_RE.test(r.agentId)) {
+        throw new AgentMetadataError("agent.registrations: agentId must be 1-78 of [A-Za-z0-9._:-]");
+      }
+      const key = agentRegistrationKey(registry as Hex, r.agentId);
+      if (seen.has(key)) throw new AgentMetadataError("agent.registrations: duplicate entry");
+      seen.add(key);
+      out.push({ key, value: "1" });
+    }
+  }
+  return out;
+}
+
+/** Guards `buildNameResolverInit`'s extra records: never the reserved keys, no duplicates. */
+function assertExtraTextRecords(records: readonly TextRecord[]): readonly TextRecord[] {
+  const seen = new Set<string>();
+  for (const r of records) {
+    if (typeof r.key !== "string" || r.key.length === 0 || typeof r.value !== "string") {
+      throw new AgentMetadataError("text records need a string key and value");
+    }
+    if (RESERVED_KEYS.has(r.key)) throw new AgentMetadataError(`text record "${r.key}" is reserved`);
+    if (seen.has(r.key)) throw new AgentMetadataError(`duplicate text record "${r.key}"`);
+    seen.add(r.key);
+  }
+  return records;
+}
+
+/** Order-sensitive hash of extra records (binds them into the resolver salt). */
+export function textRecordsHash(records: readonly TextRecord[]): Hex {
+  return keccak256(
+    encodeAbiParameters(
+      [{ type: "string[]" }, { type: "string[]" }],
+      [records.map((r) => r.key), records.map((r) => r.value)],
+    ),
+  );
 }

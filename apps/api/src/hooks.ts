@@ -1,4 +1,5 @@
 import type { Address } from "viem";
+import type { AgentMetadata } from "@soapay/sdk/ensv2";
 import { ApiError } from "./util.js";
 
 /**
@@ -8,7 +9,13 @@ import { ApiError } from "./util.js";
  */
 export interface NameIssuer {
   /** Called once, when a label is first claimed. A throw aborts the claim (nothing is stored). */
-  issue(args: { label: string; registrant: Address; metaAddress: string }): Promise<{ txHash?: string }>;
+  issue(args: {
+    label: string;
+    registrant: Address;
+    metaAddress: string;
+    /** ENSIP-25/26 agent records (docs/mvp-spec.md §8), already validated. Set once at issuance. */
+    agent?: AgentMetadata;
+  }): Promise<{ txHash?: string }>;
   /**
    * Optional: called when the registrant changes its meta-address through POST /names.
    * Omit it if the registrant edits its own record on-chain.
