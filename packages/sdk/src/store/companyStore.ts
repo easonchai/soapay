@@ -37,9 +37,39 @@ export type PaymentRecord = {
   status: PaymentStatus;
 };
 
-export type CompanyState = { employees: Record<string, Employee>; payments: PaymentRecord[] };
+export type RunRecord = {
+  id: string;
+  label: string;
+  sentAt: number;
+  mode: BatchResult['mode'];
+  txHashes: Hex[];
+  recipients: number;
+  lines: number;
+  /** Sum of amounts across lines, base units as a string. */
+  total: string;
+  partial?: boolean | undefined;
+};
+
+export type CompanyState = { employees: Record<string, Employee>; payments: PaymentRecord[]; runs: RunRecord[] };
 const KEY = 'soapay:company';
-const empty = (): CompanyState => ({ employees: {}, payments: [] });
+const empty = (): CompanyState => ({ employees: {}, payments: [], runs: [] });
+
+/** Older stores had no run summaries; rebuild them from the payments. */
+function rebuildRuns(payments: PaymentRecord[]): RunRecord[] {
+  const by = new Map<string, PaymentRecord[]>();
+  for (const p of payments) by.set(p.runId, [...(by.get(p.runId) ?? []), p]);
+  return [...by.entries()].map(([id, list]) => ({
+    id,
+    label: 'Pay run',
+    sentAt: list[0]?.sentAt ?? 0,
+    mode: list[0]?.mode ?? 'atomic',
+    txHashes: list[0]?.txHashes ?? [],
+    recipients: new Set(list.map((p) => p.employeeKey)).size,
+    lines: list.length,
+    total: String(list.reduce((s, p) => s + BigInt(p.amount), 0n)),
+    partial: list.some((p) => p.status !== 'paid'),
+  }));
+}
 
 function defaultLabel(input: string): string {
   const t = input.trim();
@@ -73,7 +103,8 @@ export function createCompanyStore(storage: StorageLike) {
     if (!raw) return empty();
     try {
       const parsed = JSON.parse(raw) as Partial<CompanyState>;
-      return { employees: parsed.employees ?? {}, payments: parsed.payments ?? [] };
+      const payments = parsed.payments ?? [];
+      return { employees: parsed.employees ?? {}, payments, runs: parsed.runs ?? rebuildRuns(payments) };
     } catch {
       return empty();
     }
@@ -82,9 +113,20 @@ export function createCompanyStore(storage: StorageLike) {
 
   return {
     get,
-    recordRun({ rows, result, sentAt }: { rows: PlannedRow[]; result: BatchResult; sentAt: number }): string {
+    recordRun({ rows, result, sentAt, label }: { rows: PlannedRow[]; result: BatchResult; sentAt: number; label?: string | undefined }): string {
       const s = get();
       const runId = `run-${sentAt}-${Math.random().toString(36).slice(2, 8)}`;
+      s.runs.push({
+        id: runId,
+        label: label?.trim() || 'Pay run',
+        sentAt,
+        mode: result.mode,
+        txHashes: result.txHashes,
+        recipients: new Set(rows.map((r) => pinKey(r.input))).size,
+        lines: rows.length,
+        total: String(rows.reduce((t, r) => t + r.amount, 0n)),
+        partial: Boolean(result.partial),
+      });
       rows.forEach((r, i) => {
         const key = pinKey(r.input);
         const meta = r.metaAddress.toLowerCase() as Hex;
@@ -144,6 +186,12 @@ export function createCompanyStore(storage: StorageLike) {
     },
     allPayments(): PaymentRecord[] {
       return get().payments.slice();
+    },
+    listRuns(): RunRecord[] {
+      return get().runs.slice().sort((a, b) => b.sentAt - a.sentAt);
+    },
+    paymentsForRun(runId: string): PaymentRecord[] {
+      return get().payments.filter((p) => p.runId === runId);
     },
     clear() {
       storage.removeItem(KEY);
