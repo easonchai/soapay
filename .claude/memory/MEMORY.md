@@ -1,0 +1,7 @@
+- [App stack](decision-app-stack.md) — pnpm+turbo, Vite React SPAs, Hono gateway, SDK-only code paths
+- [Naming](decision-naming.md) — offchain *.soapay.eth subnames; addr not pointed at registrant
+- [Atomic batch](decision-atomic-batch.md) — EIP-5792 sendCalls transfers+announces, no Disperse
+- [v1 scope](decision-scope-v1.md) — USDC on Base only; seed format BIP-39 pending confirmation
+- [Gateway announce](decision-gateway-announce.md) — announce-at-resolve kept; caller-linkage risk
+- [ScopeLift ESM quirk](scopelift-sdk-esm-quirk.md) — bundle/inline the SDK, plain Node can't load it
+- [PRD open questions](prd-open-questions.md) — unresolved issues to raise with the PRD author
