@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from "react-router";
-import { ArrowLeftRight, Home, Lock, Repeat, Send, Settings as Cog, Tag, UserRound } from "lucide-react";
+import { ArrowLeftRight, Home, Lock, Repeat, Send, Settings as Cog, ShieldCheck, Tag, UserRound } from "lucide-react";
 import { chainName } from "../config.js";
 import { Logo } from "../onboarding/Onboarding.js";
 import { useServices } from "../services/ServicesProvider.js";
@@ -9,6 +9,7 @@ import { useVault } from "../vault/VaultProvider.js";
 const NAV = [
   { to: "/", label: "Payments", icon: Home, end: true },
   { to: "/spend", label: "Send", icon: Send },
+  { to: "/exit", label: "Exit", icon: ShieldCheck },
   { to: "/convert", label: "Convert", icon: Repeat },
   { to: "/labels", label: "Labels", icon: Tag },
   { to: "/name", label: "Name", icon: UserRound },
