@@ -16,7 +16,7 @@ import {
   type Transport,
 } from "viem";
 import type { UserOperation } from "viem/account-abstraction";
-import { getChainConfig } from "../constants.js";
+import { getSpendChainConfig } from "../constants.js";
 import type { PaymasterAdapter, PaymasterContext, PaymasterFields } from "./types.js";
 
 /**
@@ -28,6 +28,8 @@ import type { PaymasterAdapter, PaymasterContext, PaymasterFields } from "./type
 export const CIRCLE_PAYMASTER_V08 = {
   8453: "0x0578cFB241215b77442a541325d6A4E6dFE700Ec",
   84532: "0x3BA9A96eE3eFf3A69E2B18886AcF52027EFF8966",
+  /** Ethereum Sepolia (exit destination); same address as Base Sepolia, verified 2026-09-25. */
+  11155111: "0x3BA9A96eE3eFf3A69E2B18886AcF52027EFF8966",
 } as const satisfies Record<number, Address>;
 
 /** Circle docs quickstart values. postOp must be >= `additionalGasCharge()` (35000 on Base). */
@@ -173,7 +175,7 @@ export function circlePaymaster(options: CirclePaymasterOptions = {}): Paymaster
     if (!a) throw new Error(`Circle paymaster: no v0.8 deployment known for chain ${chainId}`);
     return a;
   };
-  const feeToken = (chainId: number) => getChainConfig(chainId).usdc;
+  const feeToken = (chainId: number) => getSpendChainConfig(chainId).usdc;
 
   async function fields(ctx: PaymasterContext): Promise<PaymasterFields> {
     const paymaster = addressFor(ctx.chainId);

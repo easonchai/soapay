@@ -61,6 +61,25 @@ export function getChainConfig(chainId: number): SoapayChainConfig {
   return c;
 }
 
+/** A chain a stealth address can spend on (userOps via the Circle paymaster) without being a payroll chain. */
+export type SpendChainConfig = { chain: Chain; usdc: Address };
+
+/**
+ * Exit destination chains (docs/mvp-spec.md §9): stealth addresses spend here after a CCTP bridge, but
+ * nothing is paid or scanned here, so they are deliberately NOT in `CHAINS` (apps list CHAINS as
+ * payroll chains). USDC checked with eth_getCode on 2026-09-25.
+ */
+export const SPEND_ONLY_CHAINS = {
+  [sepolia.id]: { chain: sepolia, usdc: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238" },
+} as const satisfies Record<number, SpendChainConfig>;
+
+/** Chain + USDC for spend clients and paymasters: payroll chains first, then exit destinations. */
+export function getSpendChainConfig(chainId: number): SpendChainConfig {
+  const c = (CHAINS as Record<number, SpendChainConfig>)[chainId] ?? (SPEND_ONLY_CHAINS as Record<number, SpendChainConfig>)[chainId];
+  if (!c) throw new Error(`Soapay: unsupported chain ${chainId}`);
+  return c;
+}
+
 /** Default MVP chain. */
 export const DEFAULT_CHAIN_ID: SoapayChainId = baseSepolia.id;
 

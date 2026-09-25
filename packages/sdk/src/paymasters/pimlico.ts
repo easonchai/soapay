@@ -1,6 +1,6 @@
 import { encodeFunctionData, erc20Abi, getAddress, hexToBigInt, numberToHex, type Address, type Hex } from "viem";
 import { formatUserOperationRequest } from "viem/account-abstraction";
-import { getChainConfig } from "../constants.js";
+import { getSpendChainConfig } from "../constants.js";
 import { userOpMaxCost } from "./circle.js";
 import type { PaymasterAdapter, PaymasterContext, PaymasterFields, PaymasterUserOperation } from "./types.js";
 
@@ -15,7 +15,7 @@ import type { PaymasterAdapter, PaymasterContext, PaymasterFields, PaymasterUser
  * (executeBatch). That changes the calldata shape, a larger fingerprint than Circle's single execute.
  */
 export function pimlicoErc20Paymaster(options: { token?: (chainId: number) => Address } = {}): PaymasterAdapter {
-  const feeToken = (chainId: number) => options.token?.(chainId) ?? getChainConfig(chainId).usdc;
+  const feeToken = (chainId: number) => options.token?.(chainId) ?? getSpendChainConfig(chainId).usdc;
 
   type Quote = { paymaster: Address; postOpGas: bigint; exchangeRate: bigint };
   async function quote(ctx: PaymasterContext): Promise<Quote> {

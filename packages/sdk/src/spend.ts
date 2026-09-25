@@ -33,7 +33,7 @@ import {
   type BundlerClient,
   type UserOperation,
 } from "viem/account-abstraction";
-import { ENTRYPOINT_V08, SIMPLE_7702_ACCOUNT, getChainConfig } from "./constants.js";
+import { ENTRYPOINT_V08, SIMPLE_7702_ACCOUNT, getSpendChainConfig } from "./constants.js";
 import { circlePaymaster } from "./paymasters/circle.js";
 import type { PaymasterAdapter, PaymasterContext, SpendCall } from "./paymasters/types.js";
 
@@ -110,7 +110,7 @@ export type SpendClient = {
 };
 
 export function createSpendClient<chain extends Chain = Chain>(options: CreateSpendClientOptions<chain>): SpendClient {
-  const config = getChainConfig(options.chainId);
+  const config = getSpendChainConfig(options.chainId);
   const publicClient = (options.publicClient ?? createPublicClient({ chain: config.chain, transport: http() })) as unknown as PublicClient<Transport, Chain>;
   if (publicClient.chain?.id !== options.chainId) throw new Error("Soapay spend: publicClient chain does not match chainId");
   const transport = options.bundlerTransport ?? (options.bundlerUrl ? http(options.bundlerUrl) : undefined);
@@ -384,6 +384,12 @@ export type SpendOptions = {
   wait?: boolean;
   /** Receipt timeout in ms (viem default otherwise). */
   timeout?: number;
+  /**
+   * Called with the signed userOp's sender and EntryPoint nonce (key 0) right before it goes to the
+   * bundler. Persist it to make a resumable caller idempotent: once `getNonce(sender, 0)` exceeds
+   * this nonce, the op (or another with the same nonce, which can only be ours) has executed.
+   */
+  onSubmit?: (info: { sender: Address; nonce: bigint; chainId: number }) => void | Promise<void>;
 };
 
 /** Signs and submits a prepared userOp, then (by default) waits for its receipt. */
@@ -394,6 +400,7 @@ async function submit(
   options: SpendOptions,
 ): Promise<{ userOpHash: Hex; txHash?: Hex }> {
   const signature = await s.account.signUserOperation(op);
+  await options.onSubmit?.({ sender: op.sender, nonce: op.nonce, chainId: client.chainId });
   const userOpHash = await client.bundlerClient.sendUserOperation({
     ...(op as UserOperation),
     signature,
