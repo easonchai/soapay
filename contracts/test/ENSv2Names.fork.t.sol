@@ -173,6 +173,54 @@ contract ENSv2NamesForkTest is Test {
         UR.resolve(dns, abi.encodeCall(ITextResolver.text, (node, STEALTH)));
     }
 
+    /// Option A rotation (docs/mvp-spec.md §2.1): after issuance the REGISTRANT rewrites `stealth` with
+    /// its own key (gas sponsored by the API) and resolution returns the new meta-address each time.
+    function test_fork_registrantRotatesStealthAfterIssuance() public {
+        bytes memory dns = E.dnsEncode("erin", parent, "eth");
+        bytes32 node = E.namehash3("erin", parent, "eth");
+        address resolver = _issue("erin", registrant, registrant, META_1); // default writer = registrant
+        IPermissionedResolverV2 r = IPermissionedResolverV2(resolver);
+        assertEq(_resolveText(dns, node, STEALTH), META_1);
+
+        // Rotation 1: exactly the call buildSetStealthRecordCall() encodes, sent by the registrant.
+        vm.prank(registrant);
+        (bool ok,) = resolver.call(abi.encodeCall(IPermissionedResolverV2.setText, (dns, STEALTH, META_2)));
+        assertTrue(ok, "registrant rotation");
+        assertEq(_resolveText(dns, node, STEALTH), META_2, "resolves to rotated meta");
+
+        // Rotation 2 (e.g. another key loss): still the registrant, still only `stealth`.
+        vm.prank(registrant);
+        r.setText(dns, STEALTH, META_1);
+        assertEq(_resolveText(dns, node, STEALTH), META_1, "resolves to second rotation");
+
+        // Nothing else moved: registrant record unchanged, addr unset, token unchanged.
+        assertEq(_resolveText(dns, node, REGISTRANT_KEY), vm.toString(registrant));
+        (bytes memory addrRes,) = UR.resolve(dns, abi.encodeCall(IAddrResolver.addr, (node)));
+        assertEq(abi.decode(addrRes, (address)), address(0));
+        assertEq(subnames.ownerOf(subnames.getState(uint256(keccak256("erin"))).tokenId), registrant);
+
+        // A coworker can't rotate it.
+        vm.prank(mallory);
+        vm.expectRevert(_unauthorized(E.textResource(STEALTH), E.ROLE_SET_TEXT, mallory));
+        r.setText(dns, STEALTH, META_2);
+    }
+
+    /// Fixed vector shared with packages/sdk/test/ensv2.test.ts (predictProxyAddress).
+    function test_fork_predictProxyAddressVector() public {
+        address deployer = 0x000000000000000000000000000000000000dEaD;
+        Grant[] memory grants = new Grant[](1);
+        grants[0] = Grant(owner, E.ALL_ROLES);
+        vm.prank(deployer);
+        address proxy = FACTORY.deployProxy(
+            E.PERMISSIONED_RESOLVER_IMPL,
+            42,
+            abi.encodeCall(IPermissionedResolverV2.initialize, (grants, new bytes[](0)))
+        );
+        assertEq(proxy, _predictProxy(deployer, 42));
+        assertEq(FACTORY.proxyLogic(), 0xC6dbA04e7c6264e85A459Dd592a6CBC2D2a6Ad8E, "proxyLogic");
+        emit log_named_address("vector proxy (deployer 0xdead, salt 42)", proxy);
+    }
+
     /// World ID gate: the stealth-writer role goes to a guard, and the registrant can't bypass it.
     function test_fork_stealthWriterGuard() public {
         bytes memory dns = E.dnsEncode("bob", parent, "eth");
@@ -283,14 +331,41 @@ contract ENSv2NamesForkTest is Test {
         );
         calls[3] = abi.encodeCall(IPermissionedResolverV2.revokeRootRoles, (E.ROLE_SET_TEXT_ADMIN, E.VERIFIABLE_FACTORY));
 
-        uint256 salt = uint256(keccak256(abi.encode(keccak256("SoapayNameResolver"), node, registrant_)));
+        // Same salt as the SDK's nameResolverSalt(): name, registrant, writer, meta, pre-issue resource.
+        uint256 preIssueResource = subnames.getState(uint256(keccak256(bytes(label)))).resource;
+        uint256 salt = uint256(
+            keccak256(
+                abi.encode(
+                    keccak256("SoapayNameResolver"),
+                    node,
+                    registrant_,
+                    stealthWriter,
+                    keccak256(bytes(meta)),
+                    preIssueResource
+                )
+            )
+        );
+        address predicted = _predictProxy(issuer, salt);
         vm.startPrank(issuer);
         resolver = FACTORY.deployProxy(
             E.PERMISSIONED_RESOLVER_IMPL, salt, abi.encodeCall(IPermissionedResolverV2.initialize, (grants, calls))
         );
+        assertEq(resolver, predicted, "SDK predictProxyAddress formula");
         subnames.register(label, registrant_, address(0), resolver, 0, type(uint64).max);
         vm.stopPrank();
         assertEq(_resolveText(dns, node, STEALTH), meta);
+    }
+
+    /// CREATE2 address of `deployProxy(_, salt, _)` sent by `deployer`; mirrors the SDK's predictProxyAddress().
+    function _predictProxy(address deployer, uint256 salt) internal view returns (address) {
+        bytes32 outerSalt = keccak256(abi.encode(deployer, salt));
+        bytes memory code = abi.encodePacked(
+            hex"3d604d80600a3d3981f3363d3d373d3d3d363d73",
+            FACTORY.proxyLogic(),
+            hex"5af43d82803e903d91602b57fd5bf3",
+            outerSalt
+        );
+        return vm.computeCreate2Address(outerSalt, keccak256(code), E.VERIFIABLE_FACTORY);
     }
 
     function _unauthorized(uint256 resource, uint256 roleBitmap, address account)

@@ -9,6 +9,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./ensv2": {
+      "types": "./dist/ensv2.d.ts",
+      "default": "./dist/ensv2.js"
     }
   },
   "files": [

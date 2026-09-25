@@ -34,6 +34,7 @@ import {
   labelhash,
   namehash,
   parseAbi,
+  size,
   stringToHex,
   toHex,
   zeroAddress,
@@ -195,7 +196,7 @@ export function splitName(name: string): { label: string; parent: string } {
 /** A subname label: one normalized label, no dots, 1-63 bytes. */
 export function assertSubnameLabel(label: string): string {
   const l = normalize(label);
-  if (l.length === 0 || l.includes(".") || new TextEncoder().encode(l).length > 63) {
+  if (l.length === 0 || l.includes(".") || size(stringToHex(l)) > 63) {
     throw new Error(`Soapay ENSv2: invalid label "${label}"`);
   }
   return l;
