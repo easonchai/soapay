@@ -25,7 +25,8 @@ Stealth-address payroll on Base. Product spec: `PRD.md`. PRD review: `docs/prd-a
 - The only adversary is a **coworker**: a co-recipient in the same payroll batch who knows their own line, sees the whole batch on-chain, and likely knows colleagues' main wallets.
 - The **employer is trusted** and may know everything (name → stealth address → amount). Payroll admins and Safe signers count as "the company".
 - **ENS is only a reference identifier.** It still controls where salaries go, so the sender app resolves a name once at enrollment and **pins the ERC-6538 meta-address**; alert the employer if it ever changes. Caching the meta-address is safe; caching a *stealth address* is not.
-- Out of scope: chain analysts, RPC/bundler linkage, gateway mode, Privacy Pools exit. Proposed for cut from v1.
+- Out of scope for v1: chain analysts and RPC/bundler linkage. **Gateway derivation mode is deferred to the roadmap** (PRD tier 2, not v1).
+- **The compliant exit (Privacy Pools) is IN scope** (owner decision 2026-09-26). A coworker knows your main wallet, so without a screened exit an employee can't cash out without revealing which lines were theirs.
 
 ## Design decisions
 

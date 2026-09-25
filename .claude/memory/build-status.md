@@ -154,3 +154,4 @@ metadata:
   - The SDK issue() and POST /names accept an optional `agent` object; the records are written once at issuance.
   - ENSIP-25 needs a live registry such as ERC-8004, so it isn't set by default.
   - The :8787 API was restarted on the merged code. Totals: SDK 202 · API 122 · sender 118 · recipient 62 · mcp 54 · contracts 31.
+- Checkpoint 14 (2026-09-26): the owner put the **compliant exit back IN scope** (the coworker knows the main wallet, so the guard blocks cash-out without an exit), and gateway mode is DEFERRED to the roadmap. CLAUDE.md threat model updated. A research spike on exit feasibility on testnet (Privacy Pools / Railgun / CCTP V2 / paymaster on L1) is running and will write docs/exit-research.md.
