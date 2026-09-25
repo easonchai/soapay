@@ -156,7 +156,7 @@ If `soapay.eth` is taken, set `PARENT_LABEL` to another label and use the same v
 
 **How the API issuer gets its role.** Step 2 runs `grantRootRoles(ROLE_REGISTRAR, ISSUER_ADDRESS)` on the UserRegistry. That is the issuer's only role, and the script prints `issuer root roles 0x1`. To rotate the issuer key, run step 2 again with the new address, then have the owner send `buildRevokeIssuerRoleCall` for the old one.
 
-**API env** (`apps/api/.env.example` has `L1_RPC_URL` and `PARENT_NAME`; add the rest): `L1_RPC_URL` (Sepolia), `ISSUER_PRIVATE_KEY`, `PARENT_NAME=soapay.eth`, and optionally `ENS_SUBNAME_REGISTRY` and `ENS_RESOLVER_ADMIN` from step 2's output (otherwise they're looked up on-chain). The issuer is created with `createEnsV2NameIssuer({walletClient, publicClient, parent, registry?, resolverAdmin?})`. The API still ships the no-op issuer by default (`apps/api/src/index.ts`); wiring this one in is the next step.
+**API env** (`apps/api/.env.example` has `L1_RPC_URL` and `PARENT_NAME`; add the rest): `L1_RPC_URL` (Sepolia), `ISSUER_PRIVATE_KEY`, `PARENT_NAME=soapay.eth`, and optionally `ENS_SUBNAME_REGISTRY` and `ENS_RESOLVER_ADMIN` from step 2's output (otherwise they're looked up on-chain). The issuer is created with `createEnsV2NameIssuer({walletClient, publicClient, parent, registry?, resolverAdmin?})`. The API uses it when `ISSUER_PRIVATE_KEY` and `L1_RPC_URL` are set (`apps/api/src/issuer.ts`), and otherwise falls back to the store-only no-op issuer with a startup warning. It has no `updateMeta`: the registrant writes `stealth` itself.
 
 **Anvil rehearsal** (no real funds):
 
