@@ -13,6 +13,8 @@ import { nameRoutes } from "./routes/names.js";
 import { announcementRoutes } from "./routes/announcements.js";
 import { worldIdRoutes } from "./routes/worldid.js";
 import { rotationRoutes } from "./routes/rotation.js";
+import { uniswapRoutes } from "./routes/uniswap.js";
+import { RegistrationRelay } from "./relay.js";
 import type { WorldId } from "./worldid/verifier.js";
 import type { L1Funder } from "./topup.js";
 import type { LocalAccount } from "viem";
@@ -68,9 +70,11 @@ export function buildApp(input: BuildAppDeps): Hono {
   );
 
   app.route("/", healthRoutes(deps));
-  app.route("/", registerRoutes(deps));
+  const relay = new RegistrationRelay(deps);
+  app.route("/", registerRoutes(deps, relay));
   app.route("/", nameRoutes(deps));
-  app.route("/", rotationRoutes(deps));
+  app.route("/", rotationRoutes(deps, relay));
+  app.route("/", uniswapRoutes(deps));
   app.route("/", worldIdRoutes(deps));
   app.route("/", announcementRoutes(deps));
 

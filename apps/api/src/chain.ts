@@ -33,20 +33,19 @@ export async function readStealthMetaAddress(client: ReadClient, registrant: Add
   return (out ?? "0x").toLowerCase() as Hex;
 }
 
-/** Simulates then sends registerKeysOnBehalf from the relayer. Throws the simulation error on revert. */
-export async function sendRegisterKeysOnBehalf(
+/** Simulates registerKeysOnBehalf from the relayer. Throws the simulation error on revert. */
+export function simulateRegisterKeysOnBehalf(
   read: ReadClient,
   write: WriteClient,
   args: { registrant: Address; metaAddress: Hex; signature: Hex },
-): Promise<Hash> {
-  const { request } = await read.simulateContract({
+): Promise<{ request: any }> {
+  return read.simulateContract({
     account: write.account,
     address: REGISTRY_ADDRESS,
     abi: registryAbi,
     functionName: "registerKeysOnBehalf",
     args: [args.registrant, SCHEME, args.signature, args.metaAddress],
   });
-  return write.writeContract(request);
 }
 
 export type AnnouncementRow = {

@@ -7,7 +7,7 @@ import { hitRateLimit, type Logger } from "./util.js";
 export type L1Funder = {
   address: Address;
   getBalance(args: { address: Address }): Promise<bigint>;
-  estimateFeesPerGas(): Promise<{ maxFeePerGas?: bigint; gasPrice?: bigint }>;
+  estimateFeesPerGas(): Promise<{ maxFeePerGas?: bigint | undefined; gasPrice?: bigint | undefined }>;
   sendTransaction(args: { to: Address; value: bigint }): Promise<Hash>;
 };
 

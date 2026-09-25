@@ -59,7 +59,14 @@ describe("HumanVerifier", () => {
     const t = makeTestApp({ humanVerifier: { verify }, nameIssuer: { issue: async () => ({}), updateMeta } });
     onChain(t, { [registrant.address]: metaHex() });
     expect((await t.post("/names", { ...(await claim()), proof: { p: 1 } })).status).toBe(201);
-    expect(verify).toHaveBeenLastCalledWith({ action: "name", registrant: registrant.address, proof: { p: 1 } });
+    expect(verify).toHaveBeenLastCalledWith({
+      action: "name",
+      registrant: registrant.address,
+      proof: { p: 1 },
+      label: "alice",
+      metaAddress: metaUri(),
+      deadline: BigInt(NOW + 600),
+    });
     expect((t.db.prepare("SELECT nullifier FROM names").get() as any).nullifier).toBe("0xnull");
 
     onChain(t, { [registrant.address]: metaHex(2) });
