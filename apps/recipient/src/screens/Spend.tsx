@@ -1,16 +1,22 @@
 import { useState, type FormEvent } from "react";
+import { useNavigate } from "react-router";
+import { offersExit, type ExitPrefill } from "../features/exit/entry.js";
+import { useExit } from "../hooks/useExit.js";
 import { useSpendFlow } from "../hooks/useSpendFlow.js";
 import { useWallet } from "../hooks/useWallet.js";
 import { explorerTxUrl } from "../config.js";
 import { useServices } from "../services/ServicesProvider.js";
 import { Addr, Alert, Button, Card, CardHeader, Field, Input, PageHeader } from "../ui/kit.js";
 import { formatUsdc } from "../ui/format.js";
+import { ExitOffer } from "./ExitOffer.js";
 import { GuardDecision, canSend } from "./GuardDecision.js";
 
 export function Spend() {
   const flow = useSpendFlow();
   const wallet = useWallet();
   const svc = useServices();
+  const exit = useExit();
+  const navigate = useNavigate();
   const [to, setTo] = useState("");
   const [amount, setAmount] = useState("");
   const s = flow.state;
@@ -72,6 +78,15 @@ export function Spend() {
             <Alert variant="destructive" title="Not enough after fees">
               The most these addresses can deliver is {formatUsdc(s.draft.allocation.maxReceivable)} USDC.
             </Alert>
+          )}
+          {offersExit(s.draft.plan) && (
+            <ExitOffer
+              disabledReason={exit.ready ? undefined : exit.unavailableReason}
+              onExit={() => {
+                const prefill: ExitPrefill = { destination: s.draft.to, sources: s.draft.allocation.parts.map((p) => p.address) };
+                void navigate("/exit", { state: prefill });
+              }}
+            />
           )}
           {s.draft.plan && <GuardDecision plan={s.draft.plan} override={s.override} onOverride={flow.setOverride} />}
           {s.error && <Alert variant="destructive">{s.error}</Alert>}

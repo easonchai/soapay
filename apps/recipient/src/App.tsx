@@ -4,6 +4,8 @@ import { ScannerProvider } from "./hooks/scanner.js";
 import { InviteProvider, useInvite } from "./hooks/useInvite.js";
 import { Onboarding } from "./onboarding/Onboarding.js";
 import { Convert } from "./screens/Convert.js";
+import { Exit } from "./screens/Exit.js";
+import { ExitProvider } from "./hooks/useExit.js";
 import { Home } from "./screens/Home.js";
 import { Labels } from "./screens/Labels.js";
 import { Layout } from "./screens/Layout.js";
@@ -47,19 +49,22 @@ function Gate() {
       if (invite.kind === "pending" && !vault.data.profile.name) return <Onboarding claimInvite />;
       return (
         <ScannerProvider>
-          <HashRouter>
-            <Routes>
-              <Route element={<Layout />}>
-                <Route index element={<Home />} />
-                <Route path="spend" element={<Spend />} />
-                <Route path="convert" element={<Convert />} />
-                <Route path="labels" element={<Labels />} />
-                <Route path="name" element={<NameSettings />} />
-                <Route path="settings" element={<Settings />} />
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Route>
-            </Routes>
-          </HashRouter>
+          <ExitProvider>
+            <HashRouter>
+              <Routes>
+                <Route element={<Layout />}>
+                  <Route index element={<Home />} />
+                  <Route path="spend" element={<Spend />} />
+                  <Route path="convert" element={<Convert />} />
+                  <Route path="exit" element={<Exit />} />
+                  <Route path="labels" element={<Labels />} />
+                  <Route path="name" element={<NameSettings />} />
+                  <Route path="settings" element={<Settings />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Route>
+              </Routes>
+            </HashRouter>
+          </ExitProvider>
         </ScannerProvider>
       );
   }

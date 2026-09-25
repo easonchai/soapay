@@ -165,3 +165,6 @@ metadata:
   1. SDK exit.ts: CCTP V2 with forwarding back to the same stealth address, a 0xbow deposit through a 7702 userOp with the Circle paymaster on Sepolia, the ASP, the relayer withdraw, ragequit, derivePoolSecrets from the seed, a Sepolia fork test, and a live run if funds allow (it stops and asks for a faucet top-up otherwise).
   2. Recipient exit UI against the §9 types through an adapter at apps/recipient/src/features/exit/sdk.ts.
   The production chain is undecided (the SDK is chain-agnostic).
+- Checkpoint 16b: recipient exit UI MERGED (branch `exit-ui`; 74 recipient tests).
+  - Blocked send → "Exit through Privacy Pools", a planner with fees and minimums, and a resumable per-leg timeline; mock mode works.
+  - Seam: apps/recipient/src/features/exit/sdk.ts switches automatically once the SDK exports planExit/advanceExitLeg/derivePoolSecrets. `buildCtx` must be rewritten to the SDK's real per-chain context.
