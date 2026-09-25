@@ -10,3 +10,4 @@ export * from "./guard.js";
 export * from "./denominations.js";
 export * from "./safe.js";
 export * from "./swap.js";
+export * from "./ensv2.js";
