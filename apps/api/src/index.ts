@@ -80,16 +80,15 @@ function main() {
   const w = config.worldId;
   let worldId: WorldId | undefined;
   if (w.disabled) {
-    const banner = "!".repeat(78);
-    logger.error(
-      `${banner}\nWORLD_ID_DISABLED=true: /register and /names accept ANYONE and rotations cannot be attested.\n` +
-        `Local development only. Never run this in a shared or production environment.\n${banner}`,
+    logger.warn(
+      "WORLD_ID_DISABLED=true: no World ID sessions, so no rotation can be attested; " +
+        "every meta-address change needs the employer's manual approval",
     );
   } else {
-    if (!w.rpId || !w.signingKey) {
+    if (!w.signingKey) {
       console.error(
-        "Config: WORLD_RP_ID and WORLD_RP_SIGNING_KEY are required (Developer Portal, World ID 4.0). " +
-          "Set WORLD_ID_DISABLED=true for local development only.",
+        "Config: WORLD_RP_SIGNING_KEY is required (the World ID 4.0 RP signer from the Developer Portal). " +
+          "Set WORLD_ID_DISABLED=true to run without World ID.",
       );
       process.exit(1);
     }
@@ -109,8 +108,8 @@ function main() {
     getIp,
     // The ENSv2 issuer plugs in here; the default only stores.
     nameIssuer: new NoopNameIssuer(),
-    // World ID gates /register and /names; allow-all only when explicitly disabled (dev).
-    humanVerifier: worldId?.humanVerifier ?? allowAllVerifier,
+    // No enrollment gate (docs/mvp-spec.md §5); World ID backs rotations only.
+    humanVerifier: allowAllVerifier,
     worldId,
     attester,
     l1Funder: makeL1Funder(config),
@@ -128,7 +127,8 @@ function main() {
     port: config.port,
     chainId: config.chainId,
     relayer: relayer?.account.address ?? null,
-    worldId: worldId ? { environment: w.environment, rpId: w.rpId, enrollAction: w.enrollAction } : "DISABLED",
+    worldId: worldId ? { environment: w.environment, rpId: w.rpId, credential: "selfie" } : "DISABLED",
+    uniswapProxy: config.uniswap.apiKey ? "enabled" : "disabled (UNISWAP_API_KEY unset)",
     attester: attester?.address ?? null,
   });
 

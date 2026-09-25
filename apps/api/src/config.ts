@@ -28,6 +28,13 @@ export type Config = {
   };
   receiptTimeoutMs: number;
   worldId: WorldIdConfig;
+  uniswap: {
+    /** Trading API key. Server-only: never logged, never returned. Unset: /uniswap/* returns 503. */
+    apiKey: string | undefined;
+    baseUrl: string;
+    perIpPerMinute: number;
+    bodyLimitBytes: number;
+  };
   /** Signs MetaRotation attestations (docs/mvp-spec.md §2.1). Unset → rotation returns 503. */
   attesterPrivateKey: Hex | undefined;
   /** Ethereum Sepolia key that tops up registrants' gas for the ENSv2 setText. Unset → no top-ups. */
@@ -42,19 +49,20 @@ export type Config = {
   };
 };
 
-export const WORLD_ENVIRONMENTS = ["production", "staging"] as const;
+export const WORLD_ENVIRONMENTS = ["production", "staging", "sandbox"] as const;
 export type WorldEnvironment = (typeof WORLD_ENVIRONMENTS)[number];
 
 export type WorldIdConfig = {
   /** Dev only: skip World ID (allow-all). Rotation is refused while disabled. */
   disabled: boolean;
   appId: `app_${string}`;
-  rpId: string | undefined;
+  rpId: string;
   /** RP signing key. Server-only: never logged, never returned. */
   signingKey: Hex | undefined;
   environment: WorldEnvironment;
-  enrollAction: string;
   verifyBaseUrl: string;
+  /** A session attached after enrollment can back a rotation only after this delay (stolen-key window). */
+  attachCooldownSeconds: number;
   /** Lifetime of a signed RP context, seconds. */
   rpTtlSeconds: number;
   rpContextPerIp: number;
@@ -62,6 +70,8 @@ export type WorldIdConfig = {
 
 /** Public Developer Portal app id (not a secret). */
 export const DEFAULT_WORLD_APP_ID = "app_0cc7167efe114ac2e0ef7d9827098353";
+/** Soapay's registered World ID 4.0 RP (public; the signing key is not). */
+export const DEFAULT_WORLD_RP_ID = "rp_3ede5fe1cab9af48";
 
 export class ConfigError extends Error {
   constructor(message: string) {
@@ -145,17 +155,15 @@ export function loadConfig(env: Env = process.env): Config {
   const worldDisabled = bool(env, "WORLD_ID_DISABLED", false);
   const appId = str(env, "WORLD_APP_ID") ?? DEFAULT_WORLD_APP_ID;
   if (!/^app_[A-Za-z0-9_]+$/.test(appId)) throw new ConfigError(`WORLD_APP_ID must look like app_…, got "${appId}"`);
-  const rpId = str(env, "WORLD_RP_ID");
+  const rpId = str(env, "WORLD_RP_ID") ?? DEFAULT_WORLD_RP_ID;
   if (rpId !== undefined && !/^rp_[A-Za-z0-9_]+$/.test(rpId)) throw new ConfigError("WORLD_RP_ID must look like rp_…");
   const signingKey = privateKey(env, "WORLD_RP_SIGNING_KEY");
   const worldEnv = (str(env, "WORLD_ENV") ?? "staging").toLowerCase();
   if (!(WORLD_ENVIRONMENTS as readonly string[]).includes(worldEnv)) {
-    throw new ConfigError(`WORLD_ENV must be production or staging, got "${worldEnv}"`);
+    throw new ConfigError(`WORLD_ENV must be production, staging or sandbox, got "${worldEnv}"`);
   }
   // WORLD_RP_ID / WORLD_RP_SIGNING_KEY are required by the server entrypoint (src/index.ts)
   // unless WORLD_ID_DISABLED=true; loadConfig stays lenient so tests can build partial configs.
-  const enrollAction = str(env, "WORLD_ACTION_ENROLL") ?? "soapay-enroll";
-  if (!/^[A-Za-z0-9_-]{1,64}$/.test(enrollAction)) throw new ConfigError("WORLD_ACTION_ENROLL must be 1-64 of [A-Za-z0-9_-]");
 
   return {
     port: int(env, "PORT", 8787, 1),
@@ -191,10 +199,16 @@ export function loadConfig(env: Env = process.env): Config {
       rpId,
       signingKey,
       environment: worldEnv as WorldEnvironment,
-      enrollAction,
+      attachCooldownSeconds: int(env, "WORLD_ATTACH_COOLDOWN_SECONDS", 72 * 3600, 0),
       verifyBaseUrl: (url(env, "WORLD_VERIFY_BASE_URL", false) ?? "https://developer.world.org").replace(/\/+$/, ""),
       rpTtlSeconds: int(env, "WORLD_RP_TTL_SECONDS", 300, 30),
       rpContextPerIp: int(env, "RATE_LIMIT_RP_CONTEXT_PER_IP", 60, 1),
+    },
+    uniswap: {
+      apiKey: str(env, "UNISWAP_API_KEY"),
+      baseUrl: (url(env, "UNISWAP_API_URL", false) ?? "https://trade-api.gateway.uniswap.org/v1").replace(/\/+$/, ""),
+      perIpPerMinute: int(env, "RATE_LIMIT_UNISWAP_PER_IP_PER_MINUTE", 30, 1),
+      bodyLimitBytes: int(env, "UNISWAP_BODY_LIMIT_BYTES", 8 * 1024, 256),
     },
     attesterPrivateKey: privateKey(env, "ATTESTER_PRIVATE_KEY"),
     l1RelayerPrivateKey: privateKey(env, "L1_RELAYER_PRIVATE_KEY"),

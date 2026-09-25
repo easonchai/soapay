@@ -79,28 +79,23 @@ const MIGRATIONS: string[] = [
   `,
   // World ID (src/worldid/*). Nullifiers and session ids only, never identity.
   `
-  -- Every RP context we signed. A proof must echo one of our nonces, of the right kind,
-  -- and each nonce is accepted at most once.
+  -- Every RP context we signed. A proof must echo one of our nonces, and each nonce is
+  -- accepted at most once.
   CREATE TABLE worldid_requests (
     nonce         TEXT PRIMARY KEY,       -- lowercase 0x hex field element
-    kind          TEXT NOT NULL,          -- uniqueness | session
-    action        TEXT,                   -- uniqueness only
+    kind          TEXT NOT NULL,          -- session
     created_at    INTEGER NOT NULL,
     expires_at    INTEGER NOT NULL,
     used_at       INTEGER
   );
 
-  -- One row per verified human: the enroll uniqueness proof. The nullifier is a 256-bit
-  -- field element stored as a canonical decimal string (SQLite has no NUMERIC(78,0)).
-  CREATE TABLE worldid_humans (
-    action          TEXT NOT NULL,
-    nullifier       TEXT NOT NULL,
-    registrant      TEXT NOT NULL UNIQUE,  -- the key the proof's signal is bound to
-    session_id      TEXT NOT NULL UNIQUE,  -- the session created at enrollment
-    verified_at     INTEGER NOT NULL,
-    registered_at   INTEGER,               -- set by commit() after the sponsored /register tx
-    label           TEXT UNIQUE,           -- set by commit() after the one subname is stored
-    UNIQUE (action, nullifier)
+  -- The World ID session (Selfie Check) behind a name, if the registrant created one.
+  -- A name keeps its first session; a session backs one name.
+  CREATE TABLE name_sessions (
+    label         TEXT PRIMARY KEY,
+    session_id    TEXT NOT NULL UNIQUE,   -- opaque session_<hex> from IDKit
+    attached_at   INTEGER NOT NULL,
+    via           TEXT NOT NULL           -- enroll (POST /names) | attach (POST /names/:label/session)
   );
 
   -- Per-proof replay protection for session proofs (create and prove).

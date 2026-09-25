@@ -34,6 +34,38 @@ export function metaRotationDomain(chainId: number) {
   return { name: "Soapay Attestations", version: "1", chainId } as const satisfies TypedDataDomain;
 }
 
+/**
+ * AttachSession (signed by the registrant key): binds a World ID session to a name that was
+ * claimed without one. Same domain as NameClaim / RotationClaim.
+ */
+export const attachSessionTypes = {
+  AttachSession: [
+    { name: "label", type: "string" },
+    { name: "sessionId", type: "string" },
+    { name: "deadline", type: "uint256" },
+  ],
+} as const;
+
+export type AttachSession = {
+  label: string;
+  /** The IDKit `session_<hex>` id, unchanged. */
+  sessionId: string;
+  /** Unix seconds. */
+  deadline: bigint;
+  chainId: number;
+};
+
+export function attachSessionTypedData(a: AttachSession) {
+  if (!isValidLabel(a.label)) throw new Error(`Soapay: invalid label "${a.label}"`);
+  if (!/^session_[0-9a-fA-F]+$/.test(a.sessionId)) throw new Error("Soapay: sessionId must be session_<hex>");
+  return {
+    domain: rotationClaimDomain(a.chainId),
+    types: attachSessionTypes,
+    primaryType: "AttachSession",
+    message: { label: a.label, sessionId: a.sessionId, deadline: a.deadline },
+  } as const;
+}
+
 export type RotationClaim = {
   label: string;
   /** Meta-addresses as URI or raw bytes; signed as canonical `st:eth:0x<lowercase>`. */
@@ -100,9 +132,17 @@ export type AttestationsResponse = { attester: Address; items: MetaRotationAttes
 // expected signal and compares, so a proof can't be moved to another registrant or rotation.
 // ---------------------------------------------------------------------------
 
-/** Signal for the enroll uniqueness proof and the session it creates. */
-export function enrollSignal(registrant: Address): string {
-  return `soapay:enroll:${registrant.toLowerCase()}`;
+/**
+ * World ID credential Soapay requires: Selfie Check (issuer schema 11), in a session.
+ * Rotation is a continuity question ("same person who enrolled?"), which sessions answer
+ * without an Orb. See docs/worldid.md.
+ */
+export const WORLD_ID_CREDENTIAL = "selfie" as const;
+export const WORLD_ID_SCHEMA_ID = 11;
+
+/** Signal for the session created at enrollment (or attached later): binds it to name + key. */
+export function sessionSignal(label: string, registrant: Address): string {
+  return `soapay:session:${label}:${registrant.toLowerCase()}`;
 }
 
 /** Signal for the session proof that authorises one rotation. */

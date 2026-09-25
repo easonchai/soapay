@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { WORLD_ID_CREDENTIAL } from "@soapay/sdk";
 import { jsonBody, type AppDeps } from "../app.js";
 import { ApiError, enforceRateLimits } from "../util.js";
 
@@ -12,27 +13,24 @@ export function worldIdRoutes(deps: AppDeps): Hono {
     c.json({
       enabled: !cfg.disabled && !!deps.worldId,
       app_id: cfg.appId,
-      rp_id: cfg.rpId ?? null,
+      rp_id: cfg.rpId,
       environment: cfg.environment,
-      actions: { enroll: cfg.enrollAction },
+      credential: WORLD_ID_CREDENTIAL,
+      attach_cooldown_seconds: cfg.attachCooldownSeconds,
       attester: deps.attester?.address ?? null,
     }),
   );
 
   /**
-   * Signs a fresh RP context (`signRequest` from @worldcoin/idkit-server) for one IDKit request.
-   * Body: {kind: "uniqueness" | "session", action?}. Uniqueness requests are signed with the
-   * enroll action; sessions without one.
+   * Signs a fresh RP context (`signRequest` from @worldcoin/idkit-server) for one IDKit
+   * session request: creating a session or proving an existing one. Body: `{}` or
+   * `{kind: "session"}`. Sessions take no action, and Soapay has no uniqueness requests.
    */
   r.post("/worldid/rp-context", async (c) => {
     if (!deps.worldId) throw new ApiError(503, "worldid_disabled", "World ID is disabled on this server");
     const body = await jsonBody(c);
-    const kind = body.kind;
-    if (kind !== "uniqueness" && kind !== "session") {
-      throw new ApiError(400, "invalid_kind", 'kind must be "uniqueness" or "session"');
-    }
-    if (body.action !== undefined && typeof body.action !== "string") {
-      throw new ApiError(400, "invalid_action", "action must be a string");
+    if (body.kind !== undefined && body.kind !== "session") {
+      throw new ApiError(400, "invalid_kind", 'kind must be "session" (Soapay only uses World ID sessions)');
     }
     enforceRateLimits(
       db,
@@ -40,7 +38,7 @@ export function worldIdRoutes(deps: AppDeps): Hono {
       config.rateLimit.windowSeconds,
       deps.now(),
     );
-    return c.json(deps.worldId.issueRpContext(kind, body.action as string | undefined));
+    return c.json(deps.worldId.issueRpContext());
   });
 
   return r;

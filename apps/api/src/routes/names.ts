@@ -1,10 +1,11 @@
 import { Hono } from "hono";
-import { isValidLabel, verifyNameClaim } from "@soapay/sdk";
+import { isValidLabel, sessionSignal, verifyNameClaim } from "@soapay/sdk";
 import { getAddress, isAddress, type Address } from "viem";
 import { jsonBody, type AppDeps } from "../app.js";
 import { readStealthMetaAddress } from "../chain.js";
 import { tx, type Db } from "../db.js";
 import { requireHuman } from "../hooks.js";
+import type { VerifiedSession } from "../worldid/verifier.js";
 import { ApiError, enforceRateLimits, parseMetaAddress, redactSig, requireHex, sameBytes } from "../util.js";
 
 const UINT256_MAX = (1n << 256n) - 1n;
@@ -24,7 +25,10 @@ export function getName(db: Db, label: string): NameRow | undefined {
   return db.prepare("SELECT * FROM names WHERE label = ?").get(label) as NameRow | undefined;
 }
 
-function present(row: NameRow, parent: string) {
+function present(row: NameRow, parent: string, db: Db) {
+  const session = db.prepare("SELECT attached_at FROM name_sessions WHERE label = ?").get(row.label) as
+    | { attached_at: number }
+    | undefined;
   return {
     label: row.label,
     name: `${row.label}.${parent}`,
@@ -34,6 +38,8 @@ function present(row: NameRow, parent: string) {
     txHash: row.issue_tx_hash,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    /** Whether a World ID session backs rotations of this name (never the session id itself). */
+    worldIdSession: session ? { attachedAt: session.attached_at } : null,
   };
 }
 
@@ -91,7 +97,7 @@ export function nameRoutes(deps: AppDeps): Hono {
     const existing = getName(db, label);
     if (existing && existing.registrant !== registrant) throw new ApiError(409, "label_taken", "label is already taken");
     if (existing && BigInt(existing.deadline) === deadline && existing.meta_address === metaAddress) {
-      return c.json(present(existing, config.parentName)); // idempotent retry
+      return c.json(present(existing, config.parentName, db)); // idempotent retry
     }
     if (existing && deadline <= BigInt(existing.deadline)) {
       throw new ApiError(409, "stale_claim", "an update needs a later deadline than the stored claim");
@@ -117,6 +123,21 @@ export function nameRoutes(deps: AppDeps): Hono {
       metaAddress,
       deadline,
     });
+
+    // Optional World ID session (Selfie Check) created at enrollment, bound to label + registrant.
+    let session: VerifiedSession | undefined;
+    if (body.worldIdSession !== undefined && body.worldIdSession !== null) {
+      if (existing) {
+        throw new ApiError(400, "use_session_route", "attach a session to an existing name with POST /names/:label/session");
+      }
+      if (!deps.worldId) throw new ApiError(503, "worldid_disabled", "World ID is disabled on this server");
+      session = await deps.worldId.verifyNewSession({
+        label,
+        signal: sessionSignal(label, registrant),
+        result: body.worldIdSession,
+        via: "enroll",
+      });
+    }
 
     // Serialise per label so two racing claims can't both reach the issuer.
     const prev = labelLocks.get(label) ?? Promise.resolve();
@@ -162,6 +183,7 @@ export function nameRoutes(deps: AppDeps): Hono {
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         ).run(label, registrant, cur?.meta_address ?? null, metaAddress, deadline.toString(), nullifier, issueTx ?? null, now);
         commit();
+        session?.commit();
       });
     } finally {
       release();
@@ -180,7 +202,7 @@ export function nameRoutes(deps: AppDeps): Hono {
     } else {
       logger.info("names: claimed", { label, registrant, signature: redactSig(signature) });
     }
-    return c.json(present(getName(db, label)!, config.parentName), existing ? 200 : 201);
+    return c.json(present(getName(db, label)!, config.parentName, db), existing ? 200 : 201);
   });
 
   r.get("/names/:label", (c) => {
@@ -188,7 +210,7 @@ export function nameRoutes(deps: AppDeps): Hono {
     if (!isValidLabel(label)) throw new ApiError(400, "invalid_label", "invalid label");
     const row = getName(db, label);
     if (!row) throw new ApiError(404, "not_found", "name not found");
-    return c.json(present(row, config.parentName));
+    return c.json(present(row, config.parentName, db));
   });
 
   return r;
