@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.turbo/
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store
+# Claude: shared memory is committed, local settings are not
+.claude/settings.local.json

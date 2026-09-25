@@ -68,7 +68,7 @@ Gas per line, measured with the 77-byte metadata (tx gas including 21k and calld
 3. Record the address in the sender app. Run one 1-line USDC pay and confirm the recipient app finds it.
 
 ## Tools
-`tools/derive.ts` (ScopeLift SDK): `npm run derive -- st:eth:0x…=<amount> …` prints sorted Payment lines and a `cast` tuple. `--demo N` generates recipients and self-checks that each one can scan and spend its line.
+`tools/derive.ts` (ScopeLift SDK): `pnpm derive st:eth:0x…=<amount> …` prints sorted Payment lines and a `cast` tuple. `--demo N` generates recipients and self-checks that each one can scan and spend its line.
 
 ## Open questions
 1. **Amounts are the main remaining leak under this threat model.** A coworker who knows or guesses a colleague's salary finds their line directly. The contract already allows several lines per person (split into denominations, each to a fresh stealth address). Should the sender app do that by default?

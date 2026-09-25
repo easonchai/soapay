@@ -1,0 +1,22 @@
+{
+  "name": "@soapay/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "forge build",
+    "test": "forge test",
+    "test:fork": "forge test --match-contract Fork -vv",
+    "gas": "forge test --match-contract GasTest -vv",
+    "derive": "tsx tools/derive.ts",
+    "clean": "forge clean && rm -rf .turbo"
+  },
+  "dependencies": {
+    "@noble/curves": "^1.9.1",
+    "@scopelift/stealth-address-sdk": "1.0.0-beta.5",
+    "viem": "^2.56.9"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.15"
+  }
+}

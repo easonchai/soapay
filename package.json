@@ -1,0 +1,17 @@
+{
+  "name": "soapay",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "clean": "turbo run clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "turbo": "^2.11.4",
+    "typescript": "^7.0.2"
+  }
+}

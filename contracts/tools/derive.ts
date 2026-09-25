@@ -1,8 +1,8 @@
 /**
  * Derive StealthDisperse.Payment test data from ERC-6538 stealth meta-addresses (scheme 1).
  *
- *   npm run derive -- st:eth:0x<spendPub33><viewPub33>=1000000 st:eth:0x...=2500000
- *   npm run derive -- --demo 5          # random recipients, self-checks that each one can find + spend
+ *   pnpm derive st:eth:0x<spendPub33><viewPub33>=1000000 st:eth:0x...=2500000
+ *   pnpm derive --demo 5          # random recipients, self-checks that each one can find + spend
  *
  * Prints JSON lines sorted ascending by stealth address (as StealthDisperse requires) and a
  * `cast`-ready tuple array.

@@ -1,0 +1,7 @@
+- [App stack](decision-app-stack.md) — pnpm+turbo, Vite React SPAs, Hono gateway, Foundry contracts pkg, SDK-only code paths
+- [Naming](decision-naming.md) — offchain *.soapay.eth subnames; resolve once at enrollment and pin the meta-address
+- [Pay-run paths](decision-atomic-batch.md) — StealthDisperse for EOAs, EIP-5792 batch for smart accounts; ≤350 lines, global sort
+- [v1 scope](decision-scope-v1.md) — USDC on Base only; seed format BIP-39 pending confirmation
+- [Gateway mode](decision-gateway-announce.md) — out of scope under the coworker threat model; announce-at-resolve dormant
+- [ScopeLift ESM quirk](scopelift-sdk-esm-quirk.md) — bundle/inline/tsx the SDK; plain Node can't load it
+- [Open questions](prd-open-questions.md) — items not already tracked in CLAUDE.md or contracts/PLAN.md
