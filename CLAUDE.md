@@ -1,6 +1,6 @@
 # Soapay
 
-Stealth-address payroll on Base. Product spec: `PRD.md`. PRD review: `docs/prd-analysis.md`. Contract plan: `contracts/PLAN.md`.
+Stealth-address payroll on Base. Product spec: `PRD.md`. PRD review: `docs/prd-analysis.md`. Contract plan: `contracts/PLAN.md`. MVP interfaces: `docs/mvp-spec.md`.
 
 ## Layout
 
@@ -9,7 +9,7 @@ Stealth-address payroll on Base. Product spec: `PRD.md`. PRD review: `docs/prd-a
 | `packages/sdk` | `@soapay/sdk`: the only home for derivation, registry, announce, scan and spend logic |
 | `apps/recipient` | Vite + React SPA: keys, onboarding, scanner, ledger, spend |
 | `apps/sender` | Vite + React SPA: pay runs through StealthDisperse (EOAs) or an EIP-5792 batch (smart accounts) |
-| `apps/gateway` | Hono on Node: CCIP-Read service stub. Gateway mode is out of scope under the agreed threat model (proposed cut) |
+| `apps/api` | Hono on Node: subname CCIP-Read gateway, registration relayer, announcement indexer (docs/mvp-spec.md §4). Gateway *derivation* mode is out of scope (proposed cut) |
 | `contracts` | `@soapay/contracts`: Foundry, `StealthDisperse`, plus `tools/derive.ts` for test vectors |
 
 ## Commands

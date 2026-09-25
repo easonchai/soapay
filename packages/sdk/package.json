@@ -6,9 +6,14 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" }
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "dev": "tsc -p tsconfig.build.json --watch",
@@ -17,7 +22,11 @@
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
+    "@noble/curves": "^2.4.0",
+    "@noble/hashes": "^2.4.0",
     "@scopelift/stealth-address-sdk": "1.0.0-beta.5",
+    "@scure/bip32": "^2.4.0",
+    "@scure/bip39": "^2.4.0",
     "viem": "^2.56.9"
   },
   "devDependencies": {

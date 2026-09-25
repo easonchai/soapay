@@ -1,4 +1,6 @@
-- [App stack](decision-app-stack.md) — pnpm+turbo, Vite React SPAs, Hono gateway, Foundry contracts pkg, SDK-only code paths
+- [Build status](build-status.md) — checkpoint log of the multi-agent build; read first when resuming
+- [MVP scope](decision-mvp-scope.md) — full PRD minus gateway derivation + Privacy Pools; packed calldata; Sepolia first
+- [App stack](decision-app-stack.md) — pnpm+turbo, Vite React SPAs, Hono api, Foundry contracts pkg, SDK-only code paths
 - [Naming](decision-naming.md) — offchain *.soapay.eth subnames; resolve once at enrollment and pin the meta-address
 - [Pay-run paths](decision-atomic-batch.md) — StealthDisperse for EOAs, EIP-5792 batch for smart accounts; ≤350 lines, global sort
 - [v1 scope](decision-scope-v1.md) — USDC on Base only; seed format BIP-39 pending confirmation

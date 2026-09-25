@@ -85,7 +85,7 @@ git submodule update --init --recursive
 nvm use
 pnpm install
 pnpm build && pnpm test      # SDK tests + forge test
-pnpm dev                     # recipient :5173 · sender :5174 · gateway :8787
+pnpm dev                     # recipient :5173 · sender :5174 · api :8787
 ```
 
 Contracts:
@@ -125,7 +125,7 @@ Base, chain `8453`.
 ```text
 apps/recipient    Recipient app: keys, onboarding, scanner, ledger, spend
 apps/sender       Sender app: pay runs via StealthDisperse or an EIP-5792 batch
-apps/gateway      CCIP-Read gateway stub (gateway mode proposed cut)
+apps/api          Subname CCIP-Read gateway, registration relayer, announcement indexer
 packages/sdk      @soapay/sdk: derivation, registry, announce, scan, spend
 contracts         @soapay/contracts: Foundry, StealthDisperse, tools/derive.ts
 docs              PRD analysis

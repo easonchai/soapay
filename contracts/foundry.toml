@@ -16,6 +16,10 @@ runs = 256
 
 [rpc_endpoints]
 base = "${BASE_RPC_URL}"
+base_sepolia = "${BASE_SEPOLIA_RPC_URL}"
+sepolia = "${SEPOLIA_RPC_URL}"
 
 [etherscan]
 base = { key = "${BASESCAN_API_KEY}", chain = 8453 }
+base_sepolia = { key = "${BASESCAN_API_KEY}", chain = 84532 }
+sepolia = { key = "${ETHERSCAN_API_KEY}", chain = 11155111 }
