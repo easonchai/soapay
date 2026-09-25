@@ -7,6 +7,8 @@ interface ImportMetaEnv {
   readonly VITE_ENS_RPC_URL?: string;
   readonly VITE_WALLETCONNECT_PROJECT_ID?: string;
   readonly VITE_MOCK_ENS?: string;
+  readonly VITE_API_URL?: string;
+  readonly VITE_ATTESTER?: string;
 }
 
 interface ImportMeta {

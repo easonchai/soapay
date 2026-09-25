@@ -11,9 +11,9 @@ import {
   type Employee,
 } from "../src/lib/roster.js";
 import { createMockResolver, memoryRotationStore } from "../src/lib/resolver.js";
-import type { WorldIdLookup } from "../src/lib/worldid.js";
+import type { AttestationLookup } from "../src/lib/attestation.js";
 
-const unknownWorldId: WorldIdLookup = async () => ({ state: "unknown" });
+const unknownWorldId: AttestationLookup = async () => ({ state: "unavailable", reason: "test" });
 
 async function setup() {
   const rotations = memoryRotationStore();
@@ -95,7 +95,7 @@ describe("pin-change blocking", () => {
 
   it("clears the warning without changing the pin if the name points back", async () => {
     const { resolve, roster } = await setup();
-    const fake = { ...roster[0]!, pendingChange: { metaAddressURI: roster[1]!.pin.metaAddressURI, registrant: roster[1]!.pin.registrant, detectedAt: 1, worldId: { state: "unknown" as const } } };
+    const fake = { ...roster[0]!, pendingChange: { metaAddressURI: roster[1]!.pin.metaAddressURI, registrant: roster[1]!.pin.registrant, detectedAt: 1, attestation: { state: "missing" as const, reason: "test" } } };
     const cleared = await reapproveChange(resolve, fake);
     expect(cleared.pendingChange).toBeUndefined();
     expect(cleared.pin).toEqual(roster[0]!.pin);
@@ -108,12 +108,27 @@ describe("pin-change blocking", () => {
     expect(payability(roster[0]!, checks.get(roster[0]!.id))).toMatchObject({ payable: false, reason: "error" });
   });
 
-  it("stores the World ID status on the pending change (hook)", async () => {
+  it("asks the attestation lookup for exactly pin → resolved, once per changed name", async () => {
     const { resolve, rotations, roster } = await setup();
     rotations.bump("bob.soapay.eth");
-    const lookup: WorldIdLookup = vi.fn(async () => ({ state: "verified" as const, verifiedAt: 9 }));
-    const updated = await recordChanges(roster, await verifyRoster(resolve, roster), lookup);
-    expect(updated[1]!.pendingChange?.worldId).toEqual({ state: "verified", verifiedAt: 9 });
+    const lookup: AttestationLookup = vi.fn(async () => ({ state: "missing" as const, reason: "none" }));
+    const checks = await verifyRoster(resolve, roster);
+    const updated = await recordChanges(roster, checks, lookup);
+    expect(updated[1]!.pendingChange?.attestation).toEqual({ state: "missing", reason: "none" });
     expect(lookup).toHaveBeenCalledTimes(1);
+    expect(lookup).toHaveBeenCalledWith({
+      ensName: "bob.soapay.eth",
+      oldMeta: roster[1]!.pin.metaAddressURI,
+      newMeta: (checks.get(roster[1]!.id) as { resolved: { metaAddressURI: string } }).resolved.metaAddressURI,
+    });
+  });
+
+  it("a lookup that throws keeps the line blocked", async () => {
+    const { resolve, rotations, roster } = await setup();
+    rotations.bump("bob.soapay.eth");
+    const updated = await recordChanges(roster, await verifyRoster(resolve, roster), async () => {
+      throw new Error("boom");
+    });
+    expect(updated[1]!.pendingChange?.attestation.state).toBe("unavailable");
   });
 });

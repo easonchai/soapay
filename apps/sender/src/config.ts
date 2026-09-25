@@ -28,6 +28,10 @@ export type AppConfig = {
   ensRpcUrl: string | undefined;
   walletConnectProjectId: string | undefined;
   mockEns: boolean;
+  /** apps/api base URL (attestations). */
+  apiUrl: string | undefined;
+  /** PINNED MetaRotation attester (VITE_ATTESTER). Never taken from an API response. */
+  attester: Address | undefined;
 };
 
 const SETTINGS_KEY = "soapay.sender.settings.v1";
@@ -93,6 +97,11 @@ export function isMockEns(env: ImportMetaEnv = import.meta.env): boolean {
   return import.meta.env.DEV === true && env.VITE_MOCK_ENS === "1";
 }
 
+export function pinnedAttester(env: ImportMetaEnv = import.meta.env): Address | undefined {
+  const a = envString(env.VITE_ATTESTER);
+  return a && isAddress(a) ? getAddress(a) : undefined;
+}
+
 export function resolveConfig(settings: Settings = loadSettings()): AppConfig {
   const sdk = CHAINS[settings.chainId] as SoapayChainConfig;
   const disperse = settings.stealthDisperse[settings.chainId] ?? sdk.stealthDisperse ?? null;
@@ -107,6 +116,8 @@ export function resolveConfig(settings: Settings = loadSettings()): AppConfig {
     ensRpcUrl: settings.ensRpcUrl[settings.chainId],
     walletConnectProjectId: envString(import.meta.env.VITE_WALLETCONNECT_PROJECT_ID),
     mockEns: isMockEns(),
+    apiUrl: envString(import.meta.env.VITE_API_URL),
+    attester: pinnedAttester(),
   };
 }
 

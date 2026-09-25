@@ -1,11 +1,13 @@
 // Enrollment and pin checks (CLAUDE.md threat model: ENS is only a reference
 // identifier). A name is resolved ONCE at enrollment and its ERC-6538 meta-address
 // is pinned. Before every run the name is re-resolved; if it now points elsewhere
-// the employee's line is BLOCKED until the employer explicitly re-approves.
+// the change is auto-accepted only with a valid World ID MetaRotation attestation
+// (docs/mvp-spec.md §2.1, see attestation.ts); otherwise the employee's line is
+// BLOCKED until the employer explicitly re-approves.
 // Stealth addresses are never stored for reuse: each run derives fresh ones.
 import type { Address } from "viem";
 import { pinnedMetaChanged, SoapayNameError, type ResolvedStealthMeta } from "@soapay/sdk";
-import type { WorldIdLookup, WorldIdStatus } from "./worldid.js";
+import type { AttestationLookup, AttestationStatus } from "./attestation.js";
 
 export type Resolver = (ensName: string) => Promise<ResolvedStealthMeta>;
 
@@ -13,16 +15,20 @@ export type PinEvent = {
   metaAddressURI: string;
   registrant: Address;
   at: number;
-  reason: "enrolled" | "re-approved";
-  worldId?: WorldIdStatus;
+  reason: "enrolled" | "re-approved" | "attested";
+  attestation?: AttestationStatus;
 };
 
 export type PendingChange = {
   metaAddressURI: string;
   registrant: Address;
   detectedAt: number;
-  worldId: WorldIdStatus;
+  /** Why it wasn't auto-accepted (missing, invalid or unavailable attestation). */
+  attestation: AttestationStatus;
 };
+
+/** Set on the pin when it was moved by a valid World ID attestation (drives the badge). */
+export type PinAttestation = { verifiedAt: number; attester: Address; from: string };
 
 export type Employee = {
   id: string;
@@ -32,7 +38,7 @@ export type Employee = {
   /** Salary per run, USDC base units. */
   amount: bigint;
   /** Pinned at enrollment (or last explicit re-approval). The only meta-address ever paid. */
-  pin: { metaAddressURI: string; registrant: Address; pinnedAt: number };
+  pin: { metaAddressURI: string; registrant: Address; pinnedAt: number; attested?: PinAttestation };
   /** Set when a re-resolve returned a different meta-address; blocks payment. */
   pendingChange?: PendingChange;
   pinHistory: PinEvent[];
@@ -127,32 +133,53 @@ export async function verifyRoster(
 }
 
 /**
- * Records detected changes on the roster (so the warning persists across reloads).
- * A change to yet another meta-address replaces the pending one and resets its World ID state.
+ * Applies detected changes to the roster (persisted, so the warning survives reloads).
+ * - A change backed by a valid attestation for exactly pin -> resolved is ACCEPTED:
+ *   the pin moves, the history records it, and `pin.attested` drives the badge.
+ * - Anything else becomes (or refreshes) a `pendingChange` that blocks payment until
+ *   the employer re-approves by hand.
  */
 export async function recordChanges(
   employees: readonly Employee[],
   checks: ReadonlyMap<string, PinCheck>,
-  lookup: WorldIdLookup,
+  lookup: AttestationLookup,
   now = Date.now(),
 ): Promise<Employee[]> {
   return Promise.all(
     employees.map(async (e) => {
       const c = checks.get(e.id);
       if (c?.status !== "changed") return e;
-      if (e.pendingChange && !pinnedMetaChanged(e.pendingChange.metaAddressURI, c.resolved.metaAddressURI)) {
-        return e;
+      if (!pinnedMetaChanged(e.pin.metaAddressURI, c.resolved.metaAddressURI)) return e;
+      const attestation = await lookup({
+        ensName: e.ensName,
+        oldMeta: e.pin.metaAddressURI,
+        newMeta: c.resolved.metaAddressURI,
+      }).catch((err): AttestationStatus => ({ state: "unavailable", reason: String(err) }));
+
+      const { pendingChange: _p, ...rest } = e;
+      if (attestation.state === "verified") {
+        return {
+          ...rest,
+          pin: {
+            metaAddressURI: c.resolved.metaAddressURI,
+            registrant: c.resolved.registrant,
+            pinnedAt: now,
+            attested: { verifiedAt: attestation.verifiedAt, attester: attestation.attester, from: e.pin.metaAddressURI },
+          },
+          pinHistory: [
+            ...e.pinHistory,
+            { metaAddressURI: c.resolved.metaAddressURI, registrant: c.resolved.registrant, at: now, reason: "attested" as const, attestation },
+          ],
+        };
       }
-      const worldId = await lookup({ ensName: e.ensName, metaAddressURI: c.resolved.metaAddressURI }).catch(
-        (): WorldIdStatus => ({ state: "unknown" }),
-      );
+      const samePending = e.pendingChange && !pinnedMetaChanged(e.pendingChange.metaAddressURI, c.resolved.metaAddressURI);
       return {
-        ...e,
+        ...rest,
         pendingChange: {
           metaAddressURI: c.resolved.metaAddressURI,
           registrant: c.resolved.registrant,
-          detectedAt: now,
-          worldId,
+          detectedAt: samePending ? e.pendingChange!.detectedAt : now,
+          attestation,
         },
       };
     }),
@@ -164,7 +191,8 @@ export type Payability = { payable: true } | { payable: false; reason: "inactive
 /** The run gate. Only a fresh "ok" check against the pin, with no unresolved change, pays. */
 export function payability(e: Employee, check: PinCheck | undefined): Payability {
   if (!e.active) return { payable: false, reason: "inactive", message: "Paused on the roster" };
-  if (e.pendingChange || check?.status === "changed") {
+  const moved = check?.status === "changed" && pinnedMetaChanged(e.pin.metaAddressURI, check.resolved.metaAddressURI);
+  if (e.pendingChange || moved) {
     return {
       payable: false,
       reason: "changed",
@@ -205,7 +233,7 @@ export async function reapproveChange(resolve: Resolver, e: Employee, now = Date
     pin: { metaAddressURI: current.metaAddressURI, registrant: current.registrant, pinnedAt: now },
     pinHistory: [
       ...e.pinHistory,
-      { metaAddressURI: current.metaAddressURI, registrant: current.registrant, at: now, reason: "re-approved", worldId: pending.worldId },
+      { metaAddressURI: current.metaAddressURI, registrant: current.registrant, at: now, reason: "re-approved", attestation: pending.attestation },
     ],
   };
 }
