@@ -1,6 +1,6 @@
 # Soapay
 
-Stealth-address payroll on Base. Product spec: `PRD.md`. Contracts: `contracts/` (Foundry).
+Stealth-address payroll on Base. Product spec: `PRD.md`. Contracts: `contracts/` (Foundry; see `contracts/PLAN.md`). Libraries are git submodules: run `git submodule update --init --recursive`, then `cd contracts && forge test`. Fork tests run when `BASE_RPC_URL` is set.
 
 ## Agreed threat model (overrides PRD.md where they differ)
 
@@ -13,10 +13,18 @@ Stealth-address payroll on Base. Product spec: `PRD.md`. Contracts: `contracts/`
 
 - One custom contract, `StealthDisperse`: pulls tokens from `msg.sender` with `transferFrom`, and in the same tx calls the **canonical** ERC-5564 Announcer for each line. Holds no funds, keeps no state.
 - Stealth addresses in a batch must be **strictly ascending**: the order is independent of names and duplicates are rejected, enforced on-chain.
-- ERC-5564 metadata per line: `viewTag(1) | selector(4) | token(20) | amount(32)`.
-- EOAs pay via `payWithPermit` (USDC supports EIP-2612, try/catch against front-run permit). Safes use MultiSend `approve` + `pay`.
+- Ascending order guards against bugs in the employer's own app and dedupes within a batch. On its own it is **not** a privacy guarantee.
+- ERC-5564 metadata per line: `viewTag(1) | transfer selector(4) | token(20) | amount(32) | payer(20)`. The payer is appended because `Announcement.caller` is always the contract. Scanners recompute the stealth address, read real balances, and never trust the metadata amount or token.
+- `payWithPermit` is for **plain EOAs only**. Base USDC routes permits from 7702-delegated accounts through ERC-1271, so they fail; the contract reverts `PermitFailed`.
+- Recommended, pending team confirmation: smart-account, 7702 and Safe employers use a contract-less EIP-5792 atomic batch of `[USDC.transfer, Announcer.announce] × N`. Safes use `MultiSendCallOnly`, never `MultiSend`. This also avoids the contract being a single USDC-blacklist chokepoint.
 - Reuse the canonical ERC-6538 Registry and ERC-5564 Announcer, an existing audited 7702/4337 account, and a USDC paymaster. Never fork them.
-- Batch limits: roughly 400–500 lines per tx (per-tx gas cap and ~128KB tx size). Spread a person's denominated chunks randomly across split txs.
+
+## Sender-app invariants (the contract can't enforce these)
+
+- **Multi-tx runs:** derive every line for the run, sort globally by stealth address, then cut into roughly equal txs. **Never partition by employee**, or tx totals reveal salaries.
+- Cap at **350 lines per tx**. Gas is about 42k per line all-in, which gives ~398 lines under the 2^24 per-tx cap with zero margin.
+- No ephemeral key is reused across lines.
+- Sign permits for the exact total, never max.
 
 ## Open issues from the PRD review
 

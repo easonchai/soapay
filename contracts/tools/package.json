@@ -1,0 +1,16 @@
+{
+  "name": "soapay-contract-tools",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "derive": "tsx derive.ts"
+  },
+  "dependencies": {
+    "@noble/curves": "^1.9.1",
+    "@scopelift/stealth-address-sdk": "^1.0.0-beta.2",
+    "viem": "^2.21.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0"
+  }
+}
