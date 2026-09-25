@@ -1,26 +1,20 @@
 import { useState } from 'react';
 import { useAccount, useDisconnect } from 'wagmi';
-import { Shell } from '@soapay/ui';
+import { TopBar } from '@soapay/ui';
 import { short, type PlannedRow, type BatchResult } from '@soapay/sdk';
-import { chainConfig } from './config.js';
+import { chainConfig, getOrgName } from './config.js';
 import { Landing } from './Landing.js';
-import { Editor } from './Editor.js';
+import { PayRun, type RunMeta } from './PayRun.js';
 import { Review } from './Review.js';
-import { Result } from './Result.js';
-import { Employees } from './Employees.js';
+import { History } from './History.js';
+import { Recipients } from './Recipients.js';
 import { Settings } from './Settings.js';
 
-type Stage =
-  | { name: 'editor' }
-  | { name: 'review'; rows: PlannedRow[] }
-  | { name: 'result'; rows: PlannedRow[]; result: BatchResult };
-type View = 'pay' | 'employees' | 'settings';
+type View = 'pay' | 'review' | 'history' | 'recipients' | 'settings';
 
 export function App() {
   const { address, isConnected, isReconnecting } = useAccount();
   const { disconnect } = useDisconnect();
-  // Explicit session flag: Log out shows the hero at once even if the wallet takes its time
-  // to drop the connection; Login clears it (and connects if the wallet is not connected).
   const [loggedOut, setLoggedOut] = useState<boolean>(() => {
     try {
       return sessionStorage.getItem('soapay:loggedOut') === '1';
@@ -29,12 +23,13 @@ export function App() {
     }
   });
   const [view, setView] = useState<View>('pay');
-  const [stage, setStage] = useState<Stage>({ name: 'editor' });
+  const [review, setReview] = useState<{ rows: PlannedRow[]; meta: RunMeta } | null>(null);
+  const [openRun, setOpenRun] = useState<string>();
   const [prefill, setPrefill] = useState<string>();
+  const [org, setOrg] = useState(getOrgName());
 
-  // Hero until the wallet is connected. wagmi restores the last connection on reload.
   if (!isConnected || loggedOut) {
-    if (isReconnecting && !loggedOut) return <div className="l-hero" aria-busy />;
+    if (isReconnecting && !loggedOut) return <div className="land" aria-busy />;
     return (
       <Landing
         connected={isConnected}
@@ -58,58 +53,69 @@ export function App() {
     }
     setLoggedOut(true);
     setView('pay');
-    setStage({ name: 'editor' });
+    setReview(null);
     disconnect();
   }
 
-  function payFromEmployees(input: string) {
-    setPrefill(input);
-    setStage({ name: 'editor' });
+  function startRun(prefillText?: string) {
+    setPrefill(prefillText);
+    setReview(null);
     setView('pay');
   }
 
   let body;
-  if (view === 'settings') body = <Settings />;
-  else if (view === 'employees') body = <Employees onPay={payFromEmployees} />;
-  else if (stage.name === 'editor') {
-    body = <Editor prefill={prefill} onPrefillUsed={() => setPrefill(undefined)} onContinue={(rows) => setStage({ name: 'review', rows })} />;
-  } else if (stage.name === 'review') {
-    const rows = stage.rows;
+  if (view === 'settings') body = <Settings org={org} onOrgChange={setOrg} />;
+  else if (view === 'history') body = <History openRunId={openRun} onStartRun={() => startRun()} />;
+  else if (view === 'recipients') body = <Recipients onPay={startRun} />;
+  else if (view === 'review' && review) {
     body = (
-      <Review rows={rows} onBack={() => setStage({ name: 'editor' })} onSent={(result) => setStage({ name: 'result', rows, result })} />
+      <Review
+        rows={review.rows}
+        meta={review.meta}
+        onBack={() => setView('pay')}
+        onSent={(result: BatchResult, runId: string) => {
+          setReview(null);
+          setOpenRun(runId);
+          setView('history');
+        }}
+      />
     );
   } else {
     body = (
-      <Result
-        rows={stage.rows}
-        result={stage.result}
-        onNew={() => setStage({ name: 'editor' })}
-        onEmployees={() => {
-          setStage({ name: 'editor' });
-          setView('employees');
+      <PayRun
+        prefill={prefill}
+        onPrefillUsed={() => setPrefill(undefined)}
+        onReview={(rows, meta) => {
+          setReview({ rows, meta });
+          setView('review');
         }}
       />
     );
   }
 
+  const tab = (label: string, v: View, active: boolean) => ({ label, active, onSelect: () => setView(v) });
   return (
-    <Shell
-      chainName={chainConfig.chain.name}
-      tabs={[
-        { label: 'Pay', active: view === 'pay', onSelect: () => setView('pay') },
-        { label: 'Employees', active: view === 'employees', onSelect: () => setView('employees') },
-        { label: 'Settings', active: view === 'settings', onSelect: () => setView('settings') },
-      ]}
-      right={
-        <>
-          {address && <code className="muted">{short(address)}</code>}
-          <button className="btn-text" onClick={logout}>
-            Log out
-          </button>
-        </>
-      }
-    >
-      {body}
-    </Shell>
+    <div className="page">
+      <TopBar
+        org={org || undefined}
+        tabs={[
+          tab('Pay run', 'pay', view === 'pay' || view === 'review'),
+          tab('History', 'history', view === 'history'),
+          tab('Recipients', 'recipients', view === 'recipients'),
+          tab('Settings', 'settings', view === 'settings'),
+        ]}
+        right={
+          <>
+            <span className="chip">
+              {address ? short(address, 4) : ''} · {chainConfig.chain.name}
+            </span>
+            <button className="btn-text" onClick={logout}>
+              Log out
+            </button>
+          </>
+        }
+      />
+      <main className="app-main">{body}</main>
+    </div>
   );
 }

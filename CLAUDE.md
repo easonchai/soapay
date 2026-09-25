@@ -8,9 +8,9 @@ Stealth-address payroll on Base. Product spec: `PRD.md`. PRD review: `docs/prd-a
 | --- | --- |
 | `packages/sdk` | `@soapay/sdk`: the only home for derivation, registry, announce, scan and spend logic |
 | `apps/recipient` | Vite + React SPA: keys, onboarding, scanner, ledger, spend |
-| `apps/sender` | Vite + React SPA, the company app: hero landing with wallet login, then Pay, Employees (per-wallet history) and Settings. Pay runs through StealthDisperse (EOAs) or an EIP-5792 batch (smart accounts) |
+| `apps/sender` | Vite + React SPA, the company app on the Direction A Ledger design: hero landing with wallet Login, then Pay run (denominated payouts), Review & sign, History, Recipients, Settings. Pay runs through StealthDisperse (EOAs) or an EIP-5792 batch (smart accounts) |
 | `apps/gateway` | Hono on Node: `POST /relay` submits `registerKeysOnBehalf` from a dev key (M1); CCIP-Read service stub. Gateway mode is out of scope under the agreed threat model (proposed cut) |
-| `packages/ui` | `@soapay/ui`: shared styles (tokens, IBM Plex), `Shell`, `Steps`, `Pill`, `Copy`, `ErrorLine`. Source-only, no build |
+| `packages/ui` | `@soapay/ui`: Direction A Ledger tokens (light, navy #1E3A5F, IBM Plex, 2px), `TopBar`, `PageHead`, `Dots`, `NavyPanel`, `Toggle`, `FreshMark`, `Pill`, `Copy`, `ErrorLine`, `Shell`/`Steps` for the employee app. Source-only, no build |
 | `contracts` | `@soapay/contracts`: Foundry, `StealthDisperse`, plus `tools/derive.ts` for test vectors |
 
 ## Commands
