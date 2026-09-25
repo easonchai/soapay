@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { AtSign, BookOpen, Droplets, GitBranch } from 'lucide-react';
-import { useAccount, useConnect } from 'wagmi';
+import { useConnect } from 'wagmi';
 import { GITHUB, HERO_VIDEO } from './config.js';
 
 /** Fade-in on play, fade-out just before the end, restart from black: a seamless loop with no hard cut. */
@@ -55,9 +55,9 @@ function useCrossfadeLoop(ref: React.RefObject<HTMLVideoElement | null>) {
 /** Hero-only landing. "Login" connects the wallet; App switches to the dashboard once connected. */
 export function Landing({ connected, onLogin }: { connected: boolean; onLogin: () => void }) {
   const { connect, connectors, isPending, error } = useConnect();
-  const { isConnecting } = useAccount();
   const connector = connectors[0];
-  const busy = isPending || isConnecting;
+  // Only an explicit Login click counts as busy; wagmi's background reconnect must not grey the button.
+  const busy = isPending;
   const videoRef = useRef<HTMLVideoElement>(null);
   useCrossfadeLoop(videoRef);
 
