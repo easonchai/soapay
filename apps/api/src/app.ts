@@ -11,6 +11,11 @@ import { healthRoutes } from "./routes/health.js";
 import { registerRoutes } from "./routes/register.js";
 import { nameRoutes } from "./routes/names.js";
 import { announcementRoutes } from "./routes/announcements.js";
+import { worldIdRoutes } from "./routes/worldid.js";
+import { rotationRoutes } from "./routes/rotation.js";
+import type { WorldId } from "./worldid/verifier.js";
+import type { L1Funder } from "./topup.js";
+import type { LocalAccount } from "viem";
 
 export type AppDeps = {
   config: Config;
@@ -29,16 +34,26 @@ export type AppDeps = {
   nameIssuer: NameIssuer;
   /** Proof-of-personhood gate for /register and /names. Default: allow all. */
   humanVerifier: HumanVerifier;
+  /** World ID (IDKit 4). Undefined = disabled: /worldid/rp-context and rotation return 503. */
+  worldId: WorldId | undefined;
+  /** Signs MetaRotation attestations. Undefined → rotation returns 503. */
+  attester: LocalAccount | undefined;
+  /** Ethereum Sepolia gas sponsor for the registrant's setText. Undefined → no top-ups. */
+  l1Funder: L1Funder | undefined;
 };
 
-export type BuildAppDeps = Omit<AppDeps, "nameIssuer" | "humanVerifier"> &
-  Partial<Pick<AppDeps, "nameIssuer" | "humanVerifier">>;
+type Optional = "nameIssuer" | "humanVerifier" | "worldId" | "attester" | "l1Funder";
+export type BuildAppDeps = Omit<AppDeps, Optional> & { [K in Optional]?: AppDeps[K] | undefined };
 
 export function buildApp(input: BuildAppDeps): Hono {
   const deps: AppDeps = {
     ...input,
     nameIssuer: input.nameIssuer ?? new NoopNameIssuer(),
-    humanVerifier: input.humanVerifier ?? allowAllVerifier,
+    // With World ID configured, its verifier gates /register and /names unless overridden.
+    humanVerifier: input.humanVerifier ?? input.worldId?.humanVerifier ?? allowAllVerifier,
+    worldId: input.worldId,
+    attester: input.attester,
+    l1Funder: input.l1Funder,
   };
   const { config, logger } = deps;
   const app = new Hono();
@@ -55,6 +70,8 @@ export function buildApp(input: BuildAppDeps): Hono {
   app.route("/", healthRoutes(deps));
   app.route("/", registerRoutes(deps));
   app.route("/", nameRoutes(deps));
+  app.route("/", rotationRoutes(deps));
+  app.route("/", worldIdRoutes(deps));
   app.route("/", announcementRoutes(deps));
 
   app.notFound((c) => c.json(errorBody("not_found", "Route not found"), 404));

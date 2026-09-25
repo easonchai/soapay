@@ -37,7 +37,7 @@ function present(row: NameRow, parent: string) {
   };
 }
 
-function parseDeadline(v: unknown): bigint {
+export function parseDeadline(v: unknown): bigint {
   let d: bigint;
   try {
     if (typeof v === "number" && Number.isSafeInteger(v)) d = BigInt(v);

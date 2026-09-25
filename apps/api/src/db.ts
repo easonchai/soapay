@@ -77,49 +77,52 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (bucket, key)
   );
   `,
-  // World ID (humanVerifier/worldid.ts). Nullifiers only, never identity.
+  // World ID (src/worldid/*). Nullifiers and session ids only, never identity.
   `
-  -- Every RP context we signed. The proof must echo our nonce, so this is how a proof is tied
-  -- to the exact request (kind + context + signal) it was made for, and used at most once.
+  -- Every RP context we signed. A proof must echo one of our nonces, of the right kind,
+  -- and each nonce is accepted at most once.
   CREATE TABLE worldid_requests (
     nonce         TEXT PRIMARY KEY,       -- lowercase 0x hex field element
-    kind          TEXT NOT NULL,          -- enroll | session-create | meta-update
-    action        TEXT,                   -- uniqueness action (enroll only)
-    signal        TEXT NOT NULL,          -- the exact signal string the proof must commit to
-    registrant    TEXT,
-    label         TEXT,
-    meta_address  TEXT,
-    deadline      TEXT,
-    session_id    TEXT,                   -- meta-update: the session the proof must prove
+    kind          TEXT NOT NULL,          -- uniqueness | session
+    action        TEXT,                   -- uniqueness only
     created_at    INTEGER NOT NULL,
     expires_at    INTEGER NOT NULL,
     used_at       INTEGER
   );
 
-  -- One row per verified human (uniqueness nullifier for the enroll action, as a decimal string).
+  -- One row per verified human: the enroll uniqueness proof. The nullifier is a 256-bit
+  -- field element stored as a canonical decimal string (SQLite has no NUMERIC(78,0)).
   CREATE TABLE worldid_humans (
-    nullifier       TEXT PRIMARY KEY,
-    registrant      TEXT NOT NULL UNIQUE,  -- the key the enroll proof was bound to (signal)
-    sponsored_count INTEGER NOT NULL DEFAULT 0,
-    label           TEXT UNIQUE,           -- the one subname this human holds
-    enrolled_at     INTEGER NOT NULL
+    action          TEXT NOT NULL,
+    nullifier       TEXT NOT NULL,
+    registrant      TEXT NOT NULL UNIQUE,  -- the key the proof's signal is bound to
+    session_id      TEXT NOT NULL UNIQUE,  -- the session created at enrollment
+    verified_at     INTEGER NOT NULL,
+    registered_at   INTEGER,               -- set by commit() after the sponsored /register tx
+    label           TEXT UNIQUE,           -- set by commit() after the one subname is stored
+    UNIQUE (action, nullifier)
   );
 
-  -- The World ID session bound to each name: continuity for meta-address updates.
-  CREATE TABLE worldid_sessions (
-    label       TEXT PRIMARY KEY,
-    session_id  TEXT NOT NULL UNIQUE,
-    nullifier   TEXT NOT NULL,
-    created_at  INTEGER NOT NULL,
-    updated_at  INTEGER NOT NULL
-  );
-
-  -- Per-proof replay protection for session proofs.
+  -- Per-proof replay protection for session proofs (create and prove).
   CREATE TABLE worldid_session_nullifiers (
     session_nullifier TEXT PRIMARY KEY,   -- decimal string
     session_id        TEXT NOT NULL,
     at                INTEGER NOT NULL
   );
+
+  -- MetaRotation attestations (docs/mvp-spec.md §2.1), signed by ATTESTER_PRIVATE_KEY.
+  CREATE TABLE attestations (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    label        TEXT NOT NULL,
+    old_meta     TEXT NOT NULL,
+    new_meta     TEXT NOT NULL,
+    verified_at  INTEGER NOT NULL,
+    attester     TEXT NOT NULL,
+    signature    TEXT NOT NULL,
+    session_nullifier TEXT NOT NULL,
+    topup_tx     TEXT
+  );
+  CREATE INDEX attestations_label ON attestations(label, id);
   `,
 ];
 
