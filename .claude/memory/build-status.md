@@ -129,3 +129,4 @@ metadata:
     1. Auto-add the inviting employer to knownPayers when an invite is claimed (currently every row shows "Unknown payer").
     2. Verify viem getEnsResolver against ENSv2 on Sepolia.
     3. Verify /register accepts re-registration for manual rotation.
+- Checkpoint 7d: the invite agent was cut off by an account rate limit mid-task. Its uncommitted sender work was saved as WIP commit 5213483 on `worktree-agent-aeda4302f49ccea41` (the SDK invites.ts and API invite routes were already committed there). A finisher agent is resuming from that branch; it also adds the inviting employer as a recipient known payer.
