@@ -26,6 +26,8 @@ export type ExecDeps = {
   sendCalls(calls: PayRunCall[]): Promise<string>;
   waitForCalls(id: string): Promise<BatchOutcome>;
   readAllowance(owner: Address, spender: Address): Promise<bigint>;
+  /** Delay between allowance re-reads after an approval lands (injectable for tests). */
+  sleep?: (ms: number) => Promise<void>;
 };
 
 export function errorMessage(e: unknown): string {
@@ -147,6 +149,14 @@ export async function executeAttempt(p: ExecuteParams): Promise<RunRecord> {
         })),
       );
       if (status !== "landed") return run;
+      // Load-balanced public RPCs can serve a node that hasn't seen the approval yet, so `pay`
+      // would fail gas estimation with "exceeds allowance". Wait until the allowance is visible.
+      const sleep = p.deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+      for (let attempt = 0; attempt < 10; attempt++) {
+        const seen = await p.deps.readAllowance(p.payer, run.stealthDisperse).catch(() => null);
+        if (seen === null || seen >= total) break;
+        await sleep(1_500);
+      }
     }
   }
 

@@ -142,3 +142,8 @@ metadata:
   - Verified live: issue, resolve and rotate on ENSv2; register → names → resolve through the API 3/3; manual re-registration.
   - Fixed: /names read-after-write lag (re-read at the relay block).
   - Pending live: pay/scan/spend (needs faucet USDC) and a World ID session (simulator/World App).
+- Checkpoint 10 (2026-09-25): **live payroll loop passed on testnet**.
+  - Two employees onboarded through the API (ENSv2 names pay392111/pay730021.soapay.eth), resolved and pinned, then a StealthDisperse pay run of 3 + 2.5 USDC. Each scan found exactly its own line with payerKnown, then a gasless 7702 spend through the Pimlico public bundler and Circle paymaster: 1.0 USDC to a fresh address, net fee about 0.0057 USDC, and the stealth address never held ETH.
+  - Fixed: the sender app now waits for the approval to be visible before `pay` (the same load-balanced RPC lag).
+  - **Tailscale demo:** `scripts/build-demo.sh <origin>` + `node scripts/serve-demo.mjs` (:4300) + `tailscale serve --bg --https=9443 http://127.0.0.1:4300`, giving https://yudhishthra-eth.taila3275f.ts.net:9443/ (recipient), /sender/, /api. Ports 443, 8443 and 8445 belong to other services; don't touch them.
+  - The API must run as `node --env-file=.env dist/index.js` in apps/api; local .env rate limits are relaxed for the demo.

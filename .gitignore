@@ -10,3 +10,4 @@ coverage/
 # Claude: shared memory is committed, local settings are not
 .claude/settings.local.json
 .claude/worktrees/
+.gstack/

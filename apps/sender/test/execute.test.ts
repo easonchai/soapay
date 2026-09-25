@@ -38,6 +38,7 @@ function deps(over: Partial<ExecDeps> = {}): ExecDeps {
     sendCalls: vi.fn(async () => `batch-${++n}`),
     waitForCalls: vi.fn(async () => ({ status: "success" as const, txHash: "0xfeed" as Hash })),
     readAllowance: vi.fn(async () => 0n),
+    sleep: vi.fn(async () => {}),
     ...over,
   };
 }
@@ -52,6 +53,17 @@ describe("executeAttempt (StealthDisperse)", () => {
     const approve = decodeFunctionData({ abi: erc20Abi, data: calls[0].data });
     expect(approve.functionName).toBe("approve");
     expect(approve.args).toEqual([DISPERSE, 400_000_000n]);
+    expect(runStatus(out)).toBe("complete");
+  });
+
+  it("waits until a lagging RPC shows the new allowance before paying", async () => {
+    const { plan, run } = makeRun("disperse");
+    // 0 before the approval, still 0 on the first re-read (a stale node), then the total.
+    const readAllowance = vi.fn().mockResolvedValueOnce(0n).mockResolvedValueOnce(0n).mockResolvedValue(400_000_000n);
+    const sleep = vi.fn(async () => {});
+    const d = deps({ readAllowance, sleep });
+    const out = await executeAttempt({ run, attemptIndex: 0, plan, payer: PAYER, deps: d, onChange: () => {} });
+    expect(sleep).toHaveBeenCalledTimes(1);
     expect(runStatus(out)).toBe("complete");
   });
 
