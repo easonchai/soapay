@@ -161,3 +161,7 @@ metadata:
   - Route: CCTP V2 Base Sepolia→Sepolia (same addresses), minting back to the SAME stealth address through Circle's Forwarding Service (about 1.5–2.2 USDC fee, no ETH); then approve + deposit through a 7702 userOp with the Circle paymaster on Sepolia (the Pimlico public bundler works); then withdraw through the relayer to the destination.
   - Risks: the paymaster's 1271 path is unproven on Sepolia (fork test it first); testnet service uptime; about 15 USDC per line (the faucet gives 20 per 2 h).
   - Production chain decision pending: Optimism (cheap) vs Ethereum (large anonymity set).
+- Checkpoint 16 (2026-09-26): building the compliant exit (spec §9) with 2 parallel agents:
+  1. SDK exit.ts: CCTP V2 with forwarding back to the same stealth address, a 0xbow deposit through a 7702 userOp with the Circle paymaster on Sepolia, the ASP, the relayer withdraw, ragequit, derivePoolSecrets from the seed, a Sepolia fork test, and a live run if funds allow (it stops and asks for a faucet top-up otherwise).
+  2. Recipient exit UI against the §9 types through an adapter at apps/recipient/src/features/exit/sdk.ts.
+  The production chain is undecided (the SDK is chain-agnostic).
