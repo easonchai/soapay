@@ -23,3 +23,10 @@ metadata:
 - Checkpoint 2c: SDK payrun+scan merged. The TS head encoder matches the contract's fixed vectors (test wired). The /announcements contract is `?from&to&limit&cursor` → `{items[{blockNumber str, txHash, logIndex num, stealthAddress, caller, ephemeralPubKey, metadata}], nextCursor|null}`. Scan cost is about 1.5 ms per announcement (one ECDH each; the view tag only skips the later steps), so the recipient app must scan in Web Workers, incrementally from its last block. The metadata payer is trusted only when `caller` is a known StealthDisperse; otherwise payer = caller.
 - Checkpoint 2d: apps/api merged (52 tests): /register relayer (idempotent, rate-limited), /names (NameClaim via SDK verifyNameClaim, name_history, pluggable NameIssuer with optional updateMeta, HumanVerifier → 403), /announcements (the scanner's contract), /health, Dockerfile. The NameClaim EIP-712 chainId is the API's CHAIN_ID (84532). Ops: sepolia.base.org caps getLogs at 1k blocks, so backfill needs a better RPC in prod.
 - Design point: World ID can only *enforce* salary-redirect protection if the ENSv2 `stealth` write goes through the gate. Preferred: an on-chain guard contract holds the setText role and verifies World ID + the registrant signature, if World ID on-chain verification exists on Sepolia; fallback: the API gates writes. The World ID agent decides from research.
+- Checkpoint 2e (resume notes, in case the session restarts): agents in flight, each in `.claude/worktrees/agent-*` on branch `worktree-agent-*`. If a session restarts mid-flight, inspect each worktree's `git log yudhishthra..HEAD` and `git status`, then merge the finished work or re-spawn the task.
+  - ENSv2 subnames (+ grantable stealthWriter role for a guard).
+  - Uniswap swap-in-place + FEEDBACK.md + Base-fork E2E (spend/paymaster/permit-1271 verdict).
+  - Recipient app.
+  - Sender app.
+  - World ID (backend verifier with enroll uniqueness + sessions, rp-context endpoint, `@soapay/worldid-react`, optional SoapayNameGuard).
+  After all merge: wire World ID, swap and ENSv2 rotation into the apps (TODO hooks), then run E2E on a local fork.
