@@ -8,9 +8,8 @@ Stealth-address payroll on Base. Product spec: `PRD.md`. PRD review: `docs/prd-a
 | --- | --- |
 | `packages/sdk` | `@soapay/sdk`: the only home for derivation, registry, announce, scan and spend logic |
 | `apps/recipient` | Vite + React SPA: keys, onboarding, scanner, ledger, spend |
-| `apps/sender` | Vite + React SPA: pay runs through StealthDisperse (EOAs) or an EIP-5792 batch (smart accounts) |
+| `apps/sender` | Vite + React SPA, the company app: hero landing with wallet login, then Pay, Employees (per-wallet history) and Settings. Pay runs through StealthDisperse (EOAs) or an EIP-5792 batch (smart accounts) |
 | `apps/gateway` | Hono on Node: `POST /relay` submits `registerKeysOnBehalf` from a dev key (M1); CCIP-Read service stub. Gateway mode is out of scope under the agreed threat model (proposed cut) |
-| `apps/landing` | Vite + React static landing page (framer-motion, lucide). Links to the two apps |
 | `packages/ui` | `@soapay/ui`: shared styles (tokens, IBM Plex), `Shell`, `Steps`, `Pill`, `Copy`, `ErrorLine`. Source-only, no build |
 | `contracts` | `@soapay/contracts`: Foundry, `StealthDisperse`, plus `tools/derive.ts` for test vectors |
 
@@ -18,7 +17,7 @@ Stealth-address payroll on Base. Product spec: `PRD.md`. PRD review: `docs/prd-a
 
 - `git submodule update --init --recursive` once, for the Foundry libraries.
 - `pnpm install` · `pnpm build` · `pnpm test` · `pnpm typecheck` · `pnpm dev`, all run through turbo. `pnpm test` includes `forge test`.
-- Dev ports: recipient 5173, sender 5174, landing 5175, gateway 8787. Copy each app's `.env.example` to `.env.local` (Base Sepolia); the gateway needs `RELAYER_PRIVATE_KEY` for registration.
+- Dev ports: recipient 5173, sender 5174, gateway 8787. Copy each app's `.env.example` to `.env.local` (Base Sepolia); the gateway needs `RELAYER_PRIVATE_KEY` for registration.
 - Frontend M1 design and task record: `docs/frontend-m1-design.md`, `docs/frontend-m1-plan.md`.
 - One package: `pnpm --filter @soapay/sdk test`, `pnpm --filter @soapay/contracts test`.
 - Contract fork tests run when `BASE_RPC_URL` is set.

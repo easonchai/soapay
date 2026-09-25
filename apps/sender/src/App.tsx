@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { useAccount, useDisconnect } from 'wagmi';
 import { Shell } from '@soapay/ui';
-import type { PlannedRow, BatchResult } from '@soapay/sdk';
-import { chainConfig, OTHER_APP_URL } from './config.js';
+import { short, type PlannedRow, type BatchResult } from '@soapay/sdk';
+import { chainConfig } from './config.js';
+import { Landing } from './Landing.js';
 import { Editor } from './Editor.js';
 import { Review } from './Review.js';
 import { Result } from './Result.js';
@@ -15,9 +17,50 @@ type Stage =
 type View = 'pay' | 'employees' | 'settings';
 
 export function App() {
+  const { address, isConnected, isReconnecting } = useAccount();
+  const { disconnect } = useDisconnect();
+  // Explicit session flag: Log out shows the hero at once even if the wallet takes its time
+  // to drop the connection; Login clears it (and connects if the wallet is not connected).
+  const [loggedOut, setLoggedOut] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem('soapay:loggedOut') === '1';
+    } catch {
+      return false;
+    }
+  });
   const [view, setView] = useState<View>('pay');
   const [stage, setStage] = useState<Stage>({ name: 'editor' });
   const [prefill, setPrefill] = useState<string>();
+
+  // Hero until the wallet is connected. wagmi restores the last connection on reload.
+  if (!isConnected || loggedOut) {
+    if (isReconnecting && !loggedOut) return <div className="l-hero" aria-busy />;
+    return (
+      <Landing
+        connected={isConnected}
+        onLogin={() => {
+          try {
+            sessionStorage.removeItem('soapay:loggedOut');
+          } catch {
+            /* ignore */
+          }
+          setLoggedOut(false);
+        }}
+      />
+    );
+  }
+
+  function logout() {
+    try {
+      sessionStorage.setItem('soapay:loggedOut', '1');
+    } catch {
+      /* ignore */
+    }
+    setLoggedOut(true);
+    setView('pay');
+    setStage({ name: 'editor' });
+    disconnect();
+  }
 
   function payFromEmployees(input: string) {
     setPrefill(input);
@@ -56,8 +99,15 @@ export function App() {
         { label: 'Pay', active: view === 'pay', onSelect: () => setView('pay') },
         { label: 'Employees', active: view === 'employees', onSelect: () => setView('employees') },
         { label: 'Settings', active: view === 'settings', onSelect: () => setView('settings') },
-        { label: 'Employee app', href: OTHER_APP_URL },
       ]}
+      right={
+        <>
+          {address && <code className="muted">{short(address)}</code>}
+          <button className="btn-text" onClick={logout}>
+            Log out
+          </button>
+        </>
+      }
     >
       {body}
     </Shell>

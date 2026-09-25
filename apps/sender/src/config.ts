@@ -13,3 +13,5 @@ export const chainConfig = getChainConfig({
 
 export const OTHER_APP_URL: string =
   import.meta.env.VITE_OTHER_APP_URL ?? (import.meta.env.DEV ? 'http://localhost:5173' : '/');
+
+export const GITHUB = 'https://github.com/easonchai/soapay';
