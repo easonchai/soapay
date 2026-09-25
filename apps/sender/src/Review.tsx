@@ -13,7 +13,7 @@ import {
   type BatchProgress,
   type BatchResult,
 } from '@soapay/sdk';
-import { Dots, ErrorLine, FreshMark, NavyPanel } from '@soapay/ui';
+import { Dots, ErrorLine, FreshMark, NavyPanel, CountUp, Stagger, StaggerItem } from '@soapay/ui';
 import { chainConfig } from './config.js';
 import type { RunMeta } from './PayRun.js';
 
@@ -116,7 +116,8 @@ export function Review({
       <div className="stack-lg">
         <span className="eyebrow">Review · {meta.title}</span>
         <h1>
-          {fmtAmount(total, cfg.usdcDecimals)} USDC to {people.length} {people.length === 1 ? 'person' : 'people'}, on {rows.length} fresh address
+          <CountUp value={Number(total) / 10 ** cfg.usdcDecimals} format={(n) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} duration={0.8} /> USDC to{' '}
+          {people.length} {people.length === 1 ? 'person' : 'people'}, on {rows.length} fresh address
           {rows.length === 1 ? '' : 'es'}.
         </h1>
         <p className="ink2 pretty">
@@ -191,8 +192,9 @@ export function Review({
             <span className="r">Lines</span>
             <span className="r">First fresh address</span>
           </div>
-          {people.slice(0, 12).map((p) => (
-            <div key={p.input} className="tr mono" style={{ gridTemplateColumns: '1.3fr 1fr 0.9fr 1.6fr' }}>
+          <Stagger>
+          {people.slice(0, 12).map((p, i) => (
+            <StaggerItem key={p.input} index={i} className="tr mono" style={{ gridTemplateColumns: '1.3fr 1fr 0.9fr 1.6fr', display: 'grid' }}>
               <span>{p.input}</span>
               <span className="r num">{fmtAmount(p.amount, cfg.usdcDecimals)}</span>
               <span className="r ink2">{linesText(p)}</span>
@@ -201,8 +203,9 @@ export function Review({
                 {short(p.lines[0]!.stealthAddress, 4)}
                 {p.lines.length > 1 && <span className="ink3">+{p.lines.length - 1}</span>}
               </span>
-            </div>
+            </StaggerItem>
           ))}
+          </Stagger>
           <div className="foot">
             <span>
               {people.length > 12 ? `…and ${people.length - 12} more. ` : ''}

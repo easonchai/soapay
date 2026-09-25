@@ -30,7 +30,9 @@ export function Dots({
   useEffect(() => {
     const c = ref.current;
     if (!c) return;
-    const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    const reduce =
+      typeof window !== 'undefined' &&
+      (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || new URLSearchParams(window.location.search).get('motion') === 'off');
     const live = animate && !reduce;
     let raf = 0;
     let last = 0;

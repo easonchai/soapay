@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useAccount, useDisconnect } from 'wagmi';
 import { TopBar } from '@soapay/ui';
 import { short, type PlannedRow, type BatchResult } from '@soapay/sdk';
@@ -115,7 +116,19 @@ export function App() {
           </>
         }
       />
-      <main className="app-main">{body}</main>
+      <main className="app-main">
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={view === 'review' ? 'review' : view}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+          >
+            {body}
+          </motion.div>
+        </AnimatePresence>
+      </main>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { createCompanyStore, browserStorage, explorerTx, fmtAmount, fmtDate, short, type PaymentRecord, type RunRecord } from '@soapay/sdk';
-import { PageHead, NavyPanel } from '@soapay/ui';
+import { PageHead, NavyPanel, Collapse, CountUp, Stagger, StaggerItem } from '@soapay/ui';
+import { motion } from 'framer-motion';
 import { chainConfig } from './config.js';
 
 export function History({ openRunId, onStartRun }: { openRunId?: string | undefined; onStartRun: () => void }) {
@@ -72,16 +73,21 @@ export function History({ openRunId, onStartRun }: { openRunId?: string | undefi
         <NavyPanel className="stat" dots={false}>
           <span className="k">Paid in {year}</span>
           <span className="v">
-            {fmtAmount(paidThisYear, cfg.usdcDecimals)} <span className="unit">USDC</span>
+            <CountUp value={Number(paidThisYear) / 10 ** cfg.usdcDecimals} format={(n) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} duration={0.8} />{' '}
+            <span className="unit">USDC</span>
           </span>
         </NavyPanel>
         <div className="stat">
           <span className="k">Fresh addresses funded</span>
-          <span className="v">{funded}</span>
+          <span className="v">
+            <CountUp value={funded} format={(n) => String(Math.round(n))} duration={0.8} />
+          </span>
         </div>
         <div className="stat">
           <span className="k">Runs</span>
-          <span className="v">{runs.length}</span>
+          <span className="v">
+            <CountUp value={runs.length} format={(n) => String(Math.round(n))} duration={0.6} />
+          </span>
         </div>
       </div>
       <div className="table">
@@ -93,12 +99,13 @@ export function History({ openRunId, onStartRun }: { openRunId?: string | undefi
           <span className="r">Transaction</span>
           <span />
         </div>
-        {runs.map((r) => {
+        <Stagger>
+        {runs.map((r, idx) => {
           const isOpen = open === r.id;
           const tx = r.txHashes[0];
           return (
-            <div key={r.id}>
-              <div className="tr tall click" style={{ gridTemplateColumns: '130px 1.4fr 100px 1fr 1fr 24px' }} onClick={() => setOpen(isOpen ? undefined : r.id)}>
+            <StaggerItem key={r.id} index={idx}>
+              <div className={`tr tall click${r.id === openRunId ? ' flash' : ''}`} style={{ gridTemplateColumns: '130px 1.4fr 100px 1fr 1fr 24px' }} onClick={() => setOpen(isOpen ? undefined : r.id)}>
                 <span className="ink2">{fmtDate(r.sentAt)}</span>
                 <span style={{ fontWeight: 500 }}>
                   {r.label}
@@ -122,10 +129,10 @@ export function History({ openRunId, onStartRun }: { openRunId?: string | undefi
                   )}
                 </span>
                 <span style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                  <span style={{ width: 7, height: 7, borderRight: '1.5px solid var(--ink2)', borderBottom: '1.5px solid var(--ink2)', transform: isOpen ? 'rotate(-135deg)' : 'rotate(45deg)' }} />
+                  <motion.span animate={{ rotate: isOpen ? -135 : 45 }} transition={{ duration: 0.2 }} style={{ width: 7, height: 7, borderRight: '1.5px solid var(--ink2)', borderBottom: '1.5px solid var(--ink2)', display: 'block' }} />
                 </span>
               </div>
-              {isOpen && (
+              <Collapse open={isOpen}>
                 <div className="sub">
                   <div className="thead" style={{ gridTemplateColumns: '1.4fr 1fr 1fr 1.2fr' }}>
                     <span>Name</span>
@@ -155,10 +162,11 @@ export function History({ openRunId, onStartRun }: { openRunId?: string | undefi
                     )}
                   </div>
                 </div>
-              )}
-            </div>
+              </Collapse>
+            </StaggerItem>
           );
         })}
+        </Stagger>
       </div>
     </div>
   );
