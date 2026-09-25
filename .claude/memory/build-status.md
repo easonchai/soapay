@@ -87,3 +87,7 @@ metadata:
     - Done: attestation.ts (option A enforcement) with tests; 99 tests.
     - Remaining: typecheck the wallet/wagmi/services/store files; hooks, pages, 5792-only banner, README seam, build, screenshot.
     - SDK gaps: CREATE2 predictor, and MetaRotation helpers (now in SDK rotation.ts on the World ID branch).
+
+**Checkpoint 6 (2026-09-25): resumed after restart #2**
+- The World Developer Portal MCP is loaded (`mcp__worldcoin-developer-portal__*`). App `app_0cc7167efe114ac2e0ef7d9827098353` ("Soapay", production, cloud) has **World ID 4.0 NOT configured** (no RP, no actions). The owner must approve `configure_world_id` first (on-chain RP registration; the signing key is returned ONCE and goes straight into apps/api/.env, never chat or git). After that: create action `soapay-enroll` in staging and production.
+- Resume agents (round 2): ENSv2 (fix the register-parent revert, ENSV2.md, README), World ID (build/tests, ERC-6538 re-registration relay in rotation, `@soapay/worldid-react`, docs, plus the `/uniswap/:endpoint` Trading API proxy with UNISWAP_API_KEY), recipient app (wire the real swap.ts via the API proxy), sender app (UI).
