@@ -135,3 +135,10 @@ metadata:
 - Invite links MERGED: the sender's "Invite employee" (sign, link and QR, pending row, auto-enroll through resolve-and-pin on claim, re-invite on expiry), and recipient `#/join` adds the employer as a known payer.
 - Test totals: SDK 183 (+11 fork/live skipped) · API 112 · sender 117 · recipient 62 · contracts 31 (+2 fork skipped). The fork E2Es (payroll 5/5, spend/swap 3/3) pass with FORK_E2E=1.
 - NEXT: the testnet deploy (the owner runs the broadcasts), a live demo run, then compare with CK's UI and open the PR yudhishthra → main.
+- Checkpoint 9 (2026-09-25): **TESTNET LIVE**; see docs/testnet-deployment.md.
+  - StealthDisperse is on Base Sepolia at 0x6B7a…39CA; soapay.eth is registered and set up on ENSv2 Sepolia.
+  - Wallets were generated locally with cast (keys only in the gitignored .env files) and funded via the Chainstack faucet (one drip per network per 24 h), then redistributed.
+  - The API runs with `node --env-file=.env dist/index.js`.
+  - Verified live: issue, resolve and rotate on ENSv2; register → names → resolve through the API 3/3; manual re-registration.
+  - Fixed: /names read-after-write lag (re-read at the relay block).
+  - Pending live: pay/scan/spend (needs faucet USDC) and a World ID session (simulator/World App).

@@ -25,12 +25,13 @@ export const announcementEvent = getAbiItem({ abi: announcerAbi, name: "Announce
 
 const SCHEME = BigInt(SCHEME_ID);
 
-export async function readStealthMetaAddress(client: ReadClient, registrant: Address): Promise<Hex> {
+export async function readStealthMetaAddress(client: ReadClient, registrant: Address, blockNumber?: bigint): Promise<Hex> {
   const out = (await client.readContract({
     address: REGISTRY_ADDRESS,
     abi: registryAbi,
     functionName: "stealthMetaAddressOf",
     args: [registrant, SCHEME],
+    ...(blockNumber !== undefined ? { blockNumber } : {}),
   })) as Hex;
   return (out ?? "0x").toLowerCase() as Hex;
 }

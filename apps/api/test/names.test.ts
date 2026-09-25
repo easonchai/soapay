@@ -74,6 +74,27 @@ describe("POST /names", () => {
     expect((await j(res)).error.code).toBe("meta_mismatch");
   });
 
+  it("tolerates RPC read-after-write lag for a registration this API just relayed", async () => {
+    const t = makeTestApp();
+    // `latest` still shows the old state; the block the relay landed in has the new meta-address.
+    t.client.readContract.mockImplementation(async (a: any) => (a.blockNumber === 1234n ? metaHex() : "0x"));
+    t.db
+      .prepare(
+        `INSERT INTO registrations (registrant, meta_bytes, tx_hash, status, block_number, created_at, updated_at)
+         VALUES (?, ?, ?, 'success', '1234', ?, ?)`,
+      )
+      .run(registrant.address, metaHex(), "0x" + "ab".repeat(32), NOW, NOW);
+    const res = await t.post("/names", await claim());
+    expect(res.status).toBe(201);
+  });
+
+  it("still rejects a mismatch when this API never relayed that meta-address", async () => {
+    const t = makeTestApp();
+    t.client.readContract.mockImplementation(async (a: any) => (a.blockNumber === 1234n ? metaHex() : "0x"));
+    const res = await t.post("/names", await claim());
+    expect(res.status).toBe(409);
+  });
+
   it("rejects a label taken by another registrant", async () => {
     const t = makeTestApp();
     onChain(t, { [registrant.address]: metaHex(), [other.address]: metaHex(2) });

@@ -115,7 +115,29 @@ export function nameRoutes(deps: AppDeps): Hono {
       deps.now(),
     );
 
-    const onChain = await readStealthMetaAddress(deps.client, registrant);
+    let onChain = await readStealthMetaAddress(deps.client, registrant);
+    if (!sameBytes(onChain, metaBytes)) {
+      // Read-after-write lag: public RPCs are load-balanced, so a node may not yet see a
+      // registration this API just relayed. If we relayed exactly this meta-address, re-read at
+      // the block it landed in (retrying while the node catches up) instead of rejecting.
+      const relayed = db
+        .prepare(
+          `SELECT block_number FROM registrations
+           WHERE lower(registrant) = lower(?) AND lower(meta_bytes) = lower(?) AND status = 'success'
+             AND block_number IS NOT NULL
+           ORDER BY id DESC LIMIT 1`,
+        )
+        .get(registrant, metaBytes) as { block_number: string } | undefined;
+      if (relayed) {
+        for (let attempt = 0; attempt < 5 && !sameBytes(onChain, metaBytes); attempt++) {
+          try {
+            onChain = await readStealthMetaAddress(deps.client, registrant, BigInt(relayed.block_number));
+          } catch {
+            await new Promise((r) => setTimeout(r, 1_000));
+          }
+        }
+      }
+    }
     if (!sameBytes(onChain, metaBytes)) {
       throw new ApiError(409, "meta_mismatch", "metaAddress does not match stealthMetaAddressOf(registrant, 1) on-chain");
     }
