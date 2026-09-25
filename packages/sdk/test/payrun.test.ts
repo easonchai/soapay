@@ -243,7 +243,21 @@ describe("encodeStealthDisperseCalls", () => {
     ).toThrow(/350/);
   });
 
-  it.todo("matches contracts fixed vector"); // Wire to the fixed vector the contracts agent publishes in contracts/PLAN.md.
+  // Fixed vectors shared with contracts/test (see contracts/PLAN.md "SDK test vectors"),
+  // so the TS encoder and the Solidity decoder can't drift apart.
+  it("matches the contracts fixed vectors", () => {
+    const vectors = [
+      ["0x320ea225f1022f09e9fad52227e35f3006cfcee10000000000003b9aca00e103", "0x320Ea225F1022f09e9fad52227E35f3006CfCEe1", 1000000000n, 0xe1, 3],
+      ["0x8425d6ef91098fc4b35480297a1558fa6f333a140000000000003baa0c404c03", "0x8425d6Ef91098FC4b35480297A1558Fa6f333A14", 1001000000n, 0x4c, 3],
+      ["0xe59d5dc83861e5a443a0007b9dd486e8a928287e0000000000003bb94e80d202", "0xE59d5dC83861e5A443A0007b9DD486e8a928287E", 1002000000n, 0xd2, 2],
+      ["0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff02", "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF", (1n << 80n) - 1n, 0xff, 2],
+      ["0x0000000000000000000000000000000000000001000000000000000000010003", "0x0000000000000000000000000000000000000001", 1n, 0x00, 3],
+    ] as const;
+    for (const [head, stealthAddress, amount, viewTag, keyPrefix] of vectors) {
+      expect(encodeHead({ stealthAddress, amount, viewTag, keyPrefix })).toBe(BigInt(head));
+      expect(decodeHead(BigInt(head))).toEqual({ stealthAddress, amount, viewTag, keyPrefix });
+    }
+  });
 });
 
 describe("encodeBatchCalls (EIP-5792)", () => {
