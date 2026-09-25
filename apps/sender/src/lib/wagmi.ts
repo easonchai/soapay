@@ -15,6 +15,9 @@ export function createWagmiConfig(app: AppConfig): Config {
     // Smart wallet only: it supports EIP-5792 atomic batches, the no-contract pay path.
     coinbaseWallet({ appName: "Soapay", preference: { options: "smartWalletOnly" } }),
   ];
+  // Optional: @walletconnect/ethereum-provider is NOT a dependency (it is large). To enable,
+  // `pnpm --filter @soapay/sender add @walletconnect/ethereum-provider` and set the project id;
+  // without the package the connector fails only when someone picks it.
   if (app.walletConnectProjectId) {
     connectors.push(walletConnect({ projectId: app.walletConnectProjectId, showQrModal: true }));
   }
