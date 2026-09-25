@@ -267,6 +267,15 @@ describe("quoteSwapInPlace via the Trading API", () => {
     const fetch: SwapFetch = async () => ({ ok: false, status: 401, json: async () => ({}), text: async () => '{"errorCode":"Unauthorized"}' });
     await expect(quoteSwapInPlace(apiParams(fetch))).rejects.toThrow(/401/);
   });
+
+  it("goes through a key-adding proxy: apiUrl alone selects the Trading API and sends no x-api-key", async () => {
+    const { fetch, requests } = mockApi();
+    const { apiKey: _unused, ...noKey } = apiParams(fetch);
+    const q = await quoteSwapInPlace({ ...noKey, apiUrl: "https://api.soapay.test/uniswap" });
+    expect(q.source).toBe("trading-api");
+    expect(requests.map((r) => r.url)).toEqual(["https://api.soapay.test/uniswap/quote", "https://api.soapay.test/uniswap/swap"]);
+    for (const r of requests) expect(r.headers).not.toHaveProperty("x-api-key");
+  });
 });
 
 describe("minOutFor", () => {

@@ -166,14 +166,18 @@ export type SwapQuoteParams = {
   amountIn: bigint;
   /** Max output shortfall vs. the quote, in bps. Must be ≤ `MAX_SLIPPAGE_BPS`. */
   slippageBps: number;
-  /** Trading API key. Without one, the Universal Router fallback is used. */
+  /** Trading API key (server-side only). Without it or `apiUrl`, the Universal Router fallback is used. */
   apiKey?: string;
-  /** Force a source. Default: "trading-api" when `apiKey` is set, else "universal-router". */
+  /** Force a source. Default: "trading-api" when `apiKey` or `apiUrl` is set, else "universal-router". */
   source?: SwapSource;
   /** Needed for the fallback quote and the ERC-20 balance guard. */
   publicClient?: PublicClient<Transport, Chain>;
   /** V3 pool fee for the fallback. Default 500. */
   feeTier?: number;
+  /**
+   * Trading API base URL. Browser apps point this at a backend proxy that adds `x-api-key`
+   * (the key must not ship in a client bundle, and the API rejects browser CORS preflights).
+   */
   apiUrl?: string;
   fetch?: SwapFetch;
   deadlineSeconds?: number;
@@ -564,7 +568,8 @@ async function apiPost(params: SwapQuoteParams, path: string, body: unknown): Pr
     headers: {
       "content-type": "application/json",
       accept: "application/json",
-      "x-api-key": params.apiKey ?? "",
+      // Omitted when calling through a backend proxy that adds the key itself.
+      ...(params.apiKey ? { "x-api-key": params.apiKey } : {}),
       "x-universal-router-version": UNIVERSAL_ROUTER_VERSION,
       "x-agent-info": TRADING_API_AGENT_INFO,
     },
@@ -575,7 +580,7 @@ async function apiPost(params: SwapQuoteParams, path: string, body: unknown): Pr
 }
 
 async function quoteViaTradingApi(params: SwapQuoteParams, r: Resolved): Promise<SwapQuote> {
-  if (!params.apiKey) throw new SwapError("Soapay swap: apiKey is required for the Trading API");
+  if (!params.apiKey && !params.apiUrl) throw new SwapError("Soapay swap: the Trading API needs apiKey, or apiUrl pointing at a proxy that adds it");
   const quoteRes = (await apiPost(params, "/quote", {
     type: "EXACT_INPUT",
     amount: r.amountIn.toString(),
@@ -644,7 +649,7 @@ async function quoteViaTradingApi(params: SwapQuoteParams, r: Resolved): Promise
  */
 export async function quoteSwapInPlace(params: SwapQuoteParams): Promise<SwapQuote> {
   const r = resolve(params);
-  const source = params.source ?? (params.apiKey ? "trading-api" : "universal-router");
+  const source = params.source ?? (params.apiKey || params.apiUrl ? "trading-api" : "universal-router");
   return source === "trading-api" ? quoteViaTradingApi(params, r) : quoteViaUniversalRouter(params, r);
 }
 
