@@ -109,10 +109,13 @@ export function nameRoutes(deps: AppDeps): Hono {
       throw new ApiError(409, "meta_mismatch", "metaAddress does not match stealthMetaAddressOf(registrant, 1) on-chain");
     }
 
-    const nullifier = await requireHuman(deps.humanVerifier, {
+    const { nullifier, commit } = await requireHuman(deps.humanVerifier, {
       action: existing ? "update-meta" : "name",
       registrant,
       proof: body.proof,
+      label,
+      metaAddress,
+      deadline,
     });
 
     // Serialise per label so two racing claims can't both reach the issuer.
@@ -158,6 +161,7 @@ export function nameRoutes(deps: AppDeps): Hono {
           `INSERT INTO name_history (label, registrant, old_meta, new_meta, deadline, nullifier, tx_hash, at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         ).run(label, registrant, cur?.meta_address ?? null, metaAddress, deadline.toString(), nullifier, issueTx ?? null, now);
+        commit();
       });
     } finally {
       release();

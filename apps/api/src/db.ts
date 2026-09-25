@@ -77,6 +77,50 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (bucket, key)
   );
   `,
+  // World ID (humanVerifier/worldid.ts). Nullifiers only, never identity.
+  `
+  -- Every RP context we signed. The proof must echo our nonce, so this is how a proof is tied
+  -- to the exact request (kind + context + signal) it was made for, and used at most once.
+  CREATE TABLE worldid_requests (
+    nonce         TEXT PRIMARY KEY,       -- lowercase 0x hex field element
+    kind          TEXT NOT NULL,          -- enroll | session-create | meta-update
+    action        TEXT,                   -- uniqueness action (enroll only)
+    signal        TEXT NOT NULL,          -- the exact signal string the proof must commit to
+    registrant    TEXT,
+    label         TEXT,
+    meta_address  TEXT,
+    deadline      TEXT,
+    session_id    TEXT,                   -- meta-update: the session the proof must prove
+    created_at    INTEGER NOT NULL,
+    expires_at    INTEGER NOT NULL,
+    used_at       INTEGER
+  );
+
+  -- One row per verified human (uniqueness nullifier for the enroll action, as a decimal string).
+  CREATE TABLE worldid_humans (
+    nullifier       TEXT PRIMARY KEY,
+    registrant      TEXT NOT NULL UNIQUE,  -- the key the enroll proof was bound to (signal)
+    sponsored_count INTEGER NOT NULL DEFAULT 0,
+    label           TEXT UNIQUE,           -- the one subname this human holds
+    enrolled_at     INTEGER NOT NULL
+  );
+
+  -- The World ID session bound to each name: continuity for meta-address updates.
+  CREATE TABLE worldid_sessions (
+    label       TEXT PRIMARY KEY,
+    session_id  TEXT NOT NULL UNIQUE,
+    nullifier   TEXT NOT NULL,
+    created_at  INTEGER NOT NULL,
+    updated_at  INTEGER NOT NULL
+  );
+
+  -- Per-proof replay protection for session proofs.
+  CREATE TABLE worldid_session_nullifiers (
+    session_nullifier TEXT PRIMARY KEY,   -- decimal string
+    session_id        TEXT NOT NULL,
+    at                INTEGER NOT NULL
+  );
+  `,
 ];
 
 export function migrate(db: Db): void {
