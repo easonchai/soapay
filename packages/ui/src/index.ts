@@ -19,3 +19,4 @@ export { Collapse } from './motion/Collapse.js';
 export { Skeleton } from './motion/Skeleton.js';
 export { Toaster, toast } from './motion/Toaster.js';
 export { Presence, motionOff } from './motion/Presence.js';
+export { Fade } from './motion/Fade.js';

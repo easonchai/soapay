@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import { motion } from 'framer-motion';
 import { useAccount, useDisconnect } from 'wagmi';
-import { TopBar, Presence } from '@soapay/ui';
+import { TopBar, Presence, Fade } from '@soapay/ui';
 import { short, type PlannedRow, type BatchResult } from '@soapay/sdk';
 import { chainConfig, getOrgName } from './config.js';
 import { Landing } from './Landing.js';
@@ -118,15 +117,9 @@ export function App() {
       />
       <main className="app-main">
         <Presence mode="wait" initial={false}>
-          <motion.div
-            key={view === 'review' ? 'review' : view}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-          >
+          <Fade key={view === 'review' ? 'review' : view} y={8}>
             {body}
-          </motion.div>
+          </Fade>
         </Presence>
       </main>
     </div>

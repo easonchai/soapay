@@ -14,8 +14,7 @@ import {
   type PaymentRecord,
   type SpendStatus,
 } from '@soapay/sdk';
-import { Copy, NavyPanel, Pill, FreshMark, Skeleton, Stagger, StaggerItem, Presence, toast } from '@soapay/ui';
-import { motion } from 'framer-motion';
+import { Copy, NavyPanel, Pill, FreshMark, Skeleton, Stagger, StaggerItem, Presence, Fade, toast } from '@soapay/ui';
 import { chainConfig } from './config.js';
 
 export function Recipients({ onPay }: { onPay: (prefill: string) => void }) {
@@ -125,7 +124,7 @@ export function Recipients({ onPay }: { onPay: (prefill: string) => void }) {
 
       <Presence mode="wait" initial={false}>
       {!open ? (
-        <motion.div key="list" className="stack" initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }} transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}>
+        <Fade key="list" className="stack" x={-16}>
           <div className="between" style={{ alignItems: 'flex-end', borderBottom: '1px solid var(--line)', paddingBottom: 16 }}>
             <div>
               <div style={{ fontSize: 20, fontWeight: 600, letterSpacing: '-0.02em' }}>All recipients</div>
@@ -166,9 +165,9 @@ export function Recipients({ onPay }: { onPay: (prefill: string) => void }) {
               <span>&quot;Record changed&quot; means the name now points to new keys; confirm with the person before the next run.</span>
             </div>
           </div>
-        </motion.div>
+        </Fade>
       ) : (
-        <motion.div key={open.key} className="stack" initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 24 }} transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}>
+        <Fade key={open.key} className="stack" x={24} duration={0.22}>
           <div className="between" style={{ alignItems: 'flex-end', borderBottom: '1px solid var(--line)', paddingBottom: 16 }}>
             <div>
               <a
@@ -298,7 +297,7 @@ export function Recipients({ onPay }: { onPay: (prefill: string) => void }) {
               </span>
             </div>
           </div>
-        </motion.div>
+        </Fade>
       )}
       </Presence>
     </div>
