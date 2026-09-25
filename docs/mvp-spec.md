@@ -80,7 +80,7 @@ World ID 4.0 proofs can't be verified on-chain on Sepolia (only on World Chain a
    - verifies that the session_id matches the name's enrolled session, that the session_nullifier hasn't been used, and that the registrant signature is valid;
    - issues an **EIP-712 attestation** signed by `ATTESTER_PRIVATE_KEY`: `MetaRotation(string label, string oldMeta, string newMeta, uint256 verifiedAt)`. It is stored and served at `GET /names/:label/attestations`;
    - **sponsors the registrant's Sepolia gas** for the `setText` (a small top-up from the L1 relayer). The registrant is already public, so this links nothing new.
-3. **Registrant:** calls `setText(stealth)` on its own Permissioned Resolver.
+3. **Registrant:** calls `setText(stealth)` on its own Permissioned Resolver. The rotation request also carries a fresh `registerKeysOnBehalf` signature for the new meta-address. The API relays it to the ERC-6538 registry on Base in the same World-ID-gated request, so `resolveStealthMeta`'s registry cross-check keeps passing. The rotation doesn't count against the once-per-human `/register` allowance.
 4. **Sender app:** re-resolves before each run. A changed pin is **auto-accepted only with a valid attestation**: the signer equals the configured attester and `newMeta` matches. It then shows a "re-verified by World ID" badge. Otherwise the line is blocked until the employer approves it by hand.
 
 A stolen registrant key can change the record, but it can't get paid without either the same human's World ID or the employer's explicit approval.

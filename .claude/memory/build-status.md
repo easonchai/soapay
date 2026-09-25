@@ -66,3 +66,24 @@ metadata:
 - MCPs after the restart: world-docs ✔, context7 ✔ (ENS docs route), Uniswap skills ✔; the **World Developer Portal MCP is not loaded** (needs `claude mcp add world-developer-portal https://developer.world.org/api/mcp --transport http --header "Authorization: Bearer api_…"`).
 - Five resume agents started from the WIP branches: Uniswap (FEEDBACK.md, export, README), ENSv2 (SDK compile + tests, scripts, ENSV2.md, README), World ID (verifier, rotation + attestation + L1 gas sponsor, rp-context, worldid-react, docs), recipient UI, sender UI (with attestation-gated pin acceptance).
 - Next: merge each as it finishes; wire World ID, swap and ENSv2 into the apps; E2E on a fork.
+
+**Checkpoint 5 (2026-09-25): paused again for a restart (to load the World Developer Portal MCP)**
+- MERGED: Uniswap (swap.ts exported, FEEDBACK.md, README section; 138 SDK tests; fork E2E 3/3). Uniswap's skill is outdated against the live Trading API spec (`{quote}` body, numeric chainIds, UR 2.1.2), noted in FEEDBACK.md. The recipient app should call the Trading API through an apps/api proxy injecting `UNISWAP_API_KEY` (no key in the bundle; CORS).
+- Spec fix: rotation also relays the ERC-6538 re-registration of the new meta-address (§2.1 step 3).
+- Note: `git reset --hard` is denied by permissions; agents fast-forward and merge instead.
+- WIP branches to resume:
+  - ENSv2 `worktree-agent-af95021c36de07bb4` @ a178c67.
+    - Done: SDK ensv2.ts (28 tests, exported, also as subpath `@soapay/sdk/ensv2`); fork test 5/5 including double rotation.
+    - Remaining: debug the `ETHRegistrar.register` revert in `ensv2:register-parent` on an anvil fork; run setup-parent and issue-demo; ENSV2.md; README section.
+    - Issuer: `createEnsV2NameIssuer({walletClient, publicClient, parent?, registry?, resolverAdmin?, defaultStealthWriter?, deployment?}).issue({label, registrant, metaAddress, stealthWriter?})`; env ISSUER_PRIVATE_KEY, L1_RPC_URL, PARENT_NAME, ENS_SUBNAME_REGISTRY, ENS_RESOLVER_ADMIN.
+  - World ID `worktree-agent-ad60c701ad1c331c1` @ 3fe1192.
+    - Written but untested: SDK `rotation.ts` (typed data + signals), API world-id config/tables/verify/enroll gating/rotation/attestations/top-up, routes.
+    - Remaining: build, tests, worldid-react `<HumanCheck>`, docs, README. Add the ERC-6538 re-registration relay to rotation.
+    - IDKit 4.3's IDKitSessionWidget takes `constraints`, not `preset` (a docs gap; could be reported via world-docs submit_feedback).
+  - Recipient `worktree-agent-ac9402777395ffc8f` @ 72203f1.
+    - Done: rotation keys via BIP-39 passphrase `soapay:rotation:<n>` (TODO(sdk) account index), seams for HumanCheck/ENS/swap, spend pipeline.
+    - Remaining: mocks, providers, hooks, App/routing, screens, README plug-in-UI section, tests, screenshot.
+  - Sender `worktree-agent-abad332b499ba25d6` @ 0086b04.
+    - Done: attestation.ts (option A enforcement) with tests; 99 tests.
+    - Remaining: typecheck the wallet/wagmi/services/store files; hooks, pages, 5792-only banner, README seam, build, screenshot.
+    - SDK gaps: CREATE2 predictor, and MetaRotation helpers (now in SDK rotation.ts on the World ID branch).
