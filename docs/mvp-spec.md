@@ -172,6 +172,35 @@ Lets the employer pre-assign the label so the employee's onboarding is: open the
   - keys only from env or files, never returned by any tool.
 - **Keys:** `AGENT_MNEMONIC` (the agent as recipient) and `AGENT_PAYER_PRIVATE_KEY` (the agent as payer, an EOA with USDC).
 
+## 9. Compliant exit through Privacy Pools (owner decision, 2026-09-26)
+
+Research, addresses and sources are in `docs/exit-research.md`. The production chain is deliberately undecided, so the SDK is chain-agnostic, with a config per chain. The testnet demo route is Base Sepolia → Ethereum Sepolia (0xbow USDC pool).
+
+**SDK `packages/sdk/src/exit.ts`** (interface; the recipient app codes against this):
+```ts
+type ExitConfig = { source: SoapayChainId; dest: number; cctp: {...}; pool: { entrypoint; pool; asset; minDeposit }; aspApiUrl; relayerUrl; forwarding: true };
+type ExitLeg = {                         // one per stealth address, never combined
+  id: string; stealthAddress: Address; amount: bigint;
+  status: 'planned'|'burning'|'awaiting-mint'|'minted'|'depositing'|'pending-asp'|'approved'|'declined'|'withdrawing'|'done'|'refunded'|'failed';
+  txs: { burn?: Hash; mint?: Hash; deposit?: Hash; withdraw?: Hash; refund?: Hash }; poolIndex: number; error?: string; updatedAt: number };
+planExit(p: { sources: {stealthAddress, amount}[]; destination: Address; config }): { legs: ExitLeg[]; fees: {...}; warnings: string[] }
+advanceExitLeg(ctx: { spendClient(s) per chain, stealthKey, poolSecrets, config, fetch }, leg): Promise<ExitLeg>   // idempotent step machine, resumable
+derivePoolSecrets(keys: { spendingKey }, poolIndex): { nullifier; secret }   // deterministic from the seed, so a lost device recovers
+withdrawToDestination(...) // through the 0xbow relayer; round partial amounts; suggestedDelayMs
+```
+**Rules:**
+- One userOp per stealth address, and no ETH ever sent to a stealth address.
+- The mint lands back on the same stealth address (the forwarding service pays).
+- The deposit is approve + `Entrypoint.deposit` through `executeFromStealth` on the destination chain.
+- Declined deposits go back through ragequit (`refunded`).
+- The state is serializable (it lives in the recipient's encrypted vault).
+- Every leg is resumable after a reload.
+
+**Recipient app:** when `planSpend` blocks an identifiable destination, offer "Exit through Privacy Pools" in place of the override.
+- A per-leg progress timeline, with the ~10–12 min ASP wait shown honestly.
+- Resumable across reloads.
+- Copy on remaining linkability: amounts and timing; round partial withdrawals and random delays are recommended.
+
 ## Actions only the team can do
 
 - Broadcast deploys with your own keystore; agents never handle deployer keys.
