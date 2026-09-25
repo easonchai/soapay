@@ -10,7 +10,8 @@ import type { ReadClient, WriteClient } from "./chain.js";
 import { ConfigError, loadConfig, type Config } from "./config.js";
 import { openDb } from "./db.js";
 import { Indexer } from "./indexer.js";
-import { allowAllVerifier, NoopNameIssuer } from "./hooks.js";
+import { allowAllVerifier } from "./hooks.js";
+import { makeNameIssuer } from "./issuer.js";
 import type { L1Funder } from "./topup.js";
 import { consoleLogger as logger, pruneRateLimits } from "./util.js";
 import { pruneWorldIdRequests, WorldId } from "./worldid/verifier.js";
@@ -106,8 +107,8 @@ function main() {
     logger,
     now,
     getIp,
-    // The ENSv2 issuer plugs in here; the default only stores.
-    nameIssuer: new NoopNameIssuer(),
+    // ENSv2 subnames when ISSUER_PRIVATE_KEY + L1_RPC_URL are set; otherwise store only.
+    nameIssuer: makeNameIssuer(config, logger),
     // No enrollment gate (docs/mvp-spec.md §5); World ID backs rotations only.
     humanVerifier: allowAllVerifier,
     worldId,

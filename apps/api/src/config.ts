@@ -1,4 +1,4 @@
-import { isHex, type Hex } from "viem";
+import { getAddress, isAddress, isHex, type Address, type Hex } from "viem";
 import { CHAINS, DEFAULT_CHAIN_ID, PARENT_NAME } from "@soapay/sdk";
 
 export type Config = {
@@ -8,6 +8,11 @@ export type Config = {
   /** Ethereum (Sepolia) RPC for the ENSv2 NameIssuer; unused by the default no-op issuer. */
   l1RpcUrl: string | undefined;
   relayerPrivateKey: Hex | undefined;
+  /** Ethereum Sepolia key holding ROLE_REGISTRAR on the parent's ENSv2 subname registry. */
+  issuerPrivateKey: Hex | undefined;
+  /** From `pnpm ensv2:setup-parent` (contracts/ENSV2.md); looked up on-chain when unset. */
+  ensSubnameRegistry: Address | undefined;
+  ensResolverAdmin: Address | undefined;
   dbPath: string;
   parentName: string;
   corsOrigins: string[];
@@ -113,6 +118,13 @@ function privateKey(env: Env, key: string): Hex | undefined {
   return v as Hex;
 }
 
+function address(env: Env, key: string): Address | undefined {
+  const raw = str(env, key);
+  if (raw === undefined) return undefined;
+  if (!isAddress(raw, { strict: false })) throw new ConfigError(`${key} must be an address, got "${raw}"`);
+  return getAddress(raw);
+}
+
 function wei(env: Env, key: string, fallback: bigint): bigint {
   const raw = str(env, key);
   if (raw === undefined) return fallback;
@@ -171,6 +183,9 @@ export function loadConfig(env: Env = process.env): Config {
     rpcUrl: url(env, "RPC_URL", true)!,
     l1RpcUrl: url(env, "L1_RPC_URL", false),
     relayerPrivateKey: privateKey(env, "RELAYER_PRIVATE_KEY"),
+    issuerPrivateKey: privateKey(env, "ISSUER_PRIVATE_KEY"),
+    ensSubnameRegistry: address(env, "ENS_SUBNAME_REGISTRY"),
+    ensResolverAdmin: address(env, "ENS_RESOLVER_ADMIN"),
     dbPath: str(env, "DB_PATH") ?? "./data/soapay.db",
     parentName,
     corsOrigins: (str(env, "CORS_ORIGINS") ?? "http://localhost:5173,http://localhost:5174")
