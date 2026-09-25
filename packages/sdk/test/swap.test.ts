@@ -22,6 +22,7 @@ import {
   PERMIT2_ADDRESS,
   SwapError,
   SwapRecipientError,
+  SwapProxyDisabledError,
   UNIVERSAL_ROUTER,
   UR_ADDRESS_THIS,
   UR_MSG_SENDER,
@@ -275,6 +276,22 @@ describe("quoteSwapInPlace via the Trading API", () => {
     expect(q.source).toBe("trading-api");
     expect(requests.map((r) => r.url)).toEqual(["https://api.soapay.test/uniswap/quote", "https://api.soapay.test/uniswap/swap"]);
     for (const r of requests) expect(r.headers).not.toHaveProperty("x-api-key");
+  });
+
+  it("a proxy without a key (503 uniswap_disabled) falls back to the Universal Router unless the source is forced", async () => {
+    const calls: string[] = [];
+    const fetch: SwapFetch = async (url) => {
+      calls.push(url);
+      const text = JSON.stringify({ code: "uniswap_disabled", error: { code: "uniswap_disabled", message: "off" } });
+      return { ok: false, status: 503, json: async () => JSON.parse(text), text: async () => text };
+    };
+    const { apiKey: _unused, ...noKey } = apiParams(fetch);
+    const proxied = { ...noKey, apiUrl: "https://api.soapay.test/uniswap" };
+    await expect(quoteSwapInPlace({ ...proxied, source: "trading-api" })).rejects.toBeInstanceOf(SwapProxyDisabledError);
+    // Default source: the fallback runs (this mock chain has no QuoterV2, so it fails there instead).
+    const err = await quoteSwapInPlace(proxied).catch((e: unknown) => e);
+    expect(err).not.toBeInstanceOf(SwapProxyDisabledError);
+    expect(calls).toEqual(["https://api.soapay.test/uniswap/quote", "https://api.soapay.test/uniswap/quote"]);
   });
 });
 

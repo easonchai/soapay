@@ -77,6 +77,48 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (bucket, key)
   );
   `,
+  // World ID (src/worldid/*). Nullifiers and session ids only, never identity.
+  `
+  -- Every RP context we signed. A proof must echo one of our nonces, and each nonce is
+  -- accepted at most once.
+  CREATE TABLE worldid_requests (
+    nonce         TEXT PRIMARY KEY,       -- lowercase 0x hex field element
+    kind          TEXT NOT NULL,          -- session
+    created_at    INTEGER NOT NULL,
+    expires_at    INTEGER NOT NULL,
+    used_at       INTEGER
+  );
+
+  -- The World ID session (Selfie Check) behind a name, if the registrant created one.
+  -- A name keeps its first session; a session backs one name.
+  CREATE TABLE name_sessions (
+    label         TEXT PRIMARY KEY,
+    session_id    TEXT NOT NULL UNIQUE,   -- opaque session_<hex> from IDKit
+    attached_at   INTEGER NOT NULL,
+    via           TEXT NOT NULL           -- enroll (POST /names) | attach (POST /names/:label/session)
+  );
+
+  -- Per-proof replay protection for session proofs (create and prove).
+  CREATE TABLE worldid_session_nullifiers (
+    session_nullifier TEXT PRIMARY KEY,   -- decimal string
+    session_id        TEXT NOT NULL,
+    at                INTEGER NOT NULL
+  );
+
+  -- MetaRotation attestations (docs/mvp-spec.md §2.1), signed by ATTESTER_PRIVATE_KEY.
+  CREATE TABLE attestations (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    label        TEXT NOT NULL,
+    old_meta     TEXT NOT NULL,
+    new_meta     TEXT NOT NULL,
+    verified_at  INTEGER NOT NULL,
+    attester     TEXT NOT NULL,
+    signature    TEXT NOT NULL,
+    session_nullifier TEXT NOT NULL,
+    topup_tx     TEXT
+  );
+  CREATE INDEX attestations_label ON attestations(label, id);
+  `,
 ];
 
 export function migrate(db: Db): void {

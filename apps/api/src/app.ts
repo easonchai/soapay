@@ -11,6 +11,13 @@ import { healthRoutes } from "./routes/health.js";
 import { registerRoutes } from "./routes/register.js";
 import { nameRoutes } from "./routes/names.js";
 import { announcementRoutes } from "./routes/announcements.js";
+import { worldIdRoutes } from "./routes/worldid.js";
+import { rotationRoutes } from "./routes/rotation.js";
+import { uniswapRoutes } from "./routes/uniswap.js";
+import { RegistrationRelay } from "./relay.js";
+import type { WorldId } from "./worldid/verifier.js";
+import type { L1Funder } from "./topup.js";
+import type { LocalAccount } from "viem";
 
 export type AppDeps = {
   config: Config;
@@ -27,18 +34,31 @@ export type AppDeps = {
   getIp: (c: Context) => string;
   /** On-chain subname issuance (ENSv2). Default: NoopNameIssuer (store only). */
   nameIssuer: NameIssuer;
-  /** Proof-of-personhood gate for /register and /names. Default: allow all. */
+  /** Optional gate for /register and /names (docs/mvp-spec.md §5: no enrollment gate). Default: allow all. */
   humanVerifier: HumanVerifier;
+  /** World ID (IDKit 4, Selfie Check sessions). Undefined = disabled: rp-context, session and rotation return 503. */
+  worldId: WorldId | undefined;
+  /** Signs MetaRotation attestations. Undefined → rotation returns 503. */
+  attester: LocalAccount | undefined;
+  /** Ethereum Sepolia gas sponsor for the registrant's setText. Undefined → no top-ups. */
+  l1Funder: L1Funder | undefined;
+  /** Upstream fetch for the Uniswap Trading API proxy. Default: global fetch. */
+  uniswapFetch: typeof fetch;
 };
 
-export type BuildAppDeps = Omit<AppDeps, "nameIssuer" | "humanVerifier"> &
-  Partial<Pick<AppDeps, "nameIssuer" | "humanVerifier">>;
+type Optional = "nameIssuer" | "humanVerifier" | "worldId" | "attester" | "l1Funder" | "uniswapFetch";
+export type BuildAppDeps = Omit<AppDeps, Optional> & { [K in Optional]?: AppDeps[K] | undefined };
 
 export function buildApp(input: BuildAppDeps): Hono {
   const deps: AppDeps = {
     ...input,
     nameIssuer: input.nameIssuer ?? new NoopNameIssuer(),
+    // No enrollment gate: World ID is only the rotation trust moment (docs/mvp-spec.md §5).
     humanVerifier: input.humanVerifier ?? allowAllVerifier,
+    worldId: input.worldId,
+    attester: input.attester,
+    l1Funder: input.l1Funder,
+    uniswapFetch: input.uniswapFetch ?? ((u, i) => fetch(u, i)),
   };
   const { config, logger } = deps;
   const app = new Hono();
@@ -53,8 +73,12 @@ export function buildApp(input: BuildAppDeps): Hono {
   );
 
   app.route("/", healthRoutes(deps));
-  app.route("/", registerRoutes(deps));
+  const relay = new RegistrationRelay(deps);
+  app.route("/", registerRoutes(deps, relay));
   app.route("/", nameRoutes(deps));
+  app.route("/", rotationRoutes(deps, relay));
+  app.route("/", uniswapRoutes(deps));
+  app.route("/", worldIdRoutes(deps));
   app.route("/", announcementRoutes(deps));
 
   app.notFound((c) => c.json(errorBody("not_found", "Route not found"), 404));

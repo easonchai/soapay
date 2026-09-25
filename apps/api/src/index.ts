@@ -3,14 +3,35 @@ import { getConnInfo } from "@hono/node-server/conninfo";
 import type { Context } from "hono";
 import { createPublicClient, createWalletClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
+import { sepolia } from "viem/chains";
 import { getChainConfig } from "@soapay/sdk";
 import { buildApp } from "./app.js";
 import type { ReadClient, WriteClient } from "./chain.js";
-import { ConfigError, loadConfig } from "./config.js";
+import { ConfigError, loadConfig, type Config } from "./config.js";
 import { openDb } from "./db.js";
 import { Indexer } from "./indexer.js";
-import { allowAllVerifier, NoopNameIssuer } from "./hooks.js";
+import { allowAllVerifier } from "./hooks.js";
+import { makeNameIssuer } from "./issuer.js";
+import type { L1Funder } from "./topup.js";
 import { consoleLogger as logger, pruneRateLimits } from "./util.js";
+import { pruneWorldIdRequests, WorldId } from "./worldid/verifier.js";
+
+function makeL1Funder(config: Config): L1Funder | undefined {
+  if (!config.l1RelayerPrivateKey || !config.l1RpcUrl) {
+    logger.warn("L1_RELAYER_PRIVATE_KEY or L1_RPC_URL not set: rotations won't sponsor the registrant's Sepolia gas");
+    return undefined;
+  }
+  const transport = http(config.l1RpcUrl, { retryCount: 2, timeout: 30_000 });
+  const account = privateKeyToAccount(config.l1RelayerPrivateKey);
+  const pub = createPublicClient({ chain: sepolia, transport });
+  const wallet = createWalletClient({ chain: sepolia, transport, account });
+  return {
+    address: account.address,
+    getBalance: (a) => pub.getBalance(a),
+    estimateFeesPerGas: () => pub.estimateFeesPerGas(),
+    sendTransaction: (a) => wallet.sendTransaction(a),
+  };
+}
 
 function main() {
   let config;
@@ -56,6 +77,27 @@ function main() {
     }
   };
 
+  const now = () => Math.floor(Date.now() / 1000);
+  const w = config.worldId;
+  let worldId: WorldId | undefined;
+  if (w.disabled) {
+    logger.warn(
+      "WORLD_ID_DISABLED=true: no World ID sessions, so no rotation can be attested; " +
+        "every meta-address change needs the employer's manual approval",
+    );
+  } else {
+    if (!w.signingKey) {
+      console.error(
+        "Config: WORLD_RP_SIGNING_KEY is required (the World ID 4.0 RP signer from the Developer Portal). " +
+          "Set WORLD_ID_DISABLED=true to run without World ID.",
+      );
+      process.exit(1);
+    }
+    worldId = new WorldId({ config, db, fetch: (u, i) => fetch(u, i), logger, now });
+  }
+  const attester = config.attesterPrivateKey ? privateKeyToAccount(config.attesterPrivateKey) : undefined;
+  if (!attester) logger.warn("ATTESTER_PRIVATE_KEY not set: POST /names/:label/rotation is disabled");
+
   const app = buildApp({
     config,
     db,
@@ -63,18 +105,22 @@ function main() {
     relayer: relayer as unknown as WriteClient | undefined,
     indexer,
     logger,
-    now: () => Math.floor(Date.now() / 1000),
+    now,
     getIp,
-    // ENSv2 issuer and World ID verifier plug in here; defaults are store-only and allow-all.
-    nameIssuer: new NoopNameIssuer(),
+    // ENSv2 subnames when ISSUER_PRIVATE_KEY + L1_RPC_URL are set; otherwise store only.
+    nameIssuer: makeNameIssuer(config, logger),
+    // No enrollment gate (docs/mvp-spec.md §5); World ID backs rotations only.
     humanVerifier: allowAllVerifier,
+    worldId,
+    attester,
+    l1Funder: makeL1Funder(config),
   });
 
   if (config.indexer.enabled) indexer.start();
-  const pruner = setInterval(
-    () => pruneRateLimits(db, Math.floor(Date.now() / 1000), config.rateLimit.windowSeconds),
-    10 * 60_000,
-  );
+  const pruner = setInterval(() => {
+    pruneRateLimits(db, now(), Math.max(config.rateLimit.windowSeconds, 86_400));
+    pruneWorldIdRequests(db, now());
+  }, 10 * 60_000);
   pruner.unref();
 
   const server = serve({ fetch: app.fetch, port: config.port });
@@ -82,6 +128,9 @@ function main() {
     port: config.port,
     chainId: config.chainId,
     relayer: relayer?.account.address ?? null,
+    worldId: worldId ? { environment: w.environment, rpId: w.rpId, credential: "selfie" } : "DISABLED",
+    uniswapProxy: config.uniswap.apiKey ? "enabled" : "disabled (UNISWAP_API_KEY unset)",
+    attester: attester?.address ?? null,
   });
 
   const shutdown = (sig: string) => {

@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import type { PrivateKeyAccount } from "viem";
+import type { Hex, PrivateKeyAccount } from "viem";
+import { loadConfig } from "../src/config.js";
+import { NoopNameIssuer } from "../src/hooks.js";
+import { ensV2NameIssuer, makeNameIssuer } from "../src/issuer.js";
 import { nameClaimTypedData } from "@soapay/sdk";
 import { j, makeTestApp, metaHex, metaUri, NOW, other, registrant } from "./helpers.js";
 
@@ -52,6 +55,53 @@ describe("NameIssuer", () => {
   });
 });
 
+describe("ENSv2 NameIssuer wiring", () => {
+  it("issues once through the SDK issuer (retries don't re-issue) and never writes stealth on updates", async () => {
+    const inner = { issue: vi.fn(async (a: any) => ({ txHash: "0xens" as Hex, name: `${a.label}.soapay.eth`, resolver: other.address, registry: other.address })) };
+    const issuer = ensV2NameIssuer(inner as any);
+    expect(issuer.updateMeta).toBeUndefined();
+    const t = makeTestApp({ nameIssuer: issuer });
+    onChain(t, { [registrant.address]: metaHex() });
+    const body = await claim();
+    const res = await t.post("/names", body);
+    expect(res.status).toBe(201);
+    expect((await j(res)).txHash).toBe("0xens");
+    expect((await t.post("/names", body)).status).toBe(200); // idempotent retry
+    expect(inner.issue).toHaveBeenCalledTimes(1);
+    expect(inner.issue).toHaveBeenCalledWith({ label: "alice", registrant: registrant.address, metaAddress: metaUri() });
+
+    // A meta change through POST /names stores the claim; the registrant writes setText itself.
+    onChain(t, { [registrant.address]: metaHex(2) });
+    expect((await t.post("/names", await claim({ meta: metaUri(2), deadline: BigInt(NOW + 900) }))).status).toBe(200);
+    expect(inner.issue).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns 502 and stores nothing when the ENSv2 issuer fails", async () => {
+    const t = makeTestApp({ nameIssuer: ensV2NameIssuer({ issue: () => Promise.reject(new Error("execution reverted")) } as any) });
+    onChain(t, { [registrant.address]: metaHex() });
+    const res = await t.post("/names", await claim());
+    expect(res.status).toBe(502);
+    expect((await j(res)).error.code).toBe("issue_failed");
+    expect(t.db.prepare("SELECT COUNT(*) AS n FROM names").get()).toEqual({ n: 0 });
+    expect(t.db.prepare("SELECT COUNT(*) AS n FROM name_history").get()).toEqual({ n: 0 });
+  });
+
+  it("uses the no-op issuer, with a warning, unless ISSUER_PRIVATE_KEY and L1_RPC_URL are set", () => {
+    const warn = vi.fn();
+    const logger = { info: vi.fn(), warn, error: vi.fn() };
+    const base = { RPC_URL: "https://sepolia.base.org" };
+    expect(makeNameIssuer(loadConfig(base), logger)).toBeInstanceOf(NoopNameIssuer);
+    expect(makeNameIssuer(loadConfig({ ...base, ISSUER_PRIVATE_KEY: `0x${"77".repeat(32)}` }), logger)).toBeInstanceOf(NoopNameIssuer);
+    expect(warn).toHaveBeenCalledTimes(2);
+    const real = makeNameIssuer(
+      loadConfig({ ...base, ISSUER_PRIVATE_KEY: `0x${"77".repeat(32)}`, L1_RPC_URL: "http://127.0.0.1:1", ENS_SUBNAME_REGISTRY: other.address }),
+      logger,
+    );
+    expect(real).not.toBeInstanceOf(NoopNameIssuer);
+    expect(real.updateMeta).toBeUndefined();
+  });
+});
+
 describe("HumanVerifier", () => {
   it("is asked with action name / update-meta, gets the proof, and its nullifier is stored", async () => {
     const verify = vi.fn(async (_a: any) => ({ ok: true as const, nullifier: "0xnull" }));
@@ -59,7 +109,14 @@ describe("HumanVerifier", () => {
     const t = makeTestApp({ humanVerifier: { verify }, nameIssuer: { issue: async () => ({}), updateMeta } });
     onChain(t, { [registrant.address]: metaHex() });
     expect((await t.post("/names", { ...(await claim()), proof: { p: 1 } })).status).toBe(201);
-    expect(verify).toHaveBeenLastCalledWith({ action: "name", registrant: registrant.address, proof: { p: 1 } });
+    expect(verify).toHaveBeenLastCalledWith({
+      action: "name",
+      registrant: registrant.address,
+      proof: { p: 1 },
+      label: "alice",
+      metaAddress: metaUri(),
+      deadline: BigInt(NOW + 600),
+    });
     expect((t.db.prepare("SELECT nullifier FROM names").get() as any).nullifier).toBe("0xnull");
 
     onChain(t, { [registrant.address]: metaHex(2) });

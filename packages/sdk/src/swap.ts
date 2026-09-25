@@ -142,6 +142,13 @@ export const quoterV2Abi = parseAbi([
 export class SwapError extends Error {
   override name = "SwapError";
 }
+/** The backend proxy has no Trading API key (503 `uniswap_disabled`); use the Universal Router. */
+export class SwapProxyDisabledError extends SwapError {
+  override name = "SwapProxyDisabledError";
+  constructor() {
+    super("Soapay swap: the Trading API proxy is disabled (no UNISWAP_API_KEY)");
+  }
+}
 /** The quote or its calldata would send value somewhere other than the stealth address. */
 export class SwapRecipientError extends SwapError {
   override name = "SwapRecipientError";
@@ -575,6 +582,11 @@ async function apiPost(params: SwapQuoteParams, path: string, body: unknown): Pr
     },
     body: JSON.stringify(body),
   });
+  if (!res.ok && res.status === 503 && params.apiUrl) {
+    const text = await res.text();
+    if (text.includes('"uniswap_disabled"')) throw new SwapProxyDisabledError();
+    throw new SwapError(`Soapay swap: Trading API ${path} returned 503: ${text.slice(0, 300)}`);
+  }
   if (!res.ok) throw new SwapError(`Soapay swap: Trading API ${path} returned ${res.status}: ${(await res.text()).slice(0, 300)}`);
   return res.json();
 }
@@ -650,7 +662,14 @@ async function quoteViaTradingApi(params: SwapQuoteParams, r: Resolved): Promise
 export async function quoteSwapInPlace(params: SwapQuoteParams): Promise<SwapQuote> {
   const r = resolve(params);
   const source = params.source ?? (params.apiKey || params.apiUrl ? "trading-api" : "universal-router");
-  return source === "trading-api" ? quoteViaTradingApi(params, r) : quoteViaUniversalRouter(params, r);
+  if (source !== "trading-api") return quoteViaUniversalRouter(params, r);
+  try {
+    return await quoteViaTradingApi(params, r);
+  } catch (e) {
+    // A proxy without a key: fall back, unless the caller forced the Trading API.
+    if (e instanceof SwapProxyDisabledError && params.source === undefined) return quoteViaUniversalRouter(params, r);
+    throw e;
+  }
 }
 
 export type SwapInPlaceParams = Omit<SwapQuoteParams, "chainId" | "stealthAddress" | "publicClient"> & {

@@ -8,11 +8,18 @@ import type { ReadClient, WriteClient } from "../src/chain.js";
 import { loadConfig, type Config } from "../src/config.js";
 import { openDb } from "../src/db.js";
 import { Indexer } from "../src/indexer.js";
+import type { L1Funder } from "../src/topup.js";
 import type { Logger } from "../src/util.js";
+import type { Fetch } from "../src/worldid/portal.js";
+import { WorldId } from "../src/worldid/verifier.js";
 
 export const RELAYER_KEY = "0x1111111111111111111111111111111111111111111111111111111111111111" as Hex;
 export const REGISTRANT_KEY = "0x3333333333333333333333333333333333333333333333333333333333333333" as Hex;
 export const OTHER_KEY = "0x4444444444444444444444444444444444444444444444444444444444444444" as Hex;
+/** Throwaway keys generated for tests only (never the real RP signer or attester). */
+export const TEST_RP_SIGNING_KEY = "0x5555555555555555555555555555555555555555555555555555555555555555" as Hex;
+export const ATTESTER_KEY = "0x6666666666666666666666666666666666666666666666666666666666666666" as Hex;
+export const attesterAccount = privateKeyToAccount(ATTESTER_KEY);
 export const NOW = 1_800_000_000;
 
 export const registrant = privateKeyToAccount(REGISTRANT_KEY);
@@ -38,13 +45,25 @@ export type Fakes = {
 };
 
 export function makeTestApp(
-  opts: { env?: Record<string, string>; relayer?: boolean; indexer?: boolean; nameIssuer?: NameIssuer; humanVerifier?: HumanVerifier } = {},
+  opts: {
+    env?: Record<string, string>;
+    relayer?: boolean;
+    indexer?: boolean;
+    nameIssuer?: NameIssuer;
+    humanVerifier?: HumanVerifier;
+    /** Enables World ID with this mocked Developer Portal fetch. */
+    portalFetch?: Fetch;
+    attester?: boolean;
+    l1Funder?: L1Funder;
+    uniswapFetch?: typeof fetch;
+  } = {},
 ) {
   const config: Config = loadConfig({
     RPC_URL: "http://127.0.0.1:1",
     CHAIN_ID: "84532",
     RELAYER_PRIVATE_KEY: RELAYER_KEY,
     DB_PATH: ":memory:",
+    WORLD_RP_SIGNING_KEY: TEST_RP_SIGNING_KEY,
     ...opts.env,
   });
   const db = openDb(":memory:");
@@ -78,6 +97,10 @@ export function makeTestApp(
       })
     : undefined;
   let ip = "10.0.0.1";
+  let now = NOW;
+  const worldId = opts.portalFetch
+    ? new WorldId({ config, db, fetch: opts.portalFetch, logger, now: () => now })
+    : undefined;
   const deps: BuildAppDeps = {
     ...(opts.nameIssuer ? { nameIssuer: opts.nameIssuer } : {}),
     ...(opts.humanVerifier ? { humanVerifier: opts.humanVerifier } : {}),
@@ -87,14 +110,19 @@ export function makeTestApp(
     relayer: opts.relayer === false ? undefined : (relayer as unknown as WriteClient),
     indexer,
     logger,
-    now: () => NOW,
+    now: () => now,
     getIp: () => ip,
+    ...(worldId ? { worldId } : {}),
+    ...(opts.attester ? { attester: attesterAccount } : {}),
+    ...(opts.l1Funder ? { l1Funder: opts.l1Funder } : {}),
+    ...(opts.uniswapFetch ? { uniswapFetch: opts.uniswapFetch } : {}),
   };
   const app: Hono = buildApp(deps);
   const setIp = (v: string) => (ip = v);
+  const setNow = (v: number) => (now = v);
   const post = (path: string, body: unknown) =>
     app.request(path, { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" } });
-  return { app, db, config, client, relayer, logs, deps, setIp, post, indexer };
+  return { app, db, config, client, relayer, logs, deps, setIp, setNow, post, indexer, worldId };
 }
 
 /** Response.json() typed loosely for assertions. */

@@ -14,11 +14,13 @@
   "dependencies": {
     "@hono/node-server": "^2.1.1",
     "@soapay/sdk": "workspace:*",
+    "@worldcoin/idkit-server": "^1.1.1",
     "hono": "^4.13.9",
     "viem": "^2.56.9"
   },
   "devDependencies": {
     "@types/node": "^26.6.2",
+    "@worldcoin/idkit-core": "4.3.0",
     "esbuild": "^0.28.2",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
