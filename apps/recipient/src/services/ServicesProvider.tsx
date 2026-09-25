@@ -19,6 +19,9 @@ import {
   setMockIdentity,
 } from "./mock.js";
 import { createSdkSpendService, type SpendService } from "./spend.js";
+import { exitConfigFor } from "../features/exit/config.js";
+import { createMockExitService } from "../features/exit/mock.js";
+import { createSdkExitService, type ExitService } from "../features/exit/sdk.js";
 
 export type Services = {
   mock: boolean;
@@ -30,6 +33,8 @@ export type Services = {
   spend: SpendService;
   /** Convert in place (Uniswap via the SDK). */
   swap: SwapService;
+  /** Compliant exit through Privacy Pools (features/exit/sdk.ts is the SDK seam). */
+  exit: ExitService;
   /** ENSv2 `stealth` record writer for rotation (Sepolia). */
   ens: EnsWriter;
   pool: ScanPool;
@@ -57,6 +62,7 @@ export function buildServices(settings: Settings, mock: boolean): Services {
       client: createMockPublicClient(chainId) as unknown as Services["client"],
       spend: createMockSpendService(),
       swap: createMockSwapService(chainId),
+      exit: createMockExitService(),
       ens: createMockEnsWriter(),
       pool: pool(),
       stealthDisperse: disperse,
@@ -76,6 +82,12 @@ export function buildServices(settings: Settings, mock: boolean): Services {
     client: publicClient as unknown as Services["client"],
     spend: createSdkSpendService({ chainId, bundlerUrl: settings.bundlerUrl, publicClient }),
     swap: createSdkSwapService({ chainId, bundlerUrl: settings.bundlerUrl, publicClient, proxyUrl: swapProxyUrl(settings) }),
+    exit: createSdkExitService({
+      config: exitConfigFor(chainId),
+      bundlerUrl: settings.bundlerUrl,
+      rpcUrl: settings.rpcUrl,
+      fetch: fetchFn as typeof fetch,
+    }),
     ens: createEnsWriter({ l1RpcUrl: settings.l1RpcUrl }),
     pool: pool(),
     stealthDisperse: disperse,

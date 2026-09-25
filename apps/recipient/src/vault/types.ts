@@ -1,6 +1,7 @@
 import type { AnnouncementRecord, ClusterGraphJSON, MetadataHints, ScanMatch } from "@soapay/sdk";
 import type { Address, Hex } from "viem";
 import { ENV } from "../config.js";
+import type { ExitRecord } from "../features/exit/types.js";
 
 /** App settings. Stored inside the encrypted vault (the bundler URL may embed an API key). */
 export type Settings = {
@@ -36,6 +37,8 @@ export type ChainState = {
   spends?: SpendRecord[];
   /** Local convert-in-place history (never leaves the device; a public preference could fingerprint). */
   conversions?: ConvertRecord[];
+  /** Privacy Pools exits started from this chain (docs/mvp-spec.md §9). Resumed on unlock. */
+  exits?: ExitRecord[];
 };
 
 export type ConvertRecord = {
@@ -90,6 +93,8 @@ export type Profile = {
   backupConfirmedAt?: number;
   /** The user chose to share the raw meta-address instead of claiming a name. */
   nameSkipped?: boolean;
+  /** Next Privacy Pools deposit index. Pool secrets derive from the seed and this index, so it must never repeat. */
+  nextExitPoolIndex?: number;
   onboardedAt?: number;
 };
 
