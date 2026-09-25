@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { BaseError, getAddress, isAddress, type Address, type Hash, type Hex } from "viem";
 import { jsonBody, type AppDeps } from "../app.js";
 import { readStealthMetaAddress, sendRegisterKeysOnBehalf } from "../chain.js";
+import { tx } from "../db.js";
 import { requireHuman } from "../hooks.js";
 import { ApiError, enforceRateLimits, parseMetaAddress, redactSig, requireHex, sameBytes } from "../util.js";
 
@@ -88,7 +89,7 @@ export function registerRoutes(deps: AppDeps): Hono {
       throw new ApiError(409, "already_registered", "The registry already holds this meta-address for the registrant");
     }
 
-    const nullifier = await requireHuman(deps.humanVerifier, { action: "register", registrant, proof: a.proof });
+    const { nullifier, commit } = await requireHuman(deps.humanVerifier, { action: "register", registrant, proof: a.proof });
 
     const relayer = deps.relayer!;
     const send = sendQueue.then(() =>
@@ -107,10 +108,14 @@ export function registerRoutes(deps: AppDeps): Hono {
       throw new ApiError(400, "registration_rejected", `Registry rejected the registration: ${reason}`);
     }
     const now = deps.now();
-    db.prepare(
-      `INSERT INTO registrations (registrant, meta_bytes, tx_hash, status, nullifier, created_at, updated_at)
-       VALUES (?, ?, ?, 'pending', ?, ?, ?)`,
-    ).run(registrant, meta, txHash, nullifier, now, now);
+    // The relayer has spent gas: record the tx and consume the human's sponsored registration together.
+    tx(db, () => {
+      db.prepare(
+        `INSERT INTO registrations (registrant, meta_bytes, tx_hash, status, nullifier, created_at, updated_at)
+         VALUES (?, ?, ?, 'pending', ?, ?, ?)`,
+      ).run(registrant, meta, txHash, nullifier, now, now);
+      commit();
+    });
     logger.info("register: sent", { registrant, txHash, signature: redactSig(signature) });
     const status = await refreshPending(txHash);
     if (status === "reverted") throw new ApiError(502, "tx_reverted", `Registration tx ${txHash} reverted`);

@@ -14,6 +14,7 @@
   "dependencies": {
     "@hono/node-server": "^2.1.1",
     "@soapay/sdk": "workspace:*",
+    "@worldcoin/idkit-server": "^1.1.1",
     "hono": "^4.13.9",
     "viem": "^2.56.9"
   },
