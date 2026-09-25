@@ -30,3 +30,12 @@ metadata:
   - Sender app.
   - World ID (backend verifier with enroll uniqueness + sessions, rp-context endpoint, `@soapay/worldid-react`, optional SoapayNameGuard).
   After all merge: wire World ID, swap and ENSv2 rotation into the apps (TODO hooks), then run E2E on a local fork.
+- Checkpoint 3 (PAUSED for a session restart). WIP branches to resume from:
+  - `worktree-agent-a6ec2e10ad25c446a` @ d97b043, ENSv2.
+    - Done: the Sepolia fork test passes 3/3 against the real deployment (ensdomains/contracts-v2 @71a3b73, deployed 2026-09-15). It covers the full lifecycle, a guard as stealthWriter, and cross-name isolation.
+    - Remaining: compile and test `packages/sdk/src/ensv2.ts`; add `test/ensv2.test.ts`, the setup scripts (setup-parent, issue-demo) and `contracts/ENSV2.md`; add `export * from "./ensv2.js"` to index.ts.
+    - Facts:
+      - soapay.eth is NOT registered on ENSv2 Sepolia yet (the team must register it, with no resolver on the parent).
+      - The stealth-writer role is ROLE_SET_TEXT (1<<4) on resource uint256(keccak256("stealth")); roles are per text key, not per name, hence one resolver per employee.
+      - viem's default Sepolia UR routes to UniversalResolverV2, so names.ts is unchanged.
+      - Remaining issuer trust: it can register new names with arbitrary roles, but can't touch existing ones.
