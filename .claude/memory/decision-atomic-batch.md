@@ -1,10 +1,12 @@
 ---
 name: decision-atomic-batch
-description: Sender pay runs use EIP-5792 wallet_sendCalls atomic batches; no Disperse contract
+description: Pay runs use two paths, StealthDisperse for plain EOAs and an EIP-5792 batch for smart accounts
 metadata:
   type: project
 ---
-A pay run is one atomic EIP-5792 `wallet_sendCalls` batch from the employer's own account: N × `USDC.transfer(stealthAddr, amt)` + N × `Announcer.announce(1, stealthAddr, ephPub, metadata)`. Safe MultiSend is the P1 multisig path.
+Two pay-run paths (team design in CLAUDE.md and contracts/PLAN.md; the smart-account path is pending team confirmation):
+- **Plain EOA employers:** `contracts/src/StealthDisperse.sol`, via `pay` after approve, or `payWithPermit`. It is stateless, holds no funds, and requires stealth addresses strictly ascending.
+- **Smart-account, 7702 and Safe employers:** a contract-less EIP-5792 atomic batch of `[USDC.transfer, Announcer.announce] × N`. Safes use `MultiSendCallOnly`.
 
-**Why:** the PRD's "Disperse + announce via multicall" fails from an EOA because Disperse pulls via `transferFrom(msg.sender)` and msg.sender would be the multicall contract. Decided 2026-09-25.
-**How to apply:** require wallets with atomic-batch capability (check `wallet_getCapabilities` `atomic` status); build metadata with ScopeLift `buildMetadataForERC20` so the scanner gets token + amount without fetching receipts. Watch the per-tx gas cap for large denominated batches.
+**Why:** Disperse behind a multicall can't pull from an EOA. StealthDisperse fixes that for EOAs, but it is a USDC-blacklist chokepoint and permits fail for 7702 accounts, so smart accounts skip it. Superseded my 2026-09-25 "EIP-5792 only, no Disperse" decision after the teammate's contract landed.
+**How to apply:** the sender app picks the path from wallet capabilities. On both paths: derive the whole run, sort globally by stealth address, and cut into txs of 350 lines or fewer; never split by employee. Metadata is 77 bytes (standard 57 plus payer); scanners must not trust metadata token or amount.

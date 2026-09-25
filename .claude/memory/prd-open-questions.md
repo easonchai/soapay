@@ -1,14 +1,12 @@
 ---
 name: prd-open-questions
-description: Unresolved PRD issues to raise with the PRD author before their milestone
+description: Unresolved issues to settle as a team; full list in CLAUDE.md and contracts/PLAN.md
 metadata:
   type: project
 ---
-Open as of 2026-09-25 (full analysis in docs/prd-analysis.md):
+Open as of 2026-09-25. Contract-side questions are in contracts/PLAN.md "Open questions" and the product-side list is in CLAUDE.md; this file tracks only what neither covers:
 - Seed format (BIP-39 vs signature-derived); see [[decision-scope-v1]].
-- Registration relayer: `registerKeysOnBehalf` is a plain call, needs a sponsor relayer, not a 4337 paymaster.
-- Scanner performance: 1 year of Base logs in <10 s needs an indexer/snapshot serving all announcements (client-side filtering).
-- 7702 delegate choice is a fingerprint; pick the most widely used implementation. Bundler/paymaster see IPs.
-- Denominated payouts: remainder carry-over under/over-pays wages; chunk count leaks on consolidation; large batches may exceed the per-tx gas cap.
-- Telemetry metrics (client-side vs gateway, guard warnings acted on) conflict with privacy; need opt-in or on-device.
-- Privacy Pools exit: the fresh mainnet address needs gas, a new funding-link risk.
+- Registration relayer: `registerKeysOnBehalf` is a plain call that needs a sponsor relayer, not a 4337 paymaster.
+- Scanner performance: one year of Base logs in <10 s needs an indexer that serves all announcements, filtered client-side.
+- Confirm the two-path pay-run split; see [[decision-atomic-batch]].
+- Telemetry metrics (client-side vs gateway, guard warnings acted on) conflict with privacy; they need opt-in or on-device computation.

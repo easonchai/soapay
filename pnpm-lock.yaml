@@ -117,6 +117,22 @@ importers:
         specifier: ^8.3.1
         version: 8.3.1(@types/node@26.6.2)(esbuild@0.28.2)(tsx@4.23.15)
 
+  contracts:
+    dependencies:
+      '@noble/curves':
+        specifier: ^1.9.1
+        version: 1.9.1
+      '@scopelift/stealth-address-sdk':
+        specifier: 1.0.0-beta.5
+        version: 1.0.0-beta.5(graphql@16.14.2)(typescript@7.0.2)
+      viem:
+        specifier: ^2.56.9
+        version: 2.56.9(typescript@7.0.2)
+    devDependencies:
+      tsx:
+        specifier: ^4.23.15
+        version: 4.23.15
+
   packages/sdk:
     dependencies:
       '@scopelift/stealth-address-sdk':
