@@ -14,6 +14,7 @@ import { announcementRoutes } from "./routes/announcements.js";
 import { worldIdRoutes } from "./routes/worldid.js";
 import { rotationRoutes } from "./routes/rotation.js";
 import { uniswapRoutes } from "./routes/uniswap.js";
+import { inviteRoutes } from "./routes/invites.js";
 import { RegistrationRelay } from "./relay.js";
 import type { WorldId } from "./worldid/verifier.js";
 import type { L1Funder } from "./topup.js";
@@ -75,6 +76,7 @@ export function buildApp(input: BuildAppDeps): Hono {
   app.route("/", healthRoutes(deps));
   const relay = new RegistrationRelay(deps);
   app.route("/", registerRoutes(deps, relay));
+  app.route("/", inviteRoutes(deps));
   app.route("/", nameRoutes(deps));
   app.route("/", rotationRoutes(deps, relay));
   app.route("/", uniswapRoutes(deps));
