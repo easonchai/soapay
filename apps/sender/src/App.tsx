@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAccount, useDisconnect } from 'wagmi';
-import { TopBar } from '@soapay/ui';
+import { TopBar, Presence, Fade } from '@soapay/ui';
 import { short, type PlannedRow, type BatchResult } from '@soapay/sdk';
 import { chainConfig, getOrgName } from './config.js';
 import { Landing } from './Landing.js';
@@ -115,7 +115,13 @@ export function App() {
           </>
         }
       />
-      <main className="app-main">{body}</main>
+      <main className="app-main">
+        <Presence mode="wait" initial={false}>
+          <Fade key={view === 'review' ? 'review' : view} y={8}>
+            {body}
+          </Fade>
+        </Presence>
+      </main>
     </div>
   );
 }

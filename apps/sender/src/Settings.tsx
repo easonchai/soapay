@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { createCompanyStore, createSenderStore, browserStorage } from '@soapay/sdk';
-import { PageHead } from '@soapay/ui';
+import { PageHead, toast } from '@soapay/ui';
 import { chainConfig, setOrgName } from './config.js';
 
 export function Settings({ org, onOrgChange }: { org: string; onOrgChange: (v: string) => void }) {
@@ -8,7 +8,6 @@ export function Settings({ org, onOrgChange }: { org: string; onOrgChange: (v: s
   const sstore = useMemo(() => createSenderStore(browserStorage()), []);
   const company = useMemo(() => createCompanyStore(browserStorage()), []);
   const [name, setName] = useState(org);
-  const [note, setNote] = useState<string>();
   const pinCount = Object.keys(sstore.get().pins).length;
   const history = company.allPayments().length;
 
@@ -27,7 +26,7 @@ export function Settings({ org, onOrgChange }: { org: string; onOrgChange: (v: s
               onClick={() => {
                 setOrgName(name);
                 onOrgChange(name.trim());
-                setNote('Saved.');
+                toast.success('Company name saved');
               }}
             >
               Save
@@ -66,13 +65,12 @@ export function Settings({ org, onOrgChange }: { org: string; onOrgChange: (v: s
         {pinCount} pinned {pinCount === 1 ? 'recipient' : 'recipients'}, the unsent draft, and {history} payment {history === 1 ? 'record' : 'records'} (which fresh address each
         recipient was paid into). Records are never reused as payment targets.
       </p>
-      {note && <p className="notice notice-ok">{note}</p>}
       <div className="actions">
         <button
           className="btn-danger"
           onClick={() => {
             sstore.clear();
-            setNote('Pins and draft cleared. The next Resolve pins recipients again.');
+            toast('Pins and draft cleared', { description: 'The next Resolve pins recipients again.' });
           }}
         >
           Reset pins and draft
@@ -81,7 +79,7 @@ export function Settings({ org, onOrgChange }: { org: string; onOrgChange: (v: s
           className="btn-danger"
           onClick={() => {
             company.clear();
-            setNote('History cleared. Past payments are still on-chain; the app just no longer lists them.');
+            toast('History cleared', { description: 'Past payments are still on-chain; the app just no longer lists them.' });
           }}
         >
           Reset history

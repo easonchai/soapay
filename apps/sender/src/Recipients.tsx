@@ -14,7 +14,7 @@ import {
   type PaymentRecord,
   type SpendStatus,
 } from '@soapay/sdk';
-import { Copy, NavyPanel, Pill, FreshMark } from '@soapay/ui';
+import { Copy, NavyPanel, Pill, FreshMark, Skeleton, Stagger, StaggerItem, Presence, Fade, toast } from '@soapay/ui';
 import { chainConfig } from './config.js';
 
 export function Recipients({ onPay }: { onPay: (prefill: string) => void }) {
@@ -122,8 +122,9 @@ export function Recipients({ onPay }: { onPay: (prefill: string) => void }) {
         </NavyPanel>
       </div>
 
+      <Presence mode="wait" initial={false}>
       {!open ? (
-        <div className="stack">
+        <Fade key="list" className="stack" x={-16}>
           <div className="between" style={{ alignItems: 'flex-end', borderBottom: '1px solid var(--line)', paddingBottom: 16 }}>
             <div>
               <div style={{ fontSize: 20, fontWeight: 600, letterSpacing: '-0.02em' }}>All recipients</div>
@@ -147,8 +148,9 @@ export function Recipients({ onPay }: { onPay: (prefill: string) => void }) {
               <span>Last paid</span>
               <span className="r">Record</span>
             </div>
+            <Stagger>
             {employees.map((e, i) => (
-              <div key={e.key} className="tr click mono" style={{ gridTemplateColumns: '32px 1.4fr 1fr 1fr 1.2fr' }} onClick={() => setOpenKey(e.key)}>
+              <StaggerItem key={e.key} index={i} className="tr click mono" style={{ gridTemplateColumns: '32px 1.4fr 1fr 1fr 1.2fr', display: 'grid' }} onClick={() => setOpenKey(e.key)}>
                 <span className="idx">{i + 1}</span>
                 <span>{e.label}</span>
                 <span>{fmtAmount(lastAmount(e.key), cfg.usdcDecimals)} USDC</span>
@@ -156,15 +158,16 @@ export function Recipients({ onPay }: { onPay: (prefill: string) => void }) {
                 <span className="r" style={{ fontFamily: 'var(--sans)' }}>
                   {e.previousMetaAddresses.length ? <span className="st-warn">Record changed</span> : <span className="st-ok">Active</span>}
                 </span>
-              </div>
+              </StaggerItem>
             ))}
+            </Stagger>
             <div className="foot">
               <span>&quot;Record changed&quot; means the name now points to new keys; confirm with the person before the next run.</span>
             </div>
           </div>
-        </div>
+        </Fade>
       ) : (
-        <div className="stack">
+        <Fade key={open.key} className="stack" x={24} duration={0.22}>
           <div className="between" style={{ alignItems: 'flex-end', borderBottom: '1px solid var(--line)', paddingBottom: 16 }}>
             <div>
               <a
@@ -188,6 +191,7 @@ export function Recipients({ onPay }: { onPay: (prefill: string) => void }) {
                       company.renameEmployee(open.key, label);
                       setEditing(false);
                       reload();
+                      toast.success('Name saved');
                     }}
                   >
                     Save
@@ -241,16 +245,19 @@ export function Recipients({ onPay }: { onPay: (prefill: string) => void }) {
               <span>Fresh address</span>
               <span className="r">Tx</span>
             </div>
-            {openPays.map((p) => {
+            <Stagger>
+            {openPays.map((p, i) => {
               const b = balances[p.stealthAddress];
               const s = p.status === 'paid' ? paymentStatus(BigInt(p.amount), b) : undefined;
               return (
-                <div key={p.id} className="tr" style={{ gridTemplateColumns: '110px 0.9fr 0.9fr 1.1fr 1.8fr 90px' }}>
+                <StaggerItem key={p.id} index={i} className="tr" style={{ gridTemplateColumns: '110px 0.9fr 0.9fr 1.1fr 1.8fr 90px', display: 'grid' }}>
                   <span className="ink2">{fmtDate(p.sentAt)}</span>
                   <span className="r num">{fmtAmount(p.amount, cfg.usdcDecimals)}</span>
-                  <span className="r num">{b === undefined ? '…' : fmtAmount(b, cfg.usdcDecimals)}</span>
+                  <span className="r num">{b === undefined ? <Skeleton width={52} /> : fmtAmount(b, cfg.usdcDecimals)}</span>
                   <span className="r" style={{ paddingRight: 20 }}>
-                    {s ? (
+                    {b === undefined && p.status === 'paid' ? (
+                      <Skeleton width={64} />
+                    ) : s ? (
                       s === 'unspent' ? (
                         <span className="st-plain">unspent</span>
                       ) : s === 'withdrawn' ? (
@@ -278,9 +285,10 @@ export function Recipients({ onPay }: { onPay: (prefill: string) => void }) {
                       <span className="ink3">—</span>
                     )}
                   </span>
-                </div>
+                </StaggerItem>
               );
             })}
+            </Stagger>
             <div className="foot">
               <span>Live balances are read from the chain. A stored address is a record, never a payment target.</span>
               <span className="legend">
@@ -289,8 +297,9 @@ export function Recipients({ onPay }: { onPay: (prefill: string) => void }) {
               </span>
             </div>
           </div>
-        </div>
+        </Fade>
       )}
+      </Presence>
     </div>
   );
 }
