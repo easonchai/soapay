@@ -15,7 +15,7 @@ import { getRegistryNonce, signRegisterKeysOnBehalf, type RegistryReader, type S
 import type { Hex } from "viem";
 import type { Api, RotationResult } from "../../api/client.js";
 import { registerMetaAddress } from "../../onboarding/actions.js";
-import { rotateSignal, type HumanCheckResult } from "../../worldid/types.js";
+import { rotationSignal, type HumanCheckResult } from "../../worldid/types.js";
 import { canonicalMeta, signRotationClaim } from "./claim.js";
 import type { EnsWriter } from "./ens.js";
 import { keysForGeneration } from "./keys.js";
@@ -51,7 +51,7 @@ export function prepareRotation(p: {
     oldMeta: canonicalMeta(p.oldMeta),
     newMeta,
     deadline,
-    signal: rotateSignal(p.label, newMeta, deadline),
+    signal: rotationSignal(p.label, newMeta, deadline),
   };
 }
 
@@ -89,7 +89,7 @@ export async function submitRotation(p: {
     deadline: draft.deadline.toString(),
     registrantSig,
     registerSig,
-    ...(p.worldId.placeholder ? {} : { worldIdResult: p.worldId.session }),
+    worldIdResult: p.worldId,
   });
 }
 

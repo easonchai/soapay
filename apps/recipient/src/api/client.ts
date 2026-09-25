@@ -31,19 +31,25 @@ export type NameClaimBody = {
   /** uint256 unix seconds as a decimal string. */
   deadline: string;
   signature: Hex;
-  /** Optional World ID Selfie Check session result (§5): enables self-service rotation later. */
-  session?: unknown;
+  /** Optional World ID Selfie Check session result (§5), unchanged from IDKit. Only on a new name. */
+  worldIdSession?: unknown;
 };
 
 /**
- * POST /names/:label/session: attach a World ID session to an existing name, signed by the registrant
- * (EIP-712 AttachSession, features/recovery/attach.ts).
+ * POST /names/:label/session: attach a World ID session to an existing name. `signature` is the
+ * registrant's EIP-712 AttachSession (SDK `attachSessionTypedData`).
  */
 export type AttachSessionBody = {
-  session: unknown;
-  sessionId: string;
   deadline: string;
-  registrantSig: Hex;
+  signature: Hex;
+  worldIdResult: unknown;
+};
+export type AttachSessionResult = {
+  label: string;
+  sessionId: string;
+  attachedAt: number;
+  /** Unix seconds. A late-attached session can back a rotation only from here (72 h cooldown by default). */
+  rotationAllowedFrom: number;
 };
 
 /** POST /names/:label/rotation (docs/mvp-spec.md §2.1). */
@@ -62,13 +68,15 @@ export type RotationBody = {
    */
   registerSig: Hex;
 };
-/** The API issues a MetaRotation attestation; the response wrapper may still change, so fields are optional. */
+/** apps/api routes/rotation.ts response. */
 export type RotationResult = {
+  attester?: Address;
   attestation?: { label: string; oldMeta: string; newMeta: string; verifiedAt: string; signature: Hex };
-  /** Sepolia gas top-up the API sent to the registrant for the setText, if any. */
-  fundingTxHash?: Hex;
-  /** The relayed ERC-6538 re-registration on Base, if the API reports it. */
-  registerTxHash?: Hex;
+  /** The relayed ERC-6538 re-registration on Base. */
+  registry?: unknown;
+  /** Sepolia gas top-up for the registrant's setText. */
+  topup?: { status: string; txHash?: Hex };
+  idempotent?: boolean;
 };
 export type NameRecord = {
   label: string;
@@ -127,7 +135,7 @@ export function createApi(apiUrl: string, fetchFn: ApiFetch = (i, init) => fetch
     register: (body: RegisterBody) => call<RegisterResult>(fetchFn, `${root}/register`, json(body)),
     claimName: (body: NameClaimBody) => call<NameRecord>(fetchFn, `${root}/names`, json(body)),
     attachSession: (label: string, body: AttachSessionBody) =>
-      call<{ ok: boolean }>(fetchFn, `${root}/names/${encodeURIComponent(label)}/session`, json(body)),
+      call<AttachSessionResult>(fetchFn, `${root}/names/${encodeURIComponent(label)}/session`, json(body)),
     rotate: (label: string, body: RotationBody) =>
       call<RotationResult>(fetchFn, `${root}/names/${encodeURIComponent(label)}/rotation`, json(body)),
     /** null when the label is free. */

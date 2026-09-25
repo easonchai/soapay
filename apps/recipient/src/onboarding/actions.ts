@@ -9,10 +9,9 @@ import {
 import { ApiError, type Api, type NameRecord, type RegisterResult } from "../api/client.js";
 import type { HumanCheckResult } from "../worldid/types.js";
 
-/** The optional World ID session for POST /names. Placeholder results are never sent. */
-export function sessionFields(r: HumanCheckResult | undefined): { session?: unknown } {
-  if (!r || r.placeholder || r.session === undefined) return {};
-  return { session: r.session };
+/** The optional World ID session for POST /names, forwarded unchanged. */
+export function sessionFields(r: HumanCheckResult | undefined): { worldIdSession?: unknown } {
+  return r ? { worldIdSession: r } : {};
 }
 
 /**

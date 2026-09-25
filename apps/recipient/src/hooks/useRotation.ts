@@ -27,10 +27,21 @@ export type RotationState =
   | { step: "working"; stage: RotationStage | "register"; path: RotationPath }
   | { step: "done"; path: RotationPath };
 
-/** Whether rotation can be attested by World ID (a session exists and is attached to this name). */
-export function rotationPathOf(profile: Profile): RotationPath {
+/**
+ * Whether rotation can be attested by World ID: a session is attached to this name and, if it was
+ * attached late, the API's cooldown has passed.
+ */
+export function rotationPathOf(profile: Profile, nowMs = Date.now()): RotationPath {
   const r = profile.recovery;
-  return r?.sessionId && profile.name && r.attachedTo === profile.name.label ? "attested" : "manual";
+  if (!r?.sessionId || !profile.name || r.attachedTo !== profile.name.label) return "manual";
+  if (r.rotationAllowedFrom && nowMs < r.rotationAllowedFrom * 1000) return "manual";
+  return "attested";
+}
+
+/** When a late-attached session starts backing rotations (ms), or null if it already does / none. */
+export function sessionCooldownUntil(profile: Profile, nowMs = Date.now()): number | null {
+  const from = profile.recovery?.rotationAllowedFrom;
+  return from && nowMs < from * 1000 ? from * 1000 : null;
 }
 
 /**
@@ -191,10 +202,14 @@ export function useRotation() {
       setAttachError(null);
       if (!name) return setAttachError("Claim a name first.");
       try {
-        const { sessionId } = await attachSession({ api: svc.api, chainId, label: name.label, result: r, registrantKey: ring.current.registrantKey });
+        const res = await attachSession({ api: svc.api, chainId, label: name.label, result: r, registrantKey: ring.current.registrantKey });
         await v.update((d) => ({
           ...d,
-          profile: { ...d.profile, recovery: { kind: "world-id", at: Date.now(), sessionId, attachedTo: name.label }, recoverySkipped: false },
+          profile: {
+            ...d.profile,
+            recovery: { kind: "world-id", at: Date.now(), sessionId: res.sessionId, attachedTo: name.label, rotationAllowedFrom: res.rotationAllowedFrom },
+            recoverySkipped: false,
+          },
         }));
       } catch (e) {
         setAttachError(errorMessage(e));
@@ -212,6 +227,8 @@ export function useRotation() {
     rotations: profile.rotations ?? [],
     pending: profile.pendingRotation ?? null,
     recovery: profile.recovery ?? null,
+    /** A late-attached session is still in the API's cooldown until this time (ms). */
+    cooldownUntil: sessionCooldownUntil(profile),
     sessionId: path === "attested" ? profile.recovery?.sessionId : undefined,
     ensReady: svc.ens.ready,
     ensUnavailableReason: svc.ens.unavailableReason,

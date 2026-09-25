@@ -49,9 +49,11 @@ const state: {
   world: World | null;
   names: Map<string, { label: string; registrant: Address; metaAddress: string; deadline: string }>;
   rotations: { label: string; oldMeta: string; newMeta: string; verifiedAt: string }[];
+  /** label → World ID session id (mock of the API's session binding). */
+  sessions: Map<string, string>;
   registered: Set<string>;
   bornAt: number;
-} = { meta: null, world: null, names: new Map(), rotations: [], registered: new Set(), bornAt: Date.now() };
+} = { meta: null, world: null, names: new Map(), rotations: [], sessions: new Map(), registered: new Set(), bornAt: Date.now() };
 
 /**
  * Demo trigger for the partial-failure path: sending to an address that starts with this prefix makes
@@ -192,9 +194,14 @@ export function createMockFetch(chainId: number): ApiFetch {
     if (method === "POST" && attach) {
       const label = decodeURIComponent(attach[1]!);
       if (!state.names.has(label)) return err(404, "not_found", "name not found");
-      const body = JSON.parse(String(init?.body ?? "{}")) as { sessionId?: string; registrantSig?: string };
-      if (!body.sessionId || !body.registrantSig) return err(400, "invalid_body", "sessionId and registrantSig are required");
-      return respond(200, { ok: true });
+      const body = JSON.parse(String(init?.body ?? "{}")) as { signature?: string; deadline?: string; worldIdResult?: { session_id?: string } };
+      if (!body.signature || !body.deadline) return err(400, "invalid_body", "deadline and signature are required");
+      const sessionId = body.worldIdResult?.session_id;
+      if (!sessionId || !/^session_[0-9a-f]+$/i.test(sessionId)) return err(403, "proof_missing", "worldIdResult must be an IDKit session result");
+      if (state.sessions.has(label)) return err(409, "session_exists", "this name already has a World ID session");
+      const attachedAt = Math.floor(Date.now() / 1000);
+      state.sessions.set(label, sessionId);
+      return respond(201, { label, sessionId, attachedAt, rotationAllowedFrom: attachedAt + 72 * 3600 });
     }
 
     const rotation = /^\/names\/([^/]+)\/rotation$/.exec(path);
@@ -202,10 +209,19 @@ export function createMockFetch(chainId: number): ApiFetch {
       const label = decodeURIComponent(rotation[1]!);
       const row = state.names.get(label);
       if (!row) return err(404, "not_found", "name not found");
-      const body = JSON.parse(String(init?.body ?? "{}")) as { newMeta?: string; deadline?: string; registrantSig?: string; registerSig?: string };
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        newMeta?: string;
+        deadline?: string;
+        registrantSig?: string;
+        registerSig?: string;
+        worldIdResult?: { session_id?: string };
+      };
       if (!body.newMeta || !body.deadline || !body.registrantSig || !body.registerSig) {
         return err(400, "invalid_body", "newMeta, deadline, registrantSig and registerSig are required");
       }
+      const bound = state.sessions.get(label);
+      if (!bound) return err(403, "no_session", "this name has no World ID session; the employer must approve changes");
+      if (body.worldIdResult?.session_id !== bound) return err(403, "session_mismatch", "not the session enrolled for this name");
       if (BigInt(body.deadline) <= BigInt(Math.floor(Date.now() / 1000))) return err(400, "expired", "deadline has passed");
       const oldMeta = row.metaAddress.toLowerCase();
       const newMeta = body.newMeta.toLowerCase();
@@ -213,10 +229,11 @@ export function createMockFetch(chainId: number): ApiFetch {
       const verifiedAt = String(Math.floor(Date.now() / 1000));
       state.names.set(label, { ...row, metaAddress: newMeta });
       state.rotations.push({ label, oldMeta, newMeta, verifiedAt });
-      return respond(200, {
+      return respond(201, {
+        attester: MOCK_EMPLOYER,
         attestation: { label, oldMeta, newMeta, verifiedAt, signature: fakeTxHash(`attest:${label}:${verifiedAt}`) + "00" },
-        fundingTxHash: fakeTxHash(`fund:${label}:${verifiedAt}`),
-        registerTxHash: fakeTxHash(`reregister:${label}:${verifiedAt}`),
+        registry: { status: "success", txHash: fakeTxHash(`reregister:${label}:${verifiedAt}`) },
+        topup: { status: "sent", txHash: fakeTxHash(`fund:${label}:${verifiedAt}`) },
       });
     }
 
@@ -263,6 +280,7 @@ export function createMockFetch(chainId: number): ApiFetch {
           registrant: Address;
           metaAddress: string;
           deadline: string;
+          worldIdSession?: { session_id?: string };
         };
         if (!isValidLabel(body.label)) return err(400, "invalid_label", "label must be 3-32 of [a-z0-9-]");
         if (!state.registered.has(body.registrant.toLowerCase())) {
@@ -274,6 +292,7 @@ export function createMockFetch(chainId: number): ApiFetch {
         }
         const row = { label: body.label, registrant: body.registrant, metaAddress: body.metaAddress, deadline: body.deadline };
         state.names.set(body.label, row);
+        if (body.worldIdSession?.session_id) state.sessions.set(body.label, body.worldIdSession.session_id);
         return respond(201, present(row));
       }
     }

@@ -5,22 +5,23 @@ const M = "legal winner thank year wave sausage worth useful legal winner thank 
 const run = (events: OnboardingEvent[], from: OnboardingState = initialState) => events.reduce(reduce, from);
 
 describe("onboarding machine", () => {
-  it("create → backup → confirm → passphrase → register → recovery → name → share → done", () => {
+  it("create → backup → confirm → passphrase → register → name → recovery → share → done", () => {
     let s = run([{ type: "CREATE", mnemonic: M }, { type: "BACKED_UP", challenge: [0, 5, 11] }]);
     expect(s.step).toBe("confirm");
     s = reduce(s, { type: "CONFIRM", answers: ["legal", "sausage", "yellow"] });
     expect(s).toEqual({ step: "passphrase", mnemonic: M, origin: "create" });
     s = run([{ type: "VAULT_CREATED" }, { type: "REGISTERED" }], s);
-    expect(s.step).toBe("recovery");
-    s = reduce(s, { type: "SESSION_CREATED", session: { session: { session_id: "s1" } } });
-    expect(s).toEqual({ step: "name", session: { session: { session_id: "s1" } } });
+    expect(s.step).toBe("name");
+    // The World ID session signal binds the label, so recovery comes after choosing it.
+    s = reduce(s, { type: "NAME_CHOSEN", label: "alex" });
+    expect(s).toEqual({ step: "recovery", label: "alex" });
     s = run([{ type: "NAMED" }, { type: "FINISH" }], s);
     expect(s.step).toBe("done");
   });
 
-  it("World ID recovery is optional: skipping goes straight to the name without a session", () => {
-    const s = reduce({ step: "recovery" }, { type: "SKIP_RECOVERY" });
-    expect(s).toEqual({ step: "name", session: undefined });
+  it("World ID recovery is optional: skipping the name skips recovery too, and recovery can go back", () => {
+    expect(reduce({ step: "name" }, { type: "SKIP_NAME" })).toEqual({ step: "share" });
+    expect(reduce({ step: "recovery", label: "alex" }, { type: "BACK" })).toEqual({ step: "name" });
   });
 
   it("does not require World ID before registering", () => {
@@ -53,9 +54,9 @@ describe("onboarding machine", () => {
   it("resumes from what the vault records", () => {
     expect(resumeState({})).toEqual({ step: "register" });
     const reg = { registration: { txHash: "0x1" as const, status: "success", chainId: 1, at: 0 } };
-    expect(resumeState(reg)).toEqual({ step: "recovery" });
-    expect(resumeState({ ...reg, recoverySkipped: true })).toEqual({ step: "name", session: undefined });
-    expect(resumeState({ ...reg, recovery: { kind: "world-id", at: 0, sessionId: "s" }, nameSkipped: true })).toEqual({ step: "share" });
+    expect(resumeState(reg)).toEqual({ step: "name" });
+    expect(resumeState({ ...reg, nameSkipped: true })).toEqual({ step: "share" });
+    expect(resumeState({ ...reg, name: { label: "a", name: "a.soapay.eth", at: 0 } })).toEqual({ step: "share" });
     expect(resumeState({ onboardedAt: 1 })).toEqual({ step: "done" });
   });
 
@@ -64,6 +65,6 @@ describe("onboarding machine", () => {
     const seq = [0.9, 0.1, 0.1, 0.5];
     const c = pickChallenge(12, 3, () => seq[i++ % seq.length]!);
     expect(c).toEqual([1, 6, 10]);
-    expect(progressOf({ step: "recovery" })).toEqual([5, 7]);
+    expect(progressOf({ step: "recovery", label: "a" })).toEqual([6, 7]);
   });
 });

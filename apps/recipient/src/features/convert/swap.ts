@@ -96,9 +96,9 @@ export function createSdkSwapService(opts: {
   const spendClient = () =>
     (client ??= createSpendClient({ chainId: opts.chainId, bundlerUrl: opts.bundlerUrl, publicClient: opts.publicClient }));
   const proxyUrl = opts.proxyUrl.replace(/\/+$/, "");
-  const routing = proxyUrl
-    ? { apiUrl: proxyUrl, source: "trading-api" as const, ...(opts.fetch ? { fetch: opts.fetch } : {}) }
-    : { source: "universal-router" as const };
+  // With a proxy the SDK picks the Trading API and falls back to the Universal Router by itself when
+  // the proxy answers 503 `uniswap_disabled` (no key configured). No `source`, or that fallback is off.
+  const routing = proxyUrl ? { apiUrl: proxyUrl, ...(opts.fetch ? { fetch: opts.fetch } : {}) } : { source: "universal-router" as const };
   return {
     ready: true,
     route: proxyUrl ? "Uniswap Trading API (via Soapay API)" : "Uniswap Universal Router (direct)",

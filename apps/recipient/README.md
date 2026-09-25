@@ -33,7 +33,7 @@ prices directly against the Universal Router V3 with QuoterV2 instead.
 
 ### Key rotation: two paths
 
-- **Attested** (a World ID session is attached to the name): `<HumanCheck mode="rotate">` proves the
+- **Attested** (a World ID session is attached to the name and past any cooldown): `<HumanCheck mode="rotate">` proves the
   session, then `POST /names/:label/rotation` carries the RotationClaim, the World ID result and a
   `registerKeysOnBehalf` signature for the new meta. The API attests and relays the ERC-6538 update; the
   app then sends the registrant's `setText(stealth)`. The employer's app auto-accepts.
@@ -70,19 +70,24 @@ Rules any UI must keep: never display or log keys except the one-time seed backu
 `ledger[].balance` only (never `claimedAmount`); disable Send when `canSend(plan)` is false unless the user
 ticks the override; keep conversion history local.
 
-## Seams still waiting on parallel work
+## Integrations
 
-- `src/worldid/index.ts`: swap `HumanCheckPlaceholder` for `@soapay/worldid-react`'s `HumanCheck`.
-- `src/features/rotation/ens.ts`: `loadBuildSetStealthRecordCall()` returns the SDK's ENSv2
-  `buildSetStealthRecordCall` once it lands; until then the on-chain rotation step reports itself unavailable
-  (the mock writer works).
-- `src/features/recovery/attach.ts` and `features/rotation/claim.ts`: replace the mirrored EIP-712 types with
-  the SDK's `rotation.ts` exports.
-- `features/rotation/keys.ts`: move generation derivation into the SDK as an account index.
+- **World ID**: `src/worldid/index.ts` picks `@soapay/worldid-react`'s `<HumanCheck>` (IDKit session
+  widget, Selfie Check), or `MockHumanCheck` in mock mode. Onboarding creates the session after the label
+  is chosen (the signal is `sessionSignal(label, registrant)`) and sends it with POST /names as
+  `worldIdSession`. Name settings can attach one later (POST /names/:label/session, SDK AttachSession);
+  the API then makes it wait 72 h before it can back a rotation, and the UI shows until when.
+- **Rotation**: SDK `rotationClaimTypedData` / `rotationSignal`; setText via the SDK's ENSv2
+  `buildSetStealthRecordCall`, sent by the registrant on Sepolia (the API tops up its gas).
+- **Swap**: SDK `quoteSwapInPlace` / `swapInPlace` with `apiUrl = ${apiUrl}/uniswap`; on 503
+  `uniswap_disabled` the SDK falls back to the Universal Router itself.
+- Still app-side: `features/rotation/keys.ts` derives key generations with a BIP-39 passphrase; move it into
+  the SDK as an account index (TODO(sdk)).
 
 ## Mock mode
 
-`VITE_MOCK_API=1` fabricates three pay runs for the unlocked meta-address with the real SDK
+`VITE_MOCK_API=1` mocks the API (incl. names, sessions, rotation attestations), Base reads, the bundler,
+the ENS writer, World ID and Uniswap. It fabricates three pay runs for the unlocked meta-address with the real SDK
 (`derivePayRun`) among ~3,000 unrelated announcements, plus one spam announcement with a fake payer and
 amount, so the real scanner, ledger and guard run unchanged. Sending to an address that starts with
 `0xfa11` makes the second transaction of the run fail, to show the partial-failure path.

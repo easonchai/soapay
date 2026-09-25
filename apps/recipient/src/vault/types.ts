@@ -70,7 +70,14 @@ export type Profile = {
    * attested by the API and auto-accepted by the employer; without it, the employer approves by hand.
    * `attachedTo` is the label the API has the session on (set with the name claim or attached later).
    */
-  recovery?: { kind: "world-id" | "placeholder"; at: number; sessionId?: string; attachedTo?: string };
+  recovery?: {
+    kind: "world-id" | "placeholder";
+    at: number;
+    sessionId?: string;
+    attachedTo?: string;
+    /** Unix seconds. Set for a session attached after the claim: the API's cooldown (72 h by default). */
+    rotationAllowedFrom?: number;
+  };
   /** The user chose not to set up recovery during onboarding. */
   recoverySkipped?: boolean;
   /** Which derived key set the name currently points at: 0 = the original keys (see features/rotation/keys.ts). */

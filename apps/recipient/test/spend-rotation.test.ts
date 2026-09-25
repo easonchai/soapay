@@ -4,20 +4,23 @@ import {
   SpendManyError,
   generateMnemonic,
   keysFromMnemonic,
+  attachSessionTypedData,
   nameClaimDomain,
   planSpend,
   recoverRegisterKeysSigner,
+  rotationClaimTypedData,
+  rotationSignal,
   type SpendResult,
 } from "@soapay/sdk";
 import { recoverTypedDataAddress, type Address, type Hex } from "viem";
 import { createApi } from "../src/api/client.js";
-import { attachSessionTypedData } from "../src/features/recovery/attach.js";
-import { rotationClaimTypedData } from "../src/features/rotation/claim.js";
+import { attachSession } from "../src/features/recovery/attach.js";
 import { finishRotation, prepareRotation, submitRotation } from "../src/features/rotation/flow.js";
 import { keyRing } from "../src/features/rotation/keys.js";
 import { createMockEnsWriter } from "../src/services/mock.js";
 import { executeSpend, type SpendDraft } from "../src/spend/flow.js";
-import { rotateSignal } from "../src/worldid/types.js";
+import { mockSessionResult } from "../src/worldid/MockHumanCheck.js";
+import { rotationPathOf, sessionCooldownUntil } from "../src/hooks/useRotation.js";
 
 const A = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as Address;
 const B = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" as Address;
@@ -71,7 +74,7 @@ describe("rotation", () => {
     expect(d.generation).toBe(1);
     expect(d.newMeta).not.toBe(d.oldMeta);
     expect(d.newMeta).toBe(keyRing(m, 1).current.metaAddressURI.toLowerCase());
-    expect(d.signal).toBe(rotateSignal("alex", d.newMeta, 1_000n + 1_800n));
+    expect(d.signal).toBe(rotationSignal("alex", d.newMeta, 1_000n + 1_800n));
     expect(d.signal).toBe(`soapay:rotate:alex:${d.newMeta}:2800`);
   });
 
@@ -85,10 +88,12 @@ describe("rotation", () => {
       return new Response(JSON.stringify({ attestation: { label: "alex" } }), { status: 200 });
     });
     const registry = { readContract: async () => 7n } as never;
-    const res = await submitRotation({ api, registry, chainId, draft: d, registrant: ring.current, worldId: { session: { session_id: "s" } } });
+    const idkit = { session_id: "session_ab12", responses: [] };
+    const res = await submitRotation({ api, registry, chainId, draft: d, registrant: ring.current, worldId: idkit });
     expect(url).toBe("https://api.test/names/alex/rotation");
     expect(res.attestation?.label).toBe("alex");
-    expect(body.worldIdResult).toEqual({ session_id: "s" });
+    // The IDKit result is forwarded unchanged.
+    expect(body.worldIdResult).toEqual(idkit);
     const claimSigner = await recoverTypedDataAddress({
       ...rotationClaimTypedData({ label: "alex", oldMeta: d.oldMeta, newMeta: d.newMeta, deadline: d.deadline, chainId }),
       signature: body.registrantSig as Hex,
@@ -98,15 +103,38 @@ describe("rotation", () => {
     expect(regSigner).toBe(ring.current.registrantAddress);
   });
 
-  it("never sends a placeholder World ID result", async () => {
-    const d = prepareRotation({ mnemonic: m, label: "alex", currentGeneration: 0, oldMeta: ring.current.metaAddressURI });
+  it("attachSession signs the SDK AttachSession typed data and returns the cooldown", async () => {
     let body: Record<string, unknown> = {};
     const api = createApi("https://api.test", async (_u, init) => {
       body = JSON.parse(String(init?.body));
-      return new Response("{}", { status: 200 });
+      return new Response(JSON.stringify({ label: "alex", sessionId: "session_ab", attachedAt: 10, rotationAllowedFrom: 10 + 72 * 3600 }), { status: 201 });
     });
-    await submitRotation({ api, registry: { readContract: async () => 0n } as never, chainId, draft: d, registrant: ring.current, worldId: { placeholder: true } });
-    expect("worldIdResult" in body).toBe(false);
+    const res = await attachSession({ api, chainId, label: "alex", result: { session_id: "session_ab" }, registrantKey: ring.current.registrantKey, now: 0 });
+    expect(res.rotationAllowedFrom).toBe(10 + 72 * 3600);
+    const signer = await recoverTypedDataAddress({
+      ...attachSessionTypedData({ label: "alex", sessionId: "session_ab", deadline: BigInt(body.deadline as string), chainId }),
+      signature: body.signature as Hex,
+    });
+    expect(signer).toBe(ring.current.registrantAddress);
+    await expect(attachSession({ api, chainId, label: "alex", result: {}, registrantKey: ring.current.registrantKey })).rejects.toThrow(/session id/);
+  });
+
+  it("rotation is attested only with an attached session past its cooldown", () => {
+    const name = { label: "alex", name: "alex.soapay.eth", at: 0 };
+    expect(rotationPathOf({ name })).toBe("manual");
+    const rec = { kind: "world-id" as const, at: 0, sessionId: "session_ab", attachedTo: "alex" };
+    expect(rotationPathOf({ name, recovery: rec })).toBe("attested");
+    const late = { ...rec, rotationAllowedFrom: 1_000 };
+    expect(rotationPathOf({ name, recovery: late }, 999_000)).toBe("manual");
+    expect(sessionCooldownUntil({ name, recovery: late }, 999_000)).toBe(1_000_000);
+    expect(rotationPathOf({ name, recovery: late }, 1_000_000)).toBe("attested");
+    expect(rotationPathOf({ name, recovery: { ...rec, attachedTo: "other" } })).toBe("manual");
+  });
+
+  it("the mock HumanCheck returns IDKit-shaped session results", () => {
+    const created = mockSessionResult({ mode: "create-session", signal: "soapay:session:alex:0x1" });
+    expect(created.session_id).toMatch(/^session_[0-9a-f]+$/);
+    expect(mockSessionResult({ mode: "rotate", sessionId: "session_ab", signal: "x" }).session_id).toBe("session_ab");
   });
 
   it("finishRotation writes the canonical new meta via the ENS writer", async () => {
@@ -117,7 +145,7 @@ describe("rotation", () => {
   });
 
   it("AttachSession uses the Soapay Names domain", () => {
-    const td = attachSessionTypedData({ label: "alex", sessionId: "s", deadline: 1n, chainId });
+    const td = attachSessionTypedData({ label: "alex", sessionId: "session_ab", deadline: 1n, chainId });
     expect(td.domain).toEqual(nameClaimDomain(chainId));
     expect(td.types.AttachSession.map((f) => f.name)).toEqual(["label", "sessionId", "deadline"]);
   });

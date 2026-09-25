@@ -1,7 +1,10 @@
 /**
- * THE World ID swap point. When `@soapay/worldid-react` lands, replace the next line with
- *   export { HumanCheck } from "@soapay/worldid-react";
- * and add the dependency. Call sites import `HumanCheck` from here and pass only HumanCheckProps.
+ * THE World ID swap point: the real `@soapay/worldid-react` component, or the mock in VITE_MOCK_API
+ * mode. Call sites import `HumanCheck` from here and pass only HumanCheckProps.
  */
-export { HumanCheckPlaceholder as HumanCheck } from "./HumanCheckPlaceholder.js";
+import { ENV } from "../config.js";
+import { MockHumanCheck } from "./MockHumanCheck.js";
+import { WorldHumanCheck } from "./WorldHumanCheck.js";
+
+export const HumanCheck = ENV.mockApi ? MockHumanCheck : WorldHumanCheck;
 export * from "./types.js";

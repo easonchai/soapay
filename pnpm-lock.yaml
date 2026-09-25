@@ -63,6 +63,9 @@ importers:
       '@soapay/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
+      '@soapay/worldid-react':
+        specifier: workspace:*
+        version: link:../../packages/worldid-react
       lucide-react:
         specifier: ^1.48.0
         version: 1.48.0(react@19.3.0)

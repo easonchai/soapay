@@ -54,14 +54,21 @@ export function NameSettings() {
           <div className="space-y-3 px-4 py-3 text-sm">
             {r.path === "attested" ? (
               <p>A World ID Selfie Check session is linked to this name. Key changes are attested and your employer's app accepts them automatically.</p>
+            ) : r.cooldownUntil ? (
+              <Alert variant="info" title="World ID linked, waiting period running">
+                A session added after the name was claimed can back a key change from{" "}
+                <strong data-testid="cooldown-until">{new Date(r.cooldownUntil).toLocaleString()}</strong> (a 72-hour wait, so someone with a stolen key
+                can't add their own and rotate at once). Until then, a key change needs your employer's approval.
+              </Alert>
             ) : (
               <>
                 <p>No World ID session is linked. You can still change keys, but your employer must approve the change by hand before paying you again.</p>
+                <p className="text-xs text-muted-foreground">A session added now can back a key change after a 72-hour waiting period.</p>
                 {attaching ? (
                   <HumanCheck
                     mode="create-session"
                     apiUrl={svc.settings.apiUrl}
-                    signal={sessionSignal(v.keys.registrantAddress)}
+                    signal={sessionSignal(r.name.label, v.keys.registrantAddress)}
                     onCancel={() => setAttaching(false)}
                     onResult={async (res) => {
                       await r.attach(res);

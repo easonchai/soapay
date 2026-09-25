@@ -6,7 +6,7 @@ import { useVault } from "../vault/VaultProvider.js";
 import { MIN_PASSPHRASE_LENGTH } from "../vault/crypto.js";
 import { Alert, Button, Card, Checkbox, CopyButton, Field, Input, Textarea, cn, errorMessage } from "../ui/kit.js";
 import { HumanCheck, sessionIdOf, sessionSignal, type HumanCheckResult } from "../worldid/index.js";
-import { claimName, fullName, registerMetaAddress, sessionFields } from "./actions.js";
+import { claimName, fullName, registerMetaAddress } from "./actions.js";
 import { initialState, pickChallenge, progressOf, reduce, resumeState, words, type OnboardingState } from "./machine.js";
 import { useLabelAvailability } from "./useLabelAvailability.js";
 
@@ -123,10 +123,10 @@ function Step({ state, dispatch, headingRef }: StepProps) {
       return <PassphraseStep mnemonic={state.mnemonic} dispatch={dispatch} headingRef={headingRef} />;
     case "register":
       return <RegisterStep dispatch={dispatch} headingRef={headingRef} />;
-    case "recovery":
-      return <RecoveryStep dispatch={dispatch} headingRef={headingRef} />;
     case "name":
-      return <NameStep session={state.session} dispatch={dispatch} headingRef={headingRef} />;
+      return <NameStep dispatch={dispatch} headingRef={headingRef} />;
+    case "recovery":
+      return <RecoveryStep label={state.label} dispatch={dispatch} headingRef={headingRef} />;
     case "share":
     case "done":
       return <ShareStep dispatch={dispatch} headingRef={headingRef} />;
@@ -353,49 +353,68 @@ function PassphraseStep({ mnemonic, dispatch, headingRef }: { mnemonic: string }
   );
 }
 
-function RecoveryStep({ dispatch, headingRef }: Omit<StepProps, "state">) {
+function RecoveryStep({ label, dispatch, headingRef }: { label: string } & Omit<StepProps, "state">) {
   const vault = useVault();
   const svc = useServices();
+  const keys = vault.keys!;
   const [error, setError] = useState<string | null>(null);
-  const signal = sessionSignal(vault.keys?.registrantAddress ?? "");
-  const skip = async () => {
-    await vault.update((d) => ({ ...d, profile: { ...d.profile, recoverySkipped: true } }));
-    dispatch({ type: "SKIP_RECOVERY" });
+  const [busy, setBusy] = useState(false);
+
+  /** Claims the name, with the World ID session when there is one. */
+  const claim = async (session: HumanCheckResult | undefined) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const rec = await claimName({ api: svc.api, keys, chainId: svc.settings.chainId, label, session });
+      const sessionId = sessionIdOf(session);
+      await vault.update((d) => ({
+        ...d,
+        profile: {
+          ...d.profile,
+          name: { label, name: rec.name ?? fullName(label), at: Date.now() },
+          ...(sessionId
+            ? { recovery: { kind: "world-id" as const, at: Date.now(), sessionId, attachedTo: label } }
+            : { recoverySkipped: true }),
+        },
+      }));
+      dispatch({ type: "NAMED" });
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
   };
+
   return (
     <Frame
       headingRef={headingRef}
+      onBack={() => dispatch({ type: "BACK" })}
       title="Enable self-service key recovery"
-      lead="Optional. If you ever lose this device or your keys leak, a World ID Selfie Check lets you move your pay name to new keys without asking your employer."
+      lead={
+        <>
+          Optional. If you ever lose this device or your keys leak, a World ID Selfie Check lets you move{" "}
+          <span className="font-mono">{fullName(label)}</span> to new keys without asking your employer.
+        </>
+      }
     >
       <HumanCheck
         mode="create-session"
         apiUrl={svc.settings.apiUrl}
-        signal={signal}
+        signal={sessionSignal(label, keys.registrantAddress)}
         onError={(e) => setError(errorMessage(e))}
-        onResult={async (r: HumanCheckResult) => {
-          setError(null);
-          const sessionId = sessionIdOf(r);
-          await vault.update((d) => ({
-            ...d,
-            profile: {
-              ...d.profile,
-              recovery: { kind: r.placeholder ? "placeholder" : "world-id", at: Date.now(), ...(sessionId ? { sessionId } : {}) },
-            },
-          }));
-          dispatch({ type: "SESSION_CREATED", session: r });
-        }}
+        onResult={(r) => claim(r)}
       />
       {error && (
-        <Alert variant="destructive" title="World ID check failed">
+        <Alert variant="destructive" title="That didn't work">
           {error}
         </Alert>
       )}
       <Alert variant="info">
-        Without it you can still change keys later, but your employer has to approve the change by hand before paying you again.
+        Without it you can still change keys later, but your employer has to approve the change by hand before paying you again. You can
+        also add World ID later from Name settings (it then needs 72 hours before it can back a key change).
       </Alert>
-      <Button variant="ghost" className="w-full" onClick={skip}>
-        Skip for now
+      <Button variant="ghost" className="w-full" onClick={() => void claim(undefined)} loading={busy}>
+        Skip and claim {fullName(label)}
       </Button>
     </Frame>
   );
@@ -461,7 +480,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function NameStep({ session, dispatch, headingRef }: { session: HumanCheckResult | undefined } & Omit<StepProps, "state">) {
+function NameStep({ dispatch, headingRef }: Omit<StepProps, "state">) {
   const vault = useVault();
   const svc = useServices();
   const keys = vault.keys!;
@@ -471,28 +490,10 @@ function NameStep({ session, dispatch, headingRef }: { session: HumanCheckResult
   const [error, setError] = useState<string | null>(null);
   const canClaim = status.kind === "available" || status.kind === "yours";
 
-  const submit = async (e: FormEvent) => {
+  const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!canClaim) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const rec = await claimName({ api: svc.api, keys, chainId: svc.settings.chainId, label, session });
-      const attached = session && !session.placeholder && sessionFields(session).session !== undefined;
-      await vault.update((d) => ({
-        ...d,
-        profile: {
-          ...d.profile,
-          name: { label, name: rec.name ?? fullName(label), at: Date.now() },
-          ...(attached && d.profile.recovery ? { recovery: { ...d.profile.recovery, attachedTo: label } } : {}),
-        },
-      }));
-      dispatch({ type: "NAMED" });
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
+    dispatch({ type: "NAME_CHOSEN", label });
   };
   const skip = async () => {
     await vault.update((d) => ({ ...d, profile: { ...d.profile, nameSkipped: true } }));
@@ -547,7 +548,7 @@ function NameStep({ session, dispatch, headingRef }: { session: HumanCheckResult
         </Field>
         {error && <Alert variant="destructive">{error}</Alert>}
         <Button type="submit" size="lg" className="w-full" disabled={!canClaim} loading={busy}>
-          Claim name
+          Continue
         </Button>
         <Button variant="ghost" className="w-full" onClick={skip}>
           Skip, I'll share my meta-address instead

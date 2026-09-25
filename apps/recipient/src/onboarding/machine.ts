@@ -2,19 +2,17 @@
  * Onboarding state machine (PRD Flow 1). Pure: no I/O, no randomness (callers pass the mnemonic and
  * the challenge indices in), so every transition is unit-testable.
  *
- *   welcome ─create→ backup ─→ confirm ─ok→ passphrase ─vault→ register → recovery → name → share
- *          └restore→ restore ─valid→ passphrase ─┘                    (optional)  └skip┘
+ *   welcome ─create→ backup ─→ confirm ─ok→ passphrase ─vault→ register → name ─chosen→ recovery → share
+ *          └restore→ restore ─valid→ passphrase ─┘                          └──skip name──────────┘
  *
  * `recovery` is OPTIONAL (docs/mvp-spec.md §5): a World ID Selfie Check session for self-service key
- * rotation later. Its result rides along to `name`, which posts it with the claim.
+ * rotation later. The session signal binds label + registrant, so it comes after the label is chosen,
+ * and the name is claimed in that step (with `worldIdSession`, or without it on skip).
  *
  * The mnemonic lives only in the pre-vault states; once the vault is created it is dropped from the
  * machine (the vault holds it, encrypted). The seed is shown exactly once, in `backup`.
  */
 import type { Profile } from "../vault/types.js";
-import type { HumanCheckResult } from "../worldid/types.js";
-
-type Session = HumanCheckResult | undefined;
 
 export type Origin = "create" | "restore";
 
@@ -25,8 +23,8 @@ export type OnboardingState =
   | { step: "restore"; error: string | null }
   | { step: "passphrase"; mnemonic: string; origin: Origin }
   | { step: "register" }
-  | { step: "recovery" }
-  | { step: "name"; session: Session }
+  | { step: "name" }
+  | { step: "recovery"; label: string }
   | { step: "share" }
   | { step: "done" };
 
@@ -39,8 +37,7 @@ export type OnboardingEvent =
   | { type: "BACK" }
   | { type: "VAULT_CREATED" }
   | { type: "REGISTERED" }
-  | { type: "SESSION_CREATED"; session: HumanCheckResult }
-  | { type: "SKIP_RECOVERY" }
+  | { type: "NAME_CHOSEN"; label: string }
   | { type: "NAMED" }
   | { type: "SKIP_NAME" }
   | { type: "FINISH" };
@@ -51,9 +48,8 @@ export const initialState: OnboardingState = { step: "welcome" };
 export function resumeState(profile: Profile): OnboardingState {
   if (profile.onboardedAt) return { step: "done" };
   if (!profile.registration) return { step: "register" };
-  if (!profile.recovery && !profile.recoverySkipped) return { step: "recovery" };
-  // The session result itself isn't persisted: after a reload it is attached later from Name settings.
-  if (!profile.name && !profile.nameSkipped) return { step: "name", session: undefined };
+  // A label chosen but not claimed isn't persisted: resume at the name step.
+  if (!profile.name && !profile.nameSkipped) return { step: "name" };
   return { step: "share" };
 }
 
@@ -117,16 +113,17 @@ export function reduce(state: OnboardingState, event: OnboardingEvent): Onboardi
       return state;
 
     case "register":
-      if (event.type === "REGISTERED") return { step: "recovery" };
+      if (event.type === "REGISTERED") return { step: "name" };
       return state;
 
     case "recovery":
-      if (event.type === "SESSION_CREATED") return { step: "name", session: event.session };
-      if (event.type === "SKIP_RECOVERY") return { step: "name", session: undefined };
+      if (event.type === "NAMED") return { step: "share" };
+      if (event.type === "BACK") return { step: "name" };
       return state;
 
     case "name":
-      if (event.type === "NAMED" || event.type === "SKIP_NAME") return { step: "share" };
+      if (event.type === "NAME_CHOSEN") return { step: "recovery", label: event.label };
+      if (event.type === "SKIP_NAME") return { step: "share" };
       return state;
 
     case "share":
@@ -140,7 +137,7 @@ export function reduce(state: OnboardingState, event: OnboardingEvent): Onboardi
 
 /** Progress indicator: [current index, total], counting the steps a user sees. */
 export function progressOf(state: OnboardingState): [number, number] {
-  const order = ["welcome", "backup", "confirm", "passphrase", "register", "recovery", "name", "share"];
+  const order = ["welcome", "backup", "confirm", "passphrase", "register", "name", "recovery", "share"];
   const step = state.step === "restore" ? "backup" : state.step === "done" ? "share" : state.step;
   return [order.indexOf(step), order.length - 1];
 }
