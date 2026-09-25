@@ -97,3 +97,9 @@ metadata:
   - The scripts register-parent, setup-parent and issue-demo run end to end on an anvil Sepolia fork (output in contracts/ENSV2.md §6).
   - Gotcha: an owner address with code, such as a 7702-delegated EOA like anvil key 0 on Sepolia, reverts the ERC-1155 mint in `register`; the script now checks for this. Use a plain EOA to own soapay.eth.
   - Remaining: the API still uses NoopNameIssuer. Wiring createEnsV2NameIssuer plus the ISSUER_PRIVATE_KEY / ENS_SUBNAME_REGISTRY / ENS_RESOLVER_ADMIN env is assigned to the World ID agent.
+- Checkpoint 6c: sender app MERGED.
+  - 103 tests, build and typecheck pass.
+  - Hooks and props-only pages (Roster, Pay run, Run detail, History, Safe export, Settings) and a README "plug in another UI" section.
+  - Verified in mock mode: an attested rotation auto-accepts with a badge, an unattested one is blocked with re-approve, the preview excludes blocked lines, and the small-team warning shows.
+  - Not yet exercised: a real payment (needs a wallet plus a deployed StealthDisperse or a 5792 wallet). WalletConnect is optional and not installed.
+  - Headless browse on this host needs GSTACK_CHROMIUM_NO_SANDBOX=1.
