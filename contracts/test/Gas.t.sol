@@ -33,7 +33,7 @@ contract GasTest is Fixtures {
     }
 
     function _measure(uint256 n) internal {
-        (StealthDisperse.Payment[] memory ps,) = _batch(n, n, 0);
+        (StealthDisperse.PackedPayment[] memory ps,) = _batch(n, n, 0);
         bytes memory data = abi.encodeCall(StealthDisperse.pay, (token, ps));
         uint256 calldataGas = _calldataGas(data);
 
@@ -43,17 +43,25 @@ contract GasTest is Fixtures {
         uint256 exec = g0 - gasleft();
 
         uint256 txGas = 21_000 + calldataGas + exec;
+        // 100 B fixed (selector + token + array offset + length), then 64 B per line
+        assertEq(data.length, 4 + 3 * 32 + 64 * n, "64 B per line");
+        assertGe(txGas, _floorGas(data), "EIP-7623 floor does not bind");
         console.log("lines", n);
         console.log("  execution gas          ", exec);
         console.log("  calldata gas (EIP-2028)", calldataGas);
+        console.log("  calldata bytes         ", data.length);
         console.log("  tx gas (approx)        ", txGas);
         console.log("  tx gas per line        ", txGas / n);
-        console.log("  calldata bytes per line", data.length / n);
     }
 
     function _calldataGas(bytes memory data) internal pure returns (uint256 g) {
         for (uint256 i; i < data.length; ++i) {
             g += data[i] == 0 ? 4 : 16;
         }
+    }
+
+    /// @dev EIP-7623 (Prague / Base Isthmus) calldata floor: 21000 + 10 * tokens, nonzero byte = 4 tokens.
+    function _floorGas(bytes memory data) internal pure returns (uint256) {
+        return 21_000 + 10 * (_calldataGas(data) / 4);
     }
 }
