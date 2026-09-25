@@ -117,3 +117,4 @@ metadata:
   4. each employee's scan finds exactly their own lines and the ledger totals equal salaries from real balances;
   5. the guard allows a fresh destination and blocks a coworker-known one, then a 7702 + Circle paymaster spend succeeds and no stealth address ever held ETH.
   The fork harness is extracted to test/helpers/fork.ts. Not covered by this E2E: ENSv2 name resolution (Sepolia; covered by the contracts fork test) and the API services (unit-tested).
+- Checkpoint 7b: **invite links** added (owner decision; spec §7). The employer signs an EIP-712 Invite reserving a label (codeHash = keccak(random code)). The link `#/join?code&label&org` lets only the link holder claim the name. The sender roster auto-enrolls when the invite is claimed. The SDK/API/sender part is with a new agent; the recipient join route was added to the recipient agent's scope.
