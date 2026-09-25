@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Mark } from './Mark.js';
+import { Lockup } from './logo/Logo.js';
 
 export type TopTab = { label: string; active?: boolean; onSelect?: () => void; href?: string };
 
@@ -9,8 +9,7 @@ export function TopBar({ org, tabs, right }: { org?: string | undefined; tabs: T
     <header className="topbar">
       <div className="topbar-left">
         <div className="brand">
-          <Mark />
-          <span className="name">Soapay</span>
+          <Lockup height={18} />
           {org && (
             <>
               <span className="sep">/</span>

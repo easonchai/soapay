@@ -1,6 +1,6 @@
 import './styles.css';
 
-export { Mark } from './Mark.js';
+export { Mark, Wordmark, Lockup } from './logo/Logo.js';
 export { Dots, type DotsMode } from './Dots.js';
 export { TopBar, type TopTab } from './TopBar.js';
 export { Shell, type ShellTab } from './Shell.js';

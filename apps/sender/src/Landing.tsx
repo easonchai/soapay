@@ -1,5 +1,5 @@
 import { useConnect } from 'wagmi';
-import { Dots, Mark } from '@soapay/ui';
+import { Dots, Lockup } from '@soapay/ui';
 import { GITHUB } from './config.js';
 
 /** Hero-only landing (Marketing 5a). Login connects the wallet; App switches to the dashboard. */
@@ -16,10 +16,7 @@ export function Landing({ connected, onLogin }: { connected: boolean; onLogin: (
     <div className="land">
       <div className="land-bar">
         <div className="brand">
-          <Mark large />
-          <span className="name" style={{ fontSize: 15 }}>
-            Soapay
-          </span>
+          <Lockup height={22} />
         </div>
         <div className="links">
           <a href={`${GITHUB}/blob/main/PRD.md`} target="_blank" rel="noreferrer">

@@ -66,12 +66,8 @@ code, .mono { font-family: var(--mono); font-size: 12px; }
 .lead { color: var(--ink2); margin-top: 6px; text-wrap: pretty; }
 .pretty { text-wrap: pretty; }
 
-/* Mark */
-.mark { position: relative; width: 16px; height: 16px; flex: 0 0 auto; }
-.mark::before { content: ''; position: absolute; inset: 0; border: 1.5px solid var(--ink); }
-.mark::after { content: ''; position: absolute; left: 5px; top: 5px; width: 6px; height: 6px; background: var(--accent); }
-.mark-lg { width: 18px; height: 18px; }
-.mark-lg::after { left: 6px; top: 6px; }
+/* Brand: logo takes currentColor */
+.brand { color: var(--accent); }
 
 /* Top bar (app) */
 .page { background: var(--surface); min-height: 100vh; display: flex; flex-direction: column; }
