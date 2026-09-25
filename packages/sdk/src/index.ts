@@ -9,3 +9,4 @@ export * from "./spend.js";
 export * from "./guard.js";
 export * from "./denominations.js";
 export * from "./safe.js";
+export * from "./swap.js";

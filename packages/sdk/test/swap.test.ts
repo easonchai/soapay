@@ -34,7 +34,7 @@ import {
   permit2Abi,
   quoteSwapInPlace,
   universalRouterAbi,
-  type FetchLike,
+  type SwapFetch,
 } from "../src/swap.js";
 
 const CHAIN_ID = base.id;
@@ -152,7 +152,7 @@ function chainClient() {
 
 function mockApi(over: { quote?: Record<string, unknown>; top?: Record<string, unknown>; swapData?: Hex; swapTo?: Address } = {}) {
   const requests: { url: string; headers: Record<string, string>; body: Record<string, unknown> }[] = [];
-  const fetch: FetchLike = async (url, init) => {
+  const fetch: SwapFetch = async (url, init) => {
     const body = JSON.parse(init.body) as Record<string, unknown>;
     requests.push({ url, headers: init.headers, body });
     const json = url.endsWith("/quote")
@@ -188,7 +188,7 @@ function mockApi(over: { quote?: Record<string, unknown>; top?: Record<string, u
   return { fetch, requests };
 }
 
-const apiParams = (fetch: FetchLike) => ({
+const apiParams = (fetch: SwapFetch) => ({
   chainId: CHAIN_ID,
   stealthAddress: STEALTH,
   tokenOut: WETH_BASE,
@@ -208,6 +208,7 @@ describe("quoteSwapInPlace via the Trading API", () => {
     expect(requests.map((r) => r.url)).toEqual(["https://trade-api.gateway.uniswap.org/v1/quote", "https://trade-api.gateway.uniswap.org/v1/swap"]);
     expect(requests[0]!.headers["x-api-key"]).toBe("test-key");
     expect(requests[0]!.headers["x-universal-router-version"]).toBe("2.1.2");
+    expect(JSON.parse(requests[0]!.headers["x-agent-info"]!)).toMatchObject({ decision_origin: "human_mediated" });
     expect(requests[0]!.body).toMatchObject({
       type: "EXACT_INPUT",
       amount: "20000000",
@@ -263,7 +264,7 @@ describe("quoteSwapInPlace via the Trading API", () => {
   });
 
   it("surfaces HTTP errors (e.g. a missing API key) with the status", async () => {
-    const fetch: FetchLike = async () => ({ ok: false, status: 401, json: async () => ({}), text: async () => '{"errorCode":"Unauthorized"}' });
+    const fetch: SwapFetch = async () => ({ ok: false, status: 401, json: async () => ({}), text: async () => '{"errorCode":"Unauthorized"}' });
     await expect(quoteSwapInPlace(apiParams(fetch))).rejects.toThrow(/401/);
   });
 });

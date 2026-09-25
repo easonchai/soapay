@@ -68,6 +68,11 @@ export const UNISWAP_V3_QUOTER_V2 = {
 } as const satisfies Record<number, Address>;
 
 export const TRADING_API_URL = "https://trade-api.gateway.uniswap.org/v1";
+/**
+ * Optional `x-agent-info` attribution (analytics only, never changes the response). No address,
+ * key or user id goes in it. `human_mediated`: the recipient confirms every swap in the app.
+ */
+export const TRADING_API_AGENT_INFO = JSON.stringify({ decision_origin: "human_mediated", integration_name: "soapay-sdk", version: "0.0.0" });
 
 /** Hard slippage ceiling. Anything looser is refused rather than silently clamped. */
 export const MAX_SLIPPAGE_BPS = 500;
@@ -145,7 +150,7 @@ export class SwapRecipientError extends SwapError {
 export type SwapSource = "trading-api" | "universal-router";
 
 /** Minimal fetch shape, so the SDK does not depend on DOM typings. */
-export type FetchLike = (
+export type SwapFetch = (
   url: string,
   init: { method: string; headers: Record<string, string>; body: string },
 ) => Promise<{ ok: boolean; status: number; json(): Promise<unknown>; text(): Promise<string> }>;
@@ -170,7 +175,7 @@ export type SwapQuoteParams = {
   /** V3 pool fee for the fallback. Default 500. */
   feeTier?: number;
   apiUrl?: string;
-  fetch?: FetchLike;
+  fetch?: SwapFetch;
   deadlineSeconds?: number;
   /** Unix seconds; injectable for tests. */
   now?: () => number;
@@ -552,7 +557,7 @@ type ApiQuoteResponse = {
 };
 
 async function apiPost(params: SwapQuoteParams, path: string, body: unknown): Promise<unknown> {
-  const f = params.fetch ?? ((globalThis as unknown as { fetch?: FetchLike }).fetch as FetchLike | undefined);
+  const f = params.fetch ?? ((globalThis as unknown as { fetch?: SwapFetch }).fetch as SwapFetch | undefined);
   if (!f) throw new SwapError("Soapay swap: no fetch available");
   const res = await f(`${params.apiUrl ?? TRADING_API_URL}${path}`, {
     method: "POST",
@@ -561,6 +566,7 @@ async function apiPost(params: SwapQuoteParams, path: string, body: unknown): Pr
       accept: "application/json",
       "x-api-key": params.apiKey ?? "",
       "x-universal-router-version": UNIVERSAL_ROUTER_VERSION,
+      "x-agent-info": TRADING_API_AGENT_INFO,
     },
     body: JSON.stringify(body),
   });
