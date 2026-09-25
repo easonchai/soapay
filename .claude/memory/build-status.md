@@ -19,3 +19,4 @@ metadata:
 - The ENSv1 off-chain resolver agent was stopped unmerged; naming switches to ENSv2 ([[decision-naming]]). The API agent was redirected: no CCIP route, plus pluggable `NameIssuer` and `HumanVerifier` hooks.
 - Still running: SDK payrun+scan, SDK spend, API.
 - Next: an ENSv2 agent (research + contracts/scripts + issuer), then World ID (after the API merges) and the Uniswap swap (after spend merges), then wave 2 apps.
+- Checkpoint 2b: SDK spend merged (Circle Paymaster v0.8, verified at Base 0x0578…00Ec and Base Sepolia 0x3BA9…8966; paymasterData = mode 0x00|token|permitAmount|permitSig; postOp gas ≥ 35000; EntryPoint nonce key fixed at 0 to avoid a timestamp fingerprint). Open: the spend agent believes USDC permits DO validate for Simple7702Account-delegated EOAs (ERC-1271 → ECDSA recover == self), contrary to the CLAUDE.md note, which came from a fork test with a different delegate. Verify live before changing CLAUDE.md. Uniswap agent started.
