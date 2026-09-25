@@ -1,55 +1,26 @@
 import type { ReactNode } from 'react';
-import { Pill } from './Pill.js';
+import { TopBar, type TopTab } from './TopBar.js';
 
-export type ShellTab = { label: string; active?: boolean; onSelect?: () => void; href?: string };
+export type ShellTab = TopTab;
 
-/** Floating glass nav pill + centered column. Tabs switch views inside an app; an href tab links out. */
-export function Shell({
-  tabs,
-  chainName,
-  right,
-  children,
-}: {
-  tabs: ShellTab[];
-  chainName: string;
-  right?: ReactNode | undefined;
-  children: ReactNode;
-}) {
+/** Page frame: TopBar + padded main. Kept for the employee app; the company app uses TopBar directly. */
+export function Shell({ tabs, chainName, right, org, children }: { tabs: ShellTab[]; chainName: string; right?: ReactNode | undefined; org?: string | undefined; children: ReactNode }) {
   return (
-    <>
-      <div className="site-header-wrap">
-        <header className="site-header liquid-glass">
-          <span className="wordmark">Soapay</span>
-          <nav className="site-nav" aria-label="Main">
-            {tabs.map((t) =>
-              t.href ? (
-                <a key={t.label} href={t.href}>
-                  {t.label}
-                </a>
-              ) : (
-                <a
-                  key={t.label}
-                  href="#"
-                  className={t.active ? 'active' : undefined}
-                  aria-current={t.active ? 'page' : undefined}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    t.onSelect?.();
-                  }}
-                >
-                  {t.label}
-                </a>
-              ),
-            )}
-          </nav>
-          <span className="spacer" />
-          <Pill tone="accent" dot>
-            {chainName}
-          </Pill>
-          {right}
-        </header>
-      </div>
-      <main>{children}</main>
-    </>
+    <div className="page">
+      <TopBar
+        org={org}
+        tabs={tabs}
+        right={
+          <>
+            <span className="chip">
+              <span className="dot" />
+              {chainName}
+            </span>
+            {right}
+          </>
+        }
+      />
+      <main className="app-main">{children}</main>
+    </div>
   );
 }

@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 
 export function Copy({ value, label = 'Copy' }: { value: string; label?: string }) {
