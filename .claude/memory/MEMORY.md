@@ -8,3 +8,4 @@
 - [ScopeLift ESM quirk](scopelift-sdk-esm-quirk.md) — bundle/inline/tsx the SDK; plain Node can't load it
 - [Open questions](prd-open-questions.md) — items not already tracked in CLAUDE.md or contracts/PLAN.md
 - [Bounties](decision-bounties.md) — ENSv2 + World IDKit + Uniswap API; Intercepta rejected (needs agents)
+- [CK's UI](team-ui-ck.md) — teammate CK builds a separate UI; keep ours simple with logic in hooks for a later merge/compare
