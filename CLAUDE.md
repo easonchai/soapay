@@ -32,7 +32,7 @@ Stealth-address payroll on Base. Product spec: `PRD.md`. PRD review: `docs/prd-a
 - Stealth addresses in a batch must be **strictly ascending**: the order is independent of names and duplicates are rejected, enforced on-chain.
 - Ascending order guards against bugs in the employer's own app and dedupes within a batch. On its own it is **not** a privacy guarantee.
 - ERC-5564 metadata per line: `viewTag(1) | transfer selector(4) | token(20) | amount(32) | payer(20)`. The payer is appended because `Announcement.caller` is always the contract. Scanners recompute the stealth address, read real balances, and never trust the metadata amount or token.
-- `payWithPermit` is for **plain EOAs only**. Base USDC routes permits from 7702-delegated accounts through ERC-1271, so they fail; the contract reverts `PermitFailed`.
+- `payWithPermit` targets plain EOAs. Base USDC routes permits from accounts with code through ERC-1271. That fails for delegates whose `isValidSignature` isn't a plain ECDSA check (the contract then reverts `PermitFailed`), but it **does validate for Simple7702Account** (verified on a Base fork, 2026-09-25, `packages/sdk/test/fork.e2e.test.ts`), which the spend path relies on.
 - Recommended, pending team confirmation: smart-account, 7702 and Safe employers use a contract-less EIP-5792 atomic batch of `[USDC.transfer, Announcer.announce] × N`. Safes use `MultiSendCallOnly`, never `MultiSend`. This also avoids the contract being a single USDC-blacklist chokepoint.
 - Reuse the canonical ERC-6538 Registry and ERC-5564 Announcer, an existing audited 7702/4337 account, and a USDC paymaster. Never fork them.
 

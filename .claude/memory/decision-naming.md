@@ -14,4 +14,5 @@ metadata:
 The sender resolves a name once at enrollment, **pins the ERC-6538 meta-address**, and alerts the employer if it changes.
 
 **Why:** the ENSv2 prize requires ENSv2 to be central, and on-chain per-employee records remove trust in a gateway signer, who could otherwise redirect salaries. The earlier ENSv1 resolver work was stopped unmerged.
+**Rotation, option A (owner decision 2026-09-25):** the registrant keeps the `stealth` writer role. World ID is enforced in the SENDER app: a changed pin auto-accepts only with an API EIP-712 `MetaRotation` attestation, which the API issues after a matching World ID session proof. Otherwise the employer approves by hand. See docs/mvp-spec.md §2.1.
 **How to apply:** follow docs/mvp-spec.md §2 and `contracts/ENSV2.md`. There is no CCIP route in apps/api. Meta-address rotation is gated by World ID ([[decision-bounties]]).

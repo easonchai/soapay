@@ -70,6 +70,21 @@ Decided 2026-09-25: this qualifies for the ENSv2 prize and removes trust in a ga
 
 The exact contract addresses, role ids and calls are in `contracts/ENSV2.md` (the ENSv2 workstream).
 
+
+### 2.1 Key rotation under option A (owner decision, 2026-09-25)
+
+World ID 4.0 proofs can't be verified on-chain on Sepolia (only on World Chain and Arc). So the **registrant keeps the ENSv2 `stealth` writer role** (the ENS story: only the employee controls their record), and the **sender app is the enforcement point**:
+
+1. **Recipient app:** `proveSession(saved session_id)`, then `POST /names/:label/rotation {newMeta, deadline, registrantSig (EIP-712 RotationClaim), worldIdResult}`.
+2. **API:**
+   - verifies that the session_id matches the name's enrolled session, that the session_nullifier hasn't been used, and that the registrant signature is valid;
+   - issues an **EIP-712 attestation** signed by `ATTESTER_PRIVATE_KEY`: `MetaRotation(string label, string oldMeta, string newMeta, uint256 verifiedAt)`. It is stored and served at `GET /names/:label/attestations`;
+   - **sponsors the registrant's Sepolia gas** for the `setText` (a small top-up from the L1 relayer). The registrant is already public, so this links nothing new.
+3. **Registrant:** calls `setText(stealth)` on its own Permissioned Resolver.
+4. **Sender app:** re-resolves before each run. A changed pin is **auto-accepted only with a valid attestation**: the signer equals the configured attester and `newMeta` matches. It then shows a "re-verified by World ID" badge. Otherwise the line is blocked until the employer approves it by hand.
+
+A stolen registrant key can change the record, but it can't get paid without either the same human's World ID or the employer's explicit approval.
+
 ## 3. SDK modules (`packages/sdk/src`)
 
 | File | Owner | Exports |
