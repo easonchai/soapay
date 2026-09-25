@@ -4,7 +4,7 @@ import { CheckCircle2, Circle, ExternalLink, Loader2, XCircle } from "lucide-rea
 import type { Address } from "viem";
 import { exitChainName, exitTxLink } from "../features/exit/config.js";
 import { exitPrefill } from "../features/exit/entry.js";
-import type { ExitEstimate } from "../features/exit/planner.js";
+import { fmtUsdcUp, type ExitEstimate } from "../features/exit/planner.js";
 import { legLabel, timelineOf, type TimelineStep } from "../features/exit/timeline.js";
 import type { ExitLeg, ExitPrivacy, ExitRecord } from "../features/exit/types.js";
 import { DEFAULT_PRIVACY, useExit, type ExitView } from "../hooks/useExit.js";
@@ -95,7 +95,7 @@ function Planner({ prefill }: { prefill: { destination: Address; sources: Addres
   };
 
   if (!all) return null;
-  const minDeposit = all.legs[0] ? formatUsdc(all.legs[0].minAmount) : null;
+  const minDeposit = all.legs[0] ? fmtUsdcUp(all.legs[0].minAmount) : null;
   return (
     <Card>
       <CardHeader

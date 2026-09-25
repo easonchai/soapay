@@ -24,6 +24,7 @@ Config lives in `.env` (see `.env.example`) and can be overridden per user in Se
 | Send with the guard | `src/spend/flow.ts` (`prepareSpend`, `executeSpend`) | PRD Flow 4 |
 | Convert in place | `features/convert/swap.ts` over SDK `quoteSwapInPlace` / `swapInPlace` | §6 |
 | Key rotation | `features/rotation/` (`prepareRotation`, `submitRotation`, `finishRotation`) | §2.1 |
+| Compliant exit | `features/exit/` (planner, runner, SDK seam `sdk.ts`, mock), `hooks/useExit.tsx` | §9 |
 
 ### Convert and the Uniswap API key
 
@@ -57,6 +58,7 @@ and write new components against these:
 | `useSpendFlow()` | `state` (`form` → `review` → `sending` → `result`), `prepare(to, amount)`, `setOverride`, `send`, `reset` |
 | `useConvert()` | `state` (`form` → `review` → `swapping` → `done`), `sources`, `targets`, `quote(form)`, `confirm` |
 | `useRotation()` | `state` (`idle` → `confirm` → `human`? → `working` → `done`), `path`, `start`, `confirm`, `onHuman`, `resume`, `attach` |
+| `ExitProvider`, `useExit()` | `exits` (per-leg state), `sources`, `estimate(selected, privacy)`, `start`, `withdrawNow`, `retry`; polls and resumes on its own while unlocked |
 | `useLabels()` | `rows`, `setLabel(address, label)`, `remove` |
 | `useSettings()` | `settings`, `save`, `addPayer`, `removePayer`, `exportBackup`, `lock`, `wipe` |
 | `onboarding/machine.ts` | `reduce`, `resumeState`, `pickChallenge`: drive your own onboarding screens |
@@ -69,6 +71,24 @@ pieces: `screens/GuardDecision.tsx` (`GuardDecision`, `canSend`) and `ui/format.
 Rules any UI must keep: never display or log keys except the one-time seed backup; show amounts from
 `ledger[].balance` only (never `claimedAmount`); disable Send when `canSend(plan)` is false unless the user
 ticks the override; keep conversion history local.
+
+## Compliant exit (Privacy Pools)
+
+When Send's guard blocks an identifiable destination, the review offers **Exit through Privacy Pools**
+(`screens/ExitOffer.tsx`, `features/exit/entry.ts`); the override checkbox stays as the secondary path.
+The Exit screen (also in the nav) plans one leg per stealth address, never combined, with worst-case fees
+(CCTP forwarding 1.54–2.21, pool entry 1%, relayer 0.1%, paymaster gas) and the 10 USDC pool minimum.
+
+`ExitProvider` polls active legs, calls the SDK one step at a time, and writes each step into the vault
+(`chains[id].exits`, `profile.nextExitPoolIndex`), so a reload or lock resumes on unlock. Round
+withdrawals and a random delay after approval (2–24 h; seconds in mock) are on by default.
+
+**SDK seam:** `features/exit/sdk.ts`. The real service picks up `planExit` / `advanceExitLeg` /
+`derivePoolSecrets` from `@soapay/sdk` as soon as they're exported; until then it reports "hasn't landed".
+When `packages/sdk/src/exit.ts` lands: switch `sdkExit()` to a static import, re-export the SDK's types
+from `features/exit/types.ts`, and align `buildCtx` with the SDK's context. Mock mode
+(`features/exit/mock.ts`) runs the whole flow in ~35 s per leg (approval ~15 s) and declines the leg with
+pool index 1 to show the refund path.
 
 ## Invite links
 

@@ -84,7 +84,7 @@ export function estimateLeg(
     ...(eligible
       ? {}
       : {
-          reason: `Below the pool minimum: a leg needs at least ${fmt(minAmount)} USDC to deposit ${fmt(cfg.pool.minDeposit)} USDC after bridge and gas fees.`,
+          reason: `Below the pool minimum: a leg needs at least ${fmtUsdcUp(minAmount)} USDC to deposit ${fmtUsdcUp(cfg.pool.minDeposit)} USDC after bridge and gas fees.`,
         }),
     minAmount,
     gas,
@@ -147,7 +147,8 @@ export function validateExit(p: {
   return null;
 }
 
-function fmt(v: bigint): string {
+/** USDC to 2 dp, rounded UP (a minimum must never be understated). */
+export function fmtUsdcUp(v: bigint): string {
   const whole = v / USDC;
   const cents = ((v % USDC) + 9_999n) / 10_000n; // round up to the cent
   return cents >= 100n ? `${whole + 1n}.00` : `${whole}.${cents.toString().padStart(2, "0")}`;
