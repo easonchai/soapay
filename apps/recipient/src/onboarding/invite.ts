@@ -3,8 +3,9 @@
  * `label` and `org` in the URL are display hints only; the truth is `GET /invites/keccak256(code)`.
  * Framework-free so any UI can use it.
  */
-import { isHex, keccak256, type Hex } from "viem";
+import { getAddress, isAddress, isHex, keccak256, type Address, type Hex } from "viem";
 import { ApiError, type Api, type InviteRecord } from "../api/client.js";
+import type { Settings } from "../vault/types.js";
 
 export type JoinLink = { code: Hex; labelHint?: string; orgHint?: string };
 
@@ -27,7 +28,7 @@ export type InviteState =
   | { kind: "none" }
   | { kind: "loading"; link: JoinLink }
   /** Claim `label` with `inviteCode: code`; the label is locked. */
-  | { kind: "pending"; code: Hex; label: string; org: string | null; expiresAt: number }
+  | { kind: "pending"; code: Hex; label: string; org: string | null; expiresAt: number; employer: Address | null }
   /** Not usable: say why, then let the employee pick their own label. */
   | { kind: "unusable"; reason: "expired" | "claimed" | "not_found" | "error"; message: string; org: string | null };
 
@@ -50,7 +51,8 @@ export async function resolveInvite(api: Pick<Api, "getInvite">, link: JoinLink,
   if (r.status === "claimed") {
     return { kind: "unusable", reason: "claimed", message: `This invite has already been used${r.name ? ` (${r.name})` : ""}. Pick your own name.`, org };
   }
-  return { kind: "pending", code: link.code, label: r.label, org, expiresAt: Number(r.expiresAt) };
+  const employer = typeof r.employer === "string" && isAddress(r.employer, { strict: false }) ? getAddress(r.employer) : null;
+  return { kind: "pending", code: link.code, label: r.label, org, expiresAt: Number(r.expiresAt), employer };
 }
 
 /** Drops the join link from the address bar once it's been used or rejected. */
@@ -58,4 +60,15 @@ export function clearJoinLink(): void {
   if (typeof window !== "undefined" && parseJoinLink(window.location.hash)) {
     window.history.replaceState(null, "", window.location.pathname + window.location.search);
   }
+}
+
+/**
+ * After a successful claim: the inviting employer becomes a known payer, so their payroll shows
+ * under their org name instead of "Unknown payer". Idempotent; keeps a name the user already set.
+ */
+export function withInvitePayer(settings: Settings, invite: { employer: Address | null; org: string | null }): Settings {
+  if (!invite.employer) return settings;
+  const a = getAddress(invite.employer);
+  if (settings.knownPayers.some((p) => p.address.toLowerCase() === a.toLowerCase())) return settings;
+  return { ...settings, knownPayers: [...settings.knownPayers, { address: a, name: invite.org?.trim() || "Employer" }] };
 }
