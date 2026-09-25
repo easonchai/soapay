@@ -9,6 +9,7 @@ interface ImportMetaEnv {
   readonly VITE_MOCK_ENS?: string;
   readonly VITE_API_URL?: string;
   readonly VITE_ATTESTER?: string;
+  readonly VITE_RECIPIENT_URL?: string;
 }
 
 interface ImportMeta {
