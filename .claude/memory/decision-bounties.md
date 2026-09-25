@@ -6,17 +6,14 @@ metadata:
 ---
 Main track (not Continuity). The owner chose these on 2026-09-25:
 - **ENSv2 ($6k pool):** on-chain subnames and EAC-scoped records; see [[decision-naming]].
-- **World IDKit ($5k):**
-  - Proof of Human re-verification gates a meta-address change (salary-redirect protection, same nullifier as enrollment).
-  - One sponsored registration and subname per human.
-  - Verified server-side. The prize needs an alternative path in the demo and a debrief in the README.
+- **World IDKit ($5k), revised 2026-09-25 after the owner asked "is it really needed?":** ONE trust moment only, self-service key rotation, using a **Selfie Check session** (created optionally at enrollment, proved at rotation). There's no enrollment gate and no Orb requirement. It is essential for pseudonymous DAO contributors (no out-of-band channel) and a convenience for known employees. Fallback: manual employer approval. Spec: docs/mvp-spec.md §5.
 - **Uniswap API ($6k):** employee side ONLY (owner decision 2026-09-25; employer treasury-funding swap deferred).
   - Convert salary *in place* inside a stealth address (7702 userOp with approve + swap, USDC paymaster), so no clusters merge.
   - The preference stays local.
   - Needs FEEDBACK.md and the feedback form.
 
 **World ID 4.0 mechanics (verified in the docs, 2026-09-25):**
-- A nullifier is scoped to (user, app/RP, action), so two actions can't prove "same human". Enroll = a uniqueness request (action `soapay-enroll`, `proofOfHuman`) plus `createSession`, with session_id saved per name. A meta-address update = `proveSession(saved session_id)`; require a session_id match and reject a reused session_nullifier.
+- A nullifier is scoped to (user, app/RP, action). Continuity comes from sessions: `createSession` at enrollment (optional, selfieCheck), `proveSession(saved session_id)` at rotation; require a session_id match and reject a reused session_nullifier. The `soapay-enroll` action is unused.
 - Every request needs a fresh backend RP signature (`signRequest`).
 - Verification: POST https://developer.world.org/api/v4/verify/{rp_id} with the result forwarded as-is.
 - A staging action works only with the simulator.
