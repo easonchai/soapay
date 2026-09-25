@@ -123,6 +123,24 @@ pnpm ensv2:setup-parent                              # subname registry + issuer
 ISSUER_PRIVATE_KEY=0x... pnpm ensv2:issue-demo alice # issue, resolve, rotate, resolve
 ```
 
+## Agents (MCP)
+
+**Agents are namespaces too.** An AI agent gets a Soapay name exactly the way an employee does: `ledger-bot.soapay.eth` is a real ENSv2 subname with its own resolver, a `stealth` record that only the agent's registrant key can rotate, and a meta-address in the ERC-6538 registry. Anyone can pay it privately by name. The agent can pay other names from its own wallet too.
+
+[`apps/mcp`](apps/mcp) is a stdio MCP server over the SDK and API. Add it to Claude Code with `claude mcp add soapay -- node /abs/path/apps/mcp/dist/index.js`:
+
+- `create_agent_identity` registers the agent and claims its name with **ENSIP-26** records: `agent-context` (what the agent does and how to pay it) and `agent-endpoint[mcp|a2a|web]`. The ENSv2 issuer writes them atomically in the resolver's `initialize`, beside `stealth`. The same `agent` field accepts **ENSIP-25** `agent-registration[registry][id]` bindings for when a registry lists the agent.
+- `pay`, `scan`, `balance`, `spend` and `swap_in_place` cover the whole flow: pay names through StealthDisperse, find payments, send them on through 7702 + a USDC paymaster, and swap in place through Uniswap.
+- **Guardrails:**
+  - every value move is a dry run, then a confirm of a single-use plan that expires in 10 minutes;
+  - per-call and per-day USDC caps;
+  - an optional payee allowlist;
+  - pinned meta-addresses;
+  - the consolidation guard's `block` can't be overridden;
+  - keys never leave the process.
+
+Live on Base Sepolia and ENSv2 Sepolia (2026-09-25): an agent created `mcp-agent-7c1e.soapay.eth` with ENSIP-26 records, received 0.3 USDC through StealthDisperse, found it with `scan`, and spent 0.1 USDC to another name through the bundler and paymaster. Details in [`apps/mcp/README.md`](apps/mcp/README.md).
+
 ## World ID integration
 
 **One trust moment: key rotation.** A name's meta-address decides where future salary goes, and the registrant key can change it. When an employee sets up their name, they may create a World ID **session** with the **Selfie Check** credential. To rotate keys later, they prove that same session. The API verifies the proof and signs a `MetaRotation` attestation, and the payer's app then auto-accepts the new meta-address with a "re-verified by World ID" badge. A stolen key alone gets no attestation, so the line is blocked until the employer approves it by hand. There's no World ID gate on onboarding and no Orb requirement.

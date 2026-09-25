@@ -20,7 +20,7 @@ export type SwapInput = {
 type SwapPlan = { stealthAddress: Address; announcement: AnnouncementRecord; tokenOut: Address; amountIn: bigint; slippageBps: number; minOut: bigint };
 
 /** Rough fee headroom for picking a source address; the real fee is checked by the SDK. */
-const FEE_HEADROOM = 200_000n; // 0.2 USDC
+const FEE_HEADROOM = 50_000n; // 0.05 USDC; live Base Sepolia fees are ~0.01
 
 function parseTokenOut(v: string): Address {
   const s = v.trim();

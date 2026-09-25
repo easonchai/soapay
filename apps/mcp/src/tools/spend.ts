@@ -160,6 +160,8 @@ export async function spend(ctx: Ctx, input: SpendInput) {
     ctx.log.warn("spend: blocked by the consolidation guard", { to: name ?? to });
     return {
       ...summary,
+      // The SDK's reason mentions an override; this server exposes none.
+      reason: "Blocked: the destination is identifiable, so this spend would tie these funds to you.",
       planId: null,
       note: "Blocked by the consolidation guard. The agent cannot override this; only the owner can, outside this server.",
     };

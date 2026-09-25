@@ -303,6 +303,7 @@ describe("spend", () => {
     const { ctx, chain } = makeCtx({ announcements: paymentsToAgent([3]) });
     const plan = await spend(ctx, { to: PAYER, amount: "1" });
     expect(plan.decision).toBe("block");
+    expect(plan.reason).not.toMatch(/override/i);
     expect(plan.planId).toBeNull();
     expect(chain.spendMany).not.toHaveBeenCalled();
   });

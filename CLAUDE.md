@@ -10,6 +10,7 @@ Stealth-address payroll on Base. Product spec: `PRD.md`. PRD review: `docs/prd-a
 | `apps/recipient` | Vite + React SPA: keys, onboarding, scanner, ledger, spend |
 | `apps/sender` | Vite + React SPA: pay runs through StealthDisperse (EOAs) or an EIP-5792 batch (smart accounts) |
 | `apps/api` | Hono on Node: registration relayer, ENSv2 subname issuer, World ID verification, announcement indexer (docs/mvp-spec.md §4). Gateway *derivation* mode is out of scope (proposed cut) |
+| `apps/mcp` | `@soapay/mcp`: stdio MCP server (spec §8), so agents get `<label>.soapay.eth` identities with ENSIP-26 records and can pay, scan and spend. Bundled with esbuild |
 | `contracts` | `@soapay/contracts`: Foundry, `StealthDisperse`, plus `tools/derive.ts` for test vectors |
 
 ## Commands
