@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { WagmiProvider } from 'wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@soapay/ui';
+import './landing.css';
 import { wagmiConfig } from './wagmi.js';
 import { App } from './App.js';
 
