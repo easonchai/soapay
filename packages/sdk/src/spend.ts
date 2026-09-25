@@ -213,7 +213,7 @@ type Session = {
   feeToken: Address;
 };
 
-async function openSession(client: SpendClient, params: SpendParams): Promise<Session> {
+async function openSession(client: SpendClient, params: { stealthKey: Hex; maxFeeUsdc?: bigint; token?: Address }): Promise<Session> {
   const owner = privateKeyToAccount(params.stealthKey);
   const account = await toSimple7702SmartAccount({
     client: client.publicClient,
@@ -260,11 +260,23 @@ export function buildTransferCall(token: Address, to: Address, amount: bigint): 
   return { to: token, data: encodeFunctionData({ abi: erc20Abi, functionName: "transfer", args: [to, amount] }), value: 0n };
 }
 
-async function buildUserOp(client: SpendClient, s: Session, to: Address, amount: bigint) {
-  if (amount <= 0n) throw new SpendError("Soapay spend: amount must be positive");
+/** One call made by the stealth account (an executeBatch entry). */
+export type StealthCall = { to: Address; value?: bigint; data?: Hex };
+type NormalizedCall = { to: Address; value: bigint; data: Hex };
+
+function normalizeCalls(calls: readonly StealthCall[], allowValue: boolean): NormalizedCall[] {
+  if (calls.length === 0) throw new SpendError("Soapay spend: no calls");
+  const out = calls.map((c) => ({ to: getAddress(c.to), value: c.value ?? 0n, data: c.data ?? ("0x" as Hex) }));
+  for (const c of out) {
+    if (c.value < 0n) throw new SpendError("Soapay spend: negative call value");
+    if (c.value !== 0n && !allowValue) throw new SpendError("Soapay spend: calls must not move ETH");
+  }
+  return out;
+}
+
+async function buildUserOp(client: SpendClient, s: Session, userCalls: readonly NormalizedCall[]) {
   const extra = (await client.paymaster.prepareCalls?.(s.ctx)) ?? [];
-  const calls = [...extra, buildTransferCall(s.token, to, amount)];
-  if (calls.some((c) => c.value !== 0n)) throw new SpendError("Soapay spend: calls must not move ETH");
+  const calls = [...extra, ...userCalls];
 
   const adapter = client.paymaster;
   const { account: _account, ...prepared } = (await prepareUserOperation(client.bundlerClient, {
@@ -288,7 +300,13 @@ async function buildUserOp(client: SpendClient, s: Session, to: Address, amount:
   const op = prepared as UserOperation<"0.8">;
 
   const fee = await adapter.quoteMaxFee(op, s.ctx);
-  return { op, fee, amount };
+  return { op, fee };
+}
+
+async function buildTransferOp(client: SpendClient, s: Session, to: Address, amount: bigint) {
+  if (amount <= 0n) throw new SpendError("Soapay spend: amount must be positive");
+  const built = await buildUserOp(client, s, [buildTransferCall(s.token, to, amount)]);
+  return { ...built, amount };
 }
 
 async function balanceOf(client: SpendClient, token: Address, owner: Address): Promise<bigint> {
@@ -310,7 +328,7 @@ async function plan(client: SpendClient, s: Session, params: SpendParams): Promi
   const cap = s.ctx.maxFee;
   const delegated = s.authorization !== undefined;
 
-  const finish = (b: Awaited<ReturnType<typeof buildUserOp>>): SpendEstimate => {
+  const finish = (b: Awaited<ReturnType<typeof buildTransferOp>>): SpendEstimate => {
     if (b.fee > cap) throw new FeeTooHighError(b.fee, cap);
     if (sameToken) {
       if (b.amount + b.fee > balance) throw new InsufficientBalanceError(b.amount + b.fee, balance);
@@ -331,20 +349,20 @@ async function plan(client: SpendClient, s: Session, params: SpendParams): Promi
     };
   };
 
-  if (params.amount !== "max") return finish(await buildUserOp(client, s, params.to, params.amount));
-  if (!sameToken) return finish(await buildUserOp(client, s, params.to, balance));
+  if (params.amount !== "max") return finish(await buildTransferOp(client, s, params.to, params.amount));
+  if (!sameToken) return finish(await buildTransferOp(client, s, params.to, balance));
 
   // Send max: fee and calldata depend on each other a little, so iterate until amount + fee fits.
   // The first estimate uses balance − cap so the bundler's simulation can afford the prefund.
   if (balance === 0n) throw new InsufficientBalanceError(1n, 0n);
   let amount = balance > cap ? balance - cap : balance / 2n;
-  let built = await buildUserOp(client, s, params.to, amount);
+  let built = await buildTransferOp(client, s, params.to, amount);
   for (let i = 0; i < 4; i++) {
     if (built.fee > cap) throw new FeeTooHighError(built.fee, cap);
     const target = maxSendable(balance, built.fee);
     if (target === 0n) throw new InsufficientBalanceError(built.fee + 1n, balance);
     if (target === amount) return finish(built);
-    const next = await buildUserOp(client, s, params.to, target);
+    const next = await buildTransferOp(client, s, params.to, target);
     if (target + next.fee <= balance) return finish(next);
     amount = target;
     built = next;
@@ -368,24 +386,126 @@ export type SpendOptions = {
   timeout?: number;
 };
 
-/** Sign and send one userOp from one stealth address. */
-export async function spendFromStealth(client: SpendClient, params: SpendParams, options: SpendOptions = {}): Promise<SpendResult> {
-  const s = await openSession(client, params);
-  const est = await plan(client, s, params);
-  const signature = await s.account.signUserOperation(est.userOperation);
+/** Signs and submits a prepared userOp, then (by default) waits for its receipt. */
+async function submit(
+  client: SpendClient,
+  s: Session,
+  op: UserOperation<"0.8">,
+  options: SpendOptions,
+): Promise<{ userOpHash: Hex; txHash?: Hex }> {
+  const signature = await s.account.signUserOperation(op);
   const userOpHash = await client.bundlerClient.sendUserOperation({
-    ...(est.userOperation as UserOperation),
+    ...(op as UserOperation),
     signature,
     entryPointAddress: ENTRYPOINT_V08,
   } as never);
-  const result: SpendResult = { from: est.from, userOpHash, delegated: est.delegated, amount: est.amount, feeEstimate: est.fee };
-  if (options.wait === false) return result;
+  if (options.wait === false) return { userOpHash };
   const receipt = await client.bundlerClient.waitForUserOperationReceipt({
     hash: userOpHash,
     ...(options.timeout !== undefined ? { timeout: options.timeout } : {}),
   });
   if (!receipt.success) throw new SpendError(`Soapay spend: userOp ${userOpHash} reverted (${receipt.reason ?? "no reason"})`);
-  return { ...result, txHash: receipt.receipt.transactionHash };
+  return { userOpHash, txHash: receipt.receipt.transactionHash };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Generic execution: one stealth address, any calls
+// ---------------------------------------------------------------------------------------------
+
+export type ExecuteParams = {
+  /** Stealth private key recovered by the scanner. Held in memory only; never persisted or sent. */
+  stealthKey: Hex;
+  /** Calls the stealth account makes, in order (Simple7702Account.execute / executeBatch). */
+  calls: readonly StealthCall[];
+  /** Fee cap in fee-token base units. Also the paymaster permit amount. Default 1 USDC. */
+  maxFeeUsdc?: bigint;
+  /**
+   * Fee-token (USDC) the calls themselves consume, e.g. a swap's amountIn. The paymaster takes its
+   * prefund before the calls run, so the check is `feeTokenSpend + fee <= balance`. Default 0.
+   */
+  feeTokenSpend?: bigint;
+  /** Allow calls with non-zero ETH value (only once the stealth address itself holds ETH). Default false. */
+  allowValue?: boolean;
+};
+
+export type ExecuteEstimate = {
+  from: Address;
+  feeToken: Address;
+  /** Most fee-token the paymaster can pull (quoted with headroom). The unused part is refunded. */
+  fee: bigint;
+  feeTokenBalance: bigint;
+  feeTokenSpend: bigint;
+  /** Whether the userOp carries the 7702 authorization (first use, or re-delegation). */
+  delegated: boolean;
+  calls: readonly StealthCall[];
+  userOperation: UserOperation<"0.8">;
+};
+
+export type ExecuteResult = {
+  from: Address;
+  userOpHash: Hex;
+  txHash?: Hex;
+  /** Whether this userOp included the 7702 authorization. */
+  delegated: boolean;
+  feeEstimate: bigint;
+};
+
+async function planExecute(client: SpendClient, s: Session, params: ExecuteParams): Promise<ExecuteEstimate> {
+  const allowValue = params.allowValue ?? false;
+  const calls = normalizeCalls(params.calls, allowValue);
+  const spend = params.feeTokenSpend ?? 0n;
+  if (spend < 0n) throw new SpendError("Soapay spend: feeTokenSpend must be non-negative");
+  const from = s.owner.address;
+  const [feeTokenBalance, ethBalance] = await Promise.all([
+    balanceOf(client, s.feeToken, from),
+    allowValue ? client.publicClient.getBalance({ address: from }) : Promise.resolve(0n),
+  ]);
+  if (spend > feeTokenBalance) throw new InsufficientBalanceError(spend, feeTokenBalance);
+  const value = calls.reduce((a, c) => a + c.value, 0n);
+  if (value > ethBalance) throw new InsufficientBalanceError(value, ethBalance);
+
+  const built = await buildUserOp(client, s, calls);
+  if (built.fee > s.ctx.maxFee) throw new FeeTooHighError(built.fee, s.ctx.maxFee);
+  if (spend + built.fee > feeTokenBalance) throw new InsufficientBalanceError(spend + built.fee, feeTokenBalance);
+  return {
+    from,
+    feeToken: s.feeToken,
+    fee: built.fee,
+    feeTokenBalance,
+    feeTokenSpend: spend,
+    delegated: s.authorization !== undefined,
+    calls,
+    userOperation: built.op,
+  };
+}
+
+/** Quote an arbitrary batch from one stealth address without sending it. */
+export async function estimateExecute(client: SpendClient, params: ExecuteParams): Promise<ExecuteEstimate> {
+  const s = await openSession(client, params);
+  return planExecute(client, s, params);
+}
+
+/**
+ * Sign and send ONE userOp from ONE stealth address running `calls` in order, with the 7702
+ * authorization on first use and gas paid in USDC by the paymaster. It never combines addresses.
+ */
+export async function executeFromStealth(client: SpendClient, params: ExecuteParams, options: SpendOptions = {}): Promise<ExecuteResult> {
+  const s = await openSession(client, params);
+  const est = await planExecute(client, s, params);
+  const sent = await submit(client, s, est.userOperation, options);
+  return { from: est.from, delegated: est.delegated, feeEstimate: est.fee, ...sent };
+}
+
+/**
+ * Sign and send one userOp from one stealth address: a token transfer. Same pipeline as
+ * `executeFromStealth` (session → userOp builder → submit) with a transfer-specific planner,
+ * because "max" needs the fee to size the transfer.
+ */
+export async function spendFromStealth(client: SpendClient, params: SpendParams, options: SpendOptions = {}): Promise<SpendResult> {
+  const s = await openSession(client, params);
+  const est = await plan(client, s, params);
+  const sent = await submit(client, s, est.userOperation, options);
+  return { from: est.from, delegated: est.delegated, amount: est.amount, feeEstimate: est.fee, ...sent };
 }
 
 export type SpendManyOptions = SpendOptions & {

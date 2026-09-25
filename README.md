@@ -12,7 +12,7 @@
 
 Our first use case is **recurring payroll on Base**. Today one batch transaction shows every recipient and every amount next to each other. With Soapay, coworkers see a list of never-before-seen addresses.
 
-**Navigate:** [PRD](PRD.md) · [Threat model](#threat-model) · [How it works](#how-it-works) · [StealthDisperse plan](contracts/PLAN.md) · [PRD analysis](docs/prd-analysis.md) · [Roadmap](#roadmap) · [Getting started](#getting-started) · [Repository](#repository)
+**Navigate:** [PRD](PRD.md) · [Threat model](#threat-model) · [How it works](#how-it-works) · [Uniswap](#uniswap-integration) · [StealthDisperse plan](contracts/PLAN.md) · [PRD analysis](docs/prd-analysis.md) · [Roadmap](#roadmap) · [Getting started](#getting-started) · [Repository](#repository)
 
 ## What's here
 
@@ -58,6 +58,32 @@ flowchart LR
 - **Big runs.** A run is cut into transactions of at most 350 lines, after sorting globally. It is never split by employee, because per-transaction totals would reveal salaries.
 - **Find payments.** The scanner filters Announcer events by view tag, recomputes each stealth address, and reads the real balance. It never trusts the token or amount in the metadata.
 - **Spend without linking.** A stealth address delegates to an audited 4337 account through EIP-7702 on its first spend, and a USDC paymaster pays the gas.
+
+## Uniswap integration
+
+**Convert salary in place.** An employee can turn part of a stealth address's USDC into WETH or ETH **inside that same address**. Moving funds to a "swap wallet" would link the two addresses, and a coworker who spots the link can tie a salary line to a person. So the swap runs where the money already is, and nothing leaves the address.
+
+- **One userOp per address.** The stealth address delegates to `Simple7702Account` (EIP-7702) on first use and runs one batch: exact `USDC.approve(Permit2)`, then exact `Permit2.approve(UniversalRouter)`, then the Universal Router swap, then a `BALANCE_CHECK_ERC20` floor. Both allowances end at zero.
+- **Gas in USDC.** The Circle Paymaster takes gas from the same USDC balance, so the address never needs ETH, which would itself have to come from somewhere linkable.
+- **Quotes** come from the Uniswap Trading API (`/quote` then `/swap`, AMM routes only, Universal Router 2.1.2). Without a key, the SDK falls back to direct Universal Router calldata priced by QuoterV2.
+- **Nothing pays a third party.** The SDK decodes every Universal Router command, v4 actions included, and refuses to sign if any output could go anywhere but the stealth address: a transfer, a fee portion, or a different recipient.
+- **Preferences stay local.** The conversion preference lives only in the recipient app, never in a public record ([spec §6](docs/mvp-spec.md#6-uniswap-convert-salary-in-place)).
+
+| What | Code |
+| --- | --- |
+| `quoteSwapInPlace`, `swapInPlace`, Trading API client, calldata checks | [`packages/sdk/src/swap.ts`](packages/sdk/src/swap.ts) (Trading API [L563-L644](packages/sdk/src/swap.ts#L563-L644), in-place checks [L314-L458](packages/sdk/src/swap.ts#L314-L458)) |
+| `executeFromStealth`: one 7702 userOp, any calls, gas in USDC | [`packages/sdk/src/spend.ts` L414-L497](packages/sdk/src/spend.ts#L414-L497) |
+| Base mainnet fork E2E | [`packages/sdk/test/fork.e2e.test.ts`](packages/sdk/test/fork.e2e.test.ts) |
+| Developer feedback for Uniswap | [`FEEDBACK.md`](FEEDBACK.md) |
+
+The fork E2E starts its own anvil fork of Base and plays the bundler, so it needs [Foundry](https://getfoundry.sh) but no keys. It runs a first spend (delegation plus USDC gas), USDC to WETH in place, and USDC to native ETH in place:
+
+```bash
+FORK_E2E=1 pnpm --filter @soapay/sdk vitest run test/fork.e2e.test.ts
+# optional: FORK_RPC_URL=<Base RPC>, default https://mainnet.base.org
+```
+
+The Trading API path is covered by mocked tests only so far (`pnpm --filter @soapay/sdk test`), because we have no API key yet. Keep the key server-side: pass `apiUrl` pointing at a backend proxy that adds `x-api-key`.
 
 ## Roadmap
 
