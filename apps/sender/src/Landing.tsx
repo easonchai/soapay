@@ -1,6 +1,56 @@
+import { useEffect, useRef } from 'react';
 import { AtSign, BookOpen, Droplets, GitBranch } from 'lucide-react';
 import { useAccount, useConnect } from 'wagmi';
-import { GITHUB } from './config.js';
+import { GITHUB, HERO_VIDEO } from './config.js';
+
+/** Fade-in on play, fade-out just before the end, restart from black: a seamless loop with no hard cut. */
+function useCrossfadeLoop(ref: React.RefObject<HTMLVideoElement | null>) {
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    let raf = 0;
+    let fading = false;
+    const fade = (from: number, to: number, ms: number, done?: () => void) => {
+      cancelAnimationFrame(raf);
+      const t0 = performance.now();
+      const step = (t: number) => {
+        const k = Math.min(1, (t - t0) / ms);
+        v.style.opacity = String(from + (to - from) * k);
+        if (k < 1) raf = requestAnimationFrame(step);
+        else done?.();
+      };
+      raf = requestAnimationFrame(step);
+    };
+    const onCanPlay = () => {
+      void v.play().catch(() => {});
+      fade(Number(v.style.opacity || 0), 1, 500);
+    };
+    const onTime = () => {
+      if (!fading && v.duration && v.duration - v.currentTime <= 0.55) {
+        fading = true;
+        fade(Number(v.style.opacity || 1), 0, 500);
+      }
+    };
+    const onEnded = () => {
+      v.style.opacity = '0';
+      window.setTimeout(() => {
+        v.currentTime = 0;
+        void v.play().catch(() => {});
+        fading = false;
+        fade(0, 1, 500);
+      }, 100);
+    };
+    v.addEventListener('canplay', onCanPlay, { once: true });
+    v.addEventListener('timeupdate', onTime);
+    v.addEventListener('ended', onEnded);
+    return () => {
+      cancelAnimationFrame(raf);
+      v.removeEventListener('canplay', onCanPlay);
+      v.removeEventListener('timeupdate', onTime);
+      v.removeEventListener('ended', onEnded);
+    };
+  }, [ref]);
+}
 
 /** Hero-only landing. "Login" connects the wallet; App switches to the dashboard once connected. */
 export function Landing({ connected, onLogin }: { connected: boolean; onLogin: () => void }) {
@@ -8,6 +58,8 @@ export function Landing({ connected, onLogin }: { connected: boolean; onLogin: (
   const { isConnecting } = useAccount();
   const connector = connectors[0];
   const busy = isPending || isConnecting;
+  const videoRef = useRef<HTMLVideoElement>(null);
+  useCrossfadeLoop(videoRef);
 
   function login() {
     onLogin();
@@ -16,6 +68,17 @@ export function Landing({ connected, onLogin }: { connected: boolean; onLogin: (
 
   return (
     <section className="l-hero">
+      <video
+        ref={videoRef}
+        className="l-hero-video"
+        src={HERO_VIDEO}
+        muted
+        autoPlay
+        playsInline
+        preload="auto"
+        aria-hidden
+        style={{ opacity: 0 }}
+      />
       <div className="l-nav-wrap">
         <nav className="l-nav liquid-glass" aria-label="Main">
           <div className="l-nav-left">
