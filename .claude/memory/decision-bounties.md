@@ -20,7 +20,12 @@ Main track (not Continuity). The owner chose these on 2026-09-25:
 - Every request needs a fresh backend RP signature (`signRequest`).
 - Verification: POST https://developer.world.org/api/v4/verify/{rp_id} with the result forwarded as-is.
 - A staging action works only with the simulator.
-- App id `app_0cc7167efe114ac2e0ef7d9827098353` (public); rp_id and the signing key are secrets from the Portal.
+- App id `app_0cc7167efe114ac2e0ef7d9827098353`.
+- **World ID 4.0 configured 2026-09-25 (managed RP):**
+  - `rp_id` = `rp_3ede5fe1cab9af48`; signer address `0xCaf38A54bA7B0C15Eb253cb513f0B0A93AAA349D`.
+  - Registered on-chain in production AND staging.
+  - Action `soapay-enroll` exists in staging (`action_v4_bf971ef0421e15a478e79756fe4b43a6`) and production (`action_v4_ae297f57ed07717e7713c802da03ade3`).
+  - The signing key is ONLY in the owner's local `apps/api/.env` (gitignored, mode 600). If it's lost, rotate it with the Portal MCP `rotate_world_id_signing_key`; it can't be recovered.
 
 **Rejected:** Intercepta requires an agent payment flow, and agents are PRD M5 roadmap (a non-goal for v1); screening a fresh stealth `payTo` is meaningless. Also rejected: 1inch Aqua, Sui, and Curvegrid (weak fit).
 **How to apply:** prize write-ups must show real product use, not add-ons. Specs are in docs/mvp-spec.md §2, §5 and §6.
