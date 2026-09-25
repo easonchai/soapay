@@ -1,3 +1,4 @@
+// TODO: switch to @soapay/sdk rotation.ts (RotationClaim/MetaRotation typed data) once the World ID branch lands.
 // Key rotation under option A (docs/mvp-spec.md §2.1).
 //
 // The registrant key can rewrite the `stealth` record behind a name, so a changed
