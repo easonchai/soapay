@@ -60,3 +60,9 @@ metadata:
 - OPEN DESIGN QUESTION (for the owner): who holds the ENSv2 `stealth` writer role, given World ID can't be verified on-chain on Sepolia? See the chat on 2026-09-25; the recommendation is that the registrant keeps it and the sender app is the enforcement point, auto-accepting a changed pin only with an API World ID attestation.
   - `worktree-agent-a6e83ae904bb96dd0` @ 55f9635, recipient app: vault crypto, scanner worker pool, mock services, onboarding UI (see the commit body for remaining work).
   RESUME PLAN after restart: re-spawn one agent per WIP branch (with the new World/ENS/Uniswap MCPs and skills), each starting from its branch; merge them into `yudhishthra` as they finish; then wire the apps and run E2E.
+
+**Checkpoint 4 (2026-09-25, after the session restart): resumed**
+- Decided key rotation **option A** (docs/mvp-spec.md §2.1, with RotationClaim and MetaRotation attestation formats). CLAUDE.md permit note corrected with the fork evidence.
+- MCPs after the restart: world-docs ✔, context7 ✔ (ENS docs route), Uniswap skills ✔; the **World Developer Portal MCP is not loaded** (needs `claude mcp add world-developer-portal https://developer.world.org/api/mcp --transport http --header "Authorization: Bearer api_…"`).
+- Five resume agents started from the WIP branches: Uniswap (FEEDBACK.md, export, README), ENSv2 (SDK compile + tests, scripts, ENSV2.md, README), World ID (verifier, rotation + attestation + L1 gas sponsor, rp-context, worldid-react, docs), recipient UI, sender UI (with attestation-gated pin acceptance).
+- Next: merge each as it finishes; wire World ID, swap and ENSv2 into the apps; E2E on a fork.
