@@ -8,7 +8,7 @@ import { exitPrefill, offersExit } from "../src/features/exit/entry.js";
 import { createMockExitService } from "../src/features/exit/mock.js";
 import { estimateExit, estimateLeg, minLegAmount, validateExit } from "../src/features/exit/planner.js";
 import { nextAction, patchRecords } from "../src/features/exit/runner.js";
-import { createSdkExitService, sdkExit } from "../src/features/exit/sdk.js";
+import { buildCtx, createSdkExitService, destBundlerUrl, type ExitSdkModule } from "../src/features/exit/sdk.js";
 import { timelineOf } from "../src/features/exit/timeline.js";
 import type { ExitLeg, ExitRecord } from "../src/features/exit/types.js";
 import { ExitProvider, useExit, type ExitApi } from "../src/hooks/useExit.js";
@@ -122,27 +122,59 @@ describe("block → exit entry point", () => {
   });
 });
 
-describe("SDK seam", () => {
-  it("stays unavailable until the SDK exports the exit functions, then uses them", async () => {
-    expect(sdkExit({})).toBeNull();
-    const off = createSdkExitService({ config: cfg, bundlerUrl: "http://b", rpcUrl: "", fetch, sdk: null });
-    expect(off.ready).toBe(false);
-    expect(off.unavailableReason).toMatch(/hasn't landed/);
-    expect(createSdkExitService({ config: null, bundlerUrl: "http://b", rpcUrl: "", fetch, sdk: null }).unavailableReason).toMatch(/No exit route/);
+const legOf = (status: ExitLeg["status"], over: Partial<ExitLeg> = {}): ExitLeg => ({
+  id: "l",
+  stealthAddress: A,
+  amount: "1",
+  destination: MAIN,
+  source: 84532,
+  dest: 11155111,
+  status,
+  txs: {},
+  poolIndex: 0,
+  updatedAt: 0,
+  withdrawals: [],
+  ...over,
+});
 
-    const leg: ExitLeg = { id: "x", stealthAddress: A, amount: 1n, status: "planned", txs: {}, poolIndex: 0, updatedAt: 0 };
+describe("SDK seam", () => {
+  it("is unavailable without a route or a bundler; otherwise delegates to the SDK with the real context", async () => {
+    expect(createSdkExitService({ config: null, bundlerUrl: "http://b", rpcUrl: "", fetch }).unavailableReason).toMatch(/No exit route/);
+    expect(createSdkExitService({ config: cfg, bundlerUrl: "", rpcUrl: "", fetch }).unavailableReason).toMatch(/bundler URL/);
+
+    const leg = legOf("planned", { id: "x" });
+    const seen: unknown[] = [];
     const fake = {
-      planExit: vi.fn(() => ({ legs: [leg, { ...leg, id: "y" }], fees: {}, warnings: [] })),
-      advanceExitLeg: vi.fn(async (_ctx: Record<string, unknown>, l: ExitLeg) => ({ ...l, status: "burning" as const })),
-      derivePoolSecrets: vi.fn(() => ({ nullifier: 1n, secret: 2n })),
-    };
-    expect(sdkExit(fake)).toBe(fake);
-    const on = createSdkExitService({ config: cfg, bundlerUrl: "http://b", rpcUrl: "", fetch, sdk: fake });
+      planExit: vi.fn((p: { firstPoolIndex?: number }) => ({ legs: [leg, { ...leg, id: "y", poolIndex: (p.firstPoolIndex ?? 0) + 1 }].map((l, i) => ({ ...l, poolIndex: (p.firstPoolIndex ?? 0) + i })), fees: {}, warnings: [] })),
+      advanceExitLeg: vi.fn(async (ctx: unknown, l: ExitLeg) => {
+        seen.push(ctx);
+        return { ...l, status: "burning" as const };
+      }),
+      derivePoolSecrets: vi.fn(),
+    } as unknown as ExitSdkModule;
+    const on = createSdkExitService({ config: cfg, bundlerUrl: "https://api.pimlico.io/v2/84532/rpc?apikey=k", rpcUrl: "", fetch, sdk: fake });
     expect(on.ready).toBe(true);
     expect(on.planExit({ sources: [], destination: MAIN, firstPoolIndex: 7 }).legs.map((l) => l.poolIndex)).toEqual([7, 8]);
     const next = await on.advance(leg, { stealthKey: () => "0x01", spendingKey: "0x02" }, { destination: MAIN, roundWithdrawals: true });
     expect(next.status).toBe("burning");
-    expect(fake.derivePoolSecrets).toHaveBeenCalledWith({ spendingKey: "0x02" }, 0);
+    const ctx = seen[0] as { stealthKey: string; keys: { spendingKey: string }; spendClients: Record<number, { chainId: number }>; config: { withdrawDelayMs: { max: number } }; leaveChange: boolean };
+    expect(ctx.stealthKey).toBe("0x01");
+    expect(ctx.keys).toEqual({ spendingKey: "0x02" });
+    expect(Object.keys(ctx.spendClients).map(Number).sort((a, b) => a - b)).toEqual([84532, 11155111]);
+    expect(ctx.spendClients[11155111]!.chainId).toBe(11155111);
+    expect(ctx.config.withdrawDelayMs.max).toBe(0); // the app's holdUntil is the delay
+    expect(ctx.leaveChange).toBe(true);
+  });
+
+  it("points the destination at the same bundler provider", () => {
+    expect(destBundlerUrl("https://api.pimlico.io/v2/84532/rpc?apikey=k", 84532, 11155111)).toBe("https://api.pimlico.io/v2/11155111/rpc?apikey=k");
+    expect(destBundlerUrl("https://bundler.example", 84532, 11155111)).toBe("https://public.pimlico.io/v2/11155111/rpc");
+  });
+
+  it("full withdrawals when round withdrawals are off", () => {
+    const ctx = buildCtx(cfg, {}, fetch, legOf("approved"), { stealthKey: () => "0x01", spendingKey: "0x02" }, { destination: MAIN, roundWithdrawals: false });
+    expect(ctx.config.withdrawUnit).toBe(1n);
+    expect(ctx.leaveChange).toBe(false);
   });
 });
 
@@ -158,7 +190,7 @@ describe("runner", () => {
     holdUntil: {},
     ...over,
   });
-  const leg = (status: ExitLeg["status"]): ExitLeg => ({ id: "l", stealthAddress: A, amount: 1n, status, txs: {}, poolIndex: 0, updatedAt: 0 });
+  const leg = (status: ExitLeg["status"]): ExitLeg => legOf(status);
 
   it("holds an approved leg for the random delay, then withdraws", () => {
     expect(nextAction(leg("approved"), record(), 10)).toBe("schedule");
@@ -185,7 +217,7 @@ describe("runner", () => {
 // ---- useExit: persistence in the encrypted vault, resume after a reload ----
 
 const PASS = "correct horse battery staple";
-const BAL = (a: Address, v: bigint) => ({ stealthAddress: a, token: cfg.cctp.sourceUsdc, balance: v.toString() });
+const BAL = (a: Address, v: bigint) => ({ stealthAddress: a, token: cfg.cctp.source.usdc, balance: v.toString() });
 
 function Harness({ exitSvc, vaultRef, exitRef, screen: showScreen }: { exitSvc: ReturnType<typeof createMockExitService>; vaultRef: { current: VaultApi | null }; exitRef: { current: ExitApi | null }; screen?: boolean }) {
   const vault = useVault();

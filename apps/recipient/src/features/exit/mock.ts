@@ -81,16 +81,20 @@ export function createMockExitService(
     pollMs: opts.pollMs ?? 1_000,
     // The random delay after approval, compressed from hours to seconds.
     delayRangeMs: opts.delayRangeMs ?? [4_000, 10_000],
-    planExit({ sources, firstPoolIndex }) {
+    planExit({ sources, destination, firstPoolIndex }) {
       const t = now();
       const legs: ExitLeg[] = sources.map((s, i) => ({
         id: `leg-${t.toString(36)}-${i}-${s.stealthAddress.slice(2, 8).toLowerCase()}`,
         stealthAddress: getAddress(s.stealthAddress),
-        amount: s.amount,
+        amount: s.amount.toString(),
+        destination: getAddress(destination),
+        source: TESTNET_EXIT_CONFIG.source,
+        dest: TESTNET_EXIT_CONFIG.dest,
         status: "planned",
         txs: {},
         poolIndex: firstPoolIndex + i,
         updatedAt: t,
+        withdrawals: [],
       }));
       return { legs, warnings: [] };
     },

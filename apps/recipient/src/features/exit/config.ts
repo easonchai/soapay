@@ -2,38 +2,18 @@
  * Exit route config (docs/exit-research.md). The testnet demo route is Base Sepolia → Ethereum Sepolia,
  * into 0xbow's USDC pool. The production chain is undecided, so other source chains get no route.
  */
+import { EXIT_CONFIGS } from "@soapay/sdk";
 import type { ExitConfig } from "./types.js";
 
 const BASE_SEPOLIA = 84532;
 const ETH_SEPOLIA = 11155111;
 
-export const TESTNET_EXIT_CONFIG: ExitConfig = {
-  source: BASE_SEPOLIA,
-  dest: ETH_SEPOLIA,
-  cctp: {
-    tokenMessenger: "0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA",
-    messageTransmitter: "0xE737e5cEBEEBa77EFE34D4aa090756590b1CE275",
-    sourceDomain: 6,
-    destDomain: 0,
-    sourceUsdc: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-    destUsdc: "0x1c7d4b196cb0c7b01d743fbc6116a902379c7238",
-    irisUrl: "https://iris-api-sandbox.circle.com",
-  },
-  pool: {
-    entrypoint: "0x34A2068192b1297f2a7f85D7D8CdE66F8F0921cB",
-    pool: "0x0b062Fe33c4f1592D8EA63f9a0177FcA44374C0f",
-    asset: "0x1c7d4b196cb0c7b01d743fbc6116a902379c7238",
-    minDeposit: 10_000_000n, // 10 USDC, read on-chain 2026-09-25
-    vettingFeeBps: 100n, // 1%
-  },
-  aspApiUrl: "https://dw.0xbow.io",
-  relayerUrl: "https://testnet-relayer.privacypools.com",
-  forwarding: true,
-};
+/** The SDK's testnet route (addresses verified on-chain in docs/exit-research.md). */
+export const TESTNET_EXIT_CONFIG: ExitConfig = EXIT_CONFIGS[`${BASE_SEPOLIA}:${ETH_SEPOLIA}`]!;
 
 /** The exit route for a source chain, or null when none is configured. */
 export function exitConfigFor(sourceChainId: number): ExitConfig | null {
-  return sourceChainId === BASE_SEPOLIA ? TESTNET_EXIT_CONFIG : null;
+  return Object.values(EXIT_CONFIGS).find((c) => c.source === sourceChainId) ?? null;
 }
 
 /**

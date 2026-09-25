@@ -252,7 +252,7 @@ export function LegTimeline({ leg, record }: { leg: ExitLeg; record: ExitRecord 
     <div className="rounded-md border p-3" data-testid="exit-leg" data-status={leg.status}>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-sm">
         <span>
-          <Addr address={leg.stealthAddress} /> · {formatUsdc(leg.amount)} USDC
+          <Addr address={leg.stealthAddress} /> · {formatUsdc(BigInt(leg.amount))} USDC
         </span>
         <Badge tone={statusTone(leg)}>{legLabel(leg)}</Badge>
       </div>

@@ -188,6 +188,13 @@ advanceExitLeg(ctx: { spendClient(s) per chain, stealthKey, poolSecrets, config,
 derivePoolSecrets(keys: { spendingKey }, poolIndex): { nullifier; secret }   // deterministic from the seed, so a lost device recovers
 withdrawToDestination(...) // through the 0xbow relayer; round partial amounts; suggestedDelayMs
 ```
+**As built (2026-09-25), deviations from the sketch above and why:**
+- `ExitLeg.amount` and every other amount are **decimal strings**, not bigints, so a leg is plain JSON and goes into the vault unchanged. The leg also carries `destination`, `source`, `dest`, `withdrawals[]` and step details (`burn`, `cctp` message + attestation, `mint`, `deposit` label/value, `remaining`, `notBefore`, `pending`). Resume needs them.
+- `ExitConfig` holds `cctp: { source, dest: { domain, tokenMessenger, messageTransmitter, usdc }, irisApiUrl, minFinalityThreshold, forwardFeeTier }`, `pool.scope` and `pool.vettingFeeBps`, `circuitsBaseUrl`, `withdrawDelayMs`, `withdrawUnit`, `ragequitReserve` and `estimates`. Routes are keyed `"source:dest"` in `EXIT_CONFIGS` (`getExitConfig`); only `84532:11155111` exists today.
+- `advanceExitLeg(ctx: ExitContext, leg)`. The context is `{ config, spendClients: { [chainId]: SpendClient }, stealthKey, keys: { spendingKey } | poolSecrets(poolIndex, child), fetch?, persist?, withdrawParts?, leaveChange?, maxFeeUsdc?, mintFallback? }`. `persist` is called just before a userOp leaves, with `leg.pending = { step, chainId, sender, nonce }`. On resume, the EntryPoint nonce shows whether that op ran, so a crash mid-send never double-sends. The app should pass it.
+- `derivePoolSecrets(keys, poolIndex, child = 0)`. Child *n* is the change commitment after the *n*-th partial withdrawal.
+- Ethereum Sepolia is a spend-only chain (`SPEND_ONLY_CHAINS`, `getSpendChainConfig`), not in `CHAINS`, so apps don't list it as a payroll chain.
+- Prefund reality: the Circle paymaster pulls a gas prefund (~3–4 USDC on Sepolia at ~1.3 gwei) before the deposit runs, so a stealth address needs about `10 + prefund` USDC minted to deposit the 10 USDC minimum. In practice, pay a leg ≥ ~16.5 USDC on the testnet route.
 **Rules:**
 - One userOp per stealth address, and no ETH ever sent to a stealth address.
 - The mint lands back on the same stealth address (the forwarding service pays).
