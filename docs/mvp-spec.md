@@ -152,6 +152,26 @@ Lets the employer pre-assign the label so the employee's onboarding is: open the
 - **Sender app:** "Invite employee" (label, amount, optional org name) → sign → POST /invites → show the link plus a QR code. The roster row stays "Invited (pending)" until the invite is claimed, then auto-enrolls by resolving and pinning with the normal checks. The code is kept only in the employer's encrypted vault.
 - **Recipient app:** on `#/join?...`, prefill and lock the label and show "Invited by <org>". POST /names includes `inviteCode`. Expired or claimed invites show a clear error and let the employee pick their own label.
 
+## 8. MCP server: agents as ENSv2 namespaces (owner decision, 2026-09-26)
+
+`apps/mcp` (`@soapay/mcp`) is a stdio MCP server over the SDK and API (PRD M5, pulled forward for the ENSv2 prize's "agents as namespaces" bonus).
+- **Agent identity:** each agent gets `<label>.soapay.eth` through the normal onboarding (sponsored ERC-6538 registration, then POST /names). It carries ENSIP-26 agent text records, and an ENSIP-25 registry binding if the spec supports it without a live registry. Only the agent's registrant key can change its `stealth` record (the same EAC model as employees).
+- **Tools:**
+  - `whoami`: the agent's name, meta-address and balance;
+  - `resolve_name`;
+  - `pay`: names and amounts, as one pay run through StealthDisperse or a batch;
+  - `scan` / `balance`;
+  - `spend`: to an address or a name, with guard-checked 7702 + paymaster;
+  - `swap_in_place`: through the Uniswap proxy;
+  - `create_agent_identity`.
+- **Guardrails:**
+  - per-call and per-day USDC caps (env);
+  - `dry_run: true` by default for pay and spend (it returns the plan; a second call with `confirm: <planId>` executes it);
+  - the consolidation guard is enforced, and `block` is never overridden by the agent;
+  - optional payee allowlist;
+  - keys only from env or files, never returned by any tool.
+- **Keys:** `AGENT_MNEMONIC` (the agent as recipient) and `AGENT_PAYER_PRIVATE_KEY` (the agent as payer, an EOA with USDC).
+
 ## Actions only the team can do
 
 - Broadcast deploys with your own keystore; agents never handle deployer keys.
