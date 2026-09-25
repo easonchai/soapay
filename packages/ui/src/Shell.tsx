@@ -4,7 +4,17 @@ import { Pill } from './Pill.js';
 export type ShellTab = { label: string; active?: boolean; onSelect?: () => void; href?: string };
 
 /** Floating glass nav pill + centered column. Tabs switch views inside an app; an href tab links out. */
-export function Shell({ tabs, chainName, children }: { tabs: ShellTab[]; chainName: string; children: ReactNode }) {
+export function Shell({
+  tabs,
+  chainName,
+  right,
+  children,
+}: {
+  tabs: ShellTab[];
+  chainName: string;
+  right?: ReactNode | undefined;
+  children: ReactNode;
+}) {
   return (
     <>
       <div className="site-header-wrap">
@@ -36,6 +46,7 @@ export function Shell({ tabs, chainName, children }: { tabs: ShellTab[]; chainNa
           <Pill tone="accent" dot>
             {chainName}
           </Pill>
+          {right}
         </header>
       </div>
       <main>{children}</main>

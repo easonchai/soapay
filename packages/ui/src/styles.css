@@ -88,6 +88,8 @@ code, .mono { font-family: var(--mono); font-size: 0.93em; word-break: break-all
 .site-nav a:hover { color: var(--ink); text-decoration: none; background: var(--glass-hover); }
 .site-nav a.active { color: var(--ink); }
 .site-header .spacer { flex: 1; }
+.site-header .btn-text { padding: 6px 10px; font-size: 13px; }
+.site-header code { font-size: 12px; }
 main { max-width: 880px; margin: 0 auto; padding: 40px 24px 96px; }
 
 /* Steps rail */
