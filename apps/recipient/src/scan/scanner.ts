@@ -208,6 +208,27 @@ export async function runScan(prev: ChainState, deps: ScanDeps, opts: { full?: b
   };
 }
 
+/**
+ * Folds a finished scan into the LATEST stored state. A scan can take a while; meanwhile the user may
+ * label addresses or spend (which links clusters). Those live in `latest.graph` / `latest.spends`, so
+ * the graph is rebuilt from `latest.graph` plus the scanned stealth addresses, never from the scan's copy.
+ */
+export function mergeScanResult(latest: ChainState, scanned: ChainState): ChainState {
+  const graph = latest.graph ? ClusterGraph.fromJSON(latest.graph) : new ClusterGraph();
+  for (const a of scanned.matches) {
+    const bal = scanned.balances.find((b) => b.stealthAddress.toLowerCase() === a.stealthAddress.toLowerCase())?.balance;
+    graph.addStealth(a.stealthAddress, { runId: a.txHash, ...(bal ? { amount: BigInt(bal) } : {}) });
+  }
+  return {
+    ...latest,
+    lastScannedBlock: scanned.lastScannedBlock,
+    matches: scanned.matches,
+    balances: scanned.balances,
+    balancesAt: scanned.balancesAt,
+    graph: graph.toJSON(),
+  };
+}
+
 /** Ledger from stored state. Pure; re-run whenever payers or trusted StealthDisperse addresses change. */
 export function ledgerFromState(
   state: ChainState,

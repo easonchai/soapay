@@ -14,6 +14,7 @@
 import { getRegistryNonce, signRegisterKeysOnBehalf, type RegistryReader, type SoapayKeys } from "@soapay/sdk";
 import type { Hex } from "viem";
 import type { Api, RotationResult } from "../../api/client.js";
+import { registerMetaAddress } from "../../onboarding/actions.js";
 import { rotateSignal, type HumanCheckResult } from "../../worldid/types.js";
 import { canonicalMeta, signRotationClaim } from "./claim.js";
 import type { EnsWriter } from "./ens.js";
@@ -107,4 +108,26 @@ export async function finishRotation(p: {
   });
   p.onStage?.("done");
   return { setTextTx: txHash };
+}
+
+/**
+ * Manual path (no World ID session, §5): relay the ERC-6538 re-registration through POST /register.
+ * No attestation exists, so the employer's sender app blocks the line until they approve by hand.
+ */
+export async function registerRotatedMeta(p: {
+  api: Api;
+  registry: RegistryReader;
+  chainId: number;
+  /** Generation 0's registrant (KeyRing.current). */
+  registrant: SoapayKeys;
+  newMeta: string;
+}): Promise<{ txHash: Hex }> {
+  const r = await registerMetaAddress({
+    api: p.api,
+    client: p.registry,
+    keys: p.registrant,
+    chainId: p.chainId,
+    metaAddressURI: canonicalMeta(p.newMeta),
+  });
+  return { txHash: r.txHash };
 }

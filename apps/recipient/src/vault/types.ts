@@ -34,6 +34,22 @@ export type ChainState = {
   graph: ClusterGraphJSON | null;
   /** Local spend history (never leaves the device). Optional for vaults created before it existed. */
   spends?: SpendRecord[];
+  /** Local convert-in-place history (never leaves the device; a public preference could fingerprint). */
+  conversions?: ConvertRecord[];
+};
+
+export type ConvertRecord = {
+  at: number;
+  /** The stealth address that swapped (and still holds the output). */
+  address: Address;
+  amountIn: string;
+  tokenOut: Address;
+  symbol: string;
+  /** Quoted output; the on-chain floor was `minOut`. */
+  amountOut: string;
+  minOut: string;
+  userOpHash: Hex;
+  txHash?: Hex;
 };
 
 export type SpendRecord = {
