@@ -3,6 +3,7 @@ import {
   createPublicClient,
   custom,
   decodeFunctionData,
+  encodeFunctionData,
   encodeFunctionResult,
   erc20Abi,
   getAddress,
@@ -33,6 +34,7 @@ import {
   createSpendClient,
   encodeCirclePaymasterData,
   estimateSpend,
+  executeFromStealth,
   isDelegated,
   maxSendable,
   packPaymasterAndData,
@@ -454,5 +456,47 @@ describe("spendMany", () => {
     expect(err.failedIndex).toBe(1);
     expect(err.completed).toHaveLength(1);
     expect(err.cause).toBeInstanceOf(InsufficientBalanceError);
+  });
+});
+
+describe("executeFromStealth", () => {
+  const approve = (spender: Address, amount: bigint) => ({ to: USDC, data: encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [spender, amount] }) });
+  const OTHER = "0x00000000000000000000000000000000000000c0" as Address;
+
+  it("sends every call in one executeBatch from the stealth address, with the 7702 auth on first use", async () => {
+    const key = generatePrivateKey();
+    const from = privateKeyToAccount(key).address;
+    const { client, sent } = mockWorld({ balances: { [from]: 10_000_000n } });
+    const calls = [approve(OTHER, 7n), { to: OTHER, data: "0x1234" as Hex }];
+    const res = await executeFromStealth(client, { stealthKey: key, calls, feeTokenSpend: 7n });
+    expect(res.delegated).toBe(true);
+    expect(res.feeEstimate).toBe(EXPECTED_FEE);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.sender).toBe(from);
+    expect(sent[0]!.factory).toBe("0x7702");
+    const exec = decodeFunctionData({ abi: simpleAbi, data: sent[0]!.callData });
+    expect(exec.functionName).toBe("executeBatch");
+    const batch = exec.args![0] as readonly { target: Address; value: bigint; data: Hex }[];
+    expect(batch.map((c) => [getAddress(c.target), c.value, c.data])).toEqual(calls.map((c) => [getAddress(c.to), 0n, c.data]));
+  });
+
+  it("reserves the fee: feeTokenSpend + fee must fit the USDC balance", async () => {
+    const key = generatePrivateKey();
+    const from = privateKeyToAccount(key).address;
+    const { client, sent } = mockWorld({ balances: { [from]: 1_000_000n } });
+    const calls = [approve(OTHER, 1_000_000n)];
+    await expect(executeFromStealth(client, { stealthKey: key, calls, feeTokenSpend: 1_000_000n })).rejects.toBeInstanceOf(InsufficientBalanceError);
+    await expect(executeFromStealth(client, { stealthKey: key, calls, feeTokenSpend: 2_000_000n })).rejects.toBeInstanceOf(InsufficientBalanceError);
+    await executeFromStealth(client, { stealthKey: key, calls, feeTokenSpend: 1_000_000n - EXPECTED_FEE });
+    expect(sent).toHaveLength(1);
+  });
+
+  it("refuses ETH value unless allowed, and empty batches", async () => {
+    const key = generatePrivateKey();
+    const from = privateKeyToAccount(key).address;
+    const { client, sent } = mockWorld({ balances: { [from]: 10_000_000n } });
+    await expect(executeFromStealth(client, { stealthKey: key, calls: [{ to: OTHER, value: 1n }] })).rejects.toThrow(/must not move ETH/);
+    await expect(executeFromStealth(client, { stealthKey: key, calls: [] })).rejects.toThrow(/no calls/);
+    expect(sent).toHaveLength(0);
   });
 });
