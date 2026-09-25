@@ -85,6 +85,12 @@ World ID 4.0 proofs can't be verified on-chain on Sepolia (only on World Chain a
 
 A stolen registrant key can change the record, but it can't get paid without either the same human's World ID or the employer's explicit approval.
 
+**Shared formats (the API and the sender app must match exactly):**
+- **RotationClaim** (signed by the registrant key), EIP-712 domain `{name:"Soapay Names", version:"1", chainId: API CHAIN_ID}`, type `RotationClaim(string label, string oldMeta, string newMeta, uint256 deadline)`. Meta-addresses are in canonical lowercase `st:eth:0x…` form.
+- **MetaRotation attestation** (signed by `ATTESTER_PRIVATE_KEY`), domain `{name:"Soapay Attestations", version:"1", chainId: API CHAIN_ID}`, type `MetaRotation(string label, string oldMeta, string newMeta, uint256 verifiedAt)`.
+- `GET /names/:label/attestations` → `{attester: "0x…", items: [{label, oldMeta, newMeta, verifiedAt: "<unix s>", signature}]}`, newest first. `GET /worldid/config` also returns `attester`.
+- The sender app pins the attester address via `VITE_ATTESTER` (it must not trust the address in the response alone) and verifies with viem `verifyTypedData`.
+
 ## 3. SDK modules (`packages/sdk/src`)
 
 | File | Owner | Exports |
