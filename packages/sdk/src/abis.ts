@@ -1,5 +1,22 @@
 import { parseAbi } from "viem";
-export { ERC5564AnnouncerAbi as announcerAbi, ERC6538RegistryAbi as registryAbi } from "@scopelift/stealth-address-sdk";
+
+/** Canonical ERC5564Announcer (hand-written so plain Node can load it; checked against ScopeLift in tests). */
+export const announcerAbi = parseAbi([
+  "function announce(uint256 schemeId, address stealthAddress, bytes ephemeralPubKey, bytes metadata)",
+  "event Announcement(uint256 indexed schemeId, address indexed stealthAddress, address indexed caller, bytes ephemeralPubKey, bytes metadata)",
+]);
+
+/** Canonical ERC6538Registry. */
+export const registryAbi = parseAbi([
+  "function registerKeys(uint256 schemeId, bytes stealthMetaAddress)",
+  "function registerKeysOnBehalf(address registrant, uint256 schemeId, bytes signature, bytes stealthMetaAddress)",
+  "function incrementNonce()",
+  "function stealthMetaAddressOf(address registrant, uint256 schemeId) view returns (bytes)",
+  "function nonceOf(address registrant) view returns (uint256)",
+  "function DOMAIN_SEPARATOR() view returns (bytes32)",
+  "event StealthMetaAddressSet(address indexed registrant, uint256 indexed schemeId, bytes stealthMetaAddress)",
+  "event NonceIncremented(address indexed registrant, uint256 newNonce)",
+]);
 
 /** StealthDisperse, packed calldata (docs/mvp-spec.md §1). */
 export const stealthDisperseAbi = parseAbi([

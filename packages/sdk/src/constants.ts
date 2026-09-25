@@ -1,18 +1,18 @@
 import { base, baseSepolia, sepolia, mainnet } from "viem/chains";
 import type { Address, Chain } from "viem";
-import {
-  ERC5564_CONTRACT_ADDRESS,
-  ERC6538_CONTRACT_ADDRESS,
-  ERC5564_StartBlocks,
-  VALID_SCHEME_ID,
-} from "@scopelift/stealth-address-sdk";
+// Plain data only: this module must not import the ScopeLift SDK, so plain
+// Node (apps/api) can load it. test/constants.test.ts checks these values
+// against ScopeLift's exports.
 
-/** ERC-5564 scheme 1: secp256k1 with view tags. */
-export const SCHEME_ID = VALID_SCHEME_ID.SCHEME_ID_1;
+/** ERC-5564 scheme 1: secp256k1 with view tags. Equals ScopeLift VALID_SCHEME_ID.SCHEME_ID_1. */
+export const SCHEME_ID = 1 as const;
 
 /** Canonical singletons, identical on every supported chain. Never forks (PRD: Components). */
-export const ANNOUNCER_ADDRESS = ERC5564_CONTRACT_ADDRESS as Address;
-export const REGISTRY_ADDRESS = ERC6538_CONTRACT_ADDRESS as Address;
+export const ANNOUNCER_ADDRESS: Address = "0x55649E01B5Df198D18D95b5cc5051630cfD45564";
+export const REGISTRY_ADDRESS: Address = "0x6538E6bf4B0eBd30A8Ea093027Ac2422ce5d6538";
+
+/** Announcer deployment blocks (ScopeLift ERC5564_StartBlocks). */
+const ANNOUNCER_START_BLOCKS = { base: 15502414n, baseSepolia: 7552655n } as const;
 
 /** EntryPoint v0.8 (supports EIP-7702 userOps). */
 export const ENTRYPOINT_V08 = "0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108" as const;
@@ -42,13 +42,13 @@ export const CHAINS = {
   [base.id]: {
     chain: base,
     usdc: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-    announcerStartBlock: BigInt(ERC5564_StartBlocks.BASE),
+    announcerStartBlock: ANNOUNCER_START_BLOCKS.base,
     ensChain: mainnet,
   },
   [baseSepolia.id]: {
     chain: baseSepolia,
     usdc: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-    announcerStartBlock: BigInt(ERC5564_StartBlocks.BASE_SEPOLIA),
+    announcerStartBlock: ANNOUNCER_START_BLOCKS.baseSepolia,
     ensChain: sepolia,
   },
 } as const satisfies Record<number, SoapayChainConfig>;

@@ -125,7 +125,7 @@ Base, chain `8453`.
 ```text
 apps/recipient    Recipient app: keys, onboarding, scanner, ledger, spend
 apps/sender       Sender app: pay runs via StealthDisperse or an EIP-5792 batch
-apps/api          Subname CCIP-Read gateway, registration relayer, announcement indexer
+apps/api          Registration relayer, ENSv2 subname issuer, World ID checks, announcement indexer
 packages/sdk      @soapay/sdk: derivation, registry, announce, scan, spend
 contracts         @soapay/contracts: Foundry, StealthDisperse, tools/derive.ts
 docs              PRD analysis

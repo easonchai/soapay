@@ -21,7 +21,7 @@ The shared interfaces for the parallel workstreams. If this spec is wrong, fix t
 | 7702 delegate (Simple7702Account, eth-infinitism) | `0xe6Cae83BdE06E4c305530e199D7217f42808555B` | same |
 | StealthDisperse | CREATE2, salt `keccak256("soapay.StealthDisperse.v1")` | not deployed |
 
-ENS runs on Ethereum Sepolia (registry `0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e`). `SoapayOffchainResolver` is deployed there and set as the resolver of `soapay.eth`, which works as a wildcard under ENSIP-10.
+ENS runs on **ENSv2 on Ethereum Sepolia**: `soapay.eth` has its own subname registry, and each employee gets an on-chain subname with a Permissioned Resolver. Enhanced Access Control lets only the employee's registrant key edit that name's `stealth` record. Addresses are recorded in §2 once verified.
 
 ## 1. StealthDisperse packed calldata (replaces the struct ABI)
 
@@ -54,23 +54,21 @@ ephemeralPubKey = abi.encodePacked(bytes1(keyPrefix), keyX)   // 33 bytes, passe
 - **Salt:** unchanged, since nothing has been deployed yet.
 - **Clients** reject an amount ≥ 2^80 before encoding.
 
-## 2. SoapayOffchainResolver (ENS CCIP-Read, EIP-3668 + ENSIP-10)
+## 2. Names on ENSv2 (Sepolia), replacing the ENSv1 off-chain resolver
 
-This follows the `ensdomains/offchain-resolver` pattern.
+Decided 2026-09-25: this qualifies for the ENSv2 prize and removes trust in a gateway signer.
 
-```solidity
-function resolve(bytes calldata name, bytes calldata data) external view returns (bytes memory);
-  // always reverts OffchainLookup(address(this), urls, callData, this.resolveWithProof.selector, callData)
-  // callData = abi.encodeWithSelector(IResolverService.resolve.selector, name, data)
-function resolveWithProof(bytes calldata response, bytes calldata extraData) external view returns (bytes memory);
-  // response = abi.encode(bytes result, uint64 expires, bytes sig)
-  // require(block.timestamp <= expires); require(signers[ecrecover(hash, sig)])
-```
+- **Parent.** `soapay.eth` is on ENSv2 Sepolia and owned by the team. It has its own **Permissioned Registry** for subnames.
+- **Issuer.** The API's issuer key holds only the EAC role to register subnames under `soapay.eth`; it has no other rights.
+- **Per employee:** the subname `label.soapay.eth` gets:
+  - its own **Permissioned Resolver**;
+  - records: text `stealth` = meta-address URI, text `soapay:registrant` = registrant;
+  - `addr` left **unset**, so plain wallets can't pay a static address;
+  - EAC roles: the registrant key may set **only** the `stealth` text record. The subname is **non-transferable**, and the parent can revoke it.
+- **Rotation.** A meta-address change is an on-chain `setText` by the registrant, gated off-chain by a World ID re-verification (§5). The sender's pin check (`pinnedMetaChanged`) alerts the employer.
+- **Resolution.** viem `getEnsText` through the ENSv2 Universal Resolver on Sepolia.
 
-- **Signed hash:** `keccak256(abi.encodePacked(hex"1900", address(resolver), uint64 expires, keccak256(extraData /* = callData */), keccak256(result)))`.
-- **Owner-managed:** `signers` mapping, `url`, `setSigners`, `setUrl` (Ownable2Step). The resolver holds no funds.
-- **Gateway URL template:** `https://<api>/ccip/{sender}/{data}.json`, plus POST.
-- **`supportsInterface`:** IExtendedResolver `0x9061b923` and ERC-165.
+The exact contract addresses, role ids and calls are in `contracts/ENSV2.md` (the ENSv2 workstream).
 
 ## 3. SDK modules (`packages/sdk/src`)
 
@@ -87,9 +85,9 @@ function resolveWithProof(bytes calldata response, bytes calldata extraData) ext
 
 | `guard.ts` | guard | Pure library, no I/O (PRD P1). `ClusterGraph`: each stealth address starts in its own cluster. `planSpend({from[], to}) → {mergedClusters, warnings, blocked}`. A destination is identifiable if it is labelled (`main-wallet`, `exchange`, `coworker-known`, `other`) or already appears in a cluster that touched a labelled address. Coworker-known wallets count as identifiable **by default** (CLAUDE.md). Merge → warning; sending to an identifiable destination → blocked unless `override: true`. Serializable with `toJSON`/`fromJSON`. |
 | `denominations.ts` | guard | `splitIntoDenominations(amount, chunk)` → chunks plus a remainder policy: `{mode: "exact"}` adds one odd chunk (no wage carry-over, the default, because carry-over under- or over-pays wages) or `{mode: "carry", carryIn}` rounds and returns `carryOut`. `smallTeamWarning(n)` when there are fewer than 10 recipients. |
-| `safe.ts` | guard | `encodeSafeMultiSendCallOnly(calls)` → `{to: MultiSendCallOnly v1.4.1, data, operation: 0}`. Never `MultiSend` or delegatecall to anything else. Plus a Safe Transaction Builder JSON export. |
+| `safe.ts` | guard | `encodeSafeMultiSendCallOnly(calls)` → `{to: MultiSendCallOnly v1.4.1 0x9641d764fc13c8B624c04430C7356C1C7C8102e2, data, operation: 1}`. The Safe must DELEGATECALL MultiSendCallOnly, and only that pinned address; every inner call is operation 0, and inner delegatecalls are rejected. Never `MultiSend`. Plus a Safe Transaction Builder JSON export. |
 
-Name claim, EIP-712: domain `{name: "Soapay Names", version: "1", chainId}`, type `NameClaim(string label, address registrant, string metaAddress, uint256 deadline)`, signed by the registrant key.
+Name claim, EIP-712 (`metaAddress` is signed in canonical lowercase `st:eth:0x…` form): domain `{name: "Soapay Names", version: "1", chainId}`, type `NameClaim(string label, address registrant, string metaAddress, uint256 deadline)`, signed by the registrant key.
 
 ## 4. API (`apps/api`, Hono on Node, SQLite via `node:sqlite`)
 
@@ -99,10 +97,23 @@ Name claim, EIP-712: domain `{name: "Soapay Names", version: "1", chainId}`, typ
 | `POST /register` | `{registrant, metaAddress, signature}` → simulate, then send `registerKeysOnBehalf` from `RELAYER_PRIVATE_KEY` → `{txHash}`. Rate limit per IP and registrant; refuse if the registry already holds the same meta-address. |
 | `POST /names` | `{label, registrant, metaAddress, deadline, signature}` → verify the EIP-712 NameClaim, check `stealthMetaAddressOf(registrant,1) == metaAddress`, check the label is free and valid (`[a-z0-9-]{3,32}`) → store |
 | `GET /names/:label` | Public record, for debugging |
-| `GET\|POST /ccip/:sender/:data` | Decode `resolve(name, data)` and answer `text(node,"stealth")`, `text(node,"soapay:registrant")`, `addr(node)` and `addr(node, coinType)` with the **zero address** (plain wallets must fail, not pay a static address). Sign with `CCIP_SIGNER_PRIVATE_KEY` (hash above, TTL 5 min) and return `{data: abi.encode(result, expires, sig)}` |
 | `GET /announcements?from=&to=&cursor=` | All Announcer events, scheme 1, paginated. The indexer backfills from `ERC5564_StartBlocks` in chunks, then polls the tip. No filtering by recipient. |
 
-**Env:** `PORT`, `CHAIN_ID` (84532 by default), `RPC_URL`, `L1_RPC_URL`, `RELAYER_PRIVATE_KEY`, `CCIP_SIGNER_PRIVATE_KEY`, `RESOLVER_ADDRESS`, `DB_PATH`.
+`POST /register` and `POST /names` call a pluggable `HumanVerifier` (World ID, §5) and `POST /names` calls a pluggable `NameIssuer` (ENSv2, §2).
+
+**Env:** `PORT`, `CHAIN_ID` (84532 by default), `RPC_URL`, `L1_RPC_URL`, `RELAYER_PRIVATE_KEY`, `ISSUER_PRIVATE_KEY`, `WORLD_APP_ID`, `WORLD_RP_ID`/signing key (§5), `DB_PATH`.
+
+## 5. World ID (IDKit): proof of human at two trust moments
+
+- **Salary-redirect protection (main use).** Changing the meta-address behind a name redirects future salary, so it needs a fresh **Proof of Human** from the *same* human who enrolled: the same nullifier for action `soapay-meta-update`, scoped per name. A stolen registrant key alone can't redirect pay. Alternative paths: a different human, a cancelled or expired proof → the change is refused and the employer app shows "meta change unverified".
+- **Scarce benefit.** One sponsored registration and one subname per human (action `soapay-enroll`), so the gas relayer can't be drained.
+- **Minimum assurance.** Proof of Human (uniqueness and continuity). No passport or selfie: we never need who someone is, only that it's the same unique person. Proofs are verified **server-side** in `apps/api`. We store nullifier ↔ name, never identity.
+
+## 6. Uniswap: convert salary in place
+
+- The recipient app lets an employee convert part of a stealth address's USDC into another asset **inside the same stealth address**: one 7702 userOp does `approve` + a Uniswap API swap calldata, with gas paid in USDC by the paymaster. No funds move between addresses, so no clusters merge.
+- The conversion preference is **local** to the recipient app (never a public record, which could fingerprint someone).
+- `FEEDBACK.md` at the repo root, and the Uniswap feedback form, are required for the prize.
 
 ## Actions only the team can do
 

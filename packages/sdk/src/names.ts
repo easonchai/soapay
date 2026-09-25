@@ -10,10 +10,7 @@ import { normalize } from "viem/ens";
 import { formatMetaAddressURI, parseMetaAddress } from "./keys.js";
 import { ERC6538_REGISTRY, erc6538RegistryMinimalAbi, type RegistryReader } from "./registration.js";
 
-// Literal copies of TEXT_KEY_STEALTH / TEXT_KEY_REGISTRANT (constants.ts), kept local
-// so this module does not load the ScopeLift SDK. A test asserts they match.
-const TEXT_STEALTH = "stealth";
-const TEXT_REGISTRANT = "soapay:registrant";
+import { TEXT_KEY_REGISTRANT as TEXT_REGISTRANT, TEXT_KEY_STEALTH as TEXT_STEALTH } from "./constants.js";
 
 export type NameErrorCode = "NameNotFound" | "MetaMismatch" | "NotRegistered";
 

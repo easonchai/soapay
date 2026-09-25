@@ -12,3 +12,10 @@ metadata:
 - Blocked on the owner: deploy broadcasts, soapay.eth on Sepolia, relayer funding, bundler URL.
 
 **How to apply:** append a new checkpoint section at each milestone; don't rewrite history. Related: [[decision-mvp-scope]].
+
+**Checkpoint 2 (2026-09-25): wave 1 partly merged; scope adds ENSv2, World ID and Uniswap**
+- Merged into `yudhishthra`: packed StealthDisperse (31 tests + 4 fork; about 37.8k gas/line all-in, so 350 lines keeps a 21% margin; fixed vectors in PLAN.md); SDK keys/registration/names (EIP-712 domain verified live on Base and Base Sepolia); SDK guard/denominations/Safe (MultiSendCallOnly 0x9641…02e2, outer op=1 delegatecall).
+- The SDK's constants.ts and abis.ts no longer import ScopeLift, so the API can load the SDK in plain Node. ScopeLift's registry ABI lacks the NonceIncremented event; the deployed bytecode has it.
+- The ENSv1 off-chain resolver agent was stopped unmerged; naming switches to ENSv2 ([[decision-naming]]). The API agent was redirected: no CCIP route, plus pluggable `NameIssuer` and `HumanVerifier` hooks.
+- Still running: SDK payrun+scan, SDK spend, API.
+- Next: an ENSv2 agent (research + contracts/scripts + issuer), then World ID (after the API merges) and the Uniswap swap (after spend merges), then wave 2 apps.

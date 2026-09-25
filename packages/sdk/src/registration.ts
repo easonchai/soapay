@@ -16,13 +16,10 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { formatMetaAddressURI, parseMetaAddress } from "./keys.js";
+import { REGISTRY_ADDRESS } from "./constants.js";
 
-/**
- * Canonical ERC-6538 Registry (same address on every chain). Equal to
- * `REGISTRY_ADDRESS` in constants.ts; duplicated here so this module does not
- * load the ScopeLift SDK (a test asserts they match).
- */
-export const ERC6538_REGISTRY: Address = "0x6538E6bf4B0eBd30A8Ea093027Ac2422ce5d6538";
+/** Canonical ERC-6538 Registry (same address on every chain). Alias of `REGISTRY_ADDRESS`. */
+export const ERC6538_REGISTRY: Address = REGISTRY_ADDRESS;
 
 /** ERC-5564 scheme 1 (secp256k1 with view tags). */
 const SCHEME_ID_1 = 1n;
