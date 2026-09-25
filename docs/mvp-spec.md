@@ -124,11 +124,15 @@ Name claim, EIP-712 (`metaAddress` is signed in canonical lowercase `st:eth:0x�
 
 **Env:** `PORT`, `CHAIN_ID` (84532 by default), `RPC_URL`, `L1_RPC_URL`, `RELAYER_PRIVATE_KEY`, `ISSUER_PRIVATE_KEY`, `WORLD_APP_ID`, `WORLD_RP_ID`/signing key (§5), `DB_PATH`.
 
-## 5. World ID (IDKit): proof of human at two trust moments
+## 5. World ID (IDKit): self-service key rotation, a single trust moment
 
-- **Salary-redirect protection (main use).** Changing the meta-address behind a name redirects future salary, so it needs a fresh **Proof of Human** from the *same* human who enrolled: the same nullifier for action `soapay-meta-update`, scoped per name. A stolen registrant key alone can't redirect pay. Alternative paths: a different human, a cancelled or expired proof → the change is refused and the employer app shows "meta change unverified".
-- **Scarce benefit.** One sponsored registration and one subname per human (action `soapay-enroll`), so the gas relayer can't be drained.
-- **Minimum assurance.** Proof of Human (uniqueness and continuity). No passport or selfie: we never need who someone is, only that it's the same unique person. Proofs are verified **server-side** in `apps/api`. We store nullifier ↔ name, never identity.
+Owner decision (2026-09-25, supersedes the earlier two-moment design):
+- **No enrollment gate.** Onboarding doesn't require World ID, and there's no Orb requirement. Relayer abuse is handled with rate limits (employer invite links later if needed).
+- **Trust moment: key rotation / recovery.** Changing the meta-address behind a name redirects future salary. At enrollment the employee MAY create a World ID **session** with the **Selfie Check** credential (`selfieCheck`; the docs recommend sessions for repeated verification, and no Orb is needed). A later rotation must prove that same session (`proveSession`). The API verifies it and issues the MetaRotation attestation (§2.1), and the sender app auto-accepts.
+- **Why Selfie Check is the minimum sufficient assurance:** rotation asks "is this the same person who enrolled?" (continuity), not "is this a unique human?" (uniqueness). Proof of Human would add an Orb requirement without answering that question any better.
+- **Alternative paths:** no session enrolled, a cancelled or expired proof, a different person (session mismatch), or a replayed session_nullifier → no attestation → the sender app blocks the line and the employer approves by hand.
+- **Where it's essential:** DAO contributors are often pseudonymous, so the payer has no out-of-band channel to confirm a change; World ID is the only continuity signal that keeps the contributor pseudonymous. For known employees it automates what HR would otherwise confirm by phone.
+- Proofs are verified server-side in `apps/api`. We store session_id per name and used session_nullifiers, never identity. The `soapay-enroll` action exists in the Portal but is unused (sessions take no action).
 
 ## 6. Uniswap: convert salary in place
 
