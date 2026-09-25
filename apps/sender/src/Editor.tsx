@@ -6,13 +6,21 @@ import { normalize } from 'viem/ens';
 import { chainConfig } from './config.js';
 import { ErrorLine } from '@soapay/ui';
 import { Pill } from '@soapay/ui';
-import { parseBatchText, resolveRecipient, type Resolved, deriveRows, type PlannedRow, readRegisteredMeta, createSenderStore, pinKey, browserStorage, fmtUnits, short } from '@soapay/sdk';
+import { parseBatchText, resolveRecipient, type Resolved, deriveRows, type PlannedRow, readRegisteredMeta, createSenderStore, pinKey, browserStorage, fmtUnits, short, createCompanyStore } from '@soapay/sdk';
 
 /** Per contracts/PLAN.md: ~42k gas per line, 350 keeps margin under the per-tx cap. */
 const MAX_ROWS = 350;
 const firstLine = (e: unknown) => (e as Error).message.split('\n')[0];
 
-export function Editor({ onContinue }: { onContinue: (rows: PlannedRow[]) => void }) {
+export function Editor({
+  onContinue,
+  prefill,
+  onPrefillUsed,
+}: {
+  onContinue: (rows: PlannedRow[]) => void;
+  prefill?: string | undefined;
+  onPrefillUsed?: (() => void) | undefined;
+}) {
   const cfg = chainConfig;
   const { address, isConnected, chain } = useAccount();
   const { connect, connectors } = useConnect();
@@ -20,6 +28,8 @@ export function Editor({ onContinue }: { onContinue: (rows: PlannedRow[]) => voi
   const wrongChain = isConnected && !!chain && chain.id !== cfg.chainId;
   const publicClient = usePublicClient();
   const store = useMemo(() => createSenderStore(browserStorage()), []);
+  const company = useMemo(() => createCompanyStore(browserStorage()), []);
+  const roster = useMemo(() => company.listEmployees(), [company]);
   const [text, setText] = useState('');
   const [resolved, setResolved] = useState<Resolved[]>([]);
   const [resolving, setResolving] = useState(false);
@@ -29,6 +39,17 @@ export function Editor({ onContinue }: { onContinue: (rows: PlannedRow[]) => voi
   useEffect(() => {
     setText(store.get().draft);
   }, [store]);
+
+  // "Pay <employee>" from the Employees view lands here with the recipient prefilled.
+  useEffect(() => {
+    if (prefill === undefined) return;
+    if (prefill) setText((t) => (t.trim() ? `${t.trimEnd()}\n${prefill}, ` : `${prefill}, `));
+    onPrefillUsed?.();
+  }, [prefill, onPrefillUsed]);
+
+  function insert(input: string) {
+    onText(text.trim() ? `${text.trimEnd()}\n${input}, ` : `${input}, `);
+  }
 
   const { lines, errors } = useMemo(() => parseBatchText(text, cfg.usdcDecimals, MAX_ROWS), [text, cfg.usdcDecimals]);
   const total = lines.reduce((a, l) => a + l.amount, 0n);
@@ -134,6 +155,16 @@ export function Editor({ onContinue }: { onContinue: (rows: PlannedRow[]) => voi
         </div>
       )}
 
+      {roster.length > 0 && (
+        <p className="muted">
+          Add from your team:{' '}
+          {roster.map((e) => (
+            <button key={e.key} className="btn-inline" onClick={() => insert(e.input)} title={e.input}>
+              {e.label}
+            </button>
+          ))}
+        </p>
+      )}
       <div className="card">
         <textarea
           value={text}

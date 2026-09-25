@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react';
-import { createSenderStore, browserStorage } from '@soapay/sdk';
+import { createSenderStore, browserStorage, createCompanyStore } from '@soapay/sdk';
 import { chainConfig } from './config.js';
 
 export function Settings() {
   const cfg = chainConfig;
   const sstore = useMemo(() => createSenderStore(browserStorage()), []);
+  const company = useMemo(() => createCompanyStore(browserStorage()), []);
+  const history = company.allPayments().length;
   const [note, setNote] = useState<string>();
   const pinCount = Object.keys(sstore.get().pins).length;
 
@@ -54,8 +56,9 @@ export function Settings() {
 
       <h2>Stored here</h2>
       <p className="muted">
-        {pinCount} pinned {pinCount === 1 ? 'recipient' : 'recipients'} and the unsent draft. Stealth addresses from past runs are never
-        kept.
+        {pinCount} pinned {pinCount === 1 ? 'recipient' : 'recipients'}, the unsent draft, and {history} payment{' '}
+        {history === 1 ? 'record' : 'records'} (which stealth wallet each employee was paid into). Records are never reused as
+        payment targets.
       </p>
       {note && <p className="notice notice-ok">{note}</p>}
       <div className="actions">
@@ -67,6 +70,15 @@ export function Settings() {
           }}
         >
           Reset pins and draft
+        </button>
+        <button
+          className="btn-danger"
+          onClick={() => {
+            company.clear();
+            setNote('Employee history cleared. Past payments are still on-chain; the app just no longer lists them.');
+          }}
+        >
+          Reset employee history
         </button>
       </div>
     </div>

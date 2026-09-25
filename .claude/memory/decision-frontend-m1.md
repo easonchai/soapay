@@ -11,7 +11,7 @@ Recipient and sender apps (M1 P0) landed 2026-09-25 on the Vite SPA layout; prot
 - **Naming step:** the wizard's "link a name" only checks an existing `addr` record and is skippable. It does not implement the `*.soapay.eth` subnames in [[decision-naming]]; that step is replaced when the OffchainResolver ships.
 - **Sender modes** (`createWalletBatchSender`): EIP-5792 atomic batch > `StealthDisperse.payWithPermit` when `VITE_STEALTH_DISPERSE_ADDRESS` is set > sequential announce-then-pay. A partial run throws `BatchPartialError` and the UI retires the rows so nothing is paid twice. Per [[decision-atomic-batch]].
 - **Scanner:** bounded `eth_getLogs` from the registration block (recovered via `StealthMetaAddressSet` when registered elsewhere), 2000-block chunks; metadata decoded by offset for both 57- and 77-byte layouts; headline total comes from live `balanceOf`, never metadata.
-- **Not persisted:** private keys (React state only), stealth addresses from pay runs. Stored: public recipient state + ledger, sender pins + draft.
+- **Not persisted:** private keys (React state only). Stored: public recipient state + ledger; on the company side, pins, the draft, and a payment history (employee -> stealth wallet, amount, tx) so the company can track each employee's wallets and live balances. The employer is trusted under the threat model, so this is allowed; a stored wallet is a record and never a payment target.
 - **UI:** tokens in `packages/ui/src/styles.css`, IBM Plex Sans/Mono via fontsource, one primary action per screen.
 
 **Why:** matches [[decision-app-stack]] (no server in the key-holding apps, SDK-only code paths) and the contract plan's client invariants (350-row cap, global sort, no ephemeral reuse).

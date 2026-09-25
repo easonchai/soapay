@@ -1,18 +1,30 @@
+import { useEffect, useMemo, useRef } from 'react';
 import { chainConfig } from './config.js';
 import { Pill } from '@soapay/ui';
-import { type PlannedRow, type BatchResult, explorerTx, fmtUnits, short } from '@soapay/sdk';
+import { type PlannedRow, type BatchResult, explorerTx, fmtUnits, short, createCompanyStore, browserStorage, rowStatus as sdkRowStatus } from '@soapay/sdk';
 
-export function Result({ rows, result, onNew }: { rows: PlannedRow[]; result: BatchResult; onNew: () => void }) {
+export function Result({
+  rows,
+  result,
+  onNew,
+  onEmployees,
+}: {
+  rows: PlannedRow[];
+  result: BatchResult;
+  onNew: () => void;
+  onEmployees: () => void;
+}) {
   const cfg = chainConfig;
   const p = result.partial;
+  const company = useMemo(() => createCompanyStore(browserStorage()), []);
+  const recorded = useRef(false);
+  useEffect(() => {
+    if (recorded.current) return;
+    recorded.current = true;
+    company.recordRun({ rows, result, sentAt: Date.now() });
+  }, [company, rows, result]);
 
-  function rowStatus(i: number): 'paid' | 'announced only' | 'not sent' | 'unknown' {
-    if (!p) return 'paid';
-    if (result.mode !== 'sequential') return p.pendingId || p.paidRows ? 'unknown' : 'not sent';
-    if (i < p.paidRows) return 'paid';
-    if (i < p.announcedRows) return 'announced only';
-    return 'not sent';
-  }
+  const rowStatus = (i: number) => sdkRowStatus(result, i);
   const tone = (s: ReturnType<typeof rowStatus>) => (s === 'paid' ? 'ok' : s === 'not sent' ? 'muted' : 'warn');
 
   function exportCsv() {
@@ -103,6 +115,9 @@ export function Result({ rows, result, onNew }: { rows: PlannedRow[]; result: Ba
           Start another batch
         </button>
         <button onClick={exportCsv}>Download CSV</button>
+        <button className="btn-text" onClick={onEmployees}>
+          View employees
+        </button>
       </div>
     </div>
   );
