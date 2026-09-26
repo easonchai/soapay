@@ -1,25 +1,32 @@
 // Command dispatch. `run` takes its I/O as parameters so tests drive it without a network or a TTY.
+import { dirname, join } from "node:path";
 import { createPublicClient, createWalletClient, formatEther, formatUnits, http, isHex, type Address, type Hash, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import {
   apiAnnouncementSource,
   compositeResolver,
+  emptyPinBook,
   encodeDistribution,
   ensNameResolver,
   erc20Abi,
   erc6538Resolver,
   executeDistribution,
   getChain,
+  httpRotationAttestationSource,
   keysFromMnemonic,
   metaAddressResolver,
+  parsePinBook,
+  rotationAttestationLookup,
   rpcAnnouncementSource,
   validateMnemonic,
   type AnnouncementSource,
   type NameResolver,
+  type PinBook,
   type RegisteredChain,
+  type RotationAttestationSource,
 } from "@soapay/sdk";
 import { parseCli, USAGE, UsageError, type DistributeArgs, type ScanArgs } from "./args.js";
-import { buildDistribution, formatPlan, planJson } from "./distribute.js";
+import { buildDistribution, formatPlan, PinChangedError, planJson } from "./distribute.js";
 import { formatScan, scanJson, scanPayments } from "./scan.js";
 
 export type CliIo = {
@@ -27,6 +34,12 @@ export type CliIo = {
   stderr(s: string): void;
   env: Record<string, string | undefined>;
   readFile(path: string): Promise<string>;
+  /** Writes a file, creating parent directories. Used for the pin file. */
+  writeFile(path: string, content: string): Promise<void>;
+  /** Test override for the rotation-attestation API (`GET /names/:label/attestations`). */
+  attestationSource?: RotationAttestationSource;
+  /** Clock (ms), for pin timestamps. */
+  now?: () => number;
   /** Test overrides; production builds these from the chain registry and --rpc/--api. */
   resolver?: NameResolver;
   announcementSource?: AnnouncementSource;
@@ -103,17 +116,57 @@ function defaultResolver(chain: RegisteredChain, rpc?: string, ensRpc?: string):
   return compositeResolver(resolvers);
 }
 
+/**
+ * Where rotation attestations come from, per chain: the Soapay API and the attester it signs with
+ * (docs/testnet-deployment.md). The attester is PINNED here, never read from the API's response.
+ */
+const ATTESTATION_DEFAULTS: Record<number, { api: string; attester: Address }> = {
+  84532: { api: "https://soapay.up.railway.app/api", attester: "0x62377F8ad1151f5b1917708FFD67220F37dF2574" },
+};
+
+/** Default pin file: `.soapay/pins.json` next to the CSV. */
+export function defaultPinFile(csvPath: string): string {
+  return join(dirname(csvPath), ".soapay", "pins.json");
+}
+
+async function loadPins(io: CliIo, path: string): Promise<PinBook> {
+  let text: string;
+  try {
+    text = await io.readFile(path);
+  } catch (e) {
+    if ((e as { code?: string }).code === "ENOENT" || /ENOENT/.test(String(e))) return emptyPinBook();
+    throw e;
+  }
+  try {
+    return parsePinBook(text);
+  } catch (e) {
+    throw new Error(`${path}: ${e instanceof Error ? e.message.replace(/^Soapay: /, "") : String(e)}. Fix or move it; it is what protects you from a redirected name.`);
+  }
+}
+
 async function distribute(args: DistributeArgs, io: CliIo): Promise<number> {
   const chain = getChain(args.chainId);
   const csv = await io.readFile(args.csv);
-  const deps: Parameters<typeof buildDistribution>[2] = { resolver: io.resolver ?? defaultResolver(chain, args.rpc, args.ensRpc) };
+  const pinFile = args.pins ?? defaultPinFile(args.csv);
+  const defaults = ATTESTATION_DEFAULTS[chain.id];
+  const api = args.api ?? io.env.SOAPAY_API_URL ?? defaults?.api;
+  const lookup = rotationAttestationLookup({
+    attester: args.attester ?? io.env.SOAPAY_ATTESTER ?? defaults?.attester,
+    chainId: chain.id,
+    source: io.attestationSource ?? (api ? httpRotationAttestationSource(api) : null),
+  });
+  const pins: NonNullable<Parameters<typeof buildDistribution>[2]["pins"]> = { book: await loadPins(io, pinFile), lookup, now: (io.now ?? Date.now)() };
+  if (args.acceptChange) pins.accept = args.acceptChange;
+  const deps: Parameters<typeof buildDistribution>[2] = { resolver: io.resolver ?? defaultResolver(chain, args.rpc, args.ensRpc), pins, pinFile };
   if (io.randomEphemeralKey) deps.randomEphemeralKey = io.randomEphemeralKey;
   const built = await buildDistribution(args, csv, deps);
   const stealthDisperse = args.disperse ?? chain.stealthDisperse;
+  // Every name passed its pin check: record new and moved pins before anything is sent.
+  if (built.pins?.changed) await io.writeFile(pinFile, `${JSON.stringify(built.pins.book, null, 2)}\n`);
 
-  if (args.json) io.stdout(json(planJson(built, stealthDisperse)));
+  if (args.json) io.stdout(json(planJson(built, stealthDisperse, pinFile)));
   else {
-    const opts: Parameters<typeof formatPlan>[1] = { showLines: args.showLines, execute: args.execute };
+    const opts: Parameters<typeof formatPlan>[1] = { showLines: args.showLines, execute: args.execute, pinFile };
     if (stealthDisperse) opts.stealthDisperse = stealthDisperse;
     io.stdout(formatPlan(built, opts));
   }
@@ -218,6 +271,10 @@ export async function run(argv: readonly string[], io: CliIo): Promise<number> {
     }
     return args.command === "distribute" ? await distribute(args, io) : await scan(args, io);
   } catch (e) {
+    if (e instanceof PinChangedError) {
+      io.stderr(`soapay: ${e.message}`);
+      return 3;
+    }
     if (e instanceof UsageError) {
       io.stderr(`soapay: ${e.message}\n\n${USAGE}`);
       return 2;

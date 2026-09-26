@@ -13,6 +13,7 @@ export const USAGE = `Usage:
   soapay distribute --csv <file> --asset <symbol|token> [--chain 84532] [--preset payroll|dividend|grant]
                     [--total <amount>] [--decimals <n>] [--chunk <amount>] [--max-lines <n>]
                     [--disperse <address>] [--rpc <url>] [--ens-rpc <url>] [--show-lines] [--json]
+                    [--pins <file>] [--accept-change <name>]... [--api <url>] [--attester <address>]
                     [--dry-run | --execute [--allow-mainnet]]
   soapay scan --mnemonic-env <VAR> [--chain 84532] [--api <url> | --rpc <url>] [--from <block>] [--to <block>]
               [--known-payer <address>]... [--no-balances] [--json]
@@ -28,6 +29,12 @@ distribute
   balances, txs), then sends it via StealthDisperse from PAYER_PRIVATE_KEY (read from the environment,
   never from flags): one exact-total approval, then the pay txs, each with an explorer link.
   --execute refuses non-testnet chains unless --allow-mainnet is also given.
+  Pins: the first time a name (or 0x registrant) resolves, its ERC-6538 meta-address is pinned in
+  --pins (default: .soapay/pins.json next to the CSV). If it resolves to anything else later, the
+  run stops with an alert (exit 3) and nothing is sent, unless the Soapay API (--api) holds a
+  World ID rotation attestation for exactly that change, signed by the pinned --attester (or
+  SOAPAY_ATTESTER; both default to the Soapay testnet deployment on 84532), or you pass
+  --accept-change <name> after confirming the change with the recipient.
 
 scan
   Reads the recovery phrase from the named environment variable and prints received payments,
@@ -52,6 +59,14 @@ export type DistributeArgs = {
   json: boolean;
   execute: boolean;
   allowMainnet: boolean;
+  /** Pin file; default `.soapay/pins.json` next to the CSV. */
+  pins?: string;
+  /** Identifiers whose changed meta-address the payer explicitly accepts. */
+  acceptChange?: string[];
+  /** Soapay API for rotation attestations. */
+  api?: string;
+  /** Pinned MetaRotation attester. */
+  attester?: Address;
 };
 
 export type ScanArgs = {
@@ -125,6 +140,10 @@ export function parseCli(argv: readonly string[]): CliArgs {
       "dry-run": { type: "boolean", default: false },
       execute: { type: "boolean", default: false },
       "allow-mainnet": { type: "boolean", default: false },
+      pins: { type: "string" },
+      "accept-change": { type: "string", multiple: true },
+      api: { type: "string" },
+      attester: { type: "string" },
     });
     const s = (k: string) => v[k] as string | undefined;
     const b = (k: string) => v[k] === true;
@@ -166,6 +185,21 @@ export function parseCli(argv: readonly string[]): CliArgs {
     if (rpc !== undefined) out.rpc = rpc;
     const ensRpc = url(s("ens-rpc"), "--ens-rpc");
     if (ensRpc !== undefined) out.ensRpc = ensRpc;
+    const pins = s("pins");
+    if (pins !== undefined) {
+      if (!pins.trim()) throw new UsageError("--pins needs a file path");
+      out.pins = pins;
+    }
+    const accept = ((v["accept-change"] as string[] | undefined) ?? []).map((a) => a.trim());
+    if (accept.some((a) => !a)) throw new UsageError("--accept-change needs a name");
+    if (accept.length) out.acceptChange = accept;
+    const api = url(s("api"), "--api");
+    if (api !== undefined) out.api = api;
+    const attester = s("attester");
+    if (attester !== undefined) {
+      if (!isAddress(attester, { strict: false })) throw new UsageError("--attester must be an address");
+      out.attester = getAddress(attester);
+    }
     return out;
   }
 

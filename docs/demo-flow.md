@@ -2,7 +2,7 @@
 
 A live script for the Soapay demo. It follows CK's screens in the order they present themselves: the sender app (landing → login → vault → Recipients → Pay run → Review → History), then the recipient app (invite → Keys → Lock → Register → Name → Recovery → Share → Payments → Send → Exit → Convert → Name). No step below needs a screen that doesn't exist, except the one visual proposed in "Beat 4".
 
-Every screen and button label below was clicked through on 2026-09-26: both apps in mock mode (`VITE_MOCK_API=1` / `VITE_MOCK_ENS=1`), plus the live landing pages at https://soapay.up.railway.app. The screenshots are in [`demo-screens/`](demo-screens/) (`s*` = sender, `r*` = recipient, `live-*` = Railway).
+Every screen and button label below was clicked through on 2026-09-26: both apps in mock mode (`VITE_MOCK_API=1` / `VITE_MOCK_ENS=1`), plus the live pages at https://soapay.up.railway.app (landing and company app at `/`, employee app at `/app/`). The screenshots are in [`demo-screens/`](demo-screens/) (`s*` = sender, `r*` = recipient, `live-*` = Railway); all of them were retaken the same day after the recovery-kit and passkey onboarding (D-44, D-45), at 1280×800 with `?motion=off`.
 
 **The story in one line:** a public payroll batch leaks everyone's salary to every coworker. Soapay gives each employee one name and pays a fresh address every time, so a coworker sees the batch but can't tell which line is whose.
 
@@ -10,8 +10,8 @@ Every screen and button label below was clicked through on 2026-09-26: both apps
 
 | What | Link |
 | --- | --- |
-| Recipient app (live) | https://soapay.up.railway.app/ |
-| Sender app (live) | https://soapay.up.railway.app/sender/ |
+| Landing + company (sender) app (live) | https://soapay.up.railway.app/ |
+| Employee (recipient) app (live) | https://soapay.up.railway.app/app/ ([live-recipient-home](demo-screens/live-recipient-home.png)) |
 | Live pay run (StealthDisperse → 2 stealth addresses, 3.0 + 2.5 USDC, 2 Announcements; checked by RPC) | https://sepolia.basescan.org/tx/0x24f23d610d1917905d3896e282243b07a038afb2bf266f94f11f31ea9e5b492d |
 | Live gasless 7702 spend (gas paid in USDC by the Circle paymaster) | https://sepolia.basescan.org/tx/0x1167b83dfab7476ac32b286b890fdcfdba396766d9389778568d949cbffc1bae |
 | `StealthDisperse` on Base Sepolia | https://sepolia.basescan.org/address/0x6B7a1cC570Af2DDd427DA694351438F0FE8039CA |
@@ -32,7 +32,7 @@ Basescan is behind a Cloudflare check that a headless browser can't pass. Open t
 | Send (Beat 5) and Convert (Beat 6) come out of what "Me" was paid | 0 extra |
 | Paymaster gas, paid in USDC | about 1 |
 
-1. **Fix the landing overclaim first** (see Gaps). Otherwise the first screen the judges read says something false.
+1. **Check the landing copy** (see Gaps, item 2): the live landing is fixed, but make sure the build you demo from has the fix too. Otherwise the first screen the judges read says something false.
 2. **Employer wallet:** a plain EOA on Base Sepolia with about 30 USDC (`scripts/fund-usdc.sh <address>`, two faucet drips 2 hours apart, or recycle what earlier rehearsals sent to wallets we control) and a little ETH. The sender then takes the `StealthDisperse` path ("Approve the exact total, then 1 StealthDisperse payment"). The mock demo wallet can't sign, so the live pay run needs this real wallet.
 3. **Sender vault:** log in and create the vault ("Use a device key (no passphrase)"). Roster: at least 10 names. With fewer than 10 the Review page shows the small-team warning (correct, but it takes airtime). Keep **Denominated payouts** on. Give the roster small salaries (0.5–1.5 USDC each, about 8 USDC for ten people) and set Settings → chunk to `0.25`, so the run is a busy tx of about 40 equal lines on a testnet budget. (The testnet default chunk is 5 USDC; with sub-5 salaries every line would be a remainder.)
 4. **Two recipient profiles**, in two browser profiles:
@@ -49,7 +49,7 @@ Total 3:00. Time is the budget for each beat; the clicks are exactly CK's labels
 
 ### Beat 1: The problem (0:00–0:15) · sender landing
 
-- **Screen:** sender `/sender/` landing ([s01](demo-screens/s01-sender-landing.png)).
+- **Screen:** the landing at `/`, which is also the company app's front door ([s01](demo-screens/s01-sender-landing.png) in mock mode; live: [live-sender-landing](demo-screens/live-sender-landing.png)).
 - **Clicks:** none yet.
 - **Say:** "Pay your team in USDC on-chain and every coworker can read everyone's salary off the batch. A wallet address is a public bank statement."
 - **Bounty:** none (context).
@@ -57,8 +57,8 @@ Total 3:00. Time is the budget for each beat; the clicks are exactly CK's labels
 
 ### Beat 2: One name, a fresh address per payment (0:15–0:50) · Recipients → invite → onboarding · ENSv2
 
-- **Clicks (sender):** **Login with wallet** → pick the wallet ([s02](demo-screens/s02-sender-login.png)) → **Unlock on this device** → you land on **Recipients** ([s06](demo-screens/s06-sender-recipients.png)). Under **Invite employee**: Name `jordan`, Salary per run, Organisation → **Sign and create link** ([s05](demo-screens/s05-sender-invite-link.png)). Point at the row: **Invited (pending)**.
-- **Clicks (recipient, the "New hire" profile, pre-opened on the invite link):** "Invited by … Your pay name will be jordan.soapay.eth" ([r01](demo-screens/r01-invite-welcome.png)). The stepper reads Keys · Lock · Register · Name · Recovery · Share. Don't do the recovery kit and lock live ([r02](demo-screens/r02-onboard-phrase.png) shows the old write-down screen; since D-44 the Keys step is "Save your recovery kit": Download / Copy phrase / Show words, then a checkbox, no word quiz; [r03b](demo-screens/r03b-onboard-lock.png)): pre-stage the profile at **Register** and click **Register for free** ([r04](demo-screens/r04-onboard-register.png)) → **Continue** on the name ([r05](demo-screens/r05-onboard-name.png)) → on Recovery, **Skip and claim jordan.soapay.eth** (World ID is shown later) ([r06](demo-screens/r06-onboard-worldid.png)) → Share: "Share this one string with your employer" ([r07](demo-screens/r07-onboard-share.png)).
+- **Clicks (sender):** **Login with wallet** → pick the wallet ([s02](demo-screens/s02-sender-login.png)) → **Unlock on this device** (first time: **Use a device key (no passphrase)**, [s03](demo-screens/s03-sender-vault.png)) → you land on **Recipients** ([s06](demo-screens/s06-sender-recipients.png); an empty vault looks like [s04](demo-screens/s04-sender-first.png)). Under **Invite employee**: Name `jordan`, Salary per run, Organisation → **Sign and create link** ([s05](demo-screens/s05-sender-invite-link.png)). Point at the row: **Invited (pending)**.
+- **Clicks (recipient, the "New hire" profile, pre-opened on the invite link):** "Invited by … Your pay name will be jordan.soapay.eth" ([r01](demo-screens/r01-invite-welcome.png)). Without an invite, the Welcome screen offers only **Create a new account** and **Restore from recovery phrase** ([r00](demo-screens/r00-welcome.png); no wallet-signature option since D-45). The stepper reads Keys · Lock · Register · Name · Recovery · Share. Don't do the recovery kit and lock live: Keys is **Save your recovery kit** (Download recovery kit / Copy phrase / Show words, then "I saved my recovery kit somewhere safe"; no word quiz since D-44, [r02](demo-screens/r02-onboard-phrase.png)); Lock is **Lock this device**, whose explainer says "Your device will ask to save a passkey… It's saved as jordan.soapay.eth in your password manager" → **Use Face ID / fingerprint (passkey)** ([r03b](demo-screens/r03b-onboard-lock.png)); the next screen confirms **Passkey saved on this device** ([r03c](demo-screens/r03c-onboard-passkey-saved.png)). Pre-stage the profile at **Register** and click **Register for free** ([r04](demo-screens/r04-onboard-register.png)) → **Continue** on the name ([r05](demo-screens/r05-onboard-name.png)) → on Recovery, **Skip and claim jordan.soapay.eth** (World ID is shown later) ([r06](demo-screens/r06-onboard-worldid.png)) → Share: "Share this one string with your employer" ([r07](demo-screens/r07-onboard-share.png)).
 - **Say:** "The employer invites a name, not a wallet. The employee's browser makes the keys, we pay the gas to publish them, and they get `jordan.soapay.eth`, an ENSv2 subname with its own resolver that only Jordan can repoint. There's no `addr` record, so nobody can pay a static address by mistake."
 - **Bounty:** ENSv2 (per-employee Permissioned Resolver, EAC on `stealth`, `addr` unset).
 - **Pre-staged:** the invite link, and the new-hire profile parked at Register.
@@ -74,8 +74,8 @@ Total 3:00. Time is the budget for each beat; the clicks are exactly CK's labels
 
 ### Beat 4: What a coworker sees vs what I see (1:20–1:50) · the core moment
 
-- **Screen:** "Me" on **Payments**, scrolled to **Pay runs** (D-41). One row per pay-run transaction that paid me: block, payer, how many of my lines are in it, and the tx.
-- **Clicks:** **Rescan** (so Beat 3's lines appear) → **Two views** on the newest run. It opens on **Coworker view**: every line of that transaction as the chain shows it (short stealth address, amount from the USDC Transfer log, owner "unknown"), under "This is everything anyone can see on-chain: 50 payments totalling … USDC from 0x… in one transaction". Flip the toggle to **My view**: the same list, my lines highlighted **You**, and the honest count, "6 of 50 lines are yours (2,750.00 USDC)". **View on Basescan ↗** opens the same tx (live only; mock mode has no explorer link).
+- **Screen:** "Me" on **Payments** ([r08](demo-screens/r08-payments.png)), scrolled to **Pay runs** (D-41, [r08a](demo-screens/r08a-payruns.png)). One row per pay-run transaction that paid me: block, payer, how many of my lines are in it, and the tx.
+- **Clicks:** **Rescan** (so Beat 3's lines appear) → **Two views** on the newest run. It opens on **Coworker view** ([r08b](demo-screens/r08b-payrun-coworker-view.png)): every line of that transaction as the chain shows it (short stealth address, amount from the USDC Transfer log, owner "unknown"), under "This is everything anyone can see on-chain: 50 payments totalling … USDC from 0x… in one transaction". Flip the toggle to **My view** ([r08c](demo-screens/r08c-payrun-my-view.png)): the same list, my lines highlighted **You**, and the honest count, "6 of 50 lines are yours (2,750.00 USDC)". **View on Basescan ↗** opens the same tx (live only; mock mode has no explorer link).
 - **Say:** "This is my coworker's view: fifty payments to strangers, rebuilt from the transaction's own logs. They know their own lines, and that's all. Now my view: the same transaction, and only my viewing key lights up my six lines. Nothing else about the other forty-four changes."
 - **Bounty:** none directly. This is the product claim (PRD Goal 2).
 - **Pre-staged:** "Me" already paid by 2–3 runs from the Acme payer (mock mode fabricates three runs of 50 lines each, 44 of them coworkers' 500 USDC chunks: mock fixtures, not test USDC).
@@ -91,7 +91,7 @@ Total 3:00. Time is the budget for each beat; the clicks are exactly CK's labels
      ```bash
      soapay distribute --preset dividend --csv examples/demo/holders.csv --asset usdc --total 0.5 --chunk 0.05 --execute
      ```
-     Plan → preflight (payer, balances, "2 txs: 1 approval (exact total) + 1 pay (12 lines)") → Basescan links. On-chain it's 12 equal-looking lines to 12 strangers; the agent's lines are indistinguishable from the people's.
+     Plan (with a `pins` line: the first run pins every name's meta-address in `examples/demo/.soapay/pins.json`; a later change stops the run unless World ID re-verified it, D-49) → preflight (payer, balances, "2 txs: 1 approval (exact total) + 1 pay (12 lines)") → Basescan links. On-chain it's 12 equal-looking lines to 12 strangers; the agent's lines are indistinguishable from the people's.
   3. Ana scans with her phrase (`soapay scan --mnemonic-env SOAPAY_PHRASE --from <block> --known-payer <company>`): 4 lines, 0.2 USDC, real balances.
   4. The agent scans over MCP ("the pay run has 12 lines; 2 are mine"), then spends 0.02 USDC to a name with no ETH: gas is paid in USDC (7702 + paymaster), the same path the recipient app uses.
 - **Say:** "Same SDK under the apps, a CLI and an agent. A dividend is one command. The agent is just another payee: same name, same privacy, same exit."
@@ -121,7 +121,7 @@ Total 3:00. Time is the budget for each beat; the clicks are exactly CK's labels
 ### Beat 7: Key rotation protected by World ID (2:40–3:00) · Name · World ID
 
 - **Clicks (recipient "Me"):** **Name** tab ([r19](demo-screens/r19-name.png)) → **Rotate to new keys** ([r20](demo-screens/r20-rotate-confirm.png)) → **Continue to World ID** → "Prove it's still you" → **Confirm with World ID** ([r21](demo-screens/r21-rotate-worldid.png)) → Selfie Check in the simulator → "Keys rotated … with a World ID attestation" ([r22](demo-screens/r22-rotate-done.png)).
-- **Clicks (sender):** **Recipients** → **Re-verify all** → jordan shows **Re-verified by World ID**, and an unattested change shows **Blocked · record changed** ([s13](demo-screens/s13-sender-rotation-status.png)).
+- **Clicks (sender):** **Recipients** → **Re-verify all** → jordan shows **Re-verified by World ID**, and an unattested change shows **Blocked · record changed** ([s13](demo-screens/s13-sender-rotation-status.png)). A name's detail shows the pinned record and every fresh address paid ([s12](demo-screens/s12-sender-recipient-detail.png)).
 - **Say (close):** "The name decides where salary goes, so changing it takes the same human who enrolled. A stolen key alone gets blocked. One name, a fresh address every payday, and no coworker can tell which line is yours."
 - **Bounty:** World ID (IDKit Selfie Check session, EIP-712 attestation enforced by the sender).
 - **Pre-staged:** the session attached at enrollment (past the 72 h cooldown if it was attached later); the simulator open and logged in.
@@ -134,10 +134,10 @@ The demo is UI-only: judges follow a person, not a library. The SDK appears in *
 ## Gaps that weaken the story (recommendations; no app code changed)
 
 1. ~~**No coworker-view visual.**~~ Done (D-41): Payments → Pay runs → **Two views**, and the sender's run page **What coworkers see**.
-2. **The landing overclaim is still live.** The live sender landing says "…and the payroll never shows up on a block explorer" ([live-sender-landing](demo-screens/live-sender-landing.png)). Beat 4 shows the opposite. Change it with CK before judging, e.g. "…so nobody can tell which line is whose."
+2. ~~**The landing overclaim is still live.**~~ Fixed on the live landing (checked 2026-09-26): "…so on a block explorer the payroll shows new addresses, not your team's wallets" ([live-sender-landing](demo-screens/live-sender-landing.png)). The fix isn't on this branch yet: `apps/sender/src/pages/Landing.tsx` here (and the mock-mode [s01](demo-screens/s01-sender-landing.png)) still say "…the payroll never shows up on a block explorer". Make sure the branch you demo from has it.
 3. **Onboarding is too long to show live.** Save the recovery kit, then lock with a passkey (the 3-word backup check is gone since D-44, so it is shorter than it was). Pre-stage it (Beat 2). Consider a "demo account" restore, or skipping straight to Register for a pre-made profile.
 4. **The mock wallet can't sign a pay run** ("Not sent: the approval didn't go through"), so the pay run is the one beat with no offline fallback that actually sends. Keep the live tx link ready.
 5. **The invite's org name doesn't match in mock mode.** The link carries `org=Acme Labs`, but onboarding shows "Invited by Acme Robotics" (the mock fixture). Check that the live path shows the employer's own org.
-6. **After an exit, mock balances aren't refreshed.** The exited addresses still show 500 USDC under Convert's From address. Confirm it's mock-only before showing Exit and Convert back to back.
+6. **After an exit or a send, mock balances aren't refreshed.** The exited address still shows 500 USDC under Convert's From address, and an address that just sent 80 of its 100 USDC still shows 100 (rechecked 2026-09-26). Confirm it's mock-only before showing Exit and Convert back to back.
 7. ~~**Guard copy exposes a raw pay-run tx hash.**~~ Done (D-41): hashes in guard copy render short (`0x681f…9e2a`) and link to Basescan outside mock mode.
 8. **Run pages and Basescan:** live runs already link each step's tx (Tx column), and the **What coworkers see** panel links each landed tx (D-41). Mock runs never send, so they show "—" and a labelled preview instead.

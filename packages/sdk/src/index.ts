@@ -22,3 +22,4 @@ export * from "./distribute.js";
 export * from "./adapters.js";
 export * from "./batch.js";
 export * from "./gasless.js";
+export * from "./pins.js";
