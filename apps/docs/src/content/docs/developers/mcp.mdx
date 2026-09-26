@@ -1,0 +1,118 @@
+---
+title: MCP server
+description: Give an agent a pay-by-name identity with guarded payment, scan, spend, and swap tools.
+sidebar:
+  order: 4
+---
+
+`@soapay/mcp` is a stdio MCP server over `@soapay/sdk` and the Soapay API. An agent can claim a name such as `ledger-bot.soapay.eth`, publish ENSIP-26 records, receive private payments, and move value under operator-defined guardrails.
+
+The server name is `soapay`, version `0.1.0`. Protocol messages use stdout. Redacted JSON logs use stderr.
+
+## Build and configure
+
+The package must be built because its ScopeLift dependency cannot load in plain Node without bundling.
+
+```bash
+pnpm install
+pnpm --filter @soapay/mcp build
+```
+
+Configure an MCP client to run the generated file:
+
+```json
+{
+  "mcpServers": {
+    "soapay": {
+      "command": "node",
+      "args": ["/abs/path/soapay/apps/mcp/dist/index.js"],
+      "env": {
+        "API_URL": "http://localhost:8787",
+        "CHAIN_ID": "84532",
+        "RPC_URL": "https://sepolia.base.org",
+        "ENS_RPC_URL": "https://ethereum-sepolia-rpc.publicnode.com",
+        "AGENT_MNEMONIC": "twelve words ...",
+        "AGENT_PAYER_PRIVATE_KEY": "0x...",
+        "MAX_PER_CALL_USDC": "5",
+        "MAX_PER_DAY_USDC": "20"
+      }
+    }
+  }
+}
+```
+
+Useful optional settings are `BUNDLER_URL`, `PAYMASTER_URL`, `PAY_TOKEN`, `STEALTH_DISPERSE`, `STATE_DIR`, `PAYEE_ALLOWLIST`, `KNOWN_PAYERS`, and `IDENTIFIABLE_ADDRESSES`. `PLAN_TTL_SECONDS` defaults to 600 and is capped at 600. See [Environment](/docs/reference/environment/) for the complete table.
+
+## Identity and ENS records
+
+`create_agent_identity` registers the agent's ERC-5564 meta-address through `POST /register`, then claims `<label>.soapay.eth` through `POST /names`. It can accept an employer invite link or bare invite code.
+
+The ENSv2 issuer writes `agent-context` and any `agent-endpoint[<protocol>]` records at issuance. `agent-context` is JSON describing the agent, its capabilities, and how to pay it through the `stealth` record. ENSIP-25 `agent-registration[<registry>][<agentId>]` records are supported by the API and SDK, but the MCP tool does not set them by default.
+
+## Tools
+
+Every success is returned as text JSON and `structuredContent`. Errors use `{ "error": { "code", "message", "details"? } }` and set `isError: true`.
+
+### `whoami`
+
+Input: none. Output: `{ name, metaAddress, registrant, payer, chainId, guardrails, note }`. `payer` is `{ address, usdc, eth }` or `null`. `guardrails` reports per-call, per-day, remaining daily capacity, and the payee allowlist.
+
+### `resolve_name`
+
+Input: `{ name: string }`, 3 to 255 characters. Output: `{ name, metaAddress, registrant, pinned, allowlisted }`. Resolution reads ENSv2 and cross-checks ERC-6538 on the pay chain.
+
+### `create_agent_identity`
+
+Input:
+
+```ts
+{
+  label?: string;          // 3 to 32 lowercase letters, digits, or hyphens
+  invite?: string;         // full join link or 32-byte 0x code, 66 to 2048 chars
+  description?: string;    // 1 to 500 chars
+  capabilities?: string[]; // at most 16, each 1 to 40 chars
+  endpoints?: Record<string, string>; // protocol to URL
+}
+```
+
+Output: `{ name, metaAddress, registrant, created, registration?, txHash, records, invite }`. `records` maps ENS text keys to values on a new identity. `invite` is `{ org, codeHash }` or `null`; the bearer code is never returned.
+
+### `pay`
+
+Plan input: `{ payments: [{ name, amount }], dry_run?: true }`, with 1 to 350 payments. Confirmation input: `{ confirm: planId }`.
+
+The plan returns `{ planId, expiresAt, confirmWith, totalUsdc, lineCount, txCount, lines, gas, payer, guardrails, warnings, note }`. Confirmation returns `{ ok, planId, totalUsdc, lineCount, steps }`. It approves the exact total, waits for the allowance to become visible, then sends chunks of at most 350 lines.
+
+### `scan`
+
+Input: none. Output: `{ scanned, matches, totalUsdc, payments, note }`. Each payment contains `{ stealthAddress, balanceUsdc, payer, payerKnown, claimedAmountUsdc, flags, txHash, block }`. Balances are read on chain; metadata amounts are not trusted.
+
+### `balance`
+
+Input: none. Output: `{ totalUsdc, addresses, clusters, note }`. Each cluster is `{ id, identified, totalUsdc, addresses }` and groups stealth addresses already linked by previous spends.
+
+### `spend`
+
+Plan input: `{ to, amount, dry_run?: true }`, where `to` is an address or ENS name. Confirmation input: `{ confirm: planId }`.
+
+The plan reports `{ decision, reason, warnings, to, amountUsdc, maxFeesUsdc, parts, userOps, planId, expiresAt, confirmWith, note }`. A blocked plan has `planId: null`. Confirmation returns `{ ok, to, amountUsdc, results }`. Address spends use one user operation per source. Name spends derive a new stealth destination and announce each part in the same user operation.
+
+### `swap_in_place`
+
+Plan input: `{ tokenOut, amount, slippage_bps?, dry_run?: true }`. `tokenOut` is `"ETH"` or an address. Slippage is 0 to 500 basis points and defaults to 50. Confirmation input is `{ confirm: planId }`.
+
+The plan returns the source stealth address, input, quoted output, minimum output, route, source, and confirmation fields. Confirmation returns `{ ok, from, userOpHash, txHash, amountInUsdc, tokenOut, amountOut, minOut, route }`. It refuses confirmation if the new minimum output falls below the dry-run floor.
+
+### `get_test_funds`
+
+Registered only on chain 84532. Input: none. Output is `{ status: "sent", payer, usdc, tx, eth?, ethTx?, note }` or `{ status: "already_claimed", payer, note }`.
+
+## Safety model
+
+- `pay`, `spend`, and `swap_in_place` always plan first. Confirmation uses a single-use in-memory plan that expires after at most 10 minutes.
+- `MAX_PER_CALL_USDC` applies to every value-moving tool. `MAX_PER_DAY_USDC` applies to pay and spend on a UTC-day counter.
+- `PAYEE_ALLOWLIST` restricts pay and spend to listed names and rejects raw addresses.
+- Names are pinned on first use. A change fails with `pin_changed` until the operator updates local state.
+- A consolidation-guard `block` has no override parameter. A `warn` is returned in the plan for review.
+- `${STATE_DIR}/state.json` is mode 0600 and contains counters, public pins, the guard graph, and public identity data. It contains no keys.
+- Mnemonics, private keys, stealth private keys, invite codes, and full signatures never appear in tool output. Logs shorten addresses and remove key-sized or mnemonic-like strings.

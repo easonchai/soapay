@@ -1,0 +1,99 @@
+---
+title: Contracts
+description: StealthDisperse, MockUSDC, deployment addresses, and Foundry commands.
+sidebar:
+  order: 6
+---
+
+Soapay has one custom production contract: `StealthDisperse`. It pays ERC-20 tokens from the caller to fresh stealth addresses and calls the canonical ERC-5564 Announcer for every line in the same transaction. It has no owner, storage, upgrade path, or token custody.
+
+## StealthDisperse interface
+
+```solidity
+struct PackedPayment {
+    uint256 head;
+    bytes32 keyX;
+}
+
+function pay(IERC20 token, PackedPayment[] calldata lines) public;
+
+function payWithPermit(
+    IERC20 token,
+    PackedPayment[] calldata lines,
+    uint256 value,
+    uint256 deadline,
+    uint8 v,
+    bytes32 r,
+    bytes32 s
+) external;
+
+function decodeHead(uint256 head)
+    public
+    pure
+    returns (address stealthAddress, uint256 amount, bytes1 viewTag, bytes1 keyPrefix);
+
+error NotAscending(uint256 index);
+error BadEphemeralKey(uint256 index);
+error ZeroAmount(uint256 index);
+error PermitFailed();
+```
+
+The contract emits no event of its own. Each successful line produces an ERC-20 `Transfer` and this event from the canonical Announcer:
+
+```solidity
+event Announcement(
+    uint256 indexed schemeId,
+    address indexed stealthAddress,
+    address indexed caller,
+    bytes ephemeralPubKey,
+    bytes metadata
+);
+```
+
+`ANNOUNCER` is `0x55649E01B5Df198D18D95b5cc5051630cfD45564`, `SCHEME_ID` is `1`, and `METADATA_SELECTOR` is `0xa9059cbb` (`transfer(address,uint256)`).
+
+## Encoding and invariants
+
+`head` packs `stealthAddress(160) | amount(80) | viewTag(8) | keyPrefix(8)`. `keyX` stores the remaining 32 bytes of the compressed ephemeral public key. Clients must reject zero amounts, amounts above `2^80 - 1`, invalid key prefixes, repeated ephemeral keys, and repeated stealth addresses.
+
+Every batch preserves these properties:
+
+- Stealth addresses are strictly ascending. This rejects duplicates and address zero. The order is a correctness rule, not a privacy guarantee.
+- Each line calls `safeTransferFrom(msg.sender, stealthAddress, amount)` and then announces it. Any failure reverts the full batch.
+- Funds are pulled only from `msg.sender`. The contract's token balance remains zero.
+- The sender app derives and globally sorts the whole run before dividing it into roughly equal chunks of at most 350 lines. It never partitions by employee.
+- The payer approves or permits the exact total.
+
+Metadata is exactly `viewTag(1) | transfer selector(4) | token(20) | amount(32) | payer(20)`. It is 77 bytes. `Announcement.caller` is StealthDisperse, so the payer suffix records `msg.sender`. Scanners still treat every field as a hint, recompute ownership, and read the live balance.
+
+## Permit behavior
+
+`payWithPermit` tries an EIP-2612 permit, checks that allowance covers the batch total, then calls `pay`. It reverts with `PermitFailed()` when the permit path leaves insufficient allowance.
+
+Base USDC validates contract-account permits through ERC-1271. A 7702 delegate without a plain ECDSA `isValidSignature` path fails. The audited `Simple7702Account` used by Soapay does validate the permit signature, as verified by the Base fork test. Smart-account and Safe payers normally use the contract-free atomic batch path instead.
+
+## MockUSDC
+
+`MockUSDC` is testnet only. It is a plain OpenZeppelin `ERC20`, `ERC20Permit`, and `AccessControl` token named `USD Coin (Soapay test)`, symbol `USDC`, with 6 decimals and EIP-712 version `1`. Only `MINTER_ROLE` can call `mint(address,uint256)`. It never ships to mainnet.
+
+## Addresses
+
+| Chain | StealthDisperse | Pay token | Canonical contracts |
+| --- | --- | --- | --- |
+| Base, 8453 | Not deployed | Circle USDC `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` | Announcer `0x55649E01B5Df198D18D95b5cc5051630cfD45564`; Registry `0x6538E6bf4B0eBd30A8Ea093027Ac2422ce5d6538` |
+| Base Sepolia, 84532 | `0x6B7a1cC570Af2DDd427DA694351438F0FE8039CA` | MockUSDC `0x028D969c20b740582428f5043954c380686214Bb` | Same Announcer and Registry |
+| Ethereum Sepolia, 11155111 | Not deployed | Circle USDC `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238` for exit spending | No payroll deployment |
+
+Circle USDC on Base Sepolia is `0x036CbD53842c5426634e7929541eC2318f3dCF7e`. It is used for mainnet-like paymaster and exit testing, not as the default demo pay token. See [Addresses](/docs/reference/addresses/) for ENSv2 and attester deployments.
+
+## Build and test
+
+From `contracts/`:
+
+```bash
+forge build
+forge test
+BASE_RPC_URL=https://mainnet.base.org forge test --match-contract Fork -vv
+```
+
+The Base fork suite skips when `BASE_RPC_URL` is unset. The project uses Solidity 0.8.28, Cancun EVM rules, 10,000 optimizer runs, and 256 fuzz runs.

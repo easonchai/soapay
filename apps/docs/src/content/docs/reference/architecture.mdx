@@ -1,0 +1,55 @@
+---
+title: Architecture
+description: How the Soapay clients, SDK, API, contracts, identity systems, and deployment fit together.
+sidebar:
+  order: 3
+---
+
+Soapay keeps protocol logic in `@soapay/sdk`. The company app, employee app, CLI, and MCP server are clients of that SDK. The API relays registrations, issues names, verifies World ID proofs, signs rotation attestations, and indexes public announcements; it never holds spending or viewing keys, and it never holds funds.
+
+## Components
+
+The **company app** runs in the employer's browser. It stores the roster, pinned meta-addresses, and pay history locally, resolves names, plans denominations, derives each fresh stealth address, sorts the complete run, and selects the wallet path.
+
+The **employee app** runs in the recipient's browser. Its encrypted vault contains the recovery-derived keys and ledger state. It scans announcements, derives the matching private keys, applies the consolidation guard and timing queue, then sends through EIP-7702 and ERC-4337. The web app has no Convert screen. Swap-in-place remains available through the SDK and MCP server.
+
+The **SDK** owns key derivation, ENS and ERC-6538 resolution, pay-run planning, announcement scanning, spending, guard decisions, recovery, and exit planning. `StealthDisperse` is Soapay's stateless contract for plain-account payers. Smart accounts can instead send an EIP-5792 atomic batch, and Safes export a `MultiSendCallOnly` transaction.
+
+```text
+Employer                           Employee or agent
+   |                                      |
+   v                                      v
+Company app, CLI, MCP              Employee app, MCP
+   |                                      |
+   +--------------- @soapay/sdk ----------+
+                  /        |        \
+                 v         v         v
+          Soapay API      Base      Ethereum ENS chain
+          relay, names    USDC      ENSv2 name and resolver
+          World ID        ERC-6538  World ID rotation proof
+          indexer         ERC-5564  Privacy Pools exit
+                          StealthDisperse
+                          7702 and 4337
+```
+
+## Data flow
+
+Onboarding starts in the employee app. It creates the seed-derived spending, viewing, and registrant keys. The API relays the signed ERC-6538 registration on Base, then issues a `*.soapay.eth` subname on Ethereum Sepolia with its own Permissioned Resolver. The company app resolves the name, cross-checks the registry, and pins the meta-address. A World ID Proof of Human session is optional at onboarding and is used later to attest a key rotation.
+
+For a pay run, the company app gives pinned recipients and amounts to the SDK. The SDK splits denominations, creates a fresh ephemeral key and stealth address per line, sorts every line globally, and cuts large runs into transactions without grouping by employee. A plain account approves the exact token total and calls `StealthDisperse`. The contract transfers each line and calls the canonical ERC-5564 Announcer in the same transaction.
+
+For receipt, the employee app fetches announcements from the API index or an RPC. The viewing key finds matching lines locally. Each spend remains at its stealth address, receives a 7702 delegation on first use, and submits a 4337 user operation. Gas is sponsored on Base Sepolia; on Base mainnet the Circle Paymaster takes its fee in USDC.
+
+The compliant exit is a mainnet path. CCTP moves Circle USDC to the same stealth address on Ethereum, Privacy Pools screens the deposit through its association set, and a zero-knowledge withdrawal sends funds to the chosen wallet without revealing which approved deposit funded it. The exit is hidden on Base Sepolia because the demo uses mock USDC.
+
+## Trust boundaries
+
+The employer, payroll admins, and Safe signers are trusted. They may know name, stealth address, and amount, but do not receive employee keys. A coworker in the same batch is the adversary: they see every line and amount, know their own line, and may know colleagues' main wallets. Chain-wide analysis and RPC or bundler linkage are outside the v1 threat model.
+
+ENS is a reference, not a fresh source of truth on every payday. The payer pins the first verified meta-address and blocks an unexplained change. A valid World ID rotation attestation from the payer's configured attester can authorize exactly one pinned-to-current change. See [Threat model](/docs/concepts/threat-model/) and [Key rotation and recovery](/docs/concepts/key-rotation-and-recovery/).
+
+## What runs where
+
+Railway has two services. The `web` service builds and serves three static clients from one origin: the company app at `/`, the employee app at `/app/`, and these docs at `/docs/`. The same server proxies `/api` to the private `api` service, whose SQLite database is stored on a Railway volume.
+
+The public web image contains no API secret. Public chain and app settings are build inputs; relayer, issuer, attester, World ID, Pimlico, and Uniswap credentials remain API service variables. Every push to `main` triggers the GitHub Actions workflow that uploads and deploys both Railway services. See [Environment](/docs/reference/environment/) for the complete configuration surface.
