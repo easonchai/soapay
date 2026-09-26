@@ -330,7 +330,7 @@ describe("guard-writer and revoke builders", () => {
 
 type Sent = { to: Address; data: Hex };
 
-function fakeClients(opts: { isIssuer?: boolean; status?: number; resource?: bigint; existingCode?: boolean; stealth?: string } = {}) {
+function fakeClients(opts: { isIssuer?: boolean; status?: number; resource?: bigint; existingCode?: boolean; stealth?: string | (() => string) } = {}) {
   const sent: Sent[] = [];
   const account = privateKeyToAccount(`0x${"11".repeat(32)}`);
   const walletClient: EnsV2Writer = {
@@ -353,7 +353,7 @@ function fakeClients(opts: { isIssuer?: boolean; status?: number; resource?: big
         case "getResolver":
           return "0x00000000000000000000000000000000000000Re".replace("Re", "e1");
         case "text":
-          return opts.stealth ?? "";
+          return typeof opts.stealth === "function" ? opts.stealth() : (opts.stealth ?? "");
         default:
           throw new Error(`unexpected read ${functionName}`);
       }
@@ -424,10 +424,22 @@ describe("createEnsV2NameIssuer", () => {
     expect(done.sent).toHaveLength(0);
   });
 
+  it("waits for the earlier attempt's stealth record when a retry sees the name before it", async () => {
+    let reads = 0;
+    const later = fakeClients({ status: REGISTRY_STATUS.REGISTERED, stealth: () => (++reads < 2 ? "" : META_1) });
+    const res = await createEnsV2NameIssuer({ ...later, registry: REGISTRY, resolverAdmin: PARENT_ADMIN, recoverWaitMs: 5_000 }).issue({
+      label: "alice",
+      registrant: REGISTRANT,
+      metaAddress: META_1,
+    });
+    expect(res.recovered).toBe(true);
+    expect(later.sent).toHaveLength(0);
+  });
+
   it("refuses taken names, non-issuers and bad input", async () => {
     const taken = fakeClients({ status: REGISTRY_STATUS.REGISTERED });
     await expect(
-      createEnsV2NameIssuer({ ...taken, registry: REGISTRY, resolverAdmin: PARENT_ADMIN }).issue({ label: "alice", registrant: REGISTRANT, metaAddress: META_1 }),
+      createEnsV2NameIssuer({ ...taken, registry: REGISTRY, resolverAdmin: PARENT_ADMIN, recoverWaitMs: 0 }).issue({ label: "alice", registrant: REGISTRANT, metaAddress: META_1 }),
     ).rejects.toThrow(/already taken/);
 
     const notIssuer = fakeClients({ isIssuer: false });
