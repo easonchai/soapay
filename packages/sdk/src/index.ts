@@ -8,6 +8,7 @@ export * from "./scan.js";
 export * from "./spend.js";
 export * from "./guard.js";
 export * from "./denominations.js";
+export * from "./queue.js";
 export * from "./safe.js";
 export * from "./swap.js";
 export * from "./rotation.js";

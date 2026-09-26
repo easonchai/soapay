@@ -1,4 +1,4 @@
-import type { AnnouncementRecord, ClusterGraphJSON, MetadataHints, ScanMatch } from "@soapay/sdk";
+import type { AnnouncementRecord, ClusterGraphJSON, MetadataHints, ScanMatch, SpendQueue } from "@soapay/sdk";
 import type { Address, Hex } from "viem";
 import { keysFromMnemonic, keysFromSignature, validateMnemonic, type SoapayKeys } from "@soapay/sdk";
 import { ENV } from "../config.js";
@@ -20,6 +20,8 @@ export type Settings = {
   l1RpcUrl: string;
   /** Trading API quotes via the Soapay API's Uniswap proxy (`${apiUrl}/uniswap`, placeholder swapper); off = on-chain path. */
   swapViaApi: boolean;
+  /** Timing queue (D-28): at most one stealth address spent per random window of [min, max] hours. */
+  queueWindowHours: [number, number];
 };
 
 export type StoredAnnouncement = Omit<AnnouncementRecord, "blockNumber"> & { blockNumber: string };
@@ -40,7 +42,12 @@ export type ChainState = {
   conversions?: ConvertRecord[];
   /** Privacy Pools exits started from this chain (docs/mvp-spec.md §9). Resumed on unlock. */
   exits?: ExitRecord[];
+  /** Timing queue (D-28): spends and exit deposits waiting for their window. Never leaves the device. */
+  queue?: SpendQueue<QueueMeta>;
 };
+
+/** App data on a queue item: which exit leg it starts, or whether a spend was a guard override. */
+export type QueueMeta = { exitId?: string; legId?: string; override?: "1" };
 
 export type ConvertRecord = {
   at: number;
@@ -156,6 +163,7 @@ export function defaultSettings(): Settings {
     knownPayers: [],
     l1RpcUrl: ENV.l1RpcUrl,
     swapViaApi: ENV.swapViaApi,
+    queueWindowHours: [2, 12],
   };
 }
 

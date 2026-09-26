@@ -3,6 +3,8 @@ import { applySpend } from "@soapay/sdk";
 import { isAddress, type Address } from "viem";
 import { useServices } from "../services/ServicesProvider.js";
 import { executeSpend, prepareSpend, replan, type SpendDraft, type SpendOutcome } from "../spend/flow.js";
+import { enqueueSpend, queueWindow } from "../spend/queue.js";
+import { useQueue } from "./useQueue.js";
 import { errorMessage } from "../ui/kit.js";
 import { parseUsdc } from "../ui/format.js";
 import { useChain, useKeyRing } from "./useChain.js";
@@ -13,6 +15,7 @@ export type SpendFlowState =
   | { step: "preparing" }
   | { step: "review"; draft: SpendDraft; override: boolean; error: string | null }
   | { step: "sending"; draft: SpendDraft; done: number; total: number }
+  | { step: "queued"; draft: SpendDraft; groupId: string }
   | { step: "result"; outcome: SpendOutcome };
 
 /** Parses the spend form. Returns an error string, or the typed values. */
@@ -30,7 +33,8 @@ export function parseSpendForm(to: string, amount: string): { error: string } | 
  */
 export function useSpendFlow() {
   const svc = useServices();
-  const { state: chain, updateChain } = useChain();
+  const { state: chain, settings, updateChain } = useChain();
+  const queue = useQueue();
   const ring = useKeyRing();
   const wallet = useWallet();
   const [state, setState] = useState<SpendFlowState>({ step: "form", error: null });
@@ -43,9 +47,11 @@ export function useSpendFlow() {
       if (!svc.spend.ready) return setState({ step: "form", error: svc.spend.unavailableReason ?? "Sending isn't available." });
       setState({ step: "preparing" });
       try {
+        // Addresses already waiting in the timing queue can't fund another send.
+        const free = new Map([...wallet.balances].filter(([a]) => !queue.locked.has(a.toLowerCase())));
         const draft = await prepareSpend({
           graph: wallet.graph,
-          balances: wallet.balances,
+          balances: free,
           state: chain,
           ring,
           spend: svc.spend,
@@ -57,7 +63,7 @@ export function useSpendFlow() {
         setState({ step: "form", error: errorMessage(e) });
       }
     },
-    [svc.spend, wallet.graph, wallet.balances, chain, ring],
+    [svc.spend, wallet.graph, wallet.balances, chain, ring, queue.locked],
   );
 
   const setOverride = useCallback(
@@ -66,7 +72,26 @@ export function useSpendFlow() {
     [wallet.graph],
   );
 
+  /** Default (D-28): queue one item per source, each in its own random window; the first may go now. */
   const send = useCallback(async () => {
+    if (state.step !== "review" || busy.current) return;
+    const { draft } = state;
+    busy.current = true;
+    try {
+      const groupId = `send-${Date.now().toString(36)}`;
+      await updateChain((latest) =>
+        enqueueSpend(latest, draft, { now: Date.now(), window: queueWindow(settings), groupId }),
+      );
+      setState({ step: "queued", draft, groupId });
+    } catch (e) {
+      setState({ step: "review", draft, override: draft.plan?.override ?? false, error: errorMessage(e) });
+    } finally {
+      busy.current = false;
+    }
+  }, [state, updateChain, settings]);
+
+  /** The override: every source sends now, seconds apart, which links them by timing. */
+  const sendNow = useCallback(async () => {
     if (state.step !== "review" || busy.current) return;
     const { draft } = state;
     busy.current = true;
@@ -94,5 +119,5 @@ export function useSpendFlow() {
 
   const reset = useCallback(() => setState({ step: "form", error: null }), []);
 
-  return { state, prepare, setOverride, send, reset, ready: svc.spend.ready, unavailableReason: svc.spend.unavailableReason };
+  return { state, prepare, setOverride, send, sendNow, reset, ready: svc.spend.ready, unavailableReason: svc.spend.unavailableReason };
 }

@@ -126,6 +126,23 @@ export function setOrgName(v: string): void {
   else s.removeItem(ORG_KEY);
 }
 
+// Company-wide chunk size for denominated payouts (D-31): one size for every employee, so every full
+// line in a batch is identical. Not a secret: plain localStorage, like the company name.
+const CHUNK_KEY = "soapay:chunk";
+export const DEFAULT_CHUNK_USDC = "500";
+
+export function getChunkSize(): string {
+  return safeStorage()?.getItem(CHUNK_KEY) || DEFAULT_CHUNK_USDC;
+}
+
+export function setChunkSize(v: string): void {
+  const s = safeStorage();
+  if (!s) return;
+  const t = v.trim();
+  if (t && t !== DEFAULT_CHUNK_USDC) s.setItem(CHUNK_KEY, t);
+  else s.removeItem(CHUNK_KEY);
+}
+
 export function resolveConfig(settings: Settings = loadSettings()): AppConfig {
   const sdk = CHAINS[settings.chainId] as SoapayChainConfig;
   const disperse = settings.stealthDisperse[settings.chainId] ?? sdk.stealthDisperse ?? null;

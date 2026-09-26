@@ -9,7 +9,7 @@ import { legLabel, timelineOf, type TimelineStep } from "../features/exit/timeli
 import type { ExitLeg, ExitPrivacy, ExitRecord } from "../features/exit/types.js";
 import { DEFAULT_PRIVACY, useExit, type ExitView } from "../hooks/useExit.js";
 import { Addr, Alert, Badge, Button, Card, CardHeader, Checkbox, Field, Input, PageHeader, cn } from "../ui/kit.js";
-import { formatUsdc } from "../ui/format.js";
+import { formatUsdc, windowTime } from "../ui/format.js";
 
 export function Exit() {
   const exit = useExit();
@@ -101,7 +101,7 @@ function Planner({ prefill }: { prefill: { destination: Address; sources: Addres
     <Card>
       <CardHeader
         title="Plan an exit"
-        description="Pick the stealth addresses to exit. Each one is its own leg with its own bridge, deposit and withdrawal; they are never combined."
+        description="Pick the stealth addresses to exit. Each one is its own leg with its own bridge, deposit and withdrawal; they are never combined, and each starts in its own random time window."
       />
       <div className="space-y-4 p-4 pt-0">
         <Field label="Destination" hint="The wallet the pool pays out to, for example your main wallet or an exchange deposit address.">
@@ -248,6 +248,7 @@ export function LegTimeline({ leg, record }: { leg: ExitLeg; record: ExitRecord 
   const steps = timelineOf(leg);
   const hold = record.holdUntil[leg.id];
   const holding = leg.status === "approved" && hold !== undefined && hold > Date.now();
+  const queuedAt = exit.queuedAt[leg.id];
   const error = exit.errors[leg.id] ?? leg.error;
   return (
     <div className="rounded-md border p-3" data-testid="exit-leg" data-status={leg.status}>
@@ -262,6 +263,19 @@ export function LegTimeline({ leg, record }: { leg: ExitLeg; record: ExitRecord 
           <Step key={s.status} step={s} record={record} mock={exit.mock} />
         ))}
       </ol>
+      {leg.status === "planned" && queuedAt !== undefined && (
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground" data-testid="exit-queued">
+          <span>Queued: this deposit starts {windowTime(queuedAt)}. One address per window, so your deposits aren&apos;t linked by timing.</span>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => void exit.startNow(record.id)}
+            title="Starts every queued leg of this exit now: a coworker can link these addresses by timing."
+          >
+            Start now
+          </Button>
+        </div>
+      )}
       {holding && (
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
           <span>Random delay: withdrawing around {new Date(hold).toLocaleTimeString()}.</span>
