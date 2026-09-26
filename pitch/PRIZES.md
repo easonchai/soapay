@@ -144,7 +144,7 @@ If the field takes more than one link, or in the feedback field:
 - Pay runs that paid you: https://github.com/easonchai/soapay/blob/82c09589b2a88e474c2744c146bdae39680a4a8e/apps/recipient/src/screens/PayRunViews.tsx#L107
 - Exit planner with fee summary and leg timeline (built and fork-tested; hidden on the Base Sepolia demo, D-52): https://github.com/easonchai/soapay/blob/82c09589b2a88e474c2744c146bdae39680a4a8e/apps/recipient/src/screens/Exit.tsx#L69
 - Company-side pay-run history: https://github.com/easonchai/soapay/blob/82c09589b2a88e474c2744c146bdae39680a4a8e/apps/sender/src/pages/HistoryPage.tsx#L38
-- Screenshots: the README's "Screens" section, and `docs/demo-flow.md`
+- Screenshots: the README's "Screens" section, and `docs/demos/README.md`
 
 **How easy is it to use (1 to 10)**
 

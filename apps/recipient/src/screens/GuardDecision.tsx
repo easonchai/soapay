@@ -7,7 +7,7 @@ const TX_HASH = /0x[0-9a-fA-F]{64}/g;
 
 /**
  * Guard copy names pay runs by their tx hash. Shows each hash short (0x681f…9e2a), linked to the
- * explorer when `txUrl` gives a link, instead of 66 raw characters (docs/demo-flow.md gap 7).
+ * explorer when `txUrl` gives a link, instead of 66 raw characters.
  */
 export function linkTxHashes(text: string, txUrl?: (hash: string) => string | undefined): ReactNode[] {
   const out: ReactNode[] = [];

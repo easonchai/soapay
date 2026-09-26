@@ -1,4 +1,4 @@
-// Setup for the World ID recovery beat (docs/demo-flow.md). Entry point: scripts/demo-setup-recovery.ts.
+// Setup for the World ID recovery beat (docs/demos/README.md). Entry point: scripts/demo-setup-recovery.ts.
 //
 //   pnpm demo:setup-recovery [label...]     default: sam-demo
 //

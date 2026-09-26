@@ -1,4 +1,4 @@
-// The agent beats of the live demo (docs/demo-desktop.md, beats 4 and 6), run from a terminal on
+// The agent beats of the live demo (docs/demos/README.md, beats 4 and 6), run from a terminal on
 // stage. It starts the real Soapay MCP server (apps/mcp/dist/index.js) over stdio and drives its
 // tools with the MCP SDK client, exactly as an agent host would, but with no LLM in the loop.
 // Entry point: scripts/demo-agent.ts. From the repo root:

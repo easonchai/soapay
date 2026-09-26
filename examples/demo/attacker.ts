@@ -1,4 +1,4 @@
-// Attacker simulation for the World ID recovery beat (docs/demo-flow.md, D-55). Entry point:
+// Attacker simulation for the World ID recovery beat (docs/demos/README.md, D-55). Entry point:
 // scripts/demo-attacker.ts.
 //
 //   pnpm demo:attacker [label]            hijack <label>.soapay.eth (default sam-demo)

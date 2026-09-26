@@ -1,6 +1,6 @@
 /**
  * Read-only check of the demo views (D-41) against the live Base Sepolia pay run and gasless spend
- * (docs/demo-flow.md "Links to have open"). Skipped unless LIVE_VIEWS=1. No keys needed.
+ * (docs/demos/README.md, live links). Skipped unless LIVE_VIEWS=1. No keys needed.
  *
  *   LIVE_VIEWS=1 [RPC_URL=https://sepolia.base.org] pnpm --filter @soapay/sdk test views.live
  */

@@ -163,7 +163,7 @@ export function createAttestationLookup(cfg: AttestationConfig): AttestationLook
       return { state: "unavailable", reason: `Couldn't reach the attestation API: ${m.split("\n")[0]}` };
     }
     const newest = res?.items[0];
-    if (!newest) return { state: "missing", reason: "No World ID re-verification on record for this change" };
+    if (!newest) return { state: "missing", reason: "Changed without a World ID proof from the linked person (Soapay has no attestation for this change)" };
     return verifyRotationItem({ item: newest, label, oldMeta, newMeta, attester: getAddress(cfg.attester), chainId: cfg.chainId });
   };
 }

@@ -162,7 +162,9 @@ export function RecipientsPage(p: RecipientsPageProps) {
                   })}
                 </Stagger>
                 <div className="foot">
-                  <span>&quot;Blocked&quot;: new keys, no World ID re-verification. Confirm with the person, then re-approve.</span>
+                  <span>
+                    &quot;Blocked&quot;: the record changed without a World ID proof from the person linked to the name. Confirm with the person on another channel, then re-approve.
+                  </span>
                 </div>
               </div>
             )}

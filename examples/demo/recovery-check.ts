@@ -1,4 +1,4 @@
-// End-to-end proof of the recovery beat, without a browser (docs/demo-flow.md). Entry point:
+// End-to-end proof of the recovery beat, without a browser (docs/demos/README.md). Entry point:
 // scripts/demo-recovery-check.ts. LIVE: it sends Sepolia and Base Sepolia transactions.
 //
 //   pnpm demo:recovery-check [label]     default: sam-demo

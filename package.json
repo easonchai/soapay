@@ -12,8 +12,12 @@
     "demo:setup-recovery": "pnpm --filter @soapay/examples exec tsx ../scripts/demo-setup-recovery.ts",
     "demo:seed-company": "pnpm --filter @soapay/examples exec tsx ../scripts/demo-seed-company.ts",
     "demo:attacker": "pnpm --filter @soapay/examples exec tsx ../scripts/demo-attacker.ts",
+    "demo:attacker-worldid": "pnpm --filter @soapay/examples exec tsx ../scripts/demo-attacker-worldid.ts",
     "demo:agent": "pnpm --filter @soapay/examples exec tsx ../scripts/demo-agent.ts",
-    "demo:recovery-check": "pnpm --filter @soapay/examples exec tsx ../scripts/demo-recovery-check.ts"
+    "demo:agent-live": "pnpm --filter @soapay/examples exec tsx ../scripts/demo-agent-live.ts",
+    "demo:recovery-check": "pnpm --filter @soapay/examples exec tsx ../scripts/demo-recovery-check.ts",
+    "demo:ens": "pnpm --filter @soapay/examples exec tsx ../scripts/demo-ens.ts",
+    "demo:bootstrap": "pnpm --filter @soapay/examples exec tsx ../scripts/demo-bootstrap.ts"
   },
   "devDependencies": {
     "turbo": "^2.11.4",
