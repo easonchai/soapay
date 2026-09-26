@@ -14,7 +14,21 @@
 
 On a public chain, everyone with a browser: one payroll batch on Base shows every recipient and every amount next to each other, readable forever. Your colleagues too: at Gitcoin DAO a contributor started from their own pay address and put names to fifteen salaries. So companies walk away, and the fixes built for them (Base Ledgers, Tempo Zones, Toku on Aleo) are private ledgers for enterprises: not for everyone, since you apply for access, and not fully private, since the operator sees everything. Everyone else still pays in public.
 
-Soapay is **built for payroll and ready for any payout**: salaries first, and the same rail for dividends, grants, bounties, vendor payments, airdrops and tips. Three apps on open standards, and nothing of ours holds money. The full argument, with sources, is in the [pitch deck](pitch/README.md).
+Three apps on open standards, and nothing of ours holds money. The full argument, with sources, is in the [pitch deck](pitch/README.md).
+
+## Built for payroll. Ready for any payout.
+
+Payroll is the first use case because it is where public payments hurt most: one payer, many recipients who know each other, every month. But nothing in the rail is specific to salaries. Any payment that goes from one place to many names works the same way today: resolve the names, derive a fresh address per line, pay and announce in one transaction.
+
+- Dividends and revenue share
+- Token and equity allocations: vesting unlocks, stock and option settlements, investor distributions
+- Vendor and supplier payments
+- Grants and bounties
+- Prizes and airdrops
+- Tips, donations and creator payouts
+- Agents paying agents by name ([Agents](#agents-mcp))
+
+The SDK already treats these as one thing. [`packages/sdk/src/distribute.ts`](packages/sdk/src/distribute.ts) plans any distribution from a payer and a list of recipients, with presets for `payroll`, `dividend` (pro rata by largest remainder, so the allocations sum exactly to the total) `grant` (checked against a budget), and `vesting` as a kind planned the same way. [`soapay distribute`](apps/cli) runs one from a CSV, dry run by default, and [`examples/dividend-run.ts`](examples/dividend-run.ts) and [`examples/grant-round.ts`](examples/grant-round.ts) show the same rail paying a cap table and a grant round.
 
 **Navigate:** [Pitch](pitch/README.md) · [PRD](PRD.md) · [Threat model](#threat-model) · [Privacy model](docs/privacy-model.md) · [How it works](#how-it-works) · [Uniswap](#uniswap-integration) · [StealthDisperse plan](contracts/PLAN.md) · [PRD analysis](docs/prd-analysis.md) · [Roadmap](#roadmap) · [Getting started](#getting-started) · [Repository](#repository)
 
