@@ -9,7 +9,7 @@ import { Guarantees } from "./landing/Guarantees.js";
 import { CtaBand } from "./landing/CtaBand.js";
 import { DotWord } from "./landing/DotWord.js";
 import { RollWord } from "./landing/RollWord.js";
-import { useRiseIn } from "./landing/motion.js";
+import { useIslandBar, useRiseIn } from "./landing/motion.js";
 import type { WalletState } from "../hooks/usePayPath.js";
 
 export const GITHUB = "https://github.com/easonchai/soapay";
@@ -46,10 +46,12 @@ type SectionId = "how" | "product" | "chain";
 export function Landing({ wallet, onLogin, employeeUrl, docsUrl }: LandingProps) {
   const [choosing, setChoosing] = useState(false);
   const hero = useRef<HTMLElement>(null);
+  const bar = useRef<HTMLDivElement>(null);
   const sections = useRef<Record<SectionId, HTMLElement | null>>({ how: null, product: null, chain: null });
   const one = wallet.connectors.length === 1 ? wallet.connectors[0] : undefined;
 
   useRiseIn(hero, "[data-rise]", { delay: 0.05, stagger: 0.09, y: 12 });
+  useIslandBar(bar);
 
   function login() {
     onLogin();
@@ -76,29 +78,36 @@ export function Landing({ wallet, onLogin, employeeUrl, docsUrl }: LandingProps)
   const cta = wallet.connecting ? "Connecting…" : wallet.connectors.length ? "Login with wallet" : "Install a wallet to continue";
   return (
     <div className="land">
-      <div className="land-bar">
-        <div className="brand">
-          <Lockup height={22} />
-        </div>
-        <div className="links">
-          <a href="#how" onClick={jump("how")}>
-            How it works
-          </a>
-          <a href="#product" onClick={jump("product")}>
-            Product
-          </a>
-          <a href="#chain" onClick={jump("chain")}>
-            What the chain sees
-          </a>
-          <a href={docsUrl}>Docs</a>
-          <a href={GITHUB} target="_blank" rel="noreferrer" className="link-with-mark">
-            <GitHubMark size={15} />
-            GitHub
-          </a>
-        </div>
-        <button className="btn-primary" style={{ height: 36, padding: "0 16px" }} onClick={login} disabled={wallet.connecting || !wallet.connectors.length}>
-          {wallet.connecting ? "Connecting…" : "Login"}
-        </button>
+      {/* Full-width bar at the top of the page; past 40px of scroll it becomes CK's floating island (same links, owner decision 2026-09-26). */}
+      <div className="land-bar" ref={bar}>
+        <nav className="bar-inner" aria-label="Site">
+          <div className="brand">
+            <Lockup height={22} />
+          </div>
+          <div className="links">
+            <span className="links-a">
+              <a href="#how" onClick={jump("how")}>
+                How it works
+              </a>
+              <a href="#product" onClick={jump("product")}>
+                Product
+              </a>
+            </span>
+            <span className="links-b">
+              <a href="#chain" onClick={jump("chain")}>
+                What the chain sees
+              </a>
+              <a href={docsUrl}>Docs</a>
+              <a href={GITHUB} target="_blank" rel="noreferrer" className="link-with-mark">
+                <GitHubMark size={15} />
+                GitHub
+              </a>
+            </span>
+          </div>
+          <button className="btn-primary bar-login" onClick={login} disabled={wallet.connecting || !wallet.connectors.length}>
+            {wallet.connecting ? "Connecting…" : "Login"}
+          </button>
+        </nav>
       </div>
       <section className="land-hero" ref={hero}>
         <Dots mode="diamond" animate className="dots l" />
