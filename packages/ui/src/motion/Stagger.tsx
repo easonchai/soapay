@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import type { ReactNode } from 'react';
 import { motionOff } from './Presence.js';
+import { clickable } from '../clickable.js';
 
 const CAP = 24;
 const parent = { show: { transition: { staggerChildren: 0.02, delayChildren: 0.04 } } };
@@ -28,7 +29,7 @@ export function Stagger({ children, className, style, keyed }: { children: React
 export function StaggerItem({ children, index = 0, className, style, onClick }: { children: ReactNode; index?: number; className?: string; style?: React.CSSProperties; onClick?: () => void }) {
   if (motionOff()) {
     return (
-      <div {...(className ? { className } : {})} {...(style ? { style } : {})} {...(onClick ? { onClick } : {})}>
+      <div {...(className ? { className } : {})} {...(style ? { style } : {})} {...(onClick ? clickable(onClick) : {})}>
         {children}
       </div>
     );
@@ -36,6 +37,6 @@ export function StaggerItem({ children, index = 0, className, style, onClick }: 
   const props: Record<string, unknown> = { variants: index < CAP ? item : undefined };
   if (className) props.className = className;
   if (style) props.style = style;
-  if (onClick) props.onClick = onClick;
+  if (onClick) Object.assign(props, clickable(onClick));
   return <motion.div {...(props as object)}>{children}</motion.div>;
 }

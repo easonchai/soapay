@@ -183,7 +183,7 @@ export function ReviewPage({ run, plan, wallet, payPath, chainName, testnet = fa
           <span className="ink2">Addresses are kept in History for your audit trail. A run always derives new ones.</span>
         </div>
         <div className="table">
-          <div className="thead" style={{ gridTemplateColumns: "1.3fr 1fr 1.1fr 1.4fr" }}>
+          <div className="thead" style={{ gridTemplateColumns: "1.2fr 0.9fr 1.5fr 1.3fr" }}>
             <span>Name</span>
             <span className="r">Amount</span>
             <span className="r">Lines</span>
@@ -191,11 +191,11 @@ export function ReviewPage({ run, plan, wallet, payPath, chainName, testnet = fa
           </div>
           <Stagger>
             {people.slice(0, 12).map((p, i) => (
-              <StaggerItem key={p.id} index={i} className="tr mono" style={{ gridTemplateColumns: "1.3fr 1fr 1.1fr 1.4fr", display: "grid" }}>
+              <StaggerItem key={p.id} index={i} className="tr mono" style={{ gridTemplateColumns: "1.2fr 0.9fr 1.5fr 1.3fr", display: "grid" }}>
                 <span>{p.name}</span>
                 <span className="r num">{usdc(p.amount)}</span>
-                <span className="r ink2">{linesText(p)}</span>
-                <span className="r" style={{ display: "inline-flex", justifyContent: "flex-end", alignItems: "center", gap: 6 }}>
+                <span className="r ink2" style={{ whiteSpace: "nowrap" }}>{linesText(p)}</span>
+                <span className="r" style={{ display: "inline-flex", justifyContent: "flex-end", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
                   <FreshMark />
                   {short(p.first, 4)}
                   {p.amounts.length > 1 && <span className="ink3">+{p.amounts.length - 1}</span>}

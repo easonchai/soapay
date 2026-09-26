@@ -56,8 +56,8 @@ export function Landing({ wallet, onLogin, employeeUrl }: LandingProps) {
         </Reveal>
         <Reveal delay={0.2}>
           <p className="land-sub">
-            Soapay gives your team one name each. Every salary lands on a fresh address only they can open, and the payroll never shows up
-            on a block explorer.
+            Soapay gives your team one name each. Every salary lands on fresh addresses only they can open, so on a block explorer the
+            payroll shows new addresses, not your team's wallets.
           </p>
         </Reveal>
         <Reveal delay={0.28} className="land-cta">

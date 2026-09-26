@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Copy, ErrorLine, Fade, FreshLegend, FreshMark, NavyPanel, Pill, Presence, Skeleton, Stagger, StaggerItem } from "@soapay/ui";
+import { clickable, Copy, ErrorLine, Fade, FreshLegend, FreshMark, NavyPanel, Pill, Presence, Skeleton, Stagger, StaggerItem } from "@soapay/ui";
 import { explorerAddress, explorerTx, fmtDate, type SpendStatus } from "@soapay/sdk";
 import type { BalanceMap } from "../hooks/useWalletBalances.js";
 import type { RosterState } from "../hooks/useRoster.js";
@@ -48,7 +48,7 @@ export function RecipientsPage(p: RecipientsPageProps) {
         <div
           className="panel"
           style={{ padding: 16, cursor: "pointer", borderColor: open ? "var(--line)" : "var(--line-strong)" }}
-          onClick={() => p.onOpen(undefined)}
+          {...clickable(() => p.onOpen(undefined))}
         >
           <div className="between" style={{ alignItems: "baseline" }}>
             <span style={{ fontWeight: 500 }}>All recipients</span>

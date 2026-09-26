@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Collapse, CountUp, NavyPanel, PageHead, Pill, Stagger, StaggerItem } from "@soapay/ui";
+import { clickable, Collapse, CountUp, NavyPanel, PageHead, Pill, Stagger, StaggerItem } from "@soapay/ui";
 import { explorerTx, fmtDate } from "@soapay/sdk";
 import type { RunView } from "../hooks/useRunActions.js";
 import { USDC_DECIMALS } from "../lib/amount.js";
@@ -111,7 +111,7 @@ export function HistoryPage({ runs, openRunId, onOpenRun, onStartRun, onExportCs
                 <div
                   className={`tr tall click${run.id === openRunId ? " flash" : ""}`}
                   style={{ gridTemplateColumns: COLS }}
-                  onClick={() => setOpen(isOpen ? undefined : run.id)}
+                  {...clickable(() => setOpen(isOpen ? undefined : run.id), isOpen)}
                 >
                   <span className="ink2">{fmtDate(run.createdAt)}</span>
                   <span style={{ fontWeight: 500, display: "flex", gap: 8, alignItems: "center" }}>

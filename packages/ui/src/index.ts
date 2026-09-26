@@ -17,6 +17,7 @@ export { Steps } from './Steps.js';
 export { Pill, type Tone } from './Pill.js';
 export { Copy } from './Copy.js';
 export { ErrorLine } from './ErrorLine.js';
+export { clickable } from './clickable.js';
 export { Reveal } from './motion/Reveal.js';
 export { Stagger, StaggerItem } from './motion/Stagger.js';
 export { CountUp } from './motion/CountUp.js';
