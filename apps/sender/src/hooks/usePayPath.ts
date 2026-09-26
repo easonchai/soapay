@@ -11,7 +11,7 @@ export type WalletState = {
   isConnected: boolean;
   /** Wallet is on a different chain than the pay chain (actions still target the pay chain). */
   wrongChain: boolean;
-  connectors: { id: string; name: string; connect(): void }[];
+  connectors: { id: string; name: string; icon?: string | undefined; connect(): void }[];
   connecting: boolean;
   connectError: string | null;
   disconnect(): void;
@@ -26,7 +26,7 @@ export function useWallet(): WalletState {
     address,
     isConnected,
     wrongChain: isConnected && chainId !== undefined && chainId !== app.chainId,
-    connectors: connectors.map((c) => ({ id: c.uid, name: c.name, connect: () => connect({ connector: c, chainId: app.chainId }) })),
+    connectors: connectors.map((c) => ({ id: c.uid, name: c.name, icon: c.icon, connect: () => connect({ connector: c, chainId: app.chainId }) })),
     connecting: isPending,
     connectError: error ? (error as { shortMessage?: string }).shortMessage ?? error.message : null,
     disconnect: () => disconnect(),

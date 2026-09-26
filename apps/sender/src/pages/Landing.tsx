@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Dots, Lockup, Reveal } from "@soapay/ui";
+import { Dots, GitHubMark, Lockup, Reveal, WalletGlyph } from "@soapay/ui";
 import type { WalletState } from "../hooks/usePayPath.js";
 
 export const GITHUB = "https://github.com/easonchai/soapay";
@@ -35,7 +35,8 @@ export function Landing({ wallet, onLogin, employeeUrl }: LandingProps) {
           <a href={`${GITHUB}/blob/main/PRD.md`} target="_blank" rel="noreferrer">
             How it works
           </a>
-          <a href={GITHUB} target="_blank" rel="noreferrer">
+          <a href={GITHUB} target="_blank" rel="noreferrer" className="link-with-mark">
+            <GitHubMark size={15} />
             GitHub
           </a>
         </div>
@@ -73,6 +74,7 @@ export function Landing({ wallet, onLogin, employeeUrl }: LandingProps) {
             <span className="eyebrow">Choose a wallet</span>
             {wallet.connectors.map((c) => (
               <button key={c.id} onClick={() => c.connect()} disabled={wallet.connecting}>
+                {c.icon ? <img className="wallet-icon" src={c.icon} alt="" /> : <WalletGlyph size={18} style={{ opacity: 0.8 }} />}
                 {c.name}
               </button>
             ))}
@@ -93,7 +95,8 @@ export function Landing({ wallet, onLogin, employeeUrl }: LandingProps) {
           <a href={`${GITHUB}/blob/main/PRD.md`} target="_blank" rel="noreferrer">
             Docs
           </a>
-          <a href={GITHUB} target="_blank" rel="noreferrer">
+          <a href={GITHUB} target="_blank" rel="noreferrer" className="link-with-mark">
+            <GitHubMark size={13} />
             GitHub
           </a>
         </div>

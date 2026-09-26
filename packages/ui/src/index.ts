@@ -6,6 +6,7 @@ import '@fontsource/ibm-plex-mono/500.css';
 import './styles.css';
 
 export { Mark, Wordmark, Lockup } from './logo/Logo.js';
+export { GitHubMark, WalletGlyph } from './logo/Brands.js';
 export { Dots, type DotsMode } from './Dots.js';
 export { TopBar, type TopTab } from './TopBar.js';
 export { Shell, type ShellTab } from './Shell.js';

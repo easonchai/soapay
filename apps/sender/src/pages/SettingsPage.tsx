@@ -29,7 +29,7 @@ export function SettingsPage(p: SettingsPageProps) {
   const defaultChunk = defaultChunkUsdc(app.chainId);
   const [chunk, setChunk] = useState(p.chunk ?? defaultChunk);
   return (
-    <div className="stack-lg" style={{ maxWidth: 760 }}>
+    <div className="stack-lg" style={{ maxWidth: 760, margin: "0 auto" }}>
       <PageHead eyebrow="Settings" title="Where this app points, and what it keeps" line="Network values can be overridden per browser. The roster and history stay encrypted here." />
 
       <h2>Company</h2>
