@@ -56,7 +56,7 @@ describe("HowItWorks", () => {
 
     render(<HowItWorks />);
 
-    const payoffs = Array.from(document.querySelectorAll<SVGElement>(".how-payoff"));
+    const payoffs = Array.from(document.querySelectorAll<SVGElement>(".art-payoff"));
     expect(payoffs.length).toBeGreaterThan(0);
     expect(payoffs.every((payoff) => payoff.style.opacity === "")).toBe(true);
   });

@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { Fade, Lockup, Presence, motionOff, useInViewLoop } from "@soapay/ui";
+import { useGSAP } from "@gsap/react";
+import { Lockup, motionOff, useInViewLoop } from "@soapay/ui";
+import gsap from "gsap";
 import { APP_TABS, COMPANY, WALLET_CHIP } from "./sample.js";
 import { PayRunFrame } from "./frames/PayRunFrame.js";
 import { ReviewFrame } from "./frames/ReviewFrame.js";
 import { HistoryFrame } from "./frames/HistoryFrame.js";
+import { EASE_OUT } from "./motion.js";
 import "./showcase.css";
 
 type TabId = "pay" | "review" | "history";
@@ -59,7 +62,9 @@ export function Showcase() {
   const still = motionOff();
   const rootRef = useRef<HTMLElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState<TabId>("pay");
+  const [slides, setSlides] = useState<readonly TabId[]>(["pay"]);
   const [pinned, setPinned] = useState(false);
   const [scale, setScale] = useState(1);
 
@@ -86,8 +91,39 @@ export function Showcase() {
   }, []);
 
   const current = TABS.find((t) => t.id === tab) ?? TABS[0]!;
-  const Frame = FRAMES[tab];
   const progress = visible && !pinned && !still;
+
+  useEffect(() => {
+    setSlides((currentSlides) => {
+      const currentSlide = currentSlides[currentSlides.length - 1];
+      if (currentSlide === tab) return currentSlides;
+      return still || !currentSlide ? [tab] : [currentSlide, tab];
+    });
+  }, [still, tab]);
+
+  useGSAP(
+    () => {
+      const stage = stageRef.current;
+      if (!stage || slides.length < 2) return;
+      const outgoing = stage.querySelector<HTMLElement>('[data-slide="outgoing"]');
+      const incoming = stage.querySelector<HTMLElement>('[data-slide="incoming"]');
+      if (!outgoing || !incoming) return;
+      if (still) {
+        setSlides([tab]);
+        return;
+      }
+
+      const timeline = gsap.timeline({
+        onComplete: () => {
+          gsap.set(incoming, { clearProps: "opacity,transform" });
+          setSlides((currentSlides) => (currentSlides[currentSlides.length - 1] === tab ? [tab] : currentSlides));
+        },
+      });
+      timeline.to(outgoing, { opacity: 0, x: -12, duration: 0.5, ease: EASE_OUT }, 0);
+      timeline.fromTo(incoming, { opacity: 0, x: 12 }, { opacity: 1, x: 0, duration: 0.5, ease: EASE_OUT }, 0);
+    },
+    { scope: stageRef, dependencies: [slides, still, tab], revertOnUpdate: true },
+  );
 
   return (
     <section className="land-section show" ref={rootRef} aria-labelledby="show-title">
@@ -143,15 +179,20 @@ export function Showcase() {
                 <span className="show-url">{current.url}</span>
                 <span />
               </div>
-              <div className="show-stage" inert>
-                <Presence initial={false}>
-                  <Fade key={tab} x={12} duration={0.5} className="show-slide">
-                    <div className="show-app" data-frame={tab}>
-                      <FrameChrome active={current.appTab} />
-                      <Frame />
+              <div className="show-stage" ref={stageRef} inert>
+                {slides.map((slideTab, index) => {
+                  const slide = TABS.find((item) => item.id === slideTab) ?? TABS[0]!;
+                  const Frame = FRAMES[slideTab];
+                  const phase = slides.length > 1 && index === 0 ? "outgoing" : "incoming";
+                  return (
+                    <div key={slideTab} className="show-slide" data-slide={phase}>
+                      <div className="show-app" data-frame={slideTab}>
+                        <FrameChrome active={slide.appTab} />
+                        <Frame />
+                      </div>
                     </div>
-                  </Fade>
-                </Presence>
+                  );
+                })}
               </div>
             </div>
           </div>

@@ -1,12 +1,18 @@
-import { FreshMark, NavyPanel, Stagger, StaggerItem, Steps } from "@soapay/ui";
+import { useRef } from "react";
+import { FreshMark, NavyPanel, Steps } from "@soapay/ui";
 import { PREVIEW_LINES, RUN } from "../sample.js";
+import { useRiseIn } from "../motion.js";
 
 const COLS = "32px 1fr 1fr";
 
 /** Static picture of the Review step: the batch summary left, the first few lines right, one signature. */
 export function ReviewFrame() {
+  const frameRef = useRef<HTMLDivElement>(null);
+
+  useRiseIn(frameRef, "[data-rise]", { duration: 0.4, stagger: 0.04, y: 8 });
+
   return (
-    <div className="show-main">
+    <div className="show-main" ref={frameRef}>
       <Steps current={1} labels={["Approve USDC", "Sign", "Sent"]} />
       <div className="show-split">
         <div className="stack-lg">
@@ -59,18 +65,18 @@ export function ReviewFrame() {
               <span>Fresh address</span>
               <span className="r">Amount</span>
             </div>
-            <Stagger>
+            <div>
               {PREVIEW_LINES.map((l, i) => (
-                <StaggerItem key={l.address} index={i} className="tr mono" style={{ gridTemplateColumns: COLS, display: "grid" }}>
+                <div key={l.address} className="tr mono" style={{ gridTemplateColumns: COLS, display: "grid" }} data-rise>
                   <span className="idx">{i + 1}</span>
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                     <FreshMark />
                     {l.address}
                   </span>
                   <span className="r num">{l.amount}</span>
-                </StaggerItem>
+                </div>
               ))}
-            </Stagger>
+            </div>
             <div className="foot">
               <span>Every payee is a pinned, verified ENS name.</span>
               <span>…and {RUN.lines - PREVIEW_LINES.length} more</span>

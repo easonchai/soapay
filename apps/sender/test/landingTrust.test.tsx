@@ -45,23 +45,20 @@ afterEach(() => {
 });
 
 describe("ChainView", () => {
-  it("renders the six key labels and types the values in, then both coworker lists", () => {
-    vi.useFakeTimers();
+  it("renders the head and the three illustrated columns", () => {
     render(<ChainView />);
-    for (const k of ["event", "stealth address", "ephemeral key", "view tag", "recipient", "amount"]) {
-      expect(screen.getByText(k)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Public, but meaningless to a coworker." })).toBeInTheDocument();
+    for (const tag of ["The record", "Anyone can see", "No one can learn"]) expect(screen.getByText(tag)).toBeInTheDocument();
+    for (const name of [
+      "One on-chain record: address, amount, one-time key, no recipient",
+      "The payer and three addresses with their amounts, all public",
+      "Names on one side, addresses on the other, no line between them",
+    ]) {
+      expect(screen.getByRole("img", { name })).toBeInTheDocument();
     }
-    // Values arrive character by character (the stubbed observer reports the card on screen at once).
-    expect(screen.queryByText("500.00 USDC")).toBeNull();
-    act(() => {
-      vi.advanceTimersByTime(8000);
-    });
-    expect(screen.getByText("Announcement")).toBeInTheDocument();
-    expect(screen.getByText("0x7a3F4b2c…9c1E")).toBeInTheDocument();
-    expect(screen.getByText("not present")).toBeInTheDocument();
-    expect(screen.getByText("500.00 USDC")).toBeInTheDocument();
-    expect(screen.getByText("A coworker can see")).toBeInTheDocument();
-    expect(screen.getByText("A coworker cannot learn")).toBeInTheDocument();
+    for (const title of ["One record per payment", "Lines, amounts and the payer", "Which address is whose"]) {
+      expect(screen.getByRole("heading", { level: 3, name: title })).toBeInTheDocument();
+    }
   });
 });
 

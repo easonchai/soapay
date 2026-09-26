@@ -1,12 +1,18 @@
-import { NavyPanel, Pill, Stagger, StaggerItem } from "@soapay/ui";
+import { useRef } from "react";
+import { NavyPanel, Pill } from "@soapay/ui";
 import { HISTORY_STATS, RUNS } from "../sample.js";
+import { useRiseIn } from "../motion.js";
 
 const COLS = "110px 1.4fr 70px 1fr 1fr";
 
 /** Static picture of History: three figures, then every run with its label, total and transaction. */
 export function HistoryFrame() {
+  const frameRef = useRef<HTMLDivElement>(null);
+
+  useRiseIn(frameRef, "[data-rise]", { duration: 0.4, stagger: 0.04, y: 8 });
+
   return (
-    <div className="show-main">
+    <div className="show-main" ref={frameRef}>
       <div className="pagehead">
         <div className="text">
           <span className="eyebrow">History · {HISTORY_STATS.runs} runs since Oct 2025</span>
@@ -43,9 +49,9 @@ export function HistoryFrame() {
           <span className="r">Total</span>
           <span className="r">Transaction</span>
         </div>
-        <Stagger>
-          {RUNS.map((r, i) => (
-            <StaggerItem key={r.label} index={i} className="tr tall" style={{ gridTemplateColumns: COLS, display: "grid" }}>
+        <div>
+          {RUNS.map((r) => (
+            <div key={r.label} className="tr tall" style={{ gridTemplateColumns: COLS, display: "grid" }} data-rise>
               <span className="ink2">{r.date}</span>
               <span style={{ fontWeight: 500, display: "flex", gap: 8, alignItems: "center" }}>
                 {r.label}
@@ -58,9 +64,9 @@ export function HistoryFrame() {
               <span className="r mono" style={{ display: "flex", justifyContent: "flex-end" }}>
                 {r.tx ? <span className="chip">{r.tx} ↗</span> : <span className="ink3">none</span>}
               </span>
-            </StaggerItem>
+            </div>
           ))}
-        </Stagger>
+        </div>
       </div>
     </div>
   );

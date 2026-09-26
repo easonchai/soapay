@@ -1,31 +1,7 @@
 /* Landing · trust sections: "What the chain sees" (chain-), guarantees + facts strip (guar-), closing band (cta-). */
 
 /* ---------- What the chain sees ---------- */
-.chain-top { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; }
-.chain-text { display: flex; flex-direction: column; gap: 14px; }
-.chain-text .eyebrow { display: block; }
-.land-h3.chain-h3 { font-size: 32px; letter-spacing: -0.025em; line-height: 1.1; text-wrap: balance; }
-
-.chain-card {
-  border: 1px solid var(--line); background: var(--surface); padding: 20px 24px;
-  font-family: var(--mono); font-size: 12.5px; line-height: 1.6; font-variant-numeric: tabular-nums;
-}
-.chain-row { display: grid; grid-template-columns: 140px 1fr; column-gap: 16px; align-items: baseline; padding: 9px 0; border-bottom: 1px solid var(--hairline); }
-.chain-row:first-child { padding-top: 0; }
-.chain-row:last-child { padding-bottom: 0; border-bottom: 0; }
-.chain-k { color: var(--ink2); white-space: nowrap; }
-.chain-v { display: inline-flex; align-items: center; gap: 8px; min-height: 20px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.chain-v.chain-absent { color: var(--ink-disabled); }
-.chain-caret { display: inline-block; width: 2px; height: 13px; margin-left: 1px; background: var(--accent); vertical-align: -2px; }
-
-.chain-lists { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 24px; }
-.chain-list { border: 1px solid var(--line); background: var(--surface); padding: 20px 24px; }
-.chain-list-title { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 12px; }
-.chain-list ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-.chain-list li { position: relative; padding-left: 18px; font-size: 14px; line-height: 1.5; color: var(--ink2); text-wrap: pretty; }
-.chain-list li::before { content: ''; position: absolute; left: 0; top: 8px; width: 6px; height: 6px; background: var(--line-strong); }
-.chain-list.chain-cannot li { color: var(--ink); }
-.chain-list.chain-cannot li::before { background: var(--accent); }
+.chain-cols { --cols: 3; }
 
 /* ---------- Guarantees ---------- */
 .guar-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 48px; padding-top: 32px; border-top: 1px solid var(--line); }
@@ -58,11 +34,6 @@
 
 /* ---------- Responsive ---------- */
 @media (max-width: 900px) {
-  .chain-top, .chain-lists { grid-template-columns: 1fr; gap: 32px; }
-  .chain-lists { gap: 16px; margin-top: 16px; }
-  .land-h3.chain-h3 { font-size: 26px; }
-  .chain-card { padding: 16px; }
-  .chain-row { grid-template-columns: 112px 1fr; column-gap: 12px; }
   .guar-grid { grid-template-columns: 1fr; gap: 32px; }
   .guar-facts { grid-template-columns: 1fr 1fr; margin-top: 48px; }
   .guar-cell { padding: 24px 20px; }
@@ -73,9 +44,6 @@
   .cta-h2 { font-size: 24px; }
 }
 @media (max-width: 480px) {
-  .chain-card { font-size: 12px; }
-  .chain-row { grid-template-columns: 1fr; row-gap: 2px; }
-  .chain-v { white-space: normal; word-break: break-all; }
   .guar-cell .figure { font-size: 36px; }
   .cta-actions .btn { width: 100%; }
 }

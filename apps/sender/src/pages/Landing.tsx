@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { CoinbaseMark, Dots, ErrorLine, GitHubMark, Lockup, Reveal, WalletGlyph } from "@soapay/ui";
+import { CoinbaseMark, Dots, ErrorLine, GitHubMark, Lockup, WalletGlyph } from "@soapay/ui";
 import "../landing.css";
 import { Compare } from "./landing/Compare.js";
 import { HowItWorks } from "./landing/HowItWorks.js";
@@ -9,6 +9,7 @@ import { Guarantees } from "./landing/Guarantees.js";
 import { CtaBand } from "./landing/CtaBand.js";
 import { DotWord } from "./landing/DotWord.js";
 import { RollWord } from "./landing/RollWord.js";
+import { useRiseIn } from "./landing/motion.js";
 import type { WalletState } from "../hooks/usePayPath.js";
 
 export const GITHUB = "https://github.com/easonchai/soapay";
@@ -47,6 +48,8 @@ export function Landing({ wallet, onLogin, employeeUrl, docsUrl }: LandingProps)
   const hero = useRef<HTMLElement>(null);
   const sections = useRef<Record<SectionId, HTMLElement | null>>({ how: null, product: null, chain: null });
   const one = wallet.connectors.length === 1 ? wallet.connectors[0] : undefined;
+
+  useRiseIn(hero, "[data-rise]", { delay: 0.05, stagger: 0.09, y: 12 });
 
   function login() {
     onLogin();
@@ -100,18 +103,16 @@ export function Landing({ wallet, onLogin, employeeUrl, docsUrl }: LandingProps)
       <section className="land-hero" ref={hero}>
         <Dots mode="diamond" animate className="dots l" />
         <Dots mode="diamond" animate className="dots r" />
-        <Reveal delay={0.05} y={12}>
-          <h1 className="land-h1">
-            <span className="line">Public chain. </span>
-            <span className="line">
-              <DotWord word="Private" /> <RollWord words={["payroll.", "payments.", "distribution."]} />
-            </span>
-          </h1>
-        </Reveal>
-        <Reveal delay={0.14}>
-          <p className="land-sub">Every payment lands on a fresh address only the recipient can open.</p>
-        </Reveal>
-        <Reveal delay={0.22} className="land-cta">
+        <h1 className="land-h1" data-rise>
+          <span className="line">Public chain. </span>
+          <span className="line">
+            <DotWord word="Private" /> <RollWord words={["payroll.", "payments.", "distribution."]} />
+          </span>
+        </h1>
+        <p className="land-sub" data-rise>
+          Every payment lands on a fresh address only the recipient can open.
+        </p>
+        <div className="land-cta" data-rise>
           <button className="btn-primary btn-xl" onClick={login} disabled={wallet.connecting || !wallet.connectors.length}>
             {cta}
           </button>
@@ -119,7 +120,7 @@ export function Landing({ wallet, onLogin, employeeUrl, docsUrl }: LandingProps)
           <a className="btn btn-xl" href="?demo=1" data-testid="demo-door">
             Try the demo
           </a>
-        </Reveal>
+        </div>
         {choosing && !wallet.isConnected && (
           <div className="panel panel-pad connectors" style={{ minWidth: 280 }} role="dialog" aria-label="Choose a wallet">
             <span className="eyebrow">Choose a wallet</span>
@@ -133,7 +134,7 @@ export function Landing({ wallet, onLogin, employeeUrl, docsUrl }: LandingProps)
         )}
         <ErrorLine error={wallet.connectError} />
         {/* Employees who land here by habit get one quiet line to their own app. */}
-        <p className="hint" data-testid="employee-door">
+        <p className="hint" data-testid="employee-door" data-rise>
           Getting paid?{" "}
           <a href={employeeUrl} style={{ fontWeight: 500, textDecoration: "underline" }}>
             Open your payments

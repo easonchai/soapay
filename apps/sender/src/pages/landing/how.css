@@ -1,17 +1,2 @@
 /* How it works: the three-step explainer. Swiss-report register: thin navy lines, mono numerals, small squares. */
 .how-accent { color: var(--accent); }
-.how-steps3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--line); margin-top: 8px; }
-.how-step3 { position: relative; padding: 40px 32px 48px 0; }
-.how-step3 + .how-step3 { padding-left: 40px; border-left: 1px solid var(--hairline); }
-.how-n { font: 500 14px/1 var(--mono); color: var(--accent); letter-spacing: 0.02em; }
-.how-art { display: block; width: 100%; max-width: 360px; height: auto; margin: 36px 0 32px; overflow: visible; }
-.how-t { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; margin: 0 0 10px; }
-.how-d { font-size: 16px; line-height: 1.55; color: var(--ink2); max-width: 34em; margin: 0; text-wrap: pretty; }
-.how-arrow { position: absolute; top: 44px; right: -10px; width: 20px; height: 8px; color: var(--ink-disabled); }
-
-@media (max-width: 900px) {
-  .how-steps3 { grid-template-columns: 1fr; }
-  .how-step3 { padding: 28px 0 32px; }
-  .how-step3 + .how-step3 { padding-left: 0; border-left: 0; border-top: 1px solid var(--hairline); }
-  .how-arrow { display: none; }
-}
