@@ -8,14 +8,17 @@ Deck structure as of Sep 25, 23:30 (twelve slides, source: soapay-deck.html, out
 Problem statement slide, rendered (Sep 26, 00:00, universal and third-person per Marcus, one line, nothing else): "WHO SEES WHAT YOU EARN?" Alternatives offered: "Who should see your salary?" / "Should everyone know what you're paid?" / "Why is every paycheck public?" / "What if your bank statement were public?" / statements: "Every address is a public bank statement." / "On-chain, every paycheck is public." / "Getting paid means being watched."
 Talk track for this slide: "All of us get paid on-chain. And there is one universal problem every one of us is wary of: everyone can see everything."
 Frame: recipient-first headline, batch mechanism as the spine of Solution, Architecture and Demo, Coinbase as the "why now" beat.
-Status key: LOCKED = approved by Marcus. DRAFT = awaiting his edits. PENDING = waiting on research digests.
+Status key: LOCKED = approved by Marcus. DRAFT = awaiting their edits. PENDING = waiting on research digests.
+Deck theme (Sep 26, 03:30, per Marcus): the deck now uses the frontend's Direction A Ledger design system, the same tokens, fonts and components as apps/sender and packages/ui. Content and slide order are unchanged. Slide 1 is the lockup plus the one-liner, which is also the landing page eyebrow. Slide 3 is the one navy slide, the NavyPanel at full size.
 
-## Slide 1: Soapay (DRAFT)
+## Slide 1: Soapay (LOCKED)
 
-- One-liner: "One name, infinite addresses."
-- Sub-line: "Get paid on-chain without publishing your bank statement."
+- One-liner, the only text under the wordmark (Marcus, Sep 26): "Privacy infrastructure for payments on chain."
+- Retired from the slide: "One name, infinite addresses." and the sub-line "Get paid on-chain without publishing your bank statement." Both still work as spoken lines on the Solution slide.
 
 ## Slide 2: Our Team (DRAFT, needs Marcus's line)
+
+Slide as built (Marcus, Sep 26): the heading "Team" and five people, photo and name only. Eason and Marcus are named; three cards carry "[name]" placeholders. Everything below is spoken, not shown.
 
 - Headline: "We have been paid on-chain for years. All of it is public."
 - Eason: six ETHGlobal projects, ten sponsor prizes, including ENS Best Use first place at ETHBogotá (GiveFire), Coinbase CDP creator economy second place at ETHGlobal Bangkok (Dott), Best app on Citrea at ETHGlobal Taipei (Zest).
@@ -263,7 +266,7 @@ Video caption for beat 3, reuse the mechanism line: "A whole payroll lands as id
 
 Narrative arc (Sep 26, 00:10): slide 3 asks the question. Each proof slide answers it, each answer worse than the last, and the fifth shows the existing fix does not reach the people in the room. The Solution slide answers the question one last time: only you. If the slot is three minutes flat, keep proofs 1, 3 and 5.
 
-- 0:00 Title. "Soapay. One name, infinite addresses. Get paid on-chain without publishing your bank statement."
+- 0:00 Title. "Soapay. Privacy infrastructure for payments on chain."
 - 0:10 Team. "We build for web3 companies, and they pay us on-chain: prizes, grants, contractor invoices, salaries. There is one problem every one of us is wary of, and it is the same for anyone paid on a public chain."
 - 0:30 Statement. Pause. "Who sees what you earn?"
 - 0:40 Proof 1, everyone with a browser. "Today the answer is: everyone. This is a live payout batch on Base I captured tonight. One Disperse batch, four recipients, between sixteen and fifty-five thousand dollars each, five minutes old, readable forever. Map one address to a person and you know their pay every cycle."

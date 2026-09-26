@@ -4,350 +4,468 @@
 <meta charset="utf-8">
 <title>Soapay deck</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Archivo:wght@600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  /* Eight 16:9 slides, 2000x1125 each, in the reference style: beige canvas, soft blobs, heavy uppercase lines. */
+  /*
+    Thirteen 16:9 slides, 2000x1125 each, in the product's own design system:
+    Soapay Direction A "Ledger" (packages/ui/src/styles.css). Same tokens, same fonts,
+    same components (TopBar, PageHead, panel, NavyPanel, table, Steps, FreshMark, Dots),
+    scaled about 2.4x from the 13px app so a projector can read them.
+  */
   :root {
-    --bg: #efe8e1; --ink: #1c1c1c; --red: #e0392b; --blue: #1e4db7; --purple: #6b3fd8;
-    --muted: #8a8079; --card: rgba(255,255,255,.55); --line: rgba(28,28,28,.12);
+    --canvas: #f4f5f7; --surface: #ffffff; --line: #d5dae1; --line-strong: #b8c0cb; --hairline: #eef0f3;
+    --ink: #0f1720; --ink2: #4a5563; --ink3: #8a94a3;
+    --accent: #1e3a5f; --accent-soft: #e4eefa; --on-accent-muted: #c9daf0;
+    --danger: #a32d2d;
+    --ok: #1e6b3a; --ok-bg: #e1f3e7; --warn: #7a4b00; --warn-bg: #fbedd3;
+    --sans: 'IBM Plex Sans', system-ui, sans-serif;
+    --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   }
   @page { size: 2000px 1125px; margin: 0; }
+  *, *::before, *::after { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; background: #fff; }
-  body { font-family: "Archivo", "Helvetica Neue", Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .slide { position: relative; width: 2000px; height: 1125px; overflow: hidden; background: var(--bg); page-break-after: always; break-after: page; }
+  body { font-family: var(--sans); color: var(--ink); -webkit-font-smoothing: antialiased; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .slide { position: relative; width: 2000px; height: 1125px; overflow: hidden; background: var(--surface); display: flex; flex-direction: column; page-break-after: always; break-after: page; }
   .slide:last-child { page-break-after: auto; break-after: auto; }
-  .blob { position: absolute; border-radius: 50%; filter: blur(70px); opacity: .85; }
-  .blob.orange { width: 720px; height: 520px; left: 330px; top: -320px; background: #f0a25a; }
-  .blob.pink { width: 620px; height: 620px; left: -330px; top: 60px; background: #f1a9a0; }
-  .ring { position: absolute; left: -260px; top: 120px; width: 560px; height: 560px; border-radius: 50%;
-          border: 120px solid #f1b0a8; box-sizing: border-box; filter: blur(18px); opacity: .7; }
-  /* Print only: the blurred blobs rasterize to huge bitmaps in PDF, so print uses vector gradients of the same shape and color. */
-  @media print {
-    .blob, .ring { filter: none; }
-    .blob.orange { width: 860px; height: 660px; left: 260px; top: -390px; background: radial-gradient(closest-side, rgba(240,162,90,.85) 0%, rgba(240,162,90,.8) 38%, rgba(240,162,90,0) 100%); }
-    .blob.pink { width: 760px; height: 760px; left: -400px; top: -10px; background: radial-gradient(closest-side, rgba(241,169,160,.85) 0%, rgba(241,169,160,.8) 38%, rgba(241,169,160,0) 100%); }
-    .ring { border: none; width: 600px; height: 600px; left: -280px; top: 100px; background: radial-gradient(circle closest-side, rgba(241,176,168,0) 0%, rgba(241,176,168,0) 50%, rgba(241,176,168,.7) 57%, rgba(241,176,168,.7) 90%, rgba(241,176,168,0) 100%); }
-  }
-  .tag { position: absolute; top: 44px; left: 64px; font-weight: 800; font-size: 26px; letter-spacing: 3px; color: var(--muted); text-transform: uppercase; }
-  .num { position: absolute; bottom: 40px; right: 64px; font-weight: 800; font-size: 24px; color: var(--muted); }
-  .stage { position: relative; height: 100%; box-sizing: border-box; padding: 110px 110px 90px; display: flex; flex-direction: column; }
-  .center { align-items: center; justify-content: center; text-align: center; }
-  .wordmark { font-family: "Archivo Black", "Arial Black", sans-serif; font-size: 190px; line-height: .95; letter-spacing: -6px; color: var(--ink); margin-bottom: 44px; }
-  .line { font-weight: 800; text-transform: uppercase; font-size: 54px; line-height: 1.18; letter-spacing: .5px; max-width: 1760px; margin: 0 0 30px; }
-  .k { color: var(--ink); font-size: 50px; }
-  .red { color: var(--red); } .blue { color: var(--blue); } .purple { color: var(--purple); } .ink { color: var(--ink); }
-  h1.head { font-weight: 800; text-transform: uppercase; font-size: 62px; line-height: 1.1; margin: 0 0 36px; color: var(--red); letter-spacing: .5px; }
-  h1.head span { color: var(--ink); }
-  .sub { font-weight: 700; font-size: 30px; color: var(--muted); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 18px; }
-  .grid { display: grid; gap: 26px; }
-  .card { background: var(--card); border: 2px solid var(--line); border-radius: 20px; padding: 30px 34px; box-sizing: border-box; }
-  .card .who { font-weight: 800; text-transform: uppercase; font-size: 28px; color: var(--blue); letter-spacing: 1.5px; margin-bottom: 12px; }
-  .card .q { font-weight: 600; font-size: 31px; line-height: 1.3; color: var(--ink); }
-  .card .fact { font-weight: 800; font-size: 24px; color: var(--purple); margin-top: 14px; text-transform: uppercase; letter-spacing: 1px; }
-  .small .who { font-size: 22px; margin-bottom: 8px; } .small .q { font-size: 24px; line-height: 1.28; } .small { padding: 22px 26px; }
-  .foot { margin-top: auto; font-weight: 800; text-transform: uppercase; font-size: 44px; color: var(--purple); text-align: center; letter-spacing: .5px; }
-  /* Team */
-  .person { display: flex; gap: 34px; align-items: flex-start; }
-  .avatar { flex: 0 0 200px; width: 200px; height: 200px; border-radius: 50%; background: #e3d9cf; border: 3px dashed rgba(28,28,28,.25);
-            display: flex; align-items: center; justify-content: center; font-weight: 800; color: var(--muted); font-size: 22px; text-transform: uppercase; }
-  .person .name { font-family: "Archivo Black", sans-serif; font-size: 52px; color: var(--ink); margin-bottom: 10px; }
-  .person .bio { font-weight: 600; font-size: 30px; line-height: 1.35; color: var(--ink); }
-  .placeholder { color: var(--muted); font-style: italic; }
-  /* Architecture */
-  .flow { display: grid; grid-template-columns: 1fr 60px 1fr 60px 1fr 60px 1fr; align-items: stretch; gap: 0; }
-  .box { background: var(--card); border: 2px solid var(--line); border-radius: 20px; padding: 30px 32px; box-sizing: border-box; }
-  .box .t { font-weight: 800; text-transform: uppercase; font-size: 30px; color: var(--blue); letter-spacing: 1.5px; margin-bottom: 14px; }
-  .box .d { font-weight: 600; font-size: 27px; line-height: 1.32; color: var(--ink); }
-  .arrow { display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 44px; color: var(--muted); }
-  .three { margin-top: 44px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 26px; }
-  .three div { font-weight: 800; text-transform: uppercase; font-size: 30px; line-height: 1.25; color: var(--purple); letter-spacing: .5px; padding-top: 22px; border-top: 4px solid var(--purple); }
-  /* Steps */
-  .steps { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }
-  .step { display: flex; gap: 26px; background: var(--card); border: 2px solid var(--line); border-radius: 20px; padding: 28px 32px; box-sizing: border-box; }
-  .step .n { font-family: "Archivo Black", sans-serif; font-size: 64px; line-height: 1; color: var(--red); flex: 0 0 70px; }
-  .step .t { font-weight: 800; text-transform: uppercase; font-size: 30px; color: var(--blue); letter-spacing: 1px; margin-bottom: 10px; }
-  .step .d { font-weight: 600; font-size: 27px; line-height: 1.3; color: var(--ink); }
-  .beats .step { padding: 20px 28px; } .beats .step .n { font-size: 50px; flex-basis: 56px; } .beats .step .d { font-size: 26px; }
-  /* Future plan use-case grid: tighter cards so the closing line gets air. */
-  /* Visual problem slides: cropped screenshots, pull quote, logo strip. */
-  .shot { position: relative; overflow: hidden; border-radius: 18px; border: 2px solid var(--line); background: #fff; box-shadow: 0 18px 40px rgba(0,0,0,.10); }
+
+  /* No chrome (Marcus, Sep 26): no top bar, no footer. The stage is the whole slide. */
+  .stage { flex: 1; position: relative; min-height: 0; padding: 72px 72px 64px; display: flex; flex-direction: column; }
+  .stage > * { position: relative; }
+
+  /* The one navy slide, like NavyPanel at full size. */
+  .slide.navy { background: var(--accent); color: #fff; }
+
+  /* Type scale, from the app: eyebrow mono, h1 600 tight, lead ink2. */
+  .eyebrow { font-family: var(--mono); font-size: 27px; font-weight: 500; color: var(--accent); }
+  h1 { font-size: 72px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.06; margin: 0; text-wrap: balance; }
+  .lead { font-size: 34px; color: var(--ink2); line-height: 1.4; text-wrap: pretty; }
+  .hl { color: var(--accent); font-weight: 600; }
+  .numhl { font-family: var(--mono); color: var(--accent); font-weight: 500; font-variant-numeric: tabular-nums; }
+  .placeholder { color: var(--ink3); font-style: italic; }
+
+  /* PageHead: eyebrow, title, dot texture filling the gap. */
+  .pagehead { display: flex; align-items: flex-start; gap: 60px; }
+  .pagehead .text { flex: 0 0 auto; max-width: 1380px; }
+  .pagehead .text .eyebrow { display: block; margin-bottom: 18px; }
+  .pagehead .dots.head { flex: 1; min-width: 0; height: 140px; align-self: flex-start; }
+  .numline { display: block; font-size: 30px; margin: 8px 0; }
+
+  /* Dot-matrix texture, same generator as packages/ui Dots. */
+  svg.dots { display: block; pointer-events: none; }
+  .dots.dia { position: absolute; top: 50%; width: 640px; height: 640px; transform: translateY(-55%); }
+  .dots.dia.l { left: -60px; }
+  .dots.dia.r { right: -60px; }
+
+  /* Panels, NavyPanel. */
+  .panel { border: 2px solid var(--line); background: var(--surface); }
+  .navyp { position: relative; overflow: hidden; background: var(--accent); color: #fff; padding: 40px 48px; }
+  .navyp > * { position: relative; }
+  .navyp .dots { position: absolute; right: 0; top: 0; width: 340px; height: 100%; opacity: .5; }
+  .navyp .label { font-family: var(--mono); font-size: 26px; color: var(--on-accent-muted); margin-bottom: 14px; }
+  .navyp .big { font-size: 46px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.15; }
+
+  /* Fresh mark: outlined navy square, a fresh address used once. */
+  .fresh { display: inline-block; width: 16px; height: 16px; border: 3px solid var(--accent); flex: 0 0 auto; }
+
+  /* Title and Demo: the landing hero. */
+  .hero { align-items: center; justify-content: center; text-align: center; }
+  .lockup-xl { display: block; height: 190px; width: 718px; color: var(--accent); margin-bottom: 44px; }
+  .tagline { font-family: var(--mono); font-size: 40px; font-weight: 500; color: var(--accent); }
+  .big { font-size: 220px; font-weight: 600; letter-spacing: -0.04em; line-height: 1; }
+
+  /* Team: five people across, photo above name (Marcus, Sep 26). */
+  .people { display: grid; grid-template-columns: repeat(5, 1fr); gap: 32px; margin: auto 0; }
+  .person { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 24px; padding: 28px 24px 32px; }
+  .avatar { width: 100%; aspect-ratio: 1 / 1; background: var(--canvas); border: 2px dashed var(--line-strong); display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 24px; color: var(--ink3); }
+  .person .name { font-size: 36px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.15; }
+
+  /* Statement */
+  /* One line (Marcus, Sep 26): sized so the line ends before the dot texture starts. */
+  .statement { font-size: 136px; font-weight: 600; letter-spacing: -0.035em; line-height: 1.02; white-space: nowrap; }
+  .dots.side { position: absolute; right: 0; top: 0; width: 560px; height: 100%; opacity: .55; }
+
+  /* Proof slides: text with facts left, source line, screenshot right, evidence strip. */
+  .proof { display: grid; grid-template-columns: 720px 1010px; gap: 60px; align-items: start; margin-top: 36px; }
+  .proof .txt { font-size: 33px; line-height: 1.38; text-wrap: pretty; }
+  .src { font-family: var(--mono); font-size: 21px; line-height: 1.5; color: var(--ink2); margin-top: 28px; word-break: break-all; }
+  .shot { position: relative; overflow: hidden; border: 2px solid var(--line); background: #fff; }
   .shot img { position: absolute; display: block; }
-  .cap { font-weight: 700; font-size: 24px; line-height: 1.3; color: var(--muted); margin-top: 14px; }
-  .quote { font-weight: 800; font-size: 40px; line-height: 1.22; color: var(--ink); }
-  .attr { font-weight: 800; font-size: 22px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--purple); margin-top: 14px; }
-  .brands { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 22px; }
-  .brand { display: flex; align-items: center; gap: 14px; background: var(--card); border: 2px solid var(--line); border-radius: 14px; padding: 10px 16px; min-height: 56px; box-sizing: border-box; }
-  .brand img { flex: 0 0 auto; max-width: 96px; object-fit: contain; }
-  .brand b { font-weight: 800; font-size: 22px; color: var(--ink); white-space: nowrap; }
-  .brand span { font-weight: 700; font-size: 20px; line-height: 1.2; color: var(--ink); }
-  /* Proof slides, OpenVerdict pattern: text with highlighted facts left, source line, screenshot right, optional strip. */
-  .proof { display: grid; grid-template-columns: 720px 1010px; gap: 50px; align-items: start; }
-  .proof .txt { font-weight: 700; font-size: 33px; line-height: 1.32; color: var(--ink); }
-  .src { font-family: ui-monospace, Menlo, monospace; font-size: 19px; line-height: 1.5; color: var(--muted); margin-top: 28px; word-break: break-all; }
-  .strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: auto; }
-  .strip .brand { min-height: 54px; padding: 8px 14px; } .strip .brand span { font-size: 19px; }
-  /* Future plan: three numbered additions. */
-  .card.next { padding: 44px 40px; min-height: 420px; }
-  .card.next .n { font-family: "Archivo Black", sans-serif; font-size: 96px; line-height: 1; color: var(--red); margin-bottom: 26px; }
-  .card.next .who { font-size: 40px; line-height: 1.15; margin-bottom: 18px; }
-  .card.next .q { font-size: 30px; }
-  .uses .card.use { padding: 34px 30px; min-height: 200px; display: flex; flex-direction: column; justify-content: center; }
-  .uses .card.use .fact { margin: 0 0 12px; } .uses .card.use .who { font-size: 32px; line-height: 1.2; margin: 0; }
+  .strip { margin-top: auto; display: grid; grid-template-columns: repeat(4, 1fr); border: 2px solid var(--line); background: var(--surface); }
+  .strip .cell { display: flex; align-items: center; gap: 18px; padding: 16px 24px; border-left: 2px solid var(--hairline); min-height: 92px; }
+  .strip .cell:first-child { border-left: 0; }
+  .strip img { flex: 0 0 auto; max-width: 96px; object-fit: contain; }
+  .strip b { font-weight: 600; font-size: 24px; white-space: nowrap; }
+  .strip span { font-size: 22px; color: var(--ink2); line-height: 1.25; }
+  .closing { font-size: 42px; font-weight: 600; letter-spacing: -0.02em; color: var(--accent); }
+
+  /* Solution: the locked sentence, three registers of the system's status colours. */
+  .wordmark-lg { display: block; height: 96px; width: 254px; color: var(--accent); margin: 0 auto 8px; }
+  .k { font-family: var(--mono); font-size: 27px; font-weight: 500; color: var(--ink3); margin: 26px 0 14px; }
+  /* Colour only, no tinted boxes (Marcus, Sep 26). */
+  .clause { display: inline; font-size: 56px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.5; }
+  .clause.cat { color: var(--accent); }
+  .clause.mech { color: var(--ok); }
+  .clause.out { color: var(--warn); }
+  /* Centered as a block (Marcus, Sep 26). */
+  .clauses { width: 100%; text-align: center; }
+
+  /* Architecture: four boxes joined by rules and diamond glyphs. */
+  .flow { display: grid; grid-template-columns: 1fr 52px 1fr 52px 1fr 52px 1fr; align-items: stretch; margin-top: 40px; }
+  .box { padding: 32px 34px; }
+  .box .t { font-family: var(--mono); font-size: 25px; font-weight: 500; color: var(--accent); margin-bottom: 14px; }
+  .box .d { font-size: 28px; line-height: 1.38; text-wrap: pretty; }
+  .box.navyp .t { color: var(--on-accent-muted); }
+  .box.navyp .dots { width: 150px; }
+  .conn { position: relative; display: flex; align-items: center; justify-content: center; }
+  .conn::before { content: ''; width: 100%; height: 2px; background: var(--line-strong); }
+  .conn::after { content: ''; position: absolute; width: 14px; height: 14px; border: 3px solid var(--accent); background: #fff; transform: rotate(45deg); }
+  .three { margin-top: 48px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 40px; }
+  .three div { font-size: 28px; line-height: 1.38; padding-top: 22px; border-top: 2px solid var(--line); display: flex; gap: 16px; text-wrap: pretty; }
+  .three .fresh { margin-top: 12px; }
+
+  /* Use cases: eight indexed panels, like ledger rows. */
+  .uses { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; margin-top: 40px; }
+  .use { padding: 30px 30px; min-height: 214px; display: flex; flex-direction: column; justify-content: space-between; }
+  .use .idx { font-family: var(--mono); font-size: 24px; color: var(--ink3); }
+  .use .t { font-size: 32px; font-weight: 500; line-height: 1.22; letter-spacing: -0.01em; text-wrap: pretty; }
+  /* Iconsax Linear icons (iconsax-react, Marcus, Sep 26), navy, top-left of each tile with the index at top-right. */
+  .use .top { display: flex; justify-content: space-between; align-items: flex-start; }
+  .use .ico { display: block; width: 56px; height: 56px; color: var(--accent); }
+  .use .ico svg { width: 100%; height: 100%; display: block; }
+
+  /* Future plan: three Steps. */
+  .next { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; margin-top: 44px; }
+  .step { padding: 44px 40px; min-height: 380px; }
+  .step .n { width: 72px; height: 72px; background: var(--accent); color: #fff; font-family: var(--mono); font-size: 32px; display: flex; align-items: center; justify-content: center; margin-bottom: 40px; }
+  .step .t { font-size: 44px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 18px; line-height: 1.1; }
+  .step .d { font-size: 30px; color: var(--ink2); line-height: 1.4; text-wrap: pretty; }
 </style>
 </head>
 <body>
 
-<!-- 1. Title -->
+<!-- Brand symbols, copied from packages/ui/src/logo/Logo.tsx. Colour comes from currentColor. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="mark" viewBox="0 0 32 32">
+    <path d="M3 12 a5 5 0 0 1 5 -5 h9 v18 h-9 a5 5 0 0 1 -5 -5 z" fill="currentColor"/>
+    <g fill="currentColor">
+      <rect x="19.5" y="8" width="4" height="4" rx="1.4"/><rect x="19.5" y="14" width="4" height="4" rx="1.4"/><rect x="19.5" y="20" width="4" height="4" rx="1.4"/>
+      <rect x="25.5" y="11" width="2.5" height="2.5" rx="0.9"/><rect x="25.5" y="18.5" width="2.5" height="2.5" rx="0.9"/><rect x="29.5" y="15" width="1.5" height="1.5" rx="0.55"/>
+    </g>
+  </symbol>
+  <symbol id="word" viewBox="-8 -8 386 146">
+    <g fill="none" stroke="currentColor" stroke-width="12" stroke-linecap="butt" stroke-linejoin="miter">
+      <path d="M50 14 C42 4 10 4 10 24 C10 44 50 42 50 62 C50 82 14 84 4 70"/><circle cx="92" cy="52" r="22"/>
+      <path d="M150 30 H172 V74 H150 A22 22 0 0 1 150 30 Z"/><path d="M192 30 V112"/><path d="M192 30 H214 A22 22 0 0 1 214 74 H192"/>
+      <path d="M278 30 H300 V74 H278 A22 22 0 0 1 278 30 Z"/><path d="M320 30 L342 74"/><path d="M366 30 L336 88"/>
+    </g>
+    <g fill="currentColor">
+      <rect x="328.8" y="91.6" width="7" height="7" transform="rotate(27 332.3 95.1)"/><rect x="324.55" y="102.15" width="5.5" height="5.5" transform="rotate(27 327.3 104.9)"/>
+      <rect x="320.7" y="111.8" width="4" height="4" transform="rotate(27 322.7 113.8)"/><rect x="317.1" y="120.2" width="3" height="3" transform="rotate(27 318.6 121.7)"/>
+      <rect x="313.9" y="127.8" width="2" height="2" transform="rotate(27 314.9 128.8)"/>
+    </g>
+  </symbol>
+  <symbol id="lockup" viewBox="-8 -8 552 146">
+    <g transform="translate(-8,-36) scale(4.875)">
+      <path d="M3 12 a5 5 0 0 1 5 -5 h9 v18 h-9 a5 5 0 0 1 -5 -5 z" fill="currentColor"/>
+      <g fill="currentColor">
+        <rect x="19.5" y="8" width="4" height="4" rx="1.4"/><rect x="19.5" y="14" width="4" height="4" rx="1.4"/><rect x="19.5" y="20" width="4" height="4" rx="1.4"/>
+        <rect x="25.5" y="11" width="2.5" height="2.5" rx="0.9"/><rect x="25.5" y="18.5" width="2.5" height="2.5" rx="0.9"/><rect x="29.5" y="15" width="1.5" height="1.5" rx="0.55"/>
+      </g>
+    </g>
+    <g transform="translate(158,0)">
+      <g fill="none" stroke="currentColor" stroke-width="12" stroke-linecap="butt" stroke-linejoin="miter">
+        <path d="M50 14 C42 4 10 4 10 24 C10 44 50 42 50 62 C50 82 14 84 4 70"/><circle cx="92" cy="52" r="22"/>
+        <path d="M150 30 H172 V74 H150 A22 22 0 0 1 150 30 Z"/><path d="M192 30 V112"/><path d="M192 30 H214 A22 22 0 0 1 214 74 H192"/>
+        <path d="M278 30 H300 V74 H278 A22 22 0 0 1 278 30 Z"/><path d="M320 30 L342 74"/><path d="M366 30 L336 88"/>
+      </g>
+      <g fill="currentColor">
+        <rect x="328.8" y="91.6" width="7" height="7" transform="rotate(27 332.3 95.1)"/><rect x="324.55" y="102.15" width="5.5" height="5.5" transform="rotate(27 327.3 104.9)"/>
+        <rect x="320.7" y="111.8" width="4" height="4" transform="rotate(27 322.7 113.8)"/><rect x="317.1" y="120.2" width="3" height="3" transform="rotate(27 318.6 121.7)"/>
+        <rect x="313.9" y="127.8" width="2" height="2" transform="rotate(27 314.9 128.8)"/>
+      </g>
+    </g>
+  </symbol>
+</svg>
+
+<!-- 1. Title: the landing hero. Lockup, then the single one-liner (Marcus, Sep 26), which is also the landing eyebrow. -->
 <section class="slide" id="s1">
-  <div class="blob orange"></div><div class="blob pink"></div><div class="ring"></div>
-  <div class="tag">ETHGlobal Tokyo 2026</div>
-  <div class="stage center">
-    <div class="wordmark">Soapay</div>
-    <div class="line red" style="font-size:70px">One name, infinite addresses.</div>
-    <div class="line ink" style="font-size:44px; margin-top:10px">Get paid on-chain without publishing your bank statement.</div>
+  <div class="stage hero">
+    <svg class="dots dia l" data-mode="diamond"></svg>
+    <svg class="dots dia r" data-mode="diamond"></svg>
+    <svg class="lockup-xl"><use href="#lockup"/></svg>
+    <div class="tagline">Privacy infrastructure for payments on chain</div>
   </div>
-  <div class="num"></div>
 </section>
 
-<!-- 2. Team -->
+<!-- 2. Team: heading and five people, photo and name only (Marcus, Sep 26). Bios stay in PITCH.md. -->
 <section class="slide" id="s2">
-  <div class="blob orange"></div><div class="blob pink"></div><div class="ring"></div>
-  <div class="tag">Our team</div>
   <div class="stage">
-    <h1 class="head">We build for web3 companies. <span>They pay us on&#8209;chain.</span></h1>
-    <div class="grid" style="grid-template-columns:1fr 1fr; gap:40px; margin-top:20px">
-      <div class="card person">
-        <div class="avatar">photo</div>
-        <div>
-          <div class="name">Eason Chai</div>
-          <div class="bio">Six ETHGlobal projects, ten sponsor prizes, including ENS Best Use, first place, at ETHBogotá.<br><span class="placeholder">[role and one-line bio placeholder]</span></div>
-        </div>
-      </div>
-      <div class="card person">
-        <div class="avatar">photo</div>
-        <div>
-          <div class="name">Marcus</div>
-          <div class="bio"><span class="placeholder">[bio placeholder: TacitPay, private invoicing with eleven tested privacy invariants; prediction-market infrastructure; the ETHGlobal dataset analysis behind this pitch]</span></div>
-        </div>
-      </div>
+    <div class="pagehead">
+      <div class="text"><h1>Team</h1></div>
+      <svg class="dots head" data-mode="right"></svg>
     </div>
-    <div class="foot" style="color:var(--ink); font-size:38px; line-height:1.25; max-width:1700px; margin-left:auto; margin-right:auto">
-      Prizes, grants, contractor invoices, salaries. All received on-chain, to the wallet behind our ENS names. <span class="red">One problem we all share: everyone can see it.</span>
+    <div class="people">
+      <div class="panel person"><div class="avatar">photo</div><div class="name">Eason Chai</div></div>
+      <div class="panel person"><div class="avatar">photo</div><div class="name">Marcus</div></div>
+      <div class="panel person"><div class="avatar">photo</div><div class="name placeholder">[name]</div></div>
+      <div class="panel person"><div class="avatar">photo</div><div class="name placeholder">[name]</div></div>
+      <div class="panel person"><div class="avatar">photo</div><div class="name placeholder">[name]</div></div>
     </div>
   </div>
-  <div class="num"></div>
 </section>
 
-<!-- 3. Problem statement, words only -->
-<section class="slide" id="s3">
-  <div class="blob orange"></div><div class="blob pink"></div><div class="ring"></div>
-  <div class="tag">The problem</div>
-  <div class="stage center">
-    <div class="line ink" style="font-size:110px; line-height:1.04; max-width:1760px">Who sees what you earn?</div>
+<!-- 3. Problem statement, words only. The one navy slide. -->
+<section class="slide navy" id="s3">
+  <div class="stage" style="justify-content:center">
+    <svg class="dots side" data-mode="right" data-color="255,255,255"></svg>
+    <div class="statement">Who sees what you earn?</div>
   </div>
-  <div class="num"></div>
 </section>
 
 <!-- 4. Proof 1: a live payout batch -->
 <section class="slide" id="s4">
-  <div class="blob orange"></div><div class="blob pink"></div><div class="ring"></div>
-  <div class="tag">Problem 01 / 05 · Who sees what you earn?</div>
   <div class="stage">
-    <h1 class="head">Everyone with a browser.</h1>
+    <div class="pagehead">
+      <div class="text">
+        <h1>Everyone with a browser.</h1>
+      </div>
+      <svg class="dots head" data-mode="right"></svg>
+    </div>
     <div class="proof">
       <div>
-        <div class="txt">One Disperse batch on Base. Four recipients. <span class="red">$17,585 · $55,177 · $16,629 · $31,268.</span><br><br>Five minutes old when captured. <span class="red">Readable forever.</span></div>
+        <div class="txt">One Disperse batch on Base. Four recipients. <span class="numhl numline">$17,585 · $55,177 · $16,629 · $31,268</span>Five minutes old when captured. <span class="hl">Readable forever.</span></div>
         <div class="src">base.blockscout.com · Sep 25 2026<br>base.blockscout.com/address/0xD152f549545093347A162Dce210e7293f1452150</div>
       </div>
       <!-- Crop x540..2800 y330..1760 of 2880x1800 at s=0.447 -->
       <div class="shot" style="width:1010px; height:639px"><img src="assets/blockscout-disperse.png" style="width:1287px; left:-241px; top:-148px"></div>
     </div>
   </div>
-  <div class="num"></div>
 </section>
 
-<!-- 7. Proof 4: colleagues read each other's pay -->
-<section class="slide" id="s7">
-  <div class="blob orange"></div><div class="blob pink"></div><div class="ring"></div>
-  <div class="tag">Problem 02 / 05 · Who sees what you earn?</div>
+<!-- 5. Proof 2: colleagues read each other's pay -->
+<section class="slide" id="s5">
   <div class="stage">
-    <h1 class="head">Your colleagues.</h1>
+    <div class="pagehead">
+      <div class="text">
+        <h1>Your colleagues.</h1>
+      </div>
+      <svg class="dots head" data-mode="right"></svg>
+    </div>
     <div class="proof">
       <div>
-        <div class="txt">Gitcoin DAO. A contributor started from their own pay address and found <span class="red">15 colleagues' exact salaries.</span><br><br>The DAO dropped individual pay disclosure over <span class="red">"contributor privacy concerns."</span></div>
+        <div class="txt">Gitcoin DAO. A contributor started from their own pay address and found <span class="hl">15 colleagues' exact salaries.</span><br><br>The DAO dropped individual pay disclosure over <span class="hl">"contributor privacy concerns."</span></div>
         <div class="src">gov.gitcoin.co · Jun 2022, Feb 2023<br>gov.gitcoin.co/t/a-compensation-commitment/10830/24<br>gov.gitcoin.co/t/contributor-compensation-audit/12750</div>
       </div>
-      <!-- Crop x330..1900 y640..1600 of 2880x2000 at s=0.643 -->
-      <div class="shot" style="width:1010px; height:618px"><img src="assets/gitcoin-audit.png" style="width:1852px; left:-212px; top:-412px"></div>
+      <!-- Crop x330..2040 y640..1590 of 2880x2000 at s=0.590, title through the highlighted phrase -->
+      <div class="shot" style="width:1010px; height:560px"><img src="assets/gitcoin-audit.png" style="width:1700px; left:-195px; top:-378px"></div>
     </div>
     <div class="strip">
-      <div class="brand"><img src="assets/si-optimism.svg" style="height:32px"><span>grantees traced, judged by name</span></div>
-      <div class="brand"><img src="assets/logo-sushi.com.png" style="height:36px"><span>two public pay fights</span></div>
-      <div class="brand"><b>MakerDAO</b><span>$205k average, published</span></div>
-      <div class="brand"><img src="assets/logo-lido.fi.png" style="height:36px"><span>$132k average, published</span></div>
+      <div class="cell"><img src="assets/si-optimism.svg" style="height:32px"><span>grantees traced, judged by name</span></div>
+      <div class="cell"><img src="assets/logo-sushi.com.png" style="height:36px"><span>two public pay fights</span></div>
+      <div class="cell"><b>MakerDAO</b><span>$205k average, published</span></div>
+      <div class="cell"><img src="assets/logo-lido.fi.png" style="height:36px"><span>$132k average, published</span></div>
     </div>
   </div>
-  <div class="num"></div>
 </section>
 
-<!-- 5. Proof 2: CFOs walk away -->
-<section class="slide" id="s5">
-  <div class="blob orange"></div><div class="blob pink"></div><div class="ring"></div>
-  <div class="tag">Problem 03 / 05 · So what happens</div>
+<!-- 6. Proof 3: CFOs walk away -->
+<section class="slide" id="s6">
   <div class="stage">
-    <h1 class="head">So companies walk away.</h1>
+    <div class="pagehead">
+      <div class="text">
+        <h1>So companies walk away.</h1>
+      </div>
+      <svg class="dots head" data-mode="right"></svg>
+    </div>
     <div class="proof">
       <div>
-        <div class="txt">"Every public company CFO we talk to gets excited about stablecoins until they realize <span class="red">their payroll would be public.</span> That's where the conversation ends."<br><br>Toku, over <span class="red">$1B</span> in payroll processed. Compliance "was never the blocker."</div>
+        <div class="txt">"Every public company CFO we talk to gets excited about stablecoins until they realize <span class="hl">their payroll would be public.</span> That's where the conversation ends."<br><br>Toku, over <span class="numhl">$1B</span> in payroll processed. Compliance "was never the blocker."</div>
         <div class="src">aleo.org · Jul 29 2026<br>aleo.org/post/toku-case-study</div>
       </div>
       <!-- Crop x560..2320 y380..1350 of 2880x1800 at s=0.574 -->
       <div class="shot" style="width:1010px; height:557px"><img src="assets/aleo-toku.png" style="width:1653px; left:-321px; top:-218px"></div>
     </div>
     <div class="strip">
-      <div class="brand"><img src="assets/si-visa.svg" style="height:32px"><span>"a dealbreaker" for banks</span></div>
-      <div class="brand"><img src="assets/si-stripe.svg" style="height:34px"><span>"would publish every salary"</span></div>
-      <div class="brand"><b>Circle</b><span>"payroll should not be market data"</span></div>
-      <div class="brand"><b>J.P. Morgan</b><span>"transparent by design"</span></div>
+      <div class="cell"><img src="assets/si-visa.svg" style="height:32px"><span>"a dealbreaker" for banks</span></div>
+      <div class="cell"><img src="assets/si-stripe.svg" style="height:34px"><span>"would publish every salary"</span></div>
+      <div class="cell"><b>Circle</b><span>"payroll should not be market data"</span></div>
+      <div class="cell"><b>J.P. Morgan</b><span>"transparent by design"</span></div>
     </div>
   </div>
-  <div class="num"></div>
 </section>
 
-<!-- 6. Proof 3: Deel moved -->
-<section class="slide" id="s6">
-  <div class="blob orange"></div><div class="blob pink"></div><div class="ring"></div>
-  <div class="tag">Problem 04 / 05 · So what happens</div>
+<!-- 7. Proof 4: Deel moved -->
+<section class="slide" id="s7">
   <div class="stage">
-    <h1 class="head">Even the ones who wanted to.</h1>
+    <div class="pagehead">
+      <div class="text">
+        <h1>Even the ones who wanted to.</h1>
+      </div>
+      <svg class="dots head" data-mode="right"></svg>
+    </div>
     <div class="proof">
       <div>
-        <div class="txt">Deel pays for <span class="red">40,000+</span> businesses and sent <span class="red">$250M</span> in crypto payouts in 2025.<br><br>It chose a private zone "to keep contractor wallet balances and payout history <span class="red">confidential from public view.</span>"</div>
+        <div class="txt">Deel pays for <span class="numhl">40,000+</span> businesses and sent <span class="numhl">$250M</span> in crypto payouts in 2025.<br><br>It chose a private zone "to keep contractor wallet balances and payout history <span class="hl">confidential from public view.</span>"</div>
         <div class="src">tempo.xyz · Jun 2 2026<br>tempo.xyz/blog/deel-stablecoin-wallet-global-contractors-tempo</div>
       </div>
       <!-- Crop x100..2100 y330..1500 of 2880x2000 at s=0.505 -->
       <div class="shot" style="width:1010px; height:591px"><img src="assets/tempo-deel.png" style="width:1454px; left:-50px; top:-167px"></div>
     </div>
   </div>
-  <div class="num"></div>
 </section>
 
 <!-- 8. Proof 5: private ledgers, enterprise only -->
 <section class="slide" id="s8">
-  <div class="blob orange"></div><div class="blob pink"></div><div class="ring"></div>
-  <div class="tag">Problem 05 / 05 · The fix so far</div>
   <div class="stage">
-    <h1 class="head">The only fix is <span>enterprise only.</span></h1>
+    <div class="pagehead">
+      <div class="text">
+        <h1>The only fix is enterprise only.</h1>
+      </div>
+      <svg class="dots head" data-mode="right"></svg>
+    </div>
     <div class="proof">
       <div>
-        <div class="txt">Coinbase built Base Ledgers: "Onchain payroll without publishing what every employee or contractor earns."<br><br><span class="red">Request a demo. Early access.</span> An operator runs the ledger and <span class="red">sees everything.</span></div>
+        <div class="txt">Coinbase built Base Ledgers: "Onchain payroll without publishing what every employee or contractor earns."<br><br><span class="hl">Request a demo. Early access.</span> An operator runs the ledger and <span class="hl">sees everything.</span></div>
         <div class="src">base.org · Jun 2026<br>base.org/ledgers · docs.base.org/ledger/overview</div>
       </div>
-      <!-- Crop x700..2300 y330..1195 of 2880x1800 at s=0.631 -->
-      <div class="shot" style="width:1010px; height:546px"><img src="assets/base-ledgers.png" style="width:1817px; left:-442px; top:-208px"></div>
+      <!-- Crop x700..2520 y330..1195 of 2880x1800 at s=0.555 -->
+      <div class="shot" style="width:1010px; height:480px"><img src="assets/base-ledgers.png" style="width:1598px; left:-389px; top:-183px"></div>
     </div>
-    <div class="strip" style="grid-template-columns:repeat(4,1fr)">
-      <div class="brand"><img src="assets/si-stripe.svg" style="height:34px"><span>Tempo Zones, design partners only</span></div>
-      <div class="brand"><b>Circle</b><span>Arc privacy, not yet available</span></div>
-      <div class="brand"><b>J.P. Morgan</b><span>JPMD, institutional clients only</span></div>
-      <div class="brand"><img src="assets/logo-aleo.org.png" style="height:36px"><span>Toku on Aleo, enterprise clients only</span></div>
+    <div class="strip">
+      <div class="cell"><img src="assets/si-stripe.svg" style="height:34px"><span>Tempo Zones, design partners only</span></div>
+      <div class="cell"><b>Circle</b><span>Arc privacy, not yet available</span></div>
+      <div class="cell"><b>J.P. Morgan</b><span>JPMD, institutional clients only</span></div>
+      <div class="cell"><img src="assets/logo-aleo.org.png" style="height:36px"><span>Toku on Aleo, enterprise clients only</span></div>
     </div>
-    <div class="foot" style="font-size:40px; margin-top:26px">Everyone else still pays in public.</div>
+    <div class="closing" style="margin-top:26px">Everyone else still pays in public.</div>
   </div>
-  <div class="num"></div>
 </section>
 
-<!-- 4. Solution, locked sentence -->
-<section class="slide" id="s5">
-  <div class="blob orange"></div><div class="blob pink"></div><div class="ring"></div>
-  <div class="tag">Solution</div>
-  <div class="stage center">
-    <div class="wordmark">Soapay</div>
-    <div class="line k">is</div>
-    <div class="line red">Privacy infrastructure for payments on chain</div>
-    <div class="line k">where</div>
-    <div class="line blue">Every payment lands on a fresh address that only you can open</div>
-    <div class="line k">and</div>
-    <div class="line purple">You can spend it without a trace</div>
+<!-- 9. Solution, the locked sentence -->
+<section class="slide" id="s9">
+  <div class="stage" style="justify-content:center">
+    <div class="clauses">
+      <svg class="wordmark-lg"><use href="#word"/></svg>
+      <div class="k">is</div>
+      <div><span class="clause cat">Privacy infrastructure for payments on chain</span></div>
+      <div class="k">where</div>
+      <div><span class="clause mech">Every payment lands on a fresh address that only you can open</span></div>
+      <div class="k">and</div>
+      <div><span class="clause out">You can spend it without a trace</span></div>
+    </div>
   </div>
-  <div class="num"></div>
 </section>
 
-<!-- 5. Architecture, high level -->
-<section class="slide" id="s6">
-  <div class="blob orange"></div><div class="blob pink"></div><div class="ring"></div>
-  <div class="tag">Architecture</div>
+<!-- 10. Architecture, high level -->
+<section class="slide" id="s10">
   <div class="stage">
-    <h1 class="head">Three apps on open standards. <span>Nothing of ours holds money.</span></h1>
-    <div class="flow" style="margin-top:30px">
-      <div class="box"><div class="t">Recipient app</div><div class="d">Your keys, your ledger, your guard. Nothing leaves the browser.</div></div>
-      <div class="arrow">›</div>
-      <div class="box"><div class="t">Sender app</div><div class="d">Paste names and amounts. One transaction pays everyone on fresh addresses.</div></div>
-      <div class="arrow">›</div>
-      <div class="box"><div class="t">Optional gateway</div><div class="d">For wallets that cannot derive. Self-host it or use ours. The app checks its work.</div></div>
-      <div class="arrow">›</div>
-      <div class="box"><div class="t">Chain</div><div class="d">ENS name. Stealth address registry and announcer. Gasless spend. Screened exit.</div></div>
+    <div class="pagehead">
+      <div class="text">
+        <span class="eyebrow">Architecture</span>
+        <h1>Three apps on open standards. Nothing of ours holds money.</h1>
+      </div>
+      <svg class="dots head" data-mode="right"></svg>
+    </div>
+    <div class="flow">
+      <div class="panel box"><div class="t">Recipient app</div><div class="d">Your keys, your ledger, your guard. Nothing leaves the browser.</div></div>
+      <div class="conn"></div>
+      <div class="panel box"><div class="t">Sender app</div><div class="d">Paste names and amounts. One transaction pays everyone on fresh addresses.</div></div>
+      <div class="conn"></div>
+      <div class="panel box"><div class="t">Optional gateway</div><div class="d">For wallets that cannot derive. Self-host it or use ours. The app checks its work.</div></div>
+      <div class="conn"></div>
+      <div class="box navyp"><svg class="dots" data-mode="right" data-color="255,255,255"></svg><div class="t">Chain</div><div class="d">ENS name. Stealth address registry and announcer. Gasless spend. Screened exit.</div></div>
     </div>
     <div class="three">
-      <div>Every contract we touch is a public standard someone else already audited.</div>
-      <div>The only thing you ever share is a name.</div>
-      <div>Everything rebuilds from your seed with every server off.</div>
+      <div><span class="fresh"></span>Every contract we touch is a public standard someone else already audited.</div>
+      <div><span class="fresh"></span>The only thing you ever share is a name.</div>
+      <div><span class="fresh"></span>Everything rebuilds from your seed with every server off.</div>
     </div>
   </div>
-  <div class="num"></div>
 </section>
 
-<!-- 6a. Use cases: what the rail already handles, labels only -->
+<!-- 11. Use cases: what the rail already handles -->
 <section class="slide" id="s11">
-  <div class="blob orange"></div><div class="blob pink"></div><div class="ring"></div>
-  <div class="tag">Use cases</div>
   <div class="stage">
-    <h1 class="head">Built for payroll. <span>Ready for any payout.</span></h1>
-    <div class="grid uses" style="grid-template-columns:repeat(4,1fr); gap:24px; margin-top:30px">
-      <div class="card use"><div class="who">Salaries and contractor pay</div></div>
-      <div class="card use"><div class="who">DAO contributors and grants</div></div>
-      <div class="card use"><div class="who">Dividends and revenue share</div></div>
-      <div class="card use"><div class="who">Token and equity allocations</div></div>
-      <div class="card use"><div class="who">Vendor and supplier payments</div></div>
-      <div class="card use"><div class="who">Invoices and freelancers</div></div>
-      <div class="card use"><div class="who">Prizes, bounties, airdrops</div></div>
-      <div class="card use"><div class="who">Tips, donations, creators</div></div>
+    <div class="pagehead">
+      <div class="text">
+        <span class="eyebrow">Use cases</span>
+        <h1>Built for payroll. Ready for any payout.</h1>
+      </div>
+      <svg class="dots head" data-mode="right"></svg>
     </div>
-    <div class="foot" style="font-size:44px">One sender. Many names. One transaction.</div>
-  </div>
-  <div class="num"></div>
-</section>
-
-<!-- 6b. Future plan: three additions -->
-<section class="slide" id="s12">
-  <div class="blob orange"></div><div class="blob pink"></div><div class="ring"></div>
-  <div class="tag">Future plan</div>
-  <div class="stage">
-    <h1 class="head">What we add <span>next.</span></h1>
-    <div class="grid" style="grid-template-columns:repeat(3,1fr); gap:30px; margin-top:40px">
-      <div class="card next"><div class="n">1</div><div class="who">Shielded amounts</div><div class="q">Hide the number, not just the name.</div></div>
-      <div class="card next"><div class="n">2</div><div class="who">Any wallet</div><div class="q">The guard and pay-by-name as an SDK wallets embed.</div></div>
-      <div class="card next"><div class="n">3</div><div class="who">Agents paying agents</div><div class="q">Pay by name with ERC-8004 identity. No public revenue feed.</div></div>
+    <div class="uses">
+      <div class="panel use"><div class="top"><span class="ico" title="Iconsax WalletMoney"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.752 16.86v2.03c0 1.72-1.6 3.11-3.57 3.11-1.97 0-3.58-1.39-3.58-3.11v-2.03c0 1.72 1.6 2.94 3.58 2.94 1.97 0 3.57-1.23 3.57-2.94Z"/><path d="M10.75 14.11c0 .5-.14.96-.38 1.36-.59.97-1.8 1.58-3.2 1.58-1.4 0-2.61-.62-3.2-1.58-.24-.4-.38-.86-.38-1.36 0-.86.4-1.63 1.04-2.19.65-.57 1.54-.91 2.53-.91.99 0 1.88.35 2.53.91.66.55 1.06 1.33 1.06 2.19Z"/><path d="M10.752 14.11v2.75c0 1.72-1.6 2.94-3.57 2.94-1.97 0-3.58-1.23-3.58-2.94v-2.75c0-1.72 1.6-3.11 3.58-3.11.99 0 1.88.35 2.53.91.64.56 1.04 1.34 1.04 2.2ZM22 10.97v2.06c0 .55-.44 1-1 1.02h-1.96c-1.08 0-2.07-.79-2.16-1.87-.06-.63.18-1.22.6-1.63.37-.38.88-.6 1.44-.6H21c.56.02 1 .47 1 1.02Z"/><path d="M2 10.5v-2c0-2.72 1.64-4.62 4.19-4.94.26-.04.53-.06.81-.06h9c.26 0 .51.01.75.05C19.33 3.85 21 5.76 21 8.5v1.45h-2.08c-.56 0-1.07.22-1.44.6-.42.41-.66 1-.6 1.63.09 1.08 1.08 1.87 2.16 1.87H21v1.45c0 3-2 5-5 5h-2.5"/></svg></span><span class="idx">01</span></div><div class="t">Salaries and contractor pay</div></div>
+      <div class="panel use"><div class="top"><span class="ico" title="Iconsax People"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 7.16a.605.605 0 0 0-.19 0 2.573 2.573 0 0 1-2.48-2.58c0-1.43 1.15-2.58 2.58-2.58a2.58 2.58 0 0 1 2.58 2.58A2.589 2.589 0 0 1 18 7.16ZM16.97 14.44c1.37.23 2.88-.01 3.94-.72 1.41-.94 1.41-2.48 0-3.42-1.07-.71-2.6-.95-3.97-.71M5.97 7.16c.06-.01.13-.01.19 0a2.573 2.573 0 0 0 2.48-2.58C8.64 3.15 7.49 2 6.06 2a2.58 2.58 0 0 0-2.58 2.58c.01 1.4 1.11 2.53 2.49 2.58ZM7 14.44c-1.37.23-2.88-.01-3.94-.72-1.41-.94-1.41-2.48 0-3.42 1.07-.71 2.6-.95 3.97-.71M12 14.63a.605.605 0 0 0-.19 0 2.573 2.573 0 0 1-2.48-2.58c0-1.43 1.15-2.58 2.58-2.58a2.58 2.58 0 0 1 2.58 2.58c-.01 1.4-1.11 2.54-2.49 2.58ZM9.09 17.78c-1.41.94-1.41 2.48 0 3.42 1.6 1.07 4.22 1.07 5.82 0 1.41-.94 1.41-2.48 0-3.42-1.59-1.06-4.22-1.06-5.82 0Z"/></svg></span><span class="idx">02</span></div><div class="t">DAO contributors and grants</div></div>
+      <div class="panel use"><div class="top"><span class="ico" title="Iconsax PercentageSquare"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2h6c5 0 7 2 7 7v6c0 5-2 7-7 7H9c-5 0-7-2-7-7V9c0-5 2-7 7-7ZM8.57 15.27l6.54-6.54"/><path d="M8.98 10.37a1.23 1.23 0 1 0 0-2.46 1.23 1.23 0 0 0 0 2.46ZM15.52 16.09a1.23 1.23 0 1 0 0-2.46 1.23 1.23 0 0 0 0 2.46Z"/></svg></span><span class="idx">03</span></div><div class="t">Dividends and revenue share</div></div>
+      <div class="panel use"><div class="top"><span class="ico" title="Iconsax Coin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18.5 12.65v3.7c0 3.12-2.91 5.65-6.5 5.65s-6.5-2.53-6.5-5.65v-3.7C5.5 15.77 8.41 18 12 18s6.5-2.23 6.5-5.35Z"/><path d="M18.5 7.65c0 .91-.25 1.75-.69 2.47C16.74 11.88 14.54 13 12 13c-2.54 0-4.74-1.12-5.81-2.88-.44-.72-.69-1.56-.69-2.47 0-1.56.73-2.97 1.9-3.99C8.58 2.63 10.2 2 12 2c1.8 0 3.42.63 4.6 1.65 1.17 1.03 1.9 2.44 1.9 4Z"/><path d="M18.5 7.65v5c0 3.12-2.91 5.35-6.5 5.35s-6.5-2.23-6.5-5.35v-5C5.5 4.53 8.41 2 12 2c1.8 0 3.42.63 4.6 1.65 1.17 1.03 1.9 2.44 1.9 4Z"/></svg></span><span class="idx">04</span></div><div class="t">Token and equity allocations</div></div>
+      <div class="panel use"><div class="top"><span class="ico" title="Iconsax Shop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.01 11.22v4.49C3.01 20.2 4.81 22 9.3 22h5.39c4.49 0 6.29-1.8 6.29-6.29v-4.49"/><path d="M12 12c1.83 0 3.18-1.49 3-3.32L14.34 2H9.67L9 8.68C8.82 10.51 10.17 12 12 12Z"/><path d="M18.31 12c2.02 0 3.5-1.64 3.3-3.65l-.28-2.75C20.97 3 19.97 2 17.35 2H14.3l.7 7.01c.17 1.65 1.66 2.99 3.31 2.99ZM5.64 12c1.65 0 3.14-1.34 3.3-2.99l.22-2.21.48-4.8H6.59C3.97 2 2.97 3 2.61 5.6l-.27 2.75C2.14 10.36 3.62 12 5.64 12ZM12 17c-1.67 0-2.5.83-2.5 2.5V22h5v-2.5c0-1.67-.83-2.5-2.5-2.5Z"/></svg></span><span class="idx">05</span></div><div class="t">Vendor and supplier payments</div></div>
+      <div class="panel use"><div class="top"><span class="ico" title="Iconsax ReceiptItem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 6v2.42C22 10 21 11 19.42 11H16V4.01C16 2.9 16.91 2 18.02 2c1.09.01 2.09.45 2.81 1.17C21.55 3.9 22 4.9 22 6Z"/><path d="M2 7v14c0 .83.94 1.3 1.6.8l1.71-1.28c.4-.3.96-.26 1.32.1l1.66 1.67c.39.39 1.03.39 1.42 0l1.68-1.68c.35-.35.91-.39 1.3-.09l1.71 1.28c.66.49 1.6.02 1.6-.8V4c0-1.1.9-2 2-2H6C3 2 2 3.79 2 6v1Z"/><path d="M9 13.01h3M9 9.01h3"/><path d="M5.996 13h.009M5.996 9h.009"/></svg></span><span class="idx">06</span></div><div class="t">Invoices and freelancers</div></div>
+      <div class="panel use"><div class="top"><span class="ico" title="Iconsax Cup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.15 16.5v2.1"/><path d="M7.15 22h10v-1c0-1.1-.9-2-2-2h-6c-1.1 0-2 .9-2 2v1Z"/><path d="M6.15 22h12M12 16c-3.87 0-7-3.13-7-7V6c0-2.21 1.79-4 4-4h6c2.21 0 4 1.79 4 4v3c0 3.87-3.13 7-7 7Z"/><path d="M5.47 11.65c-.75-.24-1.41-.68-1.93-1.2-.9-1-1.5-2.2-1.5-3.6s1.1-2.5 2.5-2.5h.65c-.2.46-.3.97-.3 1.5v3c0 1 .21 1.94.58 2.8ZM18.53 11.65c.75-.24 1.41-.68 1.93-1.2.9-1 1.5-2.2 1.5-3.6s-1.1-2.5-2.5-2.5h-.65c.2.46.3.97.3 1.5v3c0 1-.21 1.94-.58 2.8Z"/></svg></span><span class="idx">07</span></div><div class="t">Prizes, bounties, airdrops</div></div>
+      <div class="panel use"><div class="top"><span class="ico" title="Iconsax Gift"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19.97 10h-16v8c0 3 1 4 4 4h8c3 0 4-1 4-4v-8ZM21.5 7v1c0 1.1-.53 2-2 2h-15c-1.53 0-2-.9-2-2V7c0-1.1.47-2 2-2h15c1.47 0 2 .9 2 2ZM11.64 5H6.12a.936.936 0 0 1 .03-1.3l1.42-1.42a.96.96 0 0 1 1.35 0L11.64 5ZM17.87 5h-5.52l2.72-2.72a.96.96 0 0 1 1.35 0l1.42 1.42c.36.36.37.93.03 1.3Z"/><path d="M8.94 10v5.14c0 .8.88 1.27 1.55.84l.94-.62a1 1 0 0 1 1.1 0l.89.6a.997.997 0 0 0 1.55-.83V10H8.94Z"/></svg></span><span class="idx">08</span></div><div class="t">Tips, donations, creators</div></div>
     </div>
   </div>
-  <div class="num"></div>
 </section>
 
-<!-- 7. Demo: one word, the demo itself is live -->
+<!-- 12. Future plan: three additions -->
 <section class="slide" id="s12">
-  <div class="blob orange"></div><div class="blob pink"></div><div class="ring"></div>
-  <div class="tag">Demo</div>
-  <div class="stage center">
-    <div class="wordmark" style="font-size:220px; margin:0">Demo</div>
+  <div class="stage">
+    <div class="pagehead">
+      <div class="text">
+        <span class="eyebrow">Future plan</span>
+        <h1>What we add next.</h1>
+      </div>
+      <svg class="dots head" data-mode="right"></svg>
+    </div>
+    <div class="next">
+      <div class="panel step"><div class="n">1</div><div class="t">Shielded amounts</div><div class="d">Hide the number, not just the name.</div></div>
+      <div class="panel step"><div class="n">2</div><div class="t">Any wallet</div><div class="d">The guard and pay-by-name as an SDK wallets embed.</div></div>
+      <div class="panel step"><div class="n">3</div><div class="t">Agents paying agents</div><div class="d">Pay by name with ERC-8004 identity. No public revenue feed.</div></div>
+    </div>
   </div>
-  <div class="num"></div>
+</section>
+
+<!-- 13. Demo: one word, the demo itself is live -->
+<section class="slide" id="s13">
+  <div class="stage hero">
+    <svg class="dots dia l" data-mode="diamond"></svg>
+    <svg class="dots dia r" data-mode="diamond"></svg>
+    <div class="big">Demo</div>
+  </div>
 </section>
 
 <script>
-  // ?only=N renders a single slide, used to screenshot each page for visual checks. No param prints all eight.
-  const all = document.querySelectorAll(".slide"); all.forEach((sl, i) => { const n = sl.querySelector(".num"); if (n) n.textContent = (i + 1) + " / " + all.length; });
+  const all = document.querySelectorAll(".slide");
+
+  // Dot-matrix texture: a port of packages/ui Dots (static frame), drawn as SVG rects so the PDF keeps it as vectors.
+  // Each texture is generated at app scale (6px cell) and scaled up 2.4x through the viewBox.
+  const SCALE = 2.4;
+  const hash = (i, j) => { const s = Math.sin(i * 12.9898 + j * 78.233) * 43758.5453; return s - Math.floor(s); };
+  document.querySelectorAll("svg.dots").forEach(el => {
+    const r = el.getBoundingClientRect();
+    const W = Math.round(r.width / SCALE), H = Math.round(r.height / SCALE);
+    if (!W || !H) return;
+    const mode = el.dataset.mode || "right", color = el.dataset.color || "30,58,95";
+    const cell = 6, cx = W / 2, cy = H / 2, R = Math.min(W, H) * 0.46;
+    let out = "";
+    for (let i = 0; i < W; i += cell) for (let j = 0; j < H; j += cell) {
+      let a = 0;
+      if (mode === "diamond") { const d = Math.abs(Math.abs(i - cx) + Math.abs(j - cy) - R); a = Math.max(0, 1 - d / (R * 0.4)); }
+      else if (mode === "field") a = Math.max(0, 1 - Math.hypot(((i - cx) / W) * 2, ((j - cy) / H) * 2));
+      else if (mode === "right") a = Math.max(0, (i / W - 0.3) / 0.7);
+      else a = 0.55;
+      const h = hash(i, j);
+      if (h > a * 0.9) continue;
+      const alpha = Math.min(0.96, 0.22 + 0.7 * h).toFixed(2), L = Math.max(2, Math.round(2 + h * 7));
+      out += `<rect x="${i}" y="${(j - (L - 2) / 2).toFixed(1)}" width="2" height="${L}" fill="rgb(${color})" fill-opacity="${alpha}"/>`;
+    }
+    el.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    el.setAttribute("preserveAspectRatio", "xMidYMid slice");
+    el.innerHTML = out;
+  });
+
+  // ?only=N renders a single slide, used to screenshot each page for visual checks. No param prints all thirteen.
   const only = new URLSearchParams(location.search).get("only");
-  if (only) document.querySelectorAll(".slide").forEach((s, i) => { if (String(i + 1) !== only) s.style.display = "none"; });
+  if (only) all.forEach((s, i) => { if (String(i + 1) !== only) s.style.display = "none"; });
 </script>
 </body>
 </html>
