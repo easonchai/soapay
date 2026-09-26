@@ -1,11 +1,11 @@
 # Soapay: privacy infrastructure for payments on chain
 
-[![Base](https://img.shields.io/badge/Base-Mainnet%208453-0052ff)](https://basescan.org/address/0x55649E01B5Df198D18D95b5cc5051630cfD45564)
+[![Base Sepolia](https://img.shields.io/badge/Base%20Sepolia-84532-0052ff)](https://sepolia.basescan.org/address/0x6B7a1cC570Af2DDd427DA694351438F0FE8039CA)
 [![ERC-5564](https://img.shields.io/badge/ERC--5564-Stealth%20Addresses-111111)](https://eips.ethereum.org/EIPS/eip-5564)
 [![ERC-6538](https://img.shields.io/badge/ERC--6538-Registry-111111)](https://eips.ethereum.org/EIPS/eip-6538)
 [![EIP-7702](https://img.shields.io/badge/EIP--7702-Gasless%20spend-444444)](https://eips.ethereum.org/EIPS/eip-7702)
 [![EIP-5792](https://img.shields.io/badge/EIP--5792-Atomic%20batch-444444)](https://eips.ethereum.org/EIPS/eip-5792)
-[![Tests](https://img.shields.io/badge/tests-809%20passing-2ea043)](#tests)
+[![Tests](https://img.shields.io/badge/tests-1087%20passing-2ea043)](#tests)
 [![Status](https://img.shields.io/badge/status-live%20on%20Base%20Sepolia-0052ff)](https://soapay.up.railway.app/)
 
 [![Soapay landing page: Public chain. Private payments. Every payment lands on a fresh address only the recipient can open](docs/demo-screens/landing-hero.png)](https://soapay.up.railway.app/)
@@ -76,16 +76,23 @@ Fluidkey and Umbra use the same ERC-5564 and ERC-6538 standards, and both hide y
 **Documents**
 - [Docs site](https://soapay.up.railway.app/docs/) (source in [`apps/docs`](apps/docs/README.md))
 - [Pitch](pitch/README.md) · [PRD](PRD.md) · [Design brief](DESIGN_BRIEF.md) · [Privacy model](docs/privacy-model.md) · [Demo flow with screenshots](docs/demo-flow.md)
+- [Architecture](docs/architecture.md) · [World ID](docs/worldid.md) · [Bounty integrations, how to verify](docs/bounty-integrations.md) · [Desktop demo script](docs/demo-desktop.md)
 - [StealthDisperse plan](contracts/PLAN.md) · [MVP spec](docs/mvp-spec.md) · [PRD analysis](docs/prd-analysis.md) · [Decision log](docs/decision-log.md) · [Testnet deployment](docs/testnet-deployment.md)
 
 ## What's here
 
-This is the monorepo before M1:
+A pnpm and turbo monorepo. Protocol logic lives in one package, and every app is a thin shell over it, so a payer can be a company, a script or an agent, and a payee can be a person or an agent.
 
-- **`StealthDisperse`**: one contract that pays a whole batch of stealth addresses and announces each one in the same transaction. It holds no funds, keeps no state and has no owner. It has 27 unit, fuzz and gas tests, and 4 fork tests against real Base USDC and the real Announcer.
-- **`@soapay/sdk`**: Base as the chain, the canonical ERC-5564 Announcer and ERC-6538 Registry addresses, and USDC on Base. A round-trip test covers derive, detect by view tag, and recover the spending key.
-- **Recipient and sender apps**: static Vite + React apps, set up for wagmi and viem.
-- **Test-vector tool**: `contracts/tools/derive.ts` turns meta-addresses into sorted `Payment` lines, and with `--demo` checks that each recipient can find and spend its line.
+- **`packages/sdk`**, `@soapay/sdk`: keys from one seed, ERC-6538 registration, ENSv2 names and invite links, pay-run planning (denominated chunks, global sort, at most 350 lines per transaction), the `StealthDisperse` and EIP-5792 paths plus Safe export, scanning by view tag, the consolidation guard and timing queue, EIP-7702 spending through a paymaster, using a dApp from one stealth address over WalletConnect, encrypted backups, World ID key rotation, and the Privacy Pools exit.
+- **`apps/sender`**: the company app. Wallet login, a roster of names, pay runs with denominated payouts, review and sign, history, recipients, settings. Pays through `StealthDisperse` for a plain EOA, or an EIP-5792 batch for smart accounts and Safes.
+- **`apps/recipient`**: the employee app. A recovery phrase saved as a recovery kit, passkey unlock with a passkey-synced encrypted backup, onboarding to a name, the scanner and ledger, guarded Send, the exit, and key rotation with World ID.
+- **`apps/api`**: Hono on Node. Registration relayer, ENSv2 subname issuer and invites, World ID verification and rotation attestations, announcement indexer, encrypted backup store, and on the testnet the faucet and the gas-sponsorship proxy. It never holds your keys or funds.
+- **`apps/mcp`**: a stdio MCP server, so agents get `<label>.soapay.eth` names and pay, scan and spend behind guardrails.
+- **`apps/cli`**: headless `soapay distribute` (a CSV to a plan, dry run by default) and `soapay scan`.
+- **`apps/docs`**: the public docs site, Astro Starlight, served at `/docs/` next to the two apps.
+- **`packages/ui`** and **`packages/worldid-react`**: the shared Ledger design system, and `<HumanCheck>`, the World ID step.
+- **`contracts`**: Foundry. `StealthDisperse`, the one production contract, the testnet-only `MockUSDC`, and `tools/derive.ts` for test vectors.
+- **`examples`** and **`scripts`**: a dividend run and a grant round on the same rail, and the live demo scripts (seed a company, the attacker beat, the agent beat, the recovery check).
 - **Shared Claude memory** in [`.claude/memory`](.claude/memory), loaded by [`CLAUDE.md`](CLAUDE.md).
 
 ## Threat model
@@ -121,13 +128,13 @@ flowchart LR
   RA -->|"7702 auth + userOp, USDC paymaster"| ST
 ```
 
-- **Onboard once.** The recipient app derives spending and viewing keys from one seed. It registers the meta-address through a throwaway registrant, and the API issues an on-chain ENSv2 subname under `soapay.eth`.
+- **Onboard once.** The recipient app derives spending and viewing keys from one seed, usually from an employer's invite link. It registers the meta-address through a throwaway registrant, and the API issues an on-chain ENSv2 subname under `soapay.eth`.
 - **Pay in one transaction.** The sender app derives a fresh stealth address for every line, sorts them in ascending order, and pays and announces them atomically:
   - a **plain EOA** employer goes through `StealthDisperse`;
   - a **smart account, 7702 or Safe** employer sends a contract-less EIP-5792 batch of `[USDC.transfer, Announcer.announce] × N`.
 - **Big runs.** A run is cut into transactions of at most 350 lines, after sorting globally. It is never split by employee, because per-transaction totals would reveal salaries.
 - **Find payments.** The scanner filters Announcer events by view tag, recomputes each stealth address, and reads the real balance. It never trusts the token or amount in the metadata.
-- **Spend without linking.** A stealth address delegates to an audited 4337 account through EIP-7702 on its first spend, and a USDC paymaster pays the gas.
+- **Spend without linking.** A stealth address delegates to an audited 4337 account through EIP-7702 on its first spend, and a USDC paymaster pays the gas (sponsored on the Base Sepolia demo).
 
 ## Screens
 
@@ -170,15 +177,15 @@ Both are built on ERC-5564 and ERC-6538, and both hide your wallet from stranger
 
 ## Tests
 
-**907 tests, all passing** (`pnpm test`, 2026-09-26). Every privacy invariant in the PRD is a test in one of these packages.
+**1,087 tests, all passing** (`pnpm test`, 2026-09-26). Every privacy invariant in the PRD is a test in one of these packages.
 
 | Package | Tests | Skipped | Runner |
 | --- | --- | --- | --- |
-| `@soapay/sdk` | 350 | 18 fork and live tests, need `FORK_E2E=1` or keys | vitest |
-| `@soapay/recipient` | 138 | | vitest |
-| `@soapay/sender` | 151 | | vitest |
-| `@soapay/api` | 146 | | vitest |
-| `@soapay/mcp` | 61 | | vitest |
+| `@soapay/sdk` | 368 | 18 fork and live tests, need `FORK_E2E=1` or keys | vitest |
+| `@soapay/recipient` | 225 | | vitest |
+| `@soapay/sender` | 197 | | vitest |
+| `@soapay/api` | 168 | | vitest |
+| `@soapay/mcp` | 68 | | vitest |
 | `@soapay/contracts` | 44 | 2 fork tests, need `BASE_RPC_URL` | forge |
 | `@soapay/cli` | 17 | | vitest |
 
@@ -229,7 +236,7 @@ ISSUER_PRIVATE_KEY=0x... pnpm ensv2:issue-demo alice # issue, resolve, rotate, r
 [`apps/mcp`](apps/mcp) is a stdio MCP server over the SDK and API. Add it to Claude Code with `claude mcp add soapay -- node /abs/path/apps/mcp/dist/index.js`:
 
 - `create_agent_identity` registers the agent and claims its name with **ENSIP-26** records: `agent-context` (what the agent does and how to pay it) and `agent-endpoint[mcp|a2a|web]`. The ENSv2 issuer writes them atomically in the resolver's `initialize`, beside `stealth`. The same `agent` field accepts **ENSIP-25** `agent-registration[registry][id]` bindings for when a registry lists the agent.
-- `pay`, `scan`, `balance`, `spend` and `swap_in_place` cover the whole flow: pay names through StealthDisperse, find payments, send them on through 7702 + a USDC paymaster, and convert in place.
+- `pay`, `scan`, `balance`, `spend` and `swap_in_place` cover the whole flow: pay names through StealthDisperse, find payments, send them on through 7702 + a USDC paymaster, and convert in place. `whoami` and `resolve_name` read state, and on Base Sepolia `get_test_funds` draws from the faucet.
 - **Guardrails:**
   - every value move is a dry run, then a confirm of a single-use plan that expires in 10 minutes;
   - per-call and per-day USDC caps;
@@ -263,18 +270,21 @@ The World ID app and RP come from the api's environment (`WORLD_APP_ID`, `WORLD_
 
 | Milestone | Delivers | Status |
 | --- | --- | --- |
-| **M1** SDK + sender + scanner | Key derivation, ERC-6538 registration, subnames, `StealthDisperse` + EIP-5792 pay runs, scanner and ledger | Contract done, apps scaffolded |
-| **M2** Spend | 7702 delegation, USDC paymaster, single-balance view, cluster graph and consolidation guard | Planned |
-| **M3** Gateway | CCIP-Read gateway, self-host image, hosted service | Proposed cut under the threat model |
-| **M4** Exits and amounts | Denominated payouts, CCTP bridge, Privacy Pools exit | Denominations planned; exit proposed cut |
-| **M5** Agents | MCP server over the SDK, ERC-8004 identity binding | Planned |
+| **M1** SDK + sender + scanner | Key derivation, ERC-6538 registration, subnames, `StealthDisperse` + EIP-5792 pay runs, scanner and ledger | Done, live on Base Sepolia |
+| **M2** Spend | 7702 delegation, paymaster, single-balance view, cluster graph and consolidation guard, timing queue | Done. Circle paymaster on Base, sponsored gas on the testnet |
+| **M3** Gateway | CCIP-Read gateway, self-host image, hosted service | Deferred to the roadmap (tier 2) |
+| **M4** Exits and amounts | Denominated payouts, CCTP bridge, Privacy Pools exit | Denominations done. Exit built and proven on a Sepolia fork, hidden on the testnet build |
+| **M5** Agents | MCP server over the SDK, ENSIP-26 records, ENSIP-25 bindings for agent registries | Done, live on Base Sepolia |
+| **Next** | Shielded amounts, gateway mode so any wallet can receive by name, Base mainnet deploy | Planned |
 
 ## Known gaps
 
 - **Amounts are the main remaining leak.** A coworker who knows a colleague's salary finds their line. Denominated payouts help, but consolidating chunks at spend time reveals the total again.
-- **Unconfirmed decisions:** the two pay-run paths, the seed format (BIP-39 assumed), and whether scanners require a known payer by default.
+- **Small teams.** With fewer than about ten recipients, amounts alone can identify people. A warning or a floor is still to do.
+- **The testnet is not the mainnet gas path.** On Base Sepolia the pay token is our mock USDC and spends are gas-sponsored, so the Circle paymaster path that takes gas in USDC is exercised on a Base mainnet fork, not live.
+- **The compliant exit has not run live.** The SDK and UI are built and the Sepolia fork deposit and withdrawal are proven; the live leg waits on funds, and the testnet build hides it since CCTP only moves Circle USDC.
 - **`StealthDisperse` is a USDC-blacklist chokepoint** for the EOA path. It is immutable, so moving to a redeployed address is only a config change.
-- **Not deployed yet.** The deploy is a deterministic CREATE2 script ([deploy steps](contracts/PLAN.md#deploy)).
+- **Not on Base mainnet yet.** `StealthDisperse` is deployed on Base Sepolia; the mainnet deploy is the same deterministic CREATE2 script ([deploy steps](contracts/PLAN.md#deploy)).
 
 ## Getting started
 
@@ -287,6 +297,8 @@ pnpm install
 pnpm build && pnpm test      # SDK tests + forge test
 pnpm dev                     # recipient :5173 · sender :5174 · api :8787
 ```
+
+Copy each app's `.env.example` to `.env.local` (Base Sepolia defaults). The api needs `RELAYER_PRIVATE_KEY` for registration and the faucet, and `PIMLICO_API_KEY` for sponsored gas. The live demo helpers are `pnpm demo:seed-company`, `demo:setup-recovery`, `demo:attacker`, `demo:agent` and `demo:recovery-check` ([docs/demo-flow.md](docs/demo-flow.md)).
 
 Contracts:
 
@@ -329,15 +341,27 @@ Base Sepolia, chain `84532` (the live demo; [docs/testnet-deployment.md](docs/te
 | PRD review and open questions | [`docs/prd-analysis.md`](docs/prd-analysis.md) |
 | Shared decision memory | [`.claude/memory/MEMORY.md`](.claude/memory/MEMORY.md) |
 | Chain and contract constants | [`packages/sdk/src/constants.ts`](packages/sdk/src/constants.ts) |
+| Architecture, flows and both diagrams | [`docs/architecture.md`](docs/architecture.md) |
+| World ID design and debrief | [`docs/worldid.md`](docs/worldid.md) |
+| Demo flow, every screen, desktop script | [`docs/demo-flow.md`](docs/demo-flow.md), [`docs/demo-desktop.md`](docs/demo-desktop.md) |
+| Each integration against its prize criteria | [`docs/bounty-integrations.md`](docs/bounty-integrations.md) |
 
 ```text
-apps/recipient    Recipient app: keys, onboarding, scanner, ledger, spend
-apps/sender       Sender app: pay runs via StealthDisperse or an EIP-5792 batch
-apps/api          Registration relayer, ENSv2 subname issuer, World ID checks, announcement indexer
-packages/sdk      @soapay/sdk: derivation, registry, announce, scan, spend
-contracts         @soapay/contracts: Foundry, StealthDisperse, tools/derive.ts
-docs              PRD analysis
-.claude/memory    Shared Claude memory, committed
+apps/sender             Company app: roster, pay runs via StealthDisperse or an EIP-5792 batch
+apps/recipient          Employee app: keys, onboarding, scanner, ledger, guarded spend, exit, rotation
+apps/api                Relayer, ENSv2 issuer and invites, World ID, indexer, backups, testnet faucet and gas sponsorship
+apps/mcp                MCP server: agents with .soapay.eth names
+apps/cli                soapay distribute, soapay scan
+apps/docs               Docs site (Astro Starlight), served at /docs/
+packages/sdk            @soapay/sdk: all protocol logic
+packages/ui             Shared Ledger design system
+packages/worldid-react  <HumanCheck>, the World ID step
+contracts               Foundry: StealthDisperse, MockUSDC (testnet only), tools/derive.ts
+examples                Dividend run, grant round, demo drivers
+scripts                 Live demo scripts, testnet funding, one-origin build and serve
+docs                    Architecture, privacy model, spec, decision log, demo flow and screens, diagrams
+pitch                   Deck, talk track, prize answers
+.claude/memory          Shared Claude memory, committed
 ```
 
 ## Team
