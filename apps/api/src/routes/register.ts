@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { getAddress, isAddress, type Address, type Hash, type Hex } from "viem";
 import { jsonBody, type AppDeps } from "../app.js";
 import { requireHuman } from "../hooks.js";
@@ -14,33 +14,56 @@ export function registerRoutes(deps: AppDeps, relay: RegistrationRelay): Hono {
   const inflight = new Map<string, Promise<Outcome>>();
 
   r.post("/register", async (c) => {
-    if (!relay.enabled) throw new ApiError(503, "relayer_disabled", "Registration relayer is not configured");
-
     const body = await jsonBody(c);
-    if (typeof body.registrant !== "string" || !isAddress(body.registrant, { strict: false })) {
+    const out = await submit(c, body.registrant, parseMetaAddress(body.metaAddress).bytes, body.signature, body.proof);
+    return c.json(out, out.status === "pending" ? 202 : 200);
+  });
+
+  /**
+   * CK's M1 relayer shape (was apps/gateway): {registrant, schemeId: 1, stealthMetaAddress (66 bytes hex),
+   * signature} -> {txHash} | {error}. Same path as /register: one relayer key and nonce sequence, the same
+   * rate limits, idempotency and stored receipts. Errors keep their HTTP status but use CK's flat body.
+   */
+  r.post("/relay", async (c) => {
+    try {
+      const body = await jsonBody(c);
+      if (body.schemeId !== 1) throw new ApiError(400, "invalid_scheme", "schemeId must be 1");
+      if (typeof body.stealthMetaAddress !== "string" || !/^0x[0-9a-fA-F]{132}$/.test(body.stealthMetaAddress)) {
+        throw new ApiError(400, "invalid_meta_address", "stealthMetaAddress must be 66 bytes of hex");
+      }
+      const meta = parseMetaAddress(body.stealthMetaAddress).bytes;
+      const out = await submit(c, body.registrant, meta, body.signature, undefined);
+      return c.json({ txHash: out.txHash }, 200);
+    } catch (e) {
+      if (e instanceof ApiError) {
+        for (const [k, v] of Object.entries(e.headers)) c.header(k, v);
+        return c.json({ error: e.message }, e.status);
+      }
+      throw e;
+    }
+  });
+
+  async function submit(c: Context, rawRegistrant: unknown, meta: Hex, rawSignature: unknown, proof: unknown): Promise<Outcome> {
+    if (!relay.enabled) throw new ApiError(503, "relayer_disabled", "Registration relayer is not configured");
+    if (typeof rawRegistrant !== "string" || !isAddress(rawRegistrant, { strict: false })) {
       throw new ApiError(400, "invalid_registrant", "registrant must be an address");
     }
-    const registrant = getAddress(body.registrant);
-    const meta = parseMetaAddress(body.metaAddress).bytes;
+    const registrant = getAddress(rawRegistrant);
     // ERC-6538 accepts ERC-1271 signatures too, so allow longer than 65 bytes, within reason.
-    const signature = requireHex(body.signature, "signature", 1024);
+    const signature = requireHex(rawSignature, "signature", 1024);
     const key = `${registrant}:${meta}`;
 
     // Checked and set with no await in between, so concurrent identical requests share one job.
     const pending = inflight.get(key);
-    if (pending) {
-      const out = await pending;
-      return c.json({ ...out, idempotent: true }, out.status === "pending" ? 202 : 200);
-    }
-    const job = process({ registrant, meta, signature, ip: deps.getIp(c), proof: body.proof });
+    if (pending) return { ...(await pending), idempotent: true };
+    const job = process({ registrant, meta, signature, ip: deps.getIp(c), proof });
     inflight.set(key, job);
     try {
-      const out = await job;
-      return c.json(out, out.status === "pending" ? 202 : 200);
+      return await job;
     } finally {
       inflight.delete(key);
     }
-  });
+  }
 
   async function process(a: { registrant: Address; meta: Hex; signature: Hex; ip: string; proof: unknown }): Promise<Outcome> {
     const { registrant, meta, signature } = a;
