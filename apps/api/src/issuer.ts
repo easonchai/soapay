@@ -33,7 +33,7 @@ export function makeNameIssuer(config: Config, logger: Logger): NameIssuer {
   }
   // Short per-request timeout with retries, and 1 s receipt polling: a single hung Sepolia RPC call
   // used to hold the claim for its whole 30 s timeout after the txs were already mined.
-  const transport = http(config.l1RpcUrl, { retryCount: 3, timeout: 8_000 });
+  const transport = http(config.l1RpcUrl, { retryCount: 3, timeout: 20_000 });
   const account = privateKeyToAccount(config.issuerPrivateKey);
   const publicClient = createPublicClient({ chain: sepolia, transport, pollingInterval: 1_000 });
   const walletClient = createWalletClient({ chain: sepolia, transport, account, pollingInterval: 1_000 });
