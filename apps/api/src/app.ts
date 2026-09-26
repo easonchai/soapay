@@ -17,6 +17,7 @@ import { uniswapRoutes } from "./routes/uniswap.js";
 import { inviteRoutes } from "./routes/invites.js";
 import { paymasterRoutes } from "./routes/paymaster.js";
 import { faucetRoutes } from "./routes/faucet.js";
+import { backupRoutes } from "./routes/backups.js";
 import type { FaucetWallet } from "./faucet.js";
 import { RegistrationRelay } from "./relay.js";
 import type { WorldId } from "./worldid/verifier.js";
@@ -79,17 +80,16 @@ export function buildApp(input: BuildAppDeps): Hono {
       // /paymaster is also called by wallets from their own origin (EIP-5792 paymasterService), so any
       // origin may call it; its allow-list and rate limits are the guard. Everything else: our SPAs only.
       origin: (origin, c) => (c.req.path === "/paymaster" ? origin || "*" : config.corsOrigins.includes(origin) ? origin : null),
-      allowMethods: ["GET", "POST", "OPTIONS"],
+      allowMethods: ["GET", "POST", "PUT", "OPTIONS"],
       maxAge: 600,
     }),
   );
-  app.use(
-    "*",
-    bodyLimit({
-      maxSize: config.bodyLimitBytes,
-      onError: (c) => c.json(errorBody("payload_too_large", `Body exceeds ${config.bodyLimitBytes} bytes`), 413),
-    }),
-  );
+  const globalLimit = bodyLimit({
+    maxSize: config.bodyLimitBytes,
+    onError: (c) => c.json(errorBody("payload_too_large", `Body exceeds ${config.bodyLimitBytes} bytes`), 413),
+  });
+  // Encrypted backups (up to 512 KiB) carry their own, larger route-level limit (routes/backups.ts).
+  app.use("*", (c, next) => (c.req.path.startsWith("/backups/") ? next() : globalLimit(c, next)));
 
   app.route("/", healthRoutes(deps));
   const relay = new RegistrationRelay(deps);
@@ -100,6 +100,7 @@ export function buildApp(input: BuildAppDeps): Hono {
   app.route("/", uniswapRoutes(deps));
   app.route("/", paymasterRoutes(deps));
   app.route("/", faucetRoutes(deps));
+  app.route("/", backupRoutes(deps));
   app.route("/", worldIdRoutes(deps));
   app.route("/", announcementRoutes(deps));
 

@@ -120,6 +120,8 @@ Name claim, EIP-712 (`metaAddress` is signed in canonical lowercase `st:eth:0x�
 | `POST /names` | `{label, registrant, metaAddress, deadline, signature}` → verify the EIP-712 NameClaim, check `stealthMetaAddressOf(registrant,1) == metaAddress`, check the label is free and valid (`[a-z0-9-]{3,32}`) → store |
 | `GET /names/:label` | Public record, for debugging |
 | `GET /announcements?from=&to=&cursor=` | All Announcer events, scheme 1, paginated. The indexer backfills from `ERC5564_StartBlocks` in chunks, then polls the tip. No filtering by recipient. |
+| `PUT /backups/:address` | **Encrypted backups (D-62), shared by the company and employee apps.** `{version, ciphertext, signature}`: `ciphertext` is base64 (≤ 512 KiB decoded, else 413 `too_large`); `signature` is an EIP-191 personal_sign by `address` over exactly `soapay-backup:v1:${checksummedAddress}:${version}:${keccak256(utf8 ciphertext)}` (SDK `backupMessage`), verified with viem `verifyMessage` on the API's chain so ERC-1271 / ERC-6492 / 7702 smart accounts work. `version` must be strictly greater than the stored one (409 `stale_version` with the current `version`: no rollback). Rate-limited per IP and per address. → `{address, version}` |
+| `GET /backups/:address` | → `{address, version, ciphertext, updatedAt}` or 404 `not_found`. The server only ever holds ciphertext; each app encrypts client-side with a key derived from the wallet's signature or a passphrase. |
 
 `POST /register` and `POST /names` call a pluggable `HumanVerifier` (World ID, §5) and `POST /names` calls a pluggable `NameIssuer` (ENSv2, §2).
 
