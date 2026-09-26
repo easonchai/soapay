@@ -19,7 +19,7 @@ describe("MCP server (in-memory client)", () => {
     const { client } = await connect();
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual(
-      ["balance", "create_agent_identity", "pay", "resolve_name", "scan", "spend", "swap_in_place", "whoami"].sort(),
+      ["balance", "create_agent_identity", "get_test_funds", "pay", "resolve_name", "scan", "spend", "swap_in_place", "whoami"].sort(),
     );
     const pay = tools.find((t) => t.name === "pay")!;
     expect(Object.keys(pay.inputSchema.properties ?? {})).toEqual(["payments", "dry_run", "confirm"]);

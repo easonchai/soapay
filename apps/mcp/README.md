@@ -21,13 +21,15 @@ The server is bundled because the ScopeLift SDK can't load in plain Node. Every 
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `API_URL` | `http://localhost:8787` | Soapay API: `/register`, `/names`, `/announcements`, `/uniswap` |
+| `API_URL` | `http://localhost:8787` | Soapay API: `/register`, `/names`, `/announcements`, `/uniswap`, and on Base Sepolia `/paymaster` and `/faucet` |
 | `CHAIN_ID` | `84532` | Base Sepolia |
 | `RPC_URL` / `ENS_RPC_URL` | public RPCs | Base Sepolia / Ethereum Sepolia (ENSv2) |
 | `BUNDLER_URL` | `https://public.pimlico.io/v2/84532/rpc` | ERC-4337 bundler for spends |
+| `PAYMASTER_URL` | `${API_URL}/paymaster` | Base Sepolia: the ERC-7677 sponsorship proxy that pays spends' gas (D-52). Unused on Base mainnet (Circle paymaster, gas in USDC) |
+| `PAY_TOKEN` | unset | Base Sepolia only: the pay token. Unset = Soapay's mock USDC `0x028D…14Bb` |
 | `STEALTH_DISPERSE` | `0x6B7a…39CA` | The deployed StealthDisperse |
 | `AGENT_MNEMONIC` | unset | The agent as recipient (spending, viewing and registrant keys) |
-| `AGENT_PAYER_PRIVATE_KEY` | unset | The agent as payer: an EOA with USDC and a little ETH |
+| `AGENT_PAYER_PRIVATE_KEY` | unset | The agent as payer: an EOA with USDC and a little ETH (on Base Sepolia, `get_test_funds` drops test USDC once) |
 | `STATE_DIR` | `~/.soapay-mcp` | `state.json` (0600): daily cap counter, pinned meta-addresses, guard graph. No keys |
 | `MAX_PER_CALL_USDC` / `MAX_PER_DAY_USDC` | `5` / `20` | Caps |
 | `PAYEE_ALLOWLIST` | unset | Comma-separated names. When set, only these names can be paid, and raw addresses are refused |
@@ -44,8 +46,9 @@ The server is bundled because the ScopeLift SDK can't load in plain Node. Every 
 | `pay(payments[{name, amount}])` → `pay(confirm)` | One pay run through StealthDisperse. The plan shows lines, total, txs and gas; the confirm approves the exact total, waits until the allowance is visible, then pays |
 | `scan` | Received payments: real on-chain balances, payer, ledger flags |
 | `balance` | Total received, grouped into clusters of addresses already linked |
-| `spend(to, amount)` → `spend(confirm)` | Sends received USDC to an address or a name. Gas is paid in USDC (7702 + Circle paymaster), one userOp per source address. To a name, every part goes to its own fresh stealth address with an announcement |
+| `spend(to, amount)` → `spend(confirm)` | Sends received USDC to an address or a name. One userOp per source address (7702); gas is sponsored on Base Sepolia and paid in USDC by the Circle paymaster on Base. To a name, every part goes to its own fresh stealth address with an announcement |
 | `swap_in_place(tokenOut, amount)` → `swap_in_place(confirm)` | Uniswap swap that stays inside one stealth address |
+| `get_test_funds` | Base Sepolia only (not listed elsewhere): the payer wallet's one-time drop of test USDC from the API |
 
 Example prompts:
 

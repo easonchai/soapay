@@ -126,6 +126,12 @@ export function makeCtx(opts: { env?: Record<string, string>; keys?: boolean; pa
     }),
     getName: vi.fn(async (label: string) => registry.get(label) ?? null),
     announcements: vi.fn(async () => opts.announcements ?? []),
+    faucet: vi.fn(async (address: Address) => ({
+      status: "sent" as const,
+      address,
+      usdc: { amount: "1000000000000", txHash: hash() },
+      eth: null,
+    })),
   } satisfies Record<keyof Api, unknown>;
 
   let now = NOW;
