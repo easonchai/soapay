@@ -1,0 +1,43 @@
+/* Soapay docs: Direction A Ledger tokens (packages/ui/src/styles.css) on Starlight's variables.
+   Starlight's :root is the dark theme; the light palette sits under [data-theme="light"]. */
+:root {
+  --sl-font: "IBM Plex Sans", system-ui, sans-serif;
+  --sl-font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* dark palette */
+  --sl-color-accent-low: #1f3552;
+  --sl-color-accent: #8fb3e3;
+  --sl-color-accent-high: #c9daf0;
+  --sl-color-white: #e6eaf0;
+  --sl-color-gray-1: #e6eaf0;
+  --sl-color-gray-2: #9aa5b4;
+  --sl-color-gray-3: #5c6879;
+  --sl-color-gray-4: #3a4656;
+  --sl-color-gray-5: #263040;
+  --sl-color-gray-6: #12181f;
+  --sl-color-black: #0b0f14;
+}
+:root[data-theme="light"] {
+  /* light palette: navy accent on a white canvas */
+  --sl-color-accent-low: #e4eefa;
+  --sl-color-accent: #1e3a5f;
+  --sl-color-accent-high: #162c49;
+  --sl-color-white: #0f1720;
+  --sl-color-gray-1: #0f1720;
+  --sl-color-gray-2: #4a5563;
+  --sl-color-gray-3: #8a94a3;
+  --sl-color-gray-4: #b8c0cb;
+  --sl-color-gray-5: #d5dae1;
+  --sl-color-gray-6: #eef0f3;
+  --sl-color-gray-7: #f4f5f7;
+  --sl-color-black: #ffffff;
+}
+/* 2px radius everywhere, like the apps. */
+:root {
+  --sl-border-radius: 2px;
+}
+.sl-markdown-content :is(code, pre, img, .card, .starlight-aside) {
+  border-radius: 2px;
+}
+.site-title img {
+  height: 1.5rem;
+}
