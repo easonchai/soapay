@@ -7,7 +7,7 @@
     "dividend": "tsx dividend-run.ts",
     "grant": "tsx grant-round.ts",
     "demo:setup": "tsx demo/setup-recipients.ts",
-    "demo:agent": "tsx demo/agent.ts",
+    "demo:pluggable-agent": "tsx demo/pluggable-agent.ts",
     "demo:setup-recovery": "tsx demo/setup-recovery.ts",
     "demo:attacker": "tsx demo/attacker.ts",
     "demo:recovery-check": "tsx demo/recovery-check.ts",
