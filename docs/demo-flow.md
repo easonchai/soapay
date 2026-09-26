@@ -29,7 +29,7 @@ Basescan is behind a Cloudflare check that a headless browser can't pass. Open t
    - **"Me" (Jordan):** fully onboarded with a World ID Selfie Check session attached at enrollment (or attached 72 h earlier; the cooldown applies), labelled main wallet under Labels, and already paid by 2–3 earlier runs, so Payments shows several addresses from the Acme payer.
    - **"New hire":** a fresh invite link opened and left on the first onboarding screen, or on the Recovery step (see Beat 2).
 5. **Pre-generated invite:** create it now under Recipients → Invite employee → **Sign and create link**. Keep the link and its QR.
-6. **Pre-approved exit leg:** on "Me", run one leg the day before under Exit (**Withdraw round amounts** on; **Wait a random delay after approval** off for the demo leg). Live runs need about 18 USDC per leg on the stealth address (docs/drift-audit.md: the live run was blocked on funds). The ASP approval can take hours, so it has to be approved before you go on stage. The Exit screen then lists it under **Finished exit** with its Basescan/Etherscan step links.
+6. **Pre-approved exit leg:** on "Me", run one leg the day before under Exit (**Withdraw round amounts** on; **Wait a random delay after approval** off for the demo leg). A leg needs at least **16.40 USDC** on one stealth address (the planner shows the minimum and how much a short address needs); pay 18 to be safe. The scripted live run and its funding status are in docs/testnet-deployment.md, "Live exit": as of 2026-09-26 it is blocked on 5.80 test USDC for the deployer, so there are no live tx links yet; add them to Beat 5 once it has run. If the leg is still queued in its timing window, **Start now** on the leg starts it at once. The ASP approval can take hours, so it has to be approved before you go on stage. The Exit screen then lists it under **Finished exit** with its Basescan/Etherscan step links.
 7. **World ID:** the API runs `WORLD_ENV=staging` (the simulator). Open the simulator on a second device or tab and do one full rotate end to end beforehand (it hasn't been run live yet; see bounty-integrations "Before judging").
 8. **Fallback deck:** the screenshots in `demo-screens/` in slide order, plus a mock-mode build of both apps on localhost (the recipient's `pnpm --filter @soapay/recipient dev:mock` runs the whole flow offline, exit included, in about 35 s per leg).
 
@@ -79,6 +79,7 @@ Total 3:00. Time is the budget for each beat; the clicks are exactly CK's labels
 - **Say:** "My coworkers know my main wallet, so the app refuses to link my salary to it. The way out is a screened pool: each address deposits on its own, and the withdrawal to my wallet can't be matched to a deposit."
 - **Bounty:** none of the three. This beat evidences PRD Goals 3 and 5: the gasless spend, the guard and the compliant exit.
 - **Pre-staged:** the main wallet labelled; one exit leg already approved and withdrawn.
+- **Live exit tx links:** pending the funded run (docs/testnet-deployment.md, "Live exit"); show the finished leg's Basescan/Etherscan links from the Exit screen.
 - **Fallback:** a bundler or paymaster stall past 10 s: show the live spend tx tab. Don't click **Start exit** live (the ASP wait is minutes to hours); only show the finished leg.
 
 ### Beat 6: Convert in place (2:25–2:40) · Convert · Uniswap

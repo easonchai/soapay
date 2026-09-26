@@ -212,3 +212,6 @@ metadata:
 - Checkpoint 26 (2026-09-26):
   - **The public URL is now https://soapay.up.railway.app** (the service domain was renamed via the Railway GraphQL `serviceDomainUpdate`, using the CLI's access token; PUBLIC_ORIGIN and CORS updated; both redeployed; the old URL returns 404).
   - Four parallel agents started, all on branches off `yudhishthra` with CK's UI flow frozen: `privacy-swap` (D-27 + docs/privacy-model.md), `denoms-timing` (D-31 + D-28), `sdk-agnostic` (D-29, additive only), `demo-flow` (docs/demo-flow.md walking CK's real UI).
+- Checkpoint 27 (2026-09-26): **exit fixes on branch `exit-live`** (9724373, D-42, agent decision: **confirm**).
+  - Leg minimum derived in the SDK (`exitLegMinimum`, ≈ 16.4 USDC testnet); the recipient planner uses it. Persist-before-send for userOps (runner/Retry now pass `persist`) and relayed withdrawals (`pendingWithdraw`). "Start now" starts queued legs immediately.
+  - Live exit NOT run: the deployer holds 12.2 USDC on Base Sepolia (needs 18). Funding + the one-line command are in docs/testnet-deployment.md "Live exit".
