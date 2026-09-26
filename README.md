@@ -8,7 +8,7 @@
 [![Tests](https://img.shields.io/badge/tests-809%20passing-2ea043)](#tests)
 [![Status](https://img.shields.io/badge/status-live%20on%20Base%20Sepolia-0052ff)](https://soapay.up.railway.app/)
 
-[![Soapay landing page: every wallet address is a public bank statement](docs/demo-screens/landing-hero.png)](https://soapay.up.railway.app/)
+[![Soapay landing page: Public chain. Private payments. Every payment lands on a fresh address only the recipient can open](docs/demo-screens/landing-hero.png)](https://soapay.up.railway.app/)
 
 **Live demo:** [soapay.up.railway.app](https://soapay.up.railway.app/) (company app) · [soapay.up.railway.app/app/](https://soapay.up.railway.app/app/) (employee app), on Base Sepolia. **Docs:** [soapay.up.railway.app/docs/](https://soapay.up.railway.app/docs/).
 
