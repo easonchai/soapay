@@ -17,7 +17,7 @@ The fixes built for companies (Base Ledgers, Tempo Zones, Toku on Aleo) are priv
 
 Soapay is privacy infrastructure for payments on chain. Every payment lands on a fresh address that only you can open, and you can spend it without it ever linking back to you. A recipient shares one ENS name. Each payment to it goes to a new ERC-5564 stealth address, so a coworker reading the same payroll batch sees a list of never-before-seen addresses and cannot tell which line is theirs.
 
-Nothing sits between payer and recipient. The sender's browser derives a fresh stealth address for every line, pays it directly on Base, and throws the ephemeral key away. There is no account at Soapay and no server of ours in the loop. Nothing of ours holds money, and the one contract we wrote keeps no state and has no owner.
+Nothing sits between payer and recipient. The sender's browser derives a fresh stealth address for every line, pays it directly on Base, and throws the ephemeral key away. There is nothing to apply for, no account at Soapay and no server of ours in the loop, so Soapay is permissionless. Nothing of ours holds money, and the one contract we wrote keeps no state and has no owner.
 
 ## Who it is for
 
