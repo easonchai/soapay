@@ -79,10 +79,10 @@ function readEnvFile(rel: string): Record<string, string> {
   return out;
 }
 
-type Funder = { source: string; account: Account };
+export type Funder = { source: string; account: Account };
 
 /** Wallets we control that may pay the stolen registrant's gas, in order. Env overrides first. */
-function funders(net: "sepolia" | "base-sepolia"): Funder[] {
+export function funders(net: "sepolia" | "base-sepolia"): Funder[] {
   const contracts = readEnvFile("contracts/.env");
   const api = readEnvFile("apps/api/.env");
   const candidates: [string, string | undefined][] =
