@@ -8,6 +8,7 @@ import { useVault } from "../vault/VaultProvider.js";
 const NAV = [
   { to: "/", label: "Payments" },
   { to: "/spend", label: "Send" },
+  { to: "/connect", label: "dApps" },
   { to: "/exit", label: "Exit" },
   { to: "/labels", label: "Labels" },
   { to: "/name", label: "Name" },

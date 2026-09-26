@@ -37,6 +37,14 @@ export interface SpendService {
 export const SPEND_DELAY_MS = 4_000;
 export const SPEND_JITTER_MS = 20_000;
 
+/** Why sending from a stealth address can't work with these settings (null = it can). Shared by Send and dApps. */
+export function spendUnavailableReason(opts: { chainId: number; bundlerUrl: string; paymasterUrl?: string | undefined }): string | null {
+  if (!opts.bundlerUrl) return "Add a bundler URL in Settings to send.";
+  if (defaultPaymasterMode(opts.chainId) === "sponsored" && !opts.paymasterUrl)
+    return "Add the Soapay API URL in Settings: gas on this testnet is sponsored through it.";
+  return null;
+}
+
 export function createSdkSpendService(opts: {
   chainId: number;
   bundlerUrl: string;
@@ -44,21 +52,10 @@ export function createSdkSpendService(opts: {
   /** The Soapay API's `/paymaster` (sponsored gas on Base Sepolia, D-52). Unused where gas is paid in USDC. */
   paymasterUrl?: string;
 }): SpendService {
-  if (!opts.bundlerUrl) {
-    return {
-      ready: false,
-      unavailableReason: "Add a bundler URL in Settings to send.",
-      quote: () => Promise.reject(new Error("No bundler URL configured")),
-      sendAll: () => Promise.reject(new Error("No bundler URL configured")),
-    };
-  }
-  if (defaultPaymasterMode(opts.chainId) === "sponsored" && !opts.paymasterUrl) {
-    return {
-      ready: false,
-      unavailableReason: "Add the Soapay API URL in Settings: gas on this testnet is sponsored through it.",
-      quote: () => Promise.reject(new Error("No Soapay API URL configured")),
-      sendAll: () => Promise.reject(new Error("No Soapay API URL configured")),
-    };
+  const unavailable = spendUnavailableReason(opts);
+  if (unavailable) {
+    const fail = () => Promise.reject(new Error(unavailable));
+    return { ready: false, unavailableReason: unavailable, quote: fail, sendAll: fail };
   }
   let client: SpendClient | null = null;
   const get = () =>

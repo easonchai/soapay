@@ -170,6 +170,14 @@ export function Home() {
                           >
                             Send
                           </button>
+                          <button
+                            type="button"
+                            className="btn-inline"
+                            title="Use this address with a dApp (WalletConnect)"
+                            onClick={() => void navigate("/connect", { state: { address: e.stealthAddress } })}
+                          >
+                            dApp
+                          </button>
                           <button type="button" className="btn-text btn-inline" onClick={() => setOpen(isOpen ? null : key)}>
                             {isOpen ? "Hide" : "Details"}
                           </button>
