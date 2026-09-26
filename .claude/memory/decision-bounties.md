@@ -7,7 +7,7 @@ metadata:
 Main track (not Continuity). The owner chose these on 2026-09-25:
 - **ENSv2 ($6k pool):** on-chain subnames and EAC-scoped records; see [[decision-naming]].
 - **World IDKit ($5k), revised 2026-09-25 after the owner asked "is it really needed?":** ONE trust moment only, self-service key rotation, using a **Selfie Check session** (created optionally at enrollment, proved at rotation). There's no enrollment gate and no Orb requirement. It is essential for pseudonymous DAO contributors (no out-of-band channel) and a convenience for known employees. Fallback: manual employer approval. Spec: docs/mvp-spec.md §5.
-- **Uniswap API ($6k):** employee side ONLY (owner decision 2026-09-25; employer treasury-funding swap deferred).
+- **Uniswap API ($6k): DROPPED 2026-09-26 (D-53)** — no longer targeted; code and FEEDBACK.md stay. Original note: employee side ONLY (owner decision 2026-09-25; employer treasury-funding swap deferred).
   - Convert salary *in place* inside a stealth address (7702 userOp with approve + swap, USDC paymaster), so no clusters merge.
   - The preference stays local.
   - Needs FEEDBACK.md and the feedback form.
