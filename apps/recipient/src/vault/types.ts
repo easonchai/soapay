@@ -158,7 +158,29 @@ export type VaultData = {
   settings: Settings;
   profile: Profile;
   chains: Record<string, ChainState>;
+  /**
+   * Passkey-synced backup state (D-63): what was last uploaded. Not part of the uploaded payload.
+   * Only meaningful while `address` matches the current passkey's backup address.
+   */
+  backup?: BackupMeta;
 };
+
+export type BackupMeta = {
+  /** Backup signer address the vault was last uploaded under. */
+  address: Address;
+  /** Last version the API accepted (strictly increasing per address). */
+  version: number;
+  /** When it was accepted. */
+  at: number;
+  /** contentHash of the uploaded payload, so unchanged vaults aren't re-uploaded. */
+  hash: string;
+};
+
+/** The vault data that goes into a backup: everything except the backup bookkeeping itself. */
+export function backupPayload(data: VaultData): Omit<VaultData, "backup"> {
+  const { backup: _b, ...rest } = data;
+  return rest;
+}
 
 export function defaultSettings(): Settings {
   return {

@@ -265,6 +265,20 @@ sequenceDiagram
 - **Gas.** Base mainnet: Circle paymaster, fee in USDC from the address, any target. Base Sepolia: the API's `/paymaster` only sponsors allow-listed targets (pay token, Permit2, Universal Router, StealthDisperse, Announcer). A dApp contract works there only after the operator adds it to `PAYMASTER_EXTRA_TARGETS` (an explicit opt-in that already exists; nothing was widened).
 - **Leaks this doesn't hide.** The dApp learns the one address and everything it does. WalletConnect's session store (IndexedDB, outside the encrypted vault) records which address is connected to which dApp. The relay sees the browser's IP, like the RPC and bundler (out of scope for v1).
 
+### 8. Get your account back with a synced passkey (D-63)
+
+The employee app keeps its vault (keys, name, World ID session, labels, settings) encrypted in the browser. Clearing site data or opening a new device used to leave only the recovery phrase. Passkeys already sync (iCloud Keychain, Google Password Manager), so the vault now follows them:
+
+1. **Keys from the passkey alone.** The vault's passkey evaluates PRF over the fixed app salt `PRF_SALT` on every unlock. HKDF-SHA256 over that output, with fixed info strings (`soapay-backup/v1/aes-256-gcm`, `soapay-backup/v1/secp256k1-signer`), gives an AES-256-GCM **backup key** and a secp256k1 **backup signer** (48 bytes reduced mod n, zero rejected). No per-vault salt or anything else local goes in, so any browser holding the synced passkey derives the same keys. The signer's address is the **backup address**; it isn't derived from the recovery phrase, so it has no link to the stealth, registrant or name keys. Code: `apps/recipient/src/vault/backup.ts`.
+2. **Sync.** About 3 s after a vault write, the app encrypts the vault (`0x01 | IV | AES-GCM`, with the backup address and version as additional data, fresh IV each time) and uploads it with `PUT /backups/:address {version, ciphertext, signature}`. The signature is EIP-191 by the backup signer over `soapay-backup:v1:<address>:<version>:<keccak256(ciphertext)>`; versions strictly increase, and on `409 stale_version` the app refetches the stored version and retries once (last writer wins between devices). No prompt: the keys stay in memory while unlocked and are never stored. An unchanged vault (same content hash) isn't re-uploaded. Code: `apps/recipient/src/vault/BackupSync.tsx`.
+3. **Restore.** The welcome screen shows **Unlock with passkey**: a discoverable WebAuthn request (no `allowCredentials`) with PRF over `PRF_SALT`. The app derives the backup address, calls `GET /backups/:address`, decrypts, and writes a fresh local vault locked with that same passkey, then opens the ledger; the unlock scan continues from the backed-up block and refreshes balances. No backup for that passkey: "No backup for this passkey", with **Restore from recovery phrase**.
+4. **Where it doesn't work.** Passphrase vaults and passkeys without PRF (some password managers) have no backup: the restore button is hidden when the browser can't do passkeys with PRF, and Settings shows "Backup off". The recovery phrase stays the last resort everywhere.
+5. **Storage.** After unlock the app calls `navigator.storage.persist()` once (a refusal is ignored); Settings shows "Backed up ..." and whether storage is persistent.
+
+**Spending keys never leave the client in plaintext.** The vault is encrypted on the device before upload, under a key only the passkey can reproduce; the server stores ciphertext it can't open.
+
+**What the server learns.** That some backup address has a Soapay vault, its size, and when it's updated. It can't read the vault or link the backup address to a name, a registrant or a stealth address (nothing in the request carries them). It does see the IP of each request; RPC/IP linkage is out of scope for v1, as for the rest of the API. It could serve an older genuine version of the backup (a rollback), but not forge, relabel or move one: the version and address are authenticated inside the ciphertext.
+
 ## What each piece stores, and why
 
 ### An employee's ENS name (`alice.soapay.eth`, ENSv2 on Sepolia)
@@ -421,7 +435,7 @@ We don't enter "World ID for Agents". Our agents are payees, and no agent action
 | --- | --- | --- |
 | Coworker | The whole pay run on-chain: every line, every amount | Which line is whose. Lines are fresh, sorted by address and split into standard chunks |
 | Employer | Everything (trusted by design): name → address → amount | The employee's keys |
-| Soapay API | Registrations, names, World ID proofs, public announcements | Stealth addresses in swaps (quote-only), keys, funds |
+| Soapay API | Registrations, names, World ID proofs, public announcements; encrypted vault backups under an unlinked backup address (size, update times) | Stealth addresses in swaps (quote-only), keys, funds, what's inside a backup or whose it is |
 | Uniswap | A quote's pair and amount | The address that swaps |
 | Employee | Only their own lines, found with their viewing key | Other people's lines |
 
