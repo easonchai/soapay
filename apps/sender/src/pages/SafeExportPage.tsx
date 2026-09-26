@@ -45,7 +45,7 @@ export function SafeExportPage(p: SafeExportPageProps) {
       </div>
       <div className="actions">
         <button className="btn-primary" onClick={p.onOpenRun}>
-          Open run record
+          Open run
         </button>
         <button onClick={p.onNewRun}>New pay run</button>
       </div>

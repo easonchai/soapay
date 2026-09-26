@@ -10,7 +10,7 @@ export function PageHead({ eyebrow, title, line, actions }: { eyebrow: ReactNode
         <h1>{title}</h1>
         {line && <p className="lead">{line}</p>}
       </div>
-      <Dots mode="right" animate className="dots" />
+      <Dots mode="right" animate minWidth={220} className="dots" />
       {actions && <div className="actions">{actions}</div>}
     </div>
   );

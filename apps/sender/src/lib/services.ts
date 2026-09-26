@@ -7,6 +7,8 @@ import {
   createMockResolver,
   localAttestationStore,
   localRotationStore,
+  memoryAttestationStore,
+  memoryRotationStore,
   mockAttestationSource,
   MOCK_ATTESTER,
   simulateRotation,
@@ -22,7 +24,7 @@ export type Services = {
   lookupAttestation: AttestationLookup;
   /** Invite links (docs/mvp-spec.md §7). null without VITE_API_URL (outside mock mode). */
   invites: InviteApi | null;
-  /** Present only in dev mock mode. */
+  /** Present only in dev mock mode and demo mode. */
   mock?: {
     /** The demo wallet can't sign; invites are signed by this throwaway in-memory key. */
     inviteSigner: InviteSigner & { address: Address };
@@ -32,9 +34,11 @@ export type Services = {
 };
 
 export function createServices(app: AppConfig): Services {
-  if (app.mockEns) {
-    const rotations = localRotationStore();
-    const attestations = localAttestationStore();
+  // Demo mode is the mock set, in memory: no API, no ENS, and nothing shared with a real session's
+  // dev stores (a rotation simulated in demo must not mark a real roster's pins as changed).
+  if (app.mockEns || app.demo) {
+    const rotations = app.demo ? memoryRotationStore() : localRotationStore();
+    const attestations = app.demo ? memoryAttestationStore() : localAttestationStore();
     const demoSigner = privateKeyToAccount(generatePrivateKey());
     return {
       invites: mockInviteApi({ claimAfterMs: 4_000 }),

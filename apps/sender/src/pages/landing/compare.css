@@ -1,0 +1,55 @@
+/* Landing · "The same payroll, twice". One card that morphs between a plain payroll and a Soapay one. */
+.cmp-tabs { display: flex; justify-content: flex-end; margin-bottom: 16px; }
+.cmp-tabs [role='tablist'] { display: inline-flex; border: 1px solid var(--line); background: var(--surface); }
+.cmp-tab {
+  height: 30px; padding: 0 14px; border: 0; border-radius: 0; background: transparent;
+  font: 500 12px/1 var(--mono); color: var(--ink2); cursor: pointer;
+  transition: background 0.4s cubic-bezier(0.16, 1, 0.3, 1), color 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.cmp-tab + .cmp-tab { border-left: 1px solid var(--line); }
+.cmp-tab:hover:not(:disabled) { background: var(--canvas); color: var(--ink); }
+.cmp-tab[aria-selected='true'], .cmp-tab[aria-selected='true']:hover:not(:disabled) { background: var(--accent); color: #fff; }
+.cmp-tab:active:not(:disabled) { transform: none; }
+
+.cmp-card { border: 1px solid var(--line); background: var(--surface); overflow: hidden; }
+.cmp-bar {
+  display: flex; justify-content: space-between; align-items: center; gap: 16px;
+  height: 36px; padding: 0 16px; font: 500 12px/1 var(--mono); border-bottom: 1px solid var(--line);
+}
+.cmp-bar .cmp-tx { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cmp-bar .cmp-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+
+.cmp-table { font-size: 13px; }
+.cmp-thead, .cmp-tr { display: grid; grid-template-columns: 1.4fr 1.2fr 1fr; align-items: center; column-gap: 16px; padding: 0 16px; }
+.cmp-thead { height: 28px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--ink2); }
+.cmp-tr { height: 38px; border-bottom: 1px solid var(--hairline); }
+.cmp-tr:last-child { border-bottom: 0; }
+.cmp-extra { overflow: hidden; }
+.cmp-extra .cmp-tr { border-top: 1px solid var(--hairline); border-bottom: 0; }
+.cmp-tr .cmp-addr { display: inline-flex; align-items: center; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; min-width: 0; }
+.cmp-tr .cmp-addr > .fresh { margin-right: 8px; } /* static mark (extra rows, motion off) */
+.cmp-tr .cmp-addr .cmp-fresh { display: inline-flex; overflow: hidden; align-items: center; } /* animated mark: width + margin tween */
+.cmp-tr .cmp-known { position: relative; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cmp-tr .cmp-known .cmp-known-in { display: grid; }
+.cmp-tr .cmp-known .cmp-known-in > * { grid-area: 1 / 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cmp-known .cmp-name { color: var(--danger); }
+.cmp-known .cmp-dash { color: var(--ink-disabled); }
+.cmp-tr .cmp-amt { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cmp-thead .cmp-amt { text-align: right; }
+
+.cmp-foot { position: relative; padding: 10px 16px; border-top: 1px solid var(--line); font-size: 12px; color: var(--ink2); line-height: 1.5; }
+.cmp-foot .cmp-foot-in { display: grid; }
+.cmp-foot .cmp-foot-in > * { grid-area: 1 / 1; }
+
+@media (max-width: 900px) {
+  .cmp-tabs { justify-content: flex-start; }
+  .cmp-thead, .cmp-tr { grid-template-columns: 1.5fr 1fr 1fr; column-gap: 10px; padding: 0 12px; }
+  .cmp-bar { padding: 0 12px; }
+  .cmp-foot { padding: 10px 12px; }
+}
+@media (max-width: 480px) {
+  .cmp-table { font-size: 12px; }
+  .cmp-thead, .cmp-tr { grid-template-columns: 1.6fr 0.8fr 1fr; }
+  .cmp-bar { height: auto; padding: 10px 12px; flex-direction: column; align-items: flex-start; gap: 4px; }
+  .cmp-bar .cmp-title { white-space: normal; }
+}

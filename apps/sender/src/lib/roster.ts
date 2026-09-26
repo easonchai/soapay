@@ -62,9 +62,9 @@ export class EnrollmentError extends Error {
 export function describeResolveError(e: unknown): { code: string; message: string } {
   if (e instanceof SoapayNameError) {
     const msg: Record<string, string> = {
-      NameNotFound: "No Soapay records on this name. Ask the employee to finish onboarding.",
-      NotRegistered: "The name's registrant has no stealth keys in the ERC-6538 registry.",
-      MetaMismatch: "The name's stealth record disagrees with the ERC-6538 registry. Don't pay until this is fixed.",
+      NameNotFound: "No Soapay records: ask the employee to finish onboarding.",
+      NotRegistered: "Registrant has no stealth keys in the ERC-6538 registry.",
+      MetaMismatch: "Stealth record disagrees with the ERC-6538 registry; don't pay until fixed.",
     };
     return { code: e.code, message: msg[e.code] ?? e.message };
   }

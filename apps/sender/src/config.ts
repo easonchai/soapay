@@ -28,6 +28,12 @@ export type AppConfig = {
   ensRpcUrl: string | undefined;
   walletConnectProjectId: string | undefined;
   mockEns: boolean;
+  /**
+   * Demo mode (`?demo=1`, VITE_DEMO=1, or the session flag): sample data, mock names, a demo wallet
+   * and an in-memory chain. Nothing is sent on-chain and the API is never called. Not DEV-gated:
+   * a deployed preview can run it.
+   */
+  demo: boolean;
   /** apps/api base URL (attestations). */
   apiUrl: string | undefined;
   /** PINNED MetaRotation attester (VITE_ATTESTER). Never taken from an API response. */
@@ -102,6 +108,46 @@ export function isMockEns(env: ImportMetaEnv = import.meta.env): boolean {
   return import.meta.env.DEV === true && env.VITE_MOCK_ENS === "1";
 }
 
+// Demo mode (docs: README "Demo mode"). `?demo=1` turns it on for this tab, `?demo=0` (or "Exit demo")
+// turns it off; the choice is kept in sessionStorage so hash navigation and reloads keep it. With no
+// URL param and no session choice, VITE_DEMO=1 makes a build default to demo.
+export const DEMO_SESSION_KEY = "soapay:demo";
+/** Placeholder StealthDisperse for demo mode: never deployed anywhere, never called (demoChain.ts fakes every call). */
+export const DEMO_STEALTH_DISPERSE: Address = "0x00000000000000000000000000000000d15be45e";
+
+function sessionStore(): Storage | null {
+  try {
+    return typeof sessionStorage === "undefined" ? null : sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+export function readDemoFlag(env: ImportMetaEnv = import.meta.env, search: string = typeof location === "undefined" ? "" : location.search): boolean {
+  const q = new URLSearchParams(search).get("demo");
+  const s = sessionStore();
+  if (q === "1" || q === "0") {
+    s?.setItem(DEMO_SESSION_KEY, q);
+    return q === "1";
+  }
+  const saved = s?.getItem(DEMO_SESSION_KEY);
+  if (saved === "1" || saved === "0") return saved === "1";
+  const fromEnv = env.VITE_DEMO === "1";
+  // Remember the resolved value so synchronous readers (isDemoSession) agree with resolveConfig.
+  if (fromEnv) s?.setItem(DEMO_SESSION_KEY, "1");
+  return fromEnv;
+}
+
+/** The session's demo choice, without consulting the URL or env (for readers outside resolveConfig). */
+export function isDemoSession(): boolean {
+  return sessionStore()?.getItem(DEMO_SESSION_KEY) === "1";
+}
+
+/** "Exit demo": remembers the choice for this tab (it also overrides VITE_DEMO). */
+export function setDemoFlag(on: boolean): void {
+  sessionStore()?.setItem(DEMO_SESSION_KEY, on ? "1" : "0");
+}
+
 export function pinnedAttester(env: ImportMetaEnv = import.meta.env): Address | undefined {
   const a = envString(env.VITE_ATTESTER);
   return a && isAddress(a) ? getAddress(a) : undefined;
@@ -134,9 +180,9 @@ export const DEFAULT_CHUNK_USDC = "500";
 /** Testnet default (D-47): faucet USDC is scarce (20 per address per 2 hours), so chunks are small. */
 export const TESTNET_CHUNK_USDC = "5";
 
-/** The default chunk for a chain: 5 USDC on a testnet, 500 USDC elsewhere. */
-export function defaultChunkUsdc(chainId: number = loadSettings().chainId): string {
-  return isTestnetChain(chainId) ? TESTNET_CHUNK_USDC : DEFAULT_CHUNK_USDC;
+/** The default chunk for a chain: 5 USDC on a testnet, 500 USDC elsewhere (and in demo mode, whose salaries are mainnet-sized). */
+export function defaultChunkUsdc(chainId: number = loadSettings().chainId, demo: boolean = isDemoSession()): string {
+  return isTestnetChain(chainId) && !demo ? TESTNET_CHUNK_USDC : DEFAULT_CHUNK_USDC;
 }
 
 /**
@@ -155,9 +201,11 @@ export function setChunkSize(v: string, chainId: number = loadSettings().chainId
   else s.removeItem(CHUNK_KEY);
 }
 
-export function resolveConfig(settings: Settings = loadSettings()): AppConfig {
+export function resolveConfig(settings: Settings = loadSettings(), env: ImportMetaEnv = import.meta.env): AppConfig {
   const sdk = CHAINS[settings.chainId] as SoapayChainConfig;
-  const disperse = settings.stealthDisperse[settings.chainId] ?? sdk.stealthDisperse ?? null;
+  const demo = readDemoFlag(env);
+  // Demo pays through a fake StealthDisperse so plain accounts have a pay path without a deployment.
+  const disperse = settings.stealthDisperse[settings.chainId] ?? sdk.stealthDisperse ?? (demo ? DEMO_STEALTH_DISPERSE : null);
   return {
     chainId: settings.chainId,
     chain: sdk.chain,
@@ -169,6 +217,7 @@ export function resolveConfig(settings: Settings = loadSettings()): AppConfig {
     ensRpcUrl: settings.ensRpcUrl[settings.chainId],
     walletConnectProjectId: envString(import.meta.env.VITE_WALLETCONNECT_PROJECT_ID),
     mockEns: isMockEns(),
+    demo,
     apiUrl: envString(import.meta.env.VITE_API_URL),
     attester: pinnedAttester(),
     ...recipientAppUrls(),

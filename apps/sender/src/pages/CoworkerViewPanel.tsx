@@ -19,8 +19,8 @@ export function CoworkerViewPanel({ onChain, txUrl }: { onChain: RunOnChain; txU
         <span style={{ fontWeight: 500 }}>What coworkers see</span>
         <span className="ink2">
           {preview
-            ? "Nothing on-chain yet. Once sent, the chain will show these lines: address and amount, sorted by address, no names."
-            : `Read from ${landed} transaction${landed === 1 ? "" : "s"} on-chain: addresses and amounts, no names. The name column is only on your screen.`}
+            ? "Nothing on-chain yet. Once sent: these addresses and amounts, sorted by address, no names."
+            : `Read from ${landed} transaction${landed === 1 ? "" : "s"} on-chain: addresses and amounts. Names appear only on your screen.`}
           {txs.map((h) => (
             <span key={h}>
               {" "}
@@ -32,7 +32,7 @@ export function CoworkerViewPanel({ onChain, txUrl }: { onChain: RunOnChain; txU
         </span>
       </div>
       {error && <span className="hint">Couldn't read the transaction: {error}</span>}
-      {loading && <span className="hint">Reading the transaction logs…</span>}
+      {loading && <span className="hint">Reading logs…</span>}
       <div className="table">
         <div className="thead" style={{ gridTemplateColumns: COLS }}>
           <span className="r">#</span>
