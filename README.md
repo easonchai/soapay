@@ -18,7 +18,7 @@
 
 On a public chain, everyone with a browser: one payroll batch on Base shows every recipient and every amount next to each other, readable forever. Your colleagues too: at Gitcoin DAO a contributor started from their own pay address and put names to fifteen salaries. So companies walk away, and the fixes built for them (Base Ledgers, Tempo Zones, Toku on Aleo) are private ledgers for enterprises: not for everyone, since you apply for access, and not fully private, since every payment goes through the company running them, which sees it and decides what you can withdraw. Everyone else still pays in public.
 
-Three apps on open standards, and nothing of ours holds money. The full argument, with sources, is in the [pitch deck](pitch/README.md).
+Soapay fixes both on the public chain itself. Nothing sits between payer and recipient: the sender's browser derives a fresh stealth address for every line, pays it directly on Base and throws the ephemeral key away. Only you can open that address and spend from it, so nobody but the payer and you sees the payment, and nobody decides what you can withdraw. There is nothing to apply for either: share a name and you can be paid, the money lands in a wallet only you control, and it all runs on open standards with a public SDK. Nothing of ours holds money, and the one contract we wrote keeps no state and has no owner.
 
 ## Built for payroll. Ready for any payout.
 
