@@ -4,7 +4,7 @@ import { Collapse, Copy, Fade, LogoLoader, Presence, toast } from "@soapay/ui";
 import { useRotation } from "../hooks/useRotation.js";
 import { useSessionRestore } from "../hooks/useSessionRestore.js";
 import { useServices } from "../services/ServicesProvider.js";
-import { exitOffered } from "../config.js";
+import { exitOffered, explorerTxUrl } from "../config.js";
 import { Link } from "react-router";
 import { generateMnemonic } from "@soapay/sdk";
 import { ClaimNameLater } from "../onboarding/Onboarding.js";
@@ -336,7 +336,16 @@ export function NameSettings() {
                   </span>
                   <span className="flex items-center gap-2">
                     {x.path === "attested" ? <Badge tone="success">Attested</Badge> : <Badge tone="warning">Needs employer</Badge>}
-                    {x.setTextTx && <Addr address={x.setTextTx} />}
+                    {x.setTextTx && (
+                      <a href={`https://sepolia.etherscan.io/tx/${x.setTextTx}`} target="_blank" rel="noreferrer" className="btn-text" title="The ENS record update on Ethereum Sepolia">
+                        ENS update ↗
+                      </a>
+                    )}
+                    {x.registryTx && explorerTxUrl(svc.settings.chainId, x.registryTx) && (
+                      <a href={explorerTxUrl(svc.settings.chainId, x.registryTx)} target="_blank" rel="noreferrer" className="btn-text" title="The ERC-6538 registry update on Base">
+                        Registry ↗
+                      </a>
+                    )}
                   </span>
                 </li>
               ))}

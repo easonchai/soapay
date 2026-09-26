@@ -125,8 +125,11 @@ export type RotationRecord = {
   oldMeta: string;
   newMeta: string;
   at: number;
+  /** The ENS `setText` on Ethereum Sepolia. */
   setTextTx?: Hex;
-  /** MetaRotation attestation from the API, when it returned one. */
+  /** The ERC-6538 re-registration on Base (relayed by the API, or through /register on the manual path). */
+  registryTx?: Hex;
+  /** MetaRotation attestation from the API, when it returned one. The attestation is a signature, not a transaction. */
   attestation?: unknown;
 };
 
