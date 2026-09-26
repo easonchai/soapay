@@ -16,19 +16,8 @@ export function exitConfigFor(sourceChainId: number): ExitConfig | null {
   return Object.values(EXIT_CONFIGS).find((c) => c.source === sourceChainId) ?? null;
 }
 
-/**
- * Planner-only fee figures, in USDC base units (6 dp). Sources: docs/exit-research.md §1, §3. The
- * worst-case forward fee, both paymaster gas reserves and the leg minimum come from the SDK route
- * config (`exitLegMinimum`), so the planner and the step machine never disagree.
- */
-export const EXIT_FEES = {
-  /** Circle Forwarding Service, live quote low tier (1.53 USDC on 2026-09-26): the best case. */
-  forwardLow: 1_530_000n,
-  /** CCTP fast-transfer protocol fee: 1.3 bps, as a fraction over 100_000. */
-  cctpProtocolPer100k: 13n,
-  /** 0xbow relayer fee, bps of the withdrawn amount. */
-  relayerBps: 10n,
-} as const;
+/** How long a live fee quote (Iris, relayer, Sepolia gas) is reused before the planner refreshes it. */
+export const EXIT_QUOTE_TTL_MS = 5 * 60_000;
 
 const EXPLORERS: Record<number, { name: string; url: string }> = {
   8453: { name: "Basescan", url: "https://basescan.org" },

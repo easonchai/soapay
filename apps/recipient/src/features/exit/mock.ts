@@ -8,9 +8,18 @@
 import { getAddress, keccak256, toHex, type Hash } from "viem";
 import { TESTNET_EXIT_CONFIG } from "./config.js";
 import type { ExitService } from "./sdk.js";
-import type { ExitLeg, ExitLegStatus } from "./types.js";
+import type { ExitFeeQuote, ExitLeg, ExitLegStatus } from "./types.js";
 
 export const MOCK_DECLINED_POOL_INDEX = 1;
+
+/** The mock's "live" quote: the testnet figures measured on 2026-09-26 (D-48). */
+export const MOCK_FEE_QUOTE: ExitFeeQuote = {
+  live: { cctpMinimumFeeBps: 1.3, forwardFee: 1_817_385n, relayFeeBps: 10n, relayGas: 21_500_000n, destGas: 5_562_000n },
+  sources: { cctp: true, relayer: true, destGas: true },
+  relayQuote: { amount: 100_000_000n, feeBps: 2160n, baseFeeBps: 10n, gasPriceWei: 1_030_000_000n },
+  errors: [],
+  at: 0,
+};
 
 /** How long a leg sits in each status before the mock moves it on (ms). */
 export const MOCK_DURATIONS: Record<ExitLegStatus, number> = {
@@ -81,7 +90,7 @@ export function createMockExitService(
     pollMs: opts.pollMs ?? 1_000,
     // The random delay after approval, compressed from hours to seconds.
     delayRangeMs: opts.delayRangeMs ?? [4_000, 10_000],
-    planExit({ sources, destination, firstPoolIndex }) {
+    planExit({ sources, destination, firstPoolIndex, withdrawVia }) {
       const t = now();
       const legs: ExitLeg[] = sources.map((s, i) => ({
         id: `leg-${t.toString(36)}-${i}-${s.stealthAddress.slice(2, 8).toLowerCase()}`,
@@ -95,13 +104,25 @@ export function createMockExitService(
         poolIndex: firstPoolIndex + i,
         updatedAt: t,
         withdrawals: [],
+        ...(withdrawVia === "direct" ? { withdrawVia: "direct" as const } : {}),
       }));
       return { legs, warnings: [] };
     },
     async advance(leg) {
       const t = now();
+      // Like the SDK: an approved direct leg waits for the destination wallet (withdrawDirect).
+      if (leg.status === "approved" && leg.withdrawVia === "direct") return leg;
       if (t - leg.updatedAt < durations[leg.status]) return leg;
       return step(leg, declineIndex, t);
+    },
+    async quoteFees() {
+      return { ...MOCK_FEE_QUOTE, at: now() };
+    },
+    async withdrawDirect(leg, _keys, _opts, sender) {
+      if (leg.status !== "approved") throw new Error(`Soapay exit: leg is ${leg.status}, not approved`);
+      if (sender.address.toLowerCase() !== leg.destination.toLowerCase())
+        throw new Error(`Soapay exit: connect the destination wallet ${leg.destination} to withdraw directly`);
+      return { ...leg, withdrawVia: "direct", status: "withdrawing", txs: { ...leg.txs, withdraw: fakeHash(`${leg.id}:withdraw-direct`) }, updatedAt: now() };
     },
   };
 }

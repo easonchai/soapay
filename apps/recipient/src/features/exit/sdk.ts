@@ -9,14 +9,18 @@ import {
   advanceExitLeg,
   createSpendClient,
   derivePoolSecrets,
+  fetchExitFeeQuote,
   getSpendChainConfig,
   pimlicoFeesPerGas,
   planExit,
+  withdrawDirect,
+  type DirectWithdrawSender,
   type ExitContext,
+  type ExitFeeInputs,
   type SpendClient,
 } from "@soapay/sdk";
 import { createPublicClient, http, type Address, type Chain, type Hex, type PublicClient, type Transport } from "viem";
-import type { ExitConfig, ExitLeg, ExitSource } from "./types.js";
+import type { ExitConfig, ExitFeeQuote, ExitLeg, ExitSource, ExitWithdrawVia } from "./types.js";
 
 export type ExitKeys = {
   /** Resolves the stealth address's key on demand, so a mock never touches it. */
@@ -45,9 +49,22 @@ export type ExitService = {
   pollMs: number;
   /** Random delay range between approval and the withdrawal (when the user keeps it on). */
   delayRangeMs: readonly [number, number];
-  planExit(p: { sources: ExitSource[]; destination: Address; firstPoolIndex: number }): { legs: ExitLeg[]; warnings: string[] };
+  planExit(p: {
+    sources: ExitSource[];
+    destination: Address;
+    firstPoolIndex: number;
+    /** Relayed (default) or direct from the destination wallet. */
+    withdrawVia?: ExitWithdrawVia;
+    roundWithdrawals?: boolean;
+    /** The live quotes the user saw; the relayer fee cap stored on each leg derives from them. */
+    live?: ExitFeeInputs;
+  }): { legs: ExitLeg[]; warnings: string[] };
   /** One idempotent step of the leg's state machine. Safe to call again after a reload. */
   advance(leg: ExitLeg, keys: ExitKeys, opts: AdvanceOptions): Promise<ExitLeg>;
+  /** Live fee quotes for the planner (Circle Iris, the relayer, Sepolia gas); parts fall back on their own. */
+  quoteFees(): Promise<ExitFeeQuote>;
+  /** Withdraw an approved leg directly: the destination wallet sends the pool withdrawal and pays ETH gas. */
+  withdrawDirect(leg: ExitLeg, keys: ExitKeys, opts: AdvanceOptions, sender: DirectWithdrawSender): Promise<ExitLeg>;
 };
 
 /** The §9 SDK surface this app uses; injectable for tests. */
@@ -55,9 +72,11 @@ export type ExitSdkModule = {
   planExit: typeof planExit;
   advanceExitLeg: typeof advanceExitLeg;
   derivePoolSecrets: typeof derivePoolSecrets;
+  fetchExitFeeQuote?: typeof fetchExitFeeQuote;
+  withdrawDirect?: typeof withdrawDirect;
 };
 
-const SDK: ExitSdkModule = { planExit, advanceExitLeg, derivePoolSecrets };
+const SDK: ExitSdkModule = { planExit, advanceExitLeg, derivePoolSecrets, fetchExitFeeQuote, withdrawDirect };
 const HOUR = 3_600_000;
 
 /**
@@ -98,15 +117,36 @@ export function createSdkExitService(p: {
     config: p.config,
     pollMs: 15_000,
     delayRangeMs: [2 * HOUR, 24 * HOUR],
-    planExit({ sources, destination, firstPoolIndex }) {
+    planExit({ sources, destination, firstPoolIndex, withdrawVia, roundWithdrawals, live }) {
       if (!p.config) throw new Error(unavailableReason ?? "Exit unavailable");
       // Pool indexes must be unique per seed; the app hands them out (profile.nextExitPoolIndex).
-      const plan = sdk.planExit({ sources, destination, config: p.config, firstPoolIndex });
+      // One withdrawal per leg, as buildCtx runs it (withdrawParts 1), so the stored relayer cap matches.
+      const plan = sdk.planExit({
+        sources,
+        destination,
+        config: p.config,
+        firstPoolIndex,
+        withdrawParts: 1,
+        ...(roundWithdrawals !== undefined ? { leaveChange: roundWithdrawals } : {}),
+        ...(withdrawVia ? { withdrawVia } : {}),
+        ...(live ? { live } : {}),
+      });
       return { legs: plan.legs, warnings: plan.warnings };
     },
     async advance(leg, keys, opts) {
       if (!ready || !p.config) throw new Error(unavailableReason ?? "Exit unavailable");
       return sdk.advanceExitLeg(buildCtx(p.config, spendClients(p.config), p.fetch, leg, keys, opts), leg);
+    },
+    async quoteFees() {
+      const quote = sdk.fetchExitFeeQuote ?? fetchExitFeeQuote;
+      if (!p.config) return { live: {}, sources: { cctp: false, relayer: false, destGas: false }, errors: ["no exit route"], at: Date.now() };
+      return quote(p.config, { fetch: p.fetch as unknown as NonNullable<ExitContext["fetch"]> });
+    },
+    async withdrawDirect(leg, keys, opts, sender) {
+      if (!ready || !p.config) throw new Error(unavailableReason ?? "Exit unavailable");
+      const direct = sdk.withdrawDirect ?? withdrawDirect;
+      const ctx = { ...buildCtx(p.config, spendClients(p.config), p.fetch, leg, keys, opts), directWithdraw: sender };
+      return (await direct(ctx, leg)).leg;
     },
   };
 }

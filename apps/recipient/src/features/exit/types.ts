@@ -3,9 +3,9 @@
  * is plain JSON (amounts as decimal strings), so the vault stores it as is.
  */
 import type { Address } from "viem";
-import type { ExitConfig, ExitLeg, ExitStatus } from "@soapay/sdk";
+import type { ExitConfig, ExitFeeQuote, ExitLeg, ExitStatus, ExitWithdrawVia } from "@soapay/sdk";
 
-export type { ExitConfig, ExitLeg };
+export type { ExitConfig, ExitFeeQuote, ExitLeg, ExitWithdrawVia };
 export type ExitLegStatus = ExitStatus;
 
 export type ExitSource = { stealthAddress: Address; amount: bigint };
@@ -31,6 +31,8 @@ export type ExitRecord = {
   destChainId: number;
   destination: Address;
   privacy: ExitPrivacy;
+  /** How the withdrawals go out (default the relayer). Each leg also records it (`leg.withdrawVia`). */
+  withdrawVia?: ExitWithdrawVia;
   legs: StoredExitLeg[];
   /** Per leg id: don't withdraw before this time (the random delay). */
   holdUntil: Record<string, number>;

@@ -4,9 +4,9 @@ import { CheckCircle2, Circle, ExternalLink, Loader2, XCircle } from "lucide-rea
 import type { Address } from "viem";
 import { exitChainName, exitTxLink } from "../features/exit/config.js";
 import { exitPrefill } from "../features/exit/entry.js";
-import { fmtUsdcUp, noEligibleMessage, type ExitEstimate } from "../features/exit/planner.js";
+import { fmtPercent, fmtUsdcUp, noEligibleMessage, type ExitEstimate } from "../features/exit/planner.js";
 import { legLabel, timelineOf, type TimelineStep } from "../features/exit/timeline.js";
-import type { ExitLeg, ExitPrivacy, ExitRecord } from "../features/exit/types.js";
+import type { ExitLeg, ExitPrivacy, ExitRecord, ExitWithdrawVia } from "../features/exit/types.js";
 import { DEFAULT_PRIVACY, useExit, type ExitView } from "../hooks/useExit.js";
 import { Addr, Alert, Badge, Button, Card, CardHeader, Checkbox, Field, Input, PageHeader, cn } from "../ui/kit.js";
 import { formatUsdc, windowTime } from "../ui/format.js";
@@ -68,15 +68,15 @@ function Planner({ prefill }: { prefill: { destination: Address; sources: Addres
   const exit = useExit();
   const [destination, setDestination] = useState<string>(prefill?.destination ?? "");
   const [privacy, setPrivacy] = useState<ExitPrivacy>(DEFAULT_PRIVACY);
-  const all = useMemo(() => exit.estimate(exit.sources.map((s) => s.stealthAddress), privacy), [exit, privacy]);
-  const eligible = useMemo(() => new Set(all?.eligible.map((l) => l.stealthAddress.toLowerCase()) ?? []), [all]);
-  const [selected, setSelected] = useState<Set<string>>(
-    () => new Set((prefill?.sources ?? []).map((a) => a.toLowerCase()).filter((a) => eligible.has(a))),
-  );
+  const [via, setVia] = useState<ExitWithdrawVia>("relayer");
+  const all = useMemo(() => exit.estimate(exit.sources.map((s) => s.stealthAddress), privacy, via), [exit, privacy, via]);
+  // Selection survives a switch between relayed and direct: an address may be eligible in only one.
+  const [selected, setSelected] = useState<Set<string>>(() => new Set((prefill?.sources ?? []).map((a) => a.toLowerCase())));
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
-  const picked = exit.sources.filter((s) => selected.has(s.stealthAddress.toLowerCase())).map((s) => s.stealthAddress);
-  const est = exit.estimate(picked, privacy);
+  const eligible = new Set(all?.eligible.map((l) => l.stealthAddress.toLowerCase()) ?? []);
+  const picked = exit.sources.filter((s) => selected.has(s.stealthAddress.toLowerCase()) && eligible.has(s.stealthAddress.toLowerCase())).map((s) => s.stealthAddress);
+  const est = exit.estimate(picked, privacy, via);
 
   const toggle = (a: Address, on: boolean) =>
     setSelected((s) => {
@@ -88,7 +88,7 @@ function Planner({ prefill }: { prefill: { destination: Address; sources: Addres
 
   const start = async () => {
     setStarting(true);
-    const r = await exit.start({ sources: picked, destination, privacy });
+    const r = await exit.start({ sources: picked, destination, privacy, withdrawVia: via });
     setStarting(false);
     if ("error" in r) return setError(r.error);
     setError(null);
@@ -98,6 +98,7 @@ function Planner({ prefill }: { prefill: { destination: Address; sources: Addres
   if (!all) return null;
   const minLeg = fmtUsdcUp(all.minAmount);
   const nothingEligible = noEligibleMessage(all);
+  const directHelps = via === "relayer" && all.legs.some((l) => l.directWouldWork);
   return (
     <Card>
       <CardHeader
@@ -121,15 +122,30 @@ function Planner({ prefill }: { prefill: { destination: Address; sources: Addres
         <fieldset className="space-y-2">
           <legend className="text-sm font-medium">Sources</legend>
           <p className="text-xs text-muted-foreground">
-            The pool takes deposits of {fmtUsdcUp(all.minDeposit)} USDC or more, so after bridge fees and gas each leg needs at least{" "}
+            The pool takes deposits of {fmtUsdcUp(all.minDeposit)} USDC or more, so after bridge fees and gas
+            {via === "relayer" ? " (and the relayer's fixed fee)" : ""} each leg needs at least{" "}
             <span className="font-medium" data-testid="exit-minimum">{minLeg} USDC</span> on one address.
           </p>
+          <QuoteNote />
           {nothingEligible && (
             <div data-testid="exit-none-eligible">
-              <Alert variant="warning" title="Below the exit minimum">
+              <Alert variant="warning" title={directHelps ? "The relayer costs more than these exits" : "Below the exit minimum"}>
                 {nothingEligible}
               </Alert>
             </div>
+          )}
+          {directHelps && !nothingEligible && (
+            <div data-testid="exit-direct-suggest">
+              <Alert variant="warning" title="The relayer costs more than some of these exits">
+                The relayer charges about {fmtUsdcUp(all.relayGas)} USDC per withdrawal for its gas, so the greyed-out addresses can&apos;t exit
+                through it. Withdraw directly instead to exit them (each needs {fmtUsdcUp(all.directMinAmount)} USDC).
+              </Alert>
+            </div>
+          )}
+          {directHelps && (
+            <Button size="sm" variant="outline" onClick={() => setVia("direct")} data-testid="exit-use-direct">
+              Withdraw directly instead
+            </Button>
           )}
           {exit.sources.length === 0 && <p className="text-sm text-muted-foreground">No stealth addresses with a balance. Scan first.</p>}
           <ul className="divide-y rounded-md border">
@@ -140,7 +156,7 @@ function Planner({ prefill }: { prefill: { destination: Address; sources: Addres
                   aria-label={`Exit from ${l.stealthAddress}`}
                   className="mt-1 size-4 accent-primary"
                   disabled={!l.eligible}
-                  checked={selected.has(l.stealthAddress.toLowerCase())}
+                  checked={l.eligible && selected.has(l.stealthAddress.toLowerCase())}
                   onChange={(e) => toggle(l.stealthAddress, e.target.checked)}
                 />
                 <div className="min-w-0 flex-1">
@@ -150,7 +166,7 @@ function Planner({ prefill }: { prefill: { destination: Address; sources: Addres
                   </div>
                   {l.eligible ? (
                     <p className="text-xs text-muted-foreground">
-                      Arrives as about {usdcRange(l.receive, l.receiveHigh)} USDC
+                      Arrives as about {formatUsdc(l.receive)} USDC ({fmtPercent(10_000n - l.feeShareBps)} of it)
                     </p>
                   ) : (
                     <p className="text-xs text-muted-foreground" data-testid="below-minimum">
@@ -165,10 +181,20 @@ function Planner({ prefill }: { prefill: { destination: Address; sources: Addres
 
         <div className="space-y-3">
           <Checkbox
+            checked={via === "direct"}
+            onChange={(v) => setVia(v ? "direct" : "relayer")}
+            label="Withdraw directly (your destination wallet pays a little ETH gas)"
+            description={<DirectNote />}
+          />
+          <Checkbox
             checked={privacy.roundWithdrawals}
             onChange={(v) => setPrivacy((p) => ({ ...p, roundWithdrawals: v }))}
             label="Withdraw round amounts"
-            description="Withdraw whole USDC and leave the change in the pool, so the withdrawal doesn't equal the deposit minus fees."
+            description={
+              via === "direct"
+                ? "Not used with a direct withdrawal: it takes everything in one part, so no change is left behind."
+                : "Withdraw whole USDC and leave the change in the pool, so the withdrawal doesn't equal the deposit minus fees."
+            }
           />
           <Checkbox
             checked={privacy.randomDelay}
@@ -188,7 +214,34 @@ function Planner({ prefill }: { prefill: { destination: Address; sources: Addres
   );
 }
 
-const usdcRange = (lo: bigint, hi: bigint) => (formatUsdc(lo) === formatUsdc(hi) ? formatUsdc(lo) : `${formatUsdc(lo)}–${formatUsdc(hi)}`);
+/** Where the fee figures come from: live quotes, or the route's estimates. */
+function QuoteNote() {
+  const { quote } = useExit();
+  const at = quote.quote ? new Date(quote.quote.at).toLocaleTimeString() : "";
+  const text =
+    quote.status === "loading"
+      ? "Getting live fee quotes…"
+      : quote.status === "live"
+        ? `Fees from live quotes (Circle, the relayer, Sepolia gas) at ${at}.`
+        : quote.status === "partial"
+          ? `Fees partly from live quotes at ${at}; the rest are estimates.`
+          : "Live fee quotes are unavailable, so these fees are estimates.";
+  return (
+    <p className="text-xs text-muted-foreground" data-testid="exit-quote" data-status={quote.status}>
+      {text}
+    </p>
+  );
+}
+
+/** The direct-withdrawal caveat: the ETH for gas must not come from a wallet linked to you. */
+export function DirectNote() {
+  return (
+    <span data-testid="exit-direct-note">
+      No relayer fee: your destination wallet sends the withdrawal itself and pays about 0.001 Sepolia ETH of gas. Fund it from a
+      source not linked to you, such as a public faucet or an exchange; ETH sent from one of your own wallets links the two.
+    </span>
+  );
+}
 
 export function FeeSummary({ est, destination }: { est: ExitEstimate; destination: string }) {
   const t = est.totals;
@@ -199,23 +252,50 @@ export function FeeSummary({ est, destination }: { est: ExitEstimate; destinatio
       <dd className="tabular-nums">{value}</dd>
     </div>
   );
+  const direct = est.via === "direct";
+  const keeps = t.amount > 0n ? 10_000n - est.feeShareBps : 0n;
   return (
-    <dl className="rounded-md border px-3 py-2 text-sm" data-testid="exit-fees">
-      {row(`From ${n} address${n === 1 ? "" : "es"} (${n} leg${n === 1 ? "" : "s"})`, `${formatUsdc(t.amount)} USDC`)}
-      {row("CCTP forwarding (Circle mints for you)", `−${formatUsdc(t.forwardFeeLow)}–${formatUsdc(t.forwardFeeHigh)}`, "fee-forward")}
-      {row("Paymaster gas reserve, both chains (unused gas is refunded to the address)", `−${formatUsdc(t.gas)}`, "fee-gas")}
-      {row("Pool entry fee (1%)", `−${formatUsdc(t.vettingFee)}`, "fee-pool")}
-      {row("Relayer (0.1%)", `−${formatUsdc(t.relayerFee, { precise: true })}`, "fee-relayer")}
-      {t.leftInPool > 0n && row("Left in the pool (round withdrawals)", formatUsdc(t.leftInPool, { precise: true }), "left-in-pool")}
-      <div className="mt-1 flex justify-between gap-2 border-t pt-2 font-medium" data-testid="exit-receive">
-        <dt>
-          Arrives at {destination ? <Addr address={destination} /> : "the destination"} on {exitChainName(11155111)}
-        </dt>
-        <dd className="tabular-nums">
-          ≈ {usdcRange(t.receive, t.receiveHigh)} USDC
-        </dd>
-      </div>
-    </dl>
+    <div className="space-y-2">
+      <dl className="rounded-md border px-3 py-2 text-sm" data-testid="exit-fees">
+        {row(`From ${n} address${n === 1 ? "" : "es"} (${n} leg${n === 1 ? "" : "s"})`, `${formatUsdc(t.amount)} USDC`)}
+        {row("Bridge fees (CCTP + Circle forwarding)", `−${formatUsdc(t.bridgeFee, { precise: true })}`, "fee-bridge")}
+        {row("Deposit gas, both chains (paymaster prefund; unused gas stays on the address)", `−${formatUsdc(t.gas, { precise: true })}`, "fee-gas")}
+        {row("Pool entry fee (1%)", `−${formatUsdc(t.vettingFee, { precise: true })}`, "fee-pool")}
+        {direct
+          ? row("Relayer: none (your wallet pays ≈ 0.001 ETH gas)", "0.00", "fee-relayer")
+          : row(`Relayer (${formatUsdc(est.relayGas)} USDC gas + 0.1%)`, `−${formatUsdc(t.relayerFee, { precise: true })}`, "fee-relayer")}
+        <div className="mt-1 flex justify-between gap-2 border-t pt-2" data-testid="fee-total">
+          <dt>Total fees</dt>
+          <dd className="tabular-nums">
+            −{formatUsdc(t.totalFees, { precise: true })} USDC ({fmtPercent(est.feeShareBps)})
+          </dd>
+        </div>
+        {t.leftInPool > 0n && row("Left in the pool (round withdrawals; yours, withdrawable later)", formatUsdc(t.leftInPool, { precise: true }), "left-in-pool")}
+        <div className="mt-1 flex justify-between gap-2 border-t pt-2 font-medium" data-testid="exit-receive">
+          <dt>
+            You receive at {destination ? <Addr address={destination} /> : "the destination"} on {exitChainName(11155111)}
+          </dt>
+          <dd className="tabular-nums">
+            ≈ {formatUsdc(t.receive)} of {formatUsdc(t.amount)} USDC ({fmtPercent(keeps)})
+          </dd>
+        </div>
+        {!direct && t.relayerFeeCap > 0n && (
+          <p className="pt-1 text-xs text-muted-foreground" data-testid="relayer-cap">
+            If the relayer asks more than {formatUsdc(t.relayerFeeCap)} USDC when it&apos;s time to withdraw, the exit waits for a lower quote
+            (or you can withdraw directly).
+          </p>
+        )}
+      </dl>
+      {est.highFees && (
+        <div data-testid="exit-fee-warning">
+          <Alert variant="warning" title={`Fees take ${fmtPercent(est.feeShareBps)} of this exit`}>
+            They are mostly fixed per leg (Circle&apos;s forwarding, Sepolia gas{direct ? "" : ", the relayer's gas"}), so a larger exit loses a
+            smaller share. Consider exiting later, once one address holds more, or combining chunks into one address first (that links those
+            chunks to each other; the Send guard shows it).{!direct && " A direct withdrawal also skips the relayer's fee."}
+          </Alert>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -259,6 +339,7 @@ export function LegTimeline({ leg, record }: { leg: ExitLeg; record: ExitRecord 
   const holding = leg.status === "approved" && hold !== undefined && hold > Date.now();
   const queuedAt = exit.queuedAt[leg.id];
   const error = exit.errors[leg.id] ?? leg.error;
+  const [sending, setSending] = useState(false);
   return (
     <div className="rounded-md border p-3" data-testid="exit-leg" data-status={leg.status}>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-sm">
@@ -293,6 +374,17 @@ export function LegTimeline({ leg, record }: { leg: ExitLeg; record: ExitRecord 
           </Button>
         </div>
       )}
+      {leg.status === "approved" && !holding && (leg.withdrawVia === "direct" || relayTooExpensive(error)) && (
+        <DirectWithdrawOffer
+          direct={leg.withdrawVia === "direct"}
+          onWithdraw={async () => {
+            setSending(true);
+            await exit.withdrawDirect(record.id, leg.id);
+            setSending(false);
+          }}
+          sending={sending}
+        />
+      )}
       {(leg.status === "declined" || leg.status === "refunded") && (
         <Alert variant="warning" className="mt-2" title={leg.status === "declined" ? "Declined: refunding" : "Refunded"}>
           The pool's screening didn't approve this deposit, so it goes back through ragequit to the same stealth address on{" "}
@@ -314,6 +406,30 @@ export function LegTimeline({ leg, record }: { leg: ExitLeg; record: ExitRecord 
           {leg.status === "failed" ? error : `Will retry: ${error}`}
         </Alert>
       )}
+    </div>
+  );
+}
+
+/** The relayer refused on price (more than the withdrawal, over the pool limit, or over the accepted fee). */
+export function relayTooExpensive(error: string | undefined): boolean {
+  return !!error && /relayer asks .*waiting for a lower quote/.test(error);
+}
+
+/** An approved leg that should (or must) leave without the relayer: the destination wallet withdraws. */
+function DirectWithdrawOffer({ direct, onWithdraw, sending }: { direct: boolean; onWithdraw: () => Promise<void>; sending: boolean }) {
+  return (
+    <div className="mt-2 space-y-2 rounded-md border p-3 text-xs" data-testid="exit-direct-offer">
+      <p>
+        {direct
+          ? "Approved. This leg withdraws directly: connect the destination wallet in this browser and confirm one transaction."
+          : "The relayer would take more than this withdrawal is worth right now. You can wait for a lower quote, or withdraw directly."}
+      </p>
+      <p className="text-muted-foreground">
+        <DirectNote />
+      </p>
+      <Button size="sm" variant="outline" loading={sending} onClick={() => void onWithdraw()}>
+        Withdraw directly (your destination wallet pays a little ETH gas)
+      </Button>
     </div>
   );
 }
