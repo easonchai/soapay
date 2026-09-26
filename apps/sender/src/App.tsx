@@ -314,6 +314,7 @@ export function App() {
       <Landing
         wallet={wallet}
         employeeUrl={app.otherAppUrl}
+        docsUrl={app.docsUrl}
         onLogin={() => {
           session.set(false);
           setLoggedOut(false);

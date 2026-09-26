@@ -12,11 +12,20 @@ function mount(connectors: { id: string; name: string; icon?: string }[]) {
       wallet={{ isConnected: false, connecting: false, connectError: null, connectors: connectors.map((c) => ({ ...c, connect() {} })) }}
       onLogin={() => {}}
       employeeUrl="http://localhost:5173"
+      docsUrl="/docs/"
     />,
   );
 }
 
 describe("Landing", () => {
+  it("links the docs from the top bar, the hero and the footer, never to PRD.md", () => {
+    mount([{ id: "a", name: "MetaMask", icon: ICON }]);
+    const docs = screen.getAllByRole("link", { name: /^(docs|read the docs)$/i });
+    expect(docs.length).toBe(3);
+    for (const l of docs) expect(l.getAttribute("href")).toBe("/docs/");
+    expect(document.querySelector('a[href*="PRD.md"]')).toBeNull();
+  });
+
   it("shows the GitHub mark next to the header and footer GitHub links", () => {
     mount([{ id: "a", name: "MetaMask", icon: ICON }]);
     const links = screen.getAllByRole("link", { name: /github/i });

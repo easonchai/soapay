@@ -33,12 +33,14 @@ export type LandingProps = {
   onLogin(): void;
   /** The employee app, for people who were invited (or already have an account). */
   employeeUrl: string;
+  /** The docs site (VITE_DOCS_URL, default /docs/): top bar, hero and footer "Docs" links. */
+  docsUrl: string;
 };
 
 type SectionId = "how" | "product" | "chain";
 
-/** Marketing landing (5a + 5b + trust): hero, before/after, how it works, product, what the chain sees, guarantees, CTA. Login connects a wallet; App then shows the vault gate. */
-export function Landing({ wallet, onLogin, employeeUrl }: LandingProps) {
+/** Marketing landing (5a + 5b + trust): hero, before/after, how it works, product, what the chain sees, guarantees, CTA. Docs links go to the docs site; Login connects a wallet; App then shows the vault gate. */
+export function Landing({ wallet, onLogin, employeeUrl, docsUrl }: LandingProps) {
   const [choosing, setChoosing] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const hero = useRef<HTMLElement>(null);
@@ -91,6 +93,7 @@ export function Landing({ wallet, onLogin, employeeUrl }: LandingProps) {
           <a href="#chain" onClick={jump("chain")}>
             What the chain sees
           </a>
+          <a href={docsUrl}>Docs</a>
           <a href={GITHUB} target="_blank" rel="noreferrer" className="link-with-mark">
             <GitHubMark size={15} />
             GitHub
@@ -120,7 +123,7 @@ export function Landing({ wallet, onLogin, employeeUrl }: LandingProps) {
           <button className="btn-primary btn-xl" onClick={login} disabled={wallet.connecting || !wallet.connectors.length}>
             {cta}
           </button>
-          <a className="btn btn-xl" href={`${GITHUB}/blob/main/PRD.md`} target="_blank" rel="noreferrer">
+          <a className="btn btn-xl" href={docsUrl}>
             Read the docs
           </a>
         </Reveal>
@@ -175,9 +178,7 @@ export function Landing({ wallet, onLogin, employeeUrl }: LandingProps) {
           <a href="#chain" onClick={jump("chain")}>
             Trust
           </a>
-          <a href={`${GITHUB}/blob/main/PRD.md`} target="_blank" rel="noreferrer">
-            Docs
-          </a>
+          <a href={docsUrl}>Docs</a>
           <a href={GITHUB} target="_blank" rel="noreferrer" className="link-with-mark">
             <GitHubMark size={13} />
             GitHub

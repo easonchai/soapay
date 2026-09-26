@@ -18,6 +18,7 @@ function mount(onLogin = () => {}) {
       }}
       onLogin={onLogin}
       employeeUrl="http://localhost:5173"
+      docsUrl="/docs/"
     />,
   );
 }
