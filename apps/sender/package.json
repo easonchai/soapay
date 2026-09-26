@@ -13,11 +13,13 @@
   },
   "dependencies": {
     "@coinbase/wallet-sdk": "^4.3.6",
+    "@gsap/react": "^2.1.2",
     "@noble/curves": "^2.4.0",
     "@soapay/sdk": "workspace:*",
     "@soapay/ui": "workspace:*",
     "@tanstack/react-query": "^5.103.2",
     "framer-motion": "^13.4.4",
+    "gsap": "^3.15.0",
     "papaparse": "^5.7.0",
     "qrcode": "^1.5.4",
     "react": "^19.3.0",

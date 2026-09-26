@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { CoinbaseMark, Dots, GitHubMark, Lockup, Reveal, WalletGlyph } from "@soapay/ui";
+import { useRef, useState } from "react";
+import { CoinbaseMark, Dots, ErrorLine, GitHubMark, Lockup, Reveal, WalletGlyph } from "@soapay/ui";
 import "../landing.css";
 import { Compare } from "./landing/Compare.js";
 import { HowItWorks } from "./landing/HowItWorks.js";
@@ -7,6 +7,8 @@ import { Showcase } from "./landing/Showcase.js";
 import { ChainView } from "./landing/ChainView.js";
 import { Guarantees } from "./landing/Guarantees.js";
 import { CtaBand } from "./landing/CtaBand.js";
+import { DotWord } from "./landing/DotWord.js";
+import { RollWord } from "./landing/RollWord.js";
 import type { WalletState } from "../hooks/usePayPath.js";
 
 export const GITHUB = "https://github.com/easonchai/soapay";
@@ -40,17 +42,9 @@ type SectionId = "how" | "product" | "chain";
 /** Marketing landing (5a + 5b + trust): hero, before/after, how it works, product, what the chain sees, guarantees, CTA. Login connects a wallet; App then shows the vault gate. */
 export function Landing({ wallet, onLogin, employeeUrl }: LandingProps) {
   const [choosing, setChoosing] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
   const hero = useRef<HTMLElement>(null);
   const sections = useRef<Record<SectionId, HTMLElement | null>>({ how: null, product: null, chain: null });
   const one = wallet.connectors.length === 1 ? wallet.connectors[0] : undefined;
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 40);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
 
   function login() {
     onLogin();
@@ -103,25 +97,24 @@ export function Landing({ wallet, onLogin, employeeUrl }: LandingProps) {
       <section className="land-hero" ref={hero}>
         <Dots mode="diamond" animate className="dots l" />
         <Dots mode="diamond" animate className="dots r" />
-        <Reveal delay={0.05}>
-          <span className="eyebrow" style={{ fontSize: 13 }}>
-            Privacy infrastructure for payments on chain
-          </span>
+        <Reveal delay={0.05} y={12}>
+          <h1 className="land-h1">
+            <span className="line">Public chain. </span>
+            <span className="line">
+              <DotWord word="Private" /> <RollWord words={["payroll.", "payments.", "distribution."]} />
+            </span>
+          </h1>
         </Reveal>
-        <Reveal delay={0.12} y={12}>
-          <h1 className="land-h1">Every wallet address is a public bank statement.</h1>
+        <Reveal delay={0.14}>
+          <p className="land-sub">Every payment lands on a fresh address only the recipient can open.</p>
         </Reveal>
-        <Reveal delay={0.2}>
-          <p className="land-sub">
-            One name per person; every salary lands on a fresh address only they can open.
-          </p>
-        </Reveal>
-        <Reveal delay={0.28} className="land-cta">
+        <Reveal delay={0.22} className="land-cta">
           <button className="btn-primary btn-xl" onClick={login} disabled={wallet.connecting || !wallet.connectors.length}>
             {cta}
           </button>
-          <a className="btn btn-xl" href={`${GITHUB}/blob/main/PRD.md`} target="_blank" rel="noreferrer">
-            Read the docs
+          {/* The demo door sits next to Login instead of in a sentence below it. Docs stay in the footer. */}
+          <a className="btn btn-xl" href="?demo=1" data-testid="demo-door">
+            Try the demo
           </a>
         </Reveal>
         {choosing && !wallet.isConnected && (
@@ -135,24 +128,14 @@ export function Landing({ wallet, onLogin, employeeUrl }: LandingProps) {
             ))}
           </div>
         )}
-        <p className="hint">
-          {wallet.connectError ?? "Companies: your wallet is your login."}{" "}
-          <a href="?demo=1" data-testid="demo-door" style={{ fontWeight: 500, textDecoration: "underline" }}>
-            Or try the demo
-          </a>
-          .
-        </p>
+        <ErrorLine error={wallet.connectError} />
+        {/* Employees who land here by habit get one quiet line to their own app. */}
         <p className="hint" data-testid="employee-door">
           Getting paid?{" "}
           <a href={employeeUrl} style={{ fontWeight: 500, textDecoration: "underline" }}>
             Open your payments
           </a>
-          , or follow your employer's invite link.
         </p>
-        <div className={`scroll-cue${scrolled ? " hidden" : ""}`} aria-hidden>
-          <span>Scroll</span>
-          <span className="line" />
-        </div>
       </section>
       <Compare />
       <div ref={bind("how")}>

@@ -192,6 +192,9 @@ importers:
       '@coinbase/wallet-sdk':
         specifier: ^4.3.6
         version: 4.4.0(typescript@7.0.2)(zod@4.6.5)
+      '@gsap/react':
+        specifier: ^2.1.2
+        version: 2.1.2(gsap@3.15.0)(react@19.3.0)
       '@noble/curves':
         specifier: ^2.4.0
         version: 2.4.0
@@ -207,6 +210,9 @@ importers:
       framer-motion:
         specifier: ^13.4.4
         version: 13.4.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      gsap:
+        specifier: ^3.15.0
+        version: 3.15.0
       papaparse:
         specifier: ^5.7.0
         version: 5.7.0
@@ -649,6 +655,12 @@ packages:
     resolution: {integrity: sha512-mB9oAsNCm9aM3/SOv4YtBMqZbYj10R7dkq8byBqxGY/ncFwhf2oQzMV+LCRlWoDSEBJ3COiR1yeDvMtsoOsuFQ==}
     peerDependencies:
       graphql: ^0.8.0 || ^0.9.0 || ^0.10.0 || ^0.11.0 || ^0.12.0 || ^0.13.0 || ^14.0.0 || ^15.0.0 || ^16.0.0 || ^17.0.0
+
+  '@gsap/react@2.1.2':
+    resolution: {integrity: sha512-JqliybO1837UcgH2hVOM4VO+38APk3ECNrsuSM4MuXp+rbf+/2IG2K1YJiqfTcXQHH7XlA0m3ykniFYstfq0Iw==}
+    peerDependencies:
+      gsap: ^3.12.5
+      react: '>=17'
 
   '@hono/node-server@2.1.1':
     resolution: {integrity: sha512-ELuehkj5VCBdgEw9zs+ivkKwyzzUCSQuE96YmiPvn1ECBoZCczbFXJLeEGMTYjphP6gydh4pHMqEYPVMYUVgQg==}
@@ -1716,6 +1728,9 @@ packages:
   graphql@16.14.2:
     resolution: {integrity: sha512-Chq1s4CY7jmh8gO2qvLIJyfCDIN+EHLFW/9iShnp1z8FjBQMoodWP1kDC36VAMXXIvAjj4ARa7ntfAV2BrjsbA==}
     engines: {node: ^12.22.0 || ^14.16.0 || ^16.0.0 || >=17.0.0}
+
+  gsap@3.15.0:
+    resolution: {integrity: sha512-dMW4CWBTUK1AEEDeZc1g4xpPGIrSf9fJF960qbTZmN/QwZIWY5wgliS6JWl9/25fpTGJrMRtSjGtOmPnfjZB+A==}
 
   has-symbols@1.1.0:
     resolution: {integrity: sha512-1cDNdwJ2Jaohmb3sg4OmKaMBwuC48sYni5HUw2DvsC8LjGTLK9h+eb1X6RyuOHe4hT0ULCW68iomhjUoKUqlPQ==}
@@ -2833,6 +2848,11 @@ snapshots:
     dependencies:
       graphql: 16.14.2
 
+  '@gsap/react@2.1.2(gsap@3.15.0)(react@19.3.0)':
+    dependencies:
+      gsap: 3.15.0
+      react: 19.3.0
+
   '@hono/node-server@2.1.1(hono@4.13.9)':
     dependencies:
       hono: 4.13.9
@@ -3800,6 +3820,8 @@ snapshots:
       graphql: 16.14.2
 
   graphql@16.14.2: {}
+
+  gsap@3.15.0: {}
 
   has-symbols@1.1.0: {}
 

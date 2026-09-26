@@ -1,6 +1,22 @@
 import "@testing-library/jest-dom/vitest";
 import { webcrypto } from "node:crypto";
 
+// Motion helpers inspect media preferences even though jsdom does not provide matchMedia.
+if (typeof window.matchMedia !== "function") {
+  window.matchMedia = (media: string) => ({
+    matches: false,
+    media,
+    onchange: null,
+    addEventListener() {},
+    removeEventListener() {},
+    addListener() {},
+    removeListener() {},
+    dispatchEvent() {
+      return false;
+    },
+  });
+}
+
 // @soapay/ui's dot textures draw on a canvas and watch their size; jsdom has neither.
 if (!("ResizeObserver" in globalThis)) {
   (globalThis as { ResizeObserver?: unknown }).ResizeObserver = class {

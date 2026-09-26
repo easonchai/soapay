@@ -78,7 +78,7 @@ localStorage (`soapay:org`), as are the pay-run draft toggles (`soapay:payrun`).
 
 Env: CK's `VITE_STEALTH_DISPERSE_ADDRESS` is accepted as an alias (`VITE_STEALTH_DISPERSE` wins);
 `VITE_OTHER_APP_URL` sets the top bar's **Receive** link (default `VITE_RECIPIENT_URL`). `?motion=off` disables
-animations (screenshots, QA).
+animations (screenshots, QA). The landing's motion (the headline word drawn as a cursor-reactive dot field, the last word rolling through payroll, payments and distribution, the How-it-works line art drawing in) follows the same switch and the OS reduced-motion setting.
 
 ## How to plug in another UI
 
