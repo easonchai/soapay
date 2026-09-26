@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { CredentialRequest, IDKitErrorCodes, type ConstraintNode, type IDKitResultSession, type RpContext } from "@worldcoin/idkit";
-import { IDKit, setDebug, type IDKitRequest } from "@worldcoin/idkit-core";
-import QRCode from "qrcode";
+import {
+  CredentialRequest,
+  IDKitErrorCodes,
+  IDKitSessionWidget,
+  setDebug,
+  type ConstraintNode,
+  type IDKitResultSession,
+  type RpContext,
+} from "@worldcoin/idkit";
 
 export type { IDKitResultSession } from "@worldcoin/idkit";
 
@@ -89,115 +95,61 @@ export async function fetchRpContext(apiUrl: string, f: typeof fetch = fetch, bi
 const CANCEL_CODES = new Set<string>([IDKitErrorCodes.UserRejected, IDKitErrorCodes.Cancelled]);
 
 /**
- * World ID check for Soapay's single trust moment: key rotation (docs/worldid.md).
+ * World ID check for Soapay's single trust moment: account recovery (docs/worldid.md).
  *
- * Builds the session request with IDKit core's `createSession` / `proveSession(...).constraints(...)` and
- * renders the QR code and polling itself, so a failure can surface IDKit's debug report (the exact
- * request and World App's raw response) instead of a bare `generic_error`.
+ * Uses IDKit's own `IDKitSessionWidget`, configured exactly like World's session example
+ * (constraints without a signal, `environment`, `existing_session_id` to prove a session). The
+ * purpose of each proof is bound on our server through the RP nonce (`bind`, D-57). On failure
+ * the widget's debug report (the request and World App's raw response) is kept for "Copy details".
  */
 export function HumanCheck(props: HumanCheckProps) {
   const { mode, apiUrl, sessionId, signal, onResult, actionDescription } = props;
   const controlled = props.open !== undefined;
   const [innerOpen, setInnerOpen] = useState(false);
   const open = controlled ? !!props.open : innerOpen;
-  const [uri, setUri] = useState<string | null>(null);
-  const [qr, setQr] = useState<string | null>(null);
-  const [status, setStatus] = useState<"starting" | "waiting" | "confirming">("starting");
+  const [ctx, setCtx] = useState<RpContextResponse | null>(null);
+  const [debug, setDebugText] = useState<string | null>(null);
   const cbs = useRef({ onCancel: props.onCancel, onError: props.onError, onOpenChange: props.onOpenChange, onResult });
   cbs.current = { onCancel: props.onCancel, onError: props.onError, onOpenChange: props.onOpenChange, onResult };
-  const abort = useRef<AbortController | null>(null);
-  const activeRequest = useRef<IDKitRequest | null>(null);
-  const [debug, setDebugText] = useState<string | null>(null);
   const pendingError = useRef<HumanCheckError | null>(null);
 
   const setOpen = useCallback(
     (v: boolean) => {
       if (!controlled) setInnerOpen(v);
       cbs.current.onOpenChange?.(v);
+      if (!v) setCtx(null); // every request gets a fresh, single-use RP context
     },
     [controlled],
   );
 
+  // A fresh RP context, bound to this signal, each time the check opens.
   useEffect(() => {
-    if (!open) return;
+    if (!open || ctx) return;
     if (mode === "rotate" && !sessionId) {
       cbs.current.onError?.(new HumanCheckError("no_session", "this name has no World ID session to prove"));
       setOpen(false);
       return;
     }
-    setDebug(true); // keeps IDKit's debug report for this request; nothing secret is in it
+    setDebug(true); // keeps IDKit's debug report; nothing secret is in it
     setDebugText(null);
-    activeRequest.current = null;
     pendingError.current = null;
-    const ac = new AbortController();
-    abort.current = ac;
-    setUri(null);
-    setQr(null);
-    setStatus("starting");
-    void (async () => {
-      let request: IDKitRequest;
-      try {
-        const ctx = await fetchRpContext(apiUrl, props.fetch, signal); // fresh, and bound to this signal
-        const config = {
-          app_id: ctx.app_id,
-          rp_context: ctx.rp_context,
-          environment: ctx.environment,
-          ...(actionDescription ? { action_description: actionDescription } : {}),
-        };
-        const builder = mode === "rotate" && sessionId ? IDKit.proveSession(sessionId, config) : IDKit.createSession(config);
-        // IDKit 4.3 rejects presets for session flows ("Use .constraints() instead"), although
-        // World's session docs show `.preset(...)`.
-        request = await builder.constraints(humanCheckConstraint());
-        activeRequest.current = request;
-      } catch (e) {
-        if (ac.signal.aborted) return;
+    let live = true;
+    fetchRpContext(apiUrl, props.fetch, signal)
+      .then((c) => live && setCtx(c))
+      .catch((e: unknown) => {
+        if (!live) return;
         cbs.current.onError?.(e instanceof HumanCheckError ? e : new HumanCheckError("start_failed", `World ID failed to start: ${String(e)}`));
         setOpen(false);
-        return;
-      }
-      if (ac.signal.aborted) return;
-      setUri(request.connectorURI);
-      setStatus("waiting");
-      QRCode.toDataURL(request.connectorURI, { width: 220, margin: 1, errorCorrectionLevel: "M" })
-        .then((u) => !ac.signal.aborted && setQr(u))
-        .catch(() => undefined);
-      const done = await request.pollUntilCompletion({ signal: ac.signal, timeout: 300_000 }).catch((e: unknown) => ({
-        success: false as const,
-        error: (ac.signal.aborted ? IDKitErrorCodes.Cancelled : String(e)) as IDKitErrorCodes,
-      }));
-      if (ac.signal.aborted) return;
-      if (done.success) {
-        setStatus("confirming");
-        try {
-          await cbs.current.onResult(done.result as IDKitResultSession);
-        } finally {
-          setOpen(false);
-        }
-        return;
-      }
-      if (CANCEL_CODES.has(done.error)) {
-        cbs.current.onCancel?.();
-        setOpen(false);
-        return;
-      }
-      // Keep the panel open with the debug report, so the cause can be copied.
-      let report = "";
-      try {
-        report = JSON.stringify(activeRequest.current?.getDebugReport() ?? null, null, 2);
-      } catch {
-        report = "(no debug report)";
-      }
-      // Report the error when the user closes the panel, so the details stay readable until then.
-      pendingError.current = new HumanCheckError(done.error, `World ID failed: ${done.error}`);
-      setDebugText(`error: ${done.error}\n${report}`);
-    })();
-    return () => ac.abort();
-  }, [open, mode, sessionId, apiUrl, signal, actionDescription, props.fetch, setOpen]);
+      });
+    return () => {
+      live = false;
+    };
+  }, [open, ctx, mode, sessionId, apiUrl, signal, props.fetch, setOpen]);
 
-  const cancel = () => {
-    abort.current?.abort();
+  const close = () => {
     const err = pendingError.current;
     pendingError.current = null;
+    setDebugText(null);
     if (err) cbs.current.onError?.(err);
     else cbs.current.onCancel?.();
     setOpen(false);
@@ -210,31 +162,52 @@ export function HumanCheck(props: HumanCheckProps) {
           {props.children ?? (mode === "rotate" ? "Confirm it's you with World ID" : "Protect with World ID")}
         </button>
       )}
-      {open && (
-        <div role="dialog" aria-label="Verify with World ID" data-testid="worldid-panel" style={panel}>
-          <strong>{mode === "rotate" ? "Confirm it's you with World ID" : "Link World ID (Proof of Human)"}</strong>
-          {status === "starting" && <span>Preparing the request…</span>}
-          {status !== "starting" && uri && (
-            <>
-              <span>Scan with World App, or open it on this phone.</span>
-              {qr ? <img src={qr} width={220} height={220} alt="World ID QR code" /> : <div style={{ width: 220, height: 220 }} />}
-              <a href={uri} data-testid="worldid-open-app" style={{ fontWeight: 600 }}>
-                Open World App
-              </a>
-              <span>{status === "confirming" ? "Verifying…" : "Waiting for World App…"}</span>
-            </>
-          )}
-          {debug && (
-            <>
-              <span>World App returned an error. Copy the details and send them to the team.</span>
-              <textarea readOnly value={debug} rows={6} style={{ width: "100%", fontFamily: "monospace", fontSize: 11 }} data-testid="worldid-debug" />
-              <button type="button" onClick={() => void navigator.clipboard?.writeText(debug).catch(() => undefined)}>
-                Copy details
-              </button>
-            </>
-          )}
-          <button type="button" onClick={cancel} data-testid="worldid-cancel">
-            {debug ? "Close" : "Cancel"}
+      {ctx && !debug && (
+        <IDKitSessionWidget
+          open={open}
+          onOpenChange={(v) => {
+            if (!v && !pendingError.current) close();
+          }}
+          app_id={ctx.app_id}
+          rp_context={ctx.rp_context}
+          environment={ctx.environment}
+          constraints={humanCheckConstraint()}
+          {...(mode === "rotate" && sessionId ? { existing_session_id: sessionId } : {})}
+          {...(actionDescription ? { action_description: actionDescription } : {})}
+          onSuccess={async (result) => {
+            try {
+              await cbs.current.onResult(result);
+            } finally {
+              setOpen(false);
+            }
+          }}
+          onError={(code, report) => {
+            if (CANCEL_CODES.has(code)) {
+              close();
+              return;
+            }
+            // Keep the details readable; the error is reported when the user closes the panel.
+            pendingError.current = new HumanCheckError(code, `World ID failed: ${code}`);
+            let text = "";
+            try {
+              text = JSON.stringify(report ?? null, null, 2);
+            } catch {
+              text = "(no debug report)";
+            }
+            setDebugText(`error: ${code}\n${text}`);
+          }}
+        />
+      )}
+      {open && debug && (
+        <div role="dialog" aria-label="World ID error" data-testid="worldid-panel" style={panel}>
+          <strong>World App returned an error</strong>
+          <span>Copy the details and send them to the team.</span>
+          <textarea readOnly value={debug} rows={6} style={{ width: "100%", fontFamily: "monospace", fontSize: 11 }} data-testid="worldid-debug" />
+          <button type="button" onClick={() => void navigator.clipboard?.writeText(debug).catch(() => undefined)}>
+            Copy details
+          </button>
+          <button type="button" onClick={close} data-testid="worldid-cancel">
+            Close
           </button>
         </div>
       )}
