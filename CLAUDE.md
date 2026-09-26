@@ -1,6 +1,6 @@
 # Soapay
 
-Stealth-address payroll on Base. Product spec: `PRD.md`. Contract plan: `contracts/PLAN.md`. MVP interfaces: `docs/mvp-spec.md`.
+Stealth-address payroll on Base. Product spec: `docs/PRD.md`. Contract plan: `contracts/PLAN.md`. MVP interfaces: `docs/mvp-spec.md`.
 
 ## Layout
 

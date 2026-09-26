@@ -75,7 +75,7 @@ Fluidkey and Umbra use the same ERC-5564 and ERC-6538 standards, and both hide y
 
 **Documents**
 - [Docs site](https://soapay.up.railway.app/docs/) (source in [`apps/docs`](apps/docs/README.md))
-- [Pitch](pitch/README.md) · [PRD](PRD.md) · [Design brief](DESIGN_BRIEF.md) · [Privacy model](docs/privacy-model.md) · [Demo flow with screenshots](docs/demo-flow.md)
+- [Pitch](pitch/README.md) · [PRD](docs/PRD.md) · [Design brief](docs/design-brief.md) · [Privacy model](docs/privacy-model.md) · [Demo flow with screenshots](docs/demo-flow.md)
 - [Architecture](docs/architecture.md) · [World ID](docs/worldid.md) · [Bounty integrations, how to verify](docs/bounty-integrations.md) · [Desktop demo script](docs/demo-desktop.md)
 - [StealthDisperse plan](contracts/PLAN.md) · [MVP spec](docs/mvp-spec.md) · [Decision log](docs/decision-log.md) · [Testnet deployment](docs/testnet-deployment.md)
 
@@ -334,7 +334,7 @@ Base Sepolia, chain `84532` (the live demo; [docs/testnet-deployment.md](docs/te
 
 | Looking for | Go to |
 | --- | --- |
-| Product requirements | [`PRD.md`](PRD.md) |
+| Product requirements | [`docs/PRD.md`](docs/PRD.md) |
 | Threat model, design decisions, sender-app invariants | [`CLAUDE.md`](CLAUDE.md) |
 | Who sees what; guaranteed vs not guaranteed | [`docs/privacy-model.md`](docs/privacy-model.md) |
 | `StealthDisperse` spec, invariants, test matrix, deploy | [`contracts/PLAN.md`](contracts/PLAN.md) |
