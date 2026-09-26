@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import {
   createPublicClient,
   custom,
@@ -20,7 +20,8 @@ import { baseSepolia } from "viem/chains";
 import { recoverAuthorizationAddress } from "viem/utils";
 import { getUserOperationTypedData } from "viem/account-abstraction";
 import {
-  CHAINS,
+  CIRCLE_USDC,
+  setPayTokenOverride,
   CIRCLE_PAYMASTER_PERMIT_AMOUNT_OFFSET,
   CIRCLE_PAYMASTER_PERMIT_SIGNATURE_OFFSET,
   CIRCLE_PAYMASTER_TOKEN_ADDRESS_OFFSET,
@@ -43,10 +44,18 @@ import {
   spendFromStealth,
   spendMany,
   userOpMaxCost,
+  sponsoredPaymaster,
+  SponsorshipUnavailableError,
+  resolvePaymaster,
+  type PaymasterAdapter,
 } from "../src/index.js";
 
 const CHAIN_ID = baseSepolia.id;
-const USDC = CHAINS[CHAIN_ID].usdc;
+// The Circle-paymaster world: Base Sepolia with the pay token overridden back to Circle USDC
+// (mainnet-like; the default testnet pay token is the mock and gas is sponsored, D-52).
+const USDC = CIRCLE_USDC[CHAIN_ID];
+setPayTokenOverride(CHAIN_ID, USDC);
+afterAll(() => setPayTokenOverride(CHAIN_ID, undefined));
 const PAYMASTER = CIRCLE_PAYMASTER_V08[CHAIN_ID];
 const DEST = "0x000000000000000000000000000000000000dEaD" as Address;
 
@@ -73,7 +82,7 @@ const mockAbi = parseAbi([
 
 type RpcUserOp = Record<string, Hex | Record<string, Hex> | undefined> & { sender: Address; callData: Hex };
 
-function mockWorld(opts: { code?: Record<string, Hex>; balances?: Record<string, bigint>; feeSpread?: number } = {}) {
+function mockWorld(opts: { code?: Record<string, Hex>; balances?: Record<string, bigint>; feeSpread?: number; paymaster?: PaymasterAdapter } = {}) {
   const code = Object.fromEntries(Object.entries(opts.code ?? {}).map(([k, v]) => [k.toLowerCase(), v]));
   const balances = Object.fromEntries(Object.entries(opts.balances ?? {}).map(([k, v]) => [k.toLowerCase(), v]));
   const sent: RpcUserOp[] = [];
@@ -173,6 +182,7 @@ function mockWorld(opts: { code?: Record<string, Hex>; balances?: Record<string,
     publicClient,
     bundlerTransport: bundler,
     estimateFeesPerGas: async () => FEES,
+    paymaster: opts.paymaster ?? "circle-usdc",
   });
   return { client, sent, estimated, log };
 }
@@ -497,6 +507,69 @@ describe("executeFromStealth", () => {
     const { client, sent } = mockWorld({ balances: { [from]: 10_000_000n } });
     await expect(executeFromStealth(client, { stealthKey: key, calls: [{ to: OTHER, value: 1n }] })).rejects.toThrow(/must not move ETH/);
     await expect(executeFromStealth(client, { stealthKey: key, calls: [] })).rejects.toThrow(/no calls/);
+    expect(sent).toHaveLength(0);
+  });
+});
+
+describe("sponsored gas (testnet, D-52)", () => {
+  const SPONSOR = "0x777777777702cfDbc7d3B6c1d7d8E2E6D9F4C6f0" as Address;
+  function sponsorTransport(opts: { disabled?: boolean } = {}) {
+    const calls: { method: string; params: unknown[] }[] = [];
+    const transport = custom({
+      async request({ method, params }: { method: string; params?: unknown }) {
+        const p = (params ?? []) as unknown[];
+        calls.push({ method, params: p });
+        if (opts.disabled) throw new Error("HTTP 503: sponsorship_disabled");
+        if (method === "pm_getPaymasterStubData")
+          return { paymaster: SPONSOR, paymasterData: `0x${"00".repeat(65)}`, paymasterVerificationGasLimit: "0x10000", paymasterPostOpGasLimit: "0x1", isFinal: false };
+        if (method === "pm_getPaymasterData") return { paymaster: SPONSOR, paymasterData: `0x${"ab".repeat(65)}` };
+        throw new Error(`unexpected paymaster rpc ${method}`);
+      },
+    });
+    return { transport, calls };
+  }
+
+  it("defaults: Base Sepolia is sponsored (needs the proxy URL), Base mainnet stays on the Circle paymaster", () => {
+    expect(() => resolvePaymaster(84532, undefined)).toThrow(/sponsored gas; pass paymasterUrl/);
+    expect(resolvePaymaster(84532, undefined, "https://api.example/paymaster").name).toBe("sponsored");
+    expect(resolvePaymaster(8453, undefined).name).toBe("circle");
+    expect(resolvePaymaster(84532, "circle-usdc").name).toBe("circle");
+    expect(resolvePaymaster(11155111, undefined).name).toBe("circle");
+  });
+
+  it("sends the transfer with sponsor fields only: no permit, no approve, fee 0, whole balance sendable", async () => {
+    const key = generatePrivateKey();
+    const from = privateKeyToAccount(key).address;
+    const sp = sponsorTransport();
+    const { client, sent, log } = mockWorld({ balances: { [from]: 7_000_000n }, paymaster: sponsoredPaymaster({ transport: sp.transport }) });
+
+    const est = await estimateSpend(client, { stealthKey: key, to: DEST, amount: "max" });
+    expect(est.fee).toBe(0n);
+    expect(est.amount).toBe(7_000_000n);
+    expect(est.maxSendable).toBe(7_000_000n);
+
+    const res = await spendFromStealth(client, { stealthKey: key, to: DEST, amount: 7_000_000n });
+    expect(res.feeEstimate).toBe(0n);
+    const op = sent.at(-1)!;
+    expect(getAddress(op.paymaster as Hex)).toBe(getAddress(SPONSOR));
+    expect(op.paymasterData).toBe(`0x${"ab".repeat(65)}`);
+    // One plain transfer: the stealth address signs no permit and approves nothing.
+    expect(decodeTransfer(op.callData)).toEqual({ target: getAddress(USDC), to: DEST, amount: 7_000_000n });
+    expect(log).not.toContain("eth_signTypedData_v4");
+    // ERC-7677 params: [userOp, entryPoint, chainId hex, context].
+    const stub = sp.calls.find((c) => c.method === "pm_getPaymasterStubData")!;
+    expect(stub.params[1]).toBe(ENTRYPOINT_V08);
+    expect(stub.params[2]).toBe(numberToHex(CHAIN_ID));
+    expect((stub.params[0] as { eip7702Auth?: unknown }).eip7702Auth).toBeDefined();
+    expect(sp.calls.some((c) => c.method === "pm_getPaymasterData")).toBe(true);
+  });
+
+  it("a 503 sponsorship_disabled from the proxy becomes SponsorshipUnavailableError", async () => {
+    const key = generatePrivateKey();
+    const from = privateKeyToAccount(key).address;
+    const sp = sponsorTransport({ disabled: true });
+    const { client, sent } = mockWorld({ balances: { [from]: 1_000_000n }, paymaster: sponsoredPaymaster({ transport: sp.transport }) });
+    await expect(spendFromStealth(client, { stealthKey: key, to: DEST, amount: 1n })).rejects.toBeInstanceOf(SponsorshipUnavailableError);
     expect(sent).toHaveLength(0);
   });
 });

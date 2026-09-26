@@ -44,7 +44,7 @@ import {
   type Hash,
   type Hex,
 } from "viem";
-import { ENTRYPOINT_V08, getSpendChainConfig } from "./constants.js";
+import { ENTRYPOINT_V08, getChainConfig, getSpendChainConfig } from "./constants.js";
 import {
   estimateExecute,
   executeFromStealth,
@@ -178,6 +178,29 @@ export function getExitConfig(source: number, dest: number): ExitConfig {
   const c = EXIT_CONFIGS[`${source}:${dest}`];
   if (!c) throw new Error(`Soapay exit: no route ${source} → ${dest}`);
   return c;
+}
+
+/** Shown wherever the exit is offered on a chain whose pay token is not Circle USDC (D-52). */
+export const EXIT_TESTNET_DISABLED_MESSAGE = "The compliant exit needs real Circle USDC; it's off on this testnet demo.";
+
+export type ExitAvailability = { available: true } | { available: false; reason: string };
+
+/**
+ * Whether the exit can run for balances paid on `source`: CCTP only burns Circle USDC, so the chain's
+ * pay token must be the route's CCTP token. On Base Sepolia the pay token is our mock (D-52), so the
+ * exit is off there unless the pay token is overridden back to Circle USDC. The code stays intact.
+ */
+export function exitAvailability(source: number, dest?: number): ExitAvailability {
+  const config = dest !== undefined ? EXIT_CONFIGS[`${source}:${dest}`] : Object.values(EXIT_CONFIGS).find((c) => c.source === source);
+  if (!config) return { available: false, reason: `No exit route from chain ${source}.` };
+  let payToken: Address;
+  try {
+    payToken = getChainConfig(source).usdc;
+  } catch {
+    return { available: false, reason: `No exit route from chain ${source}.` };
+  }
+  if (payToken.toLowerCase() !== config.cctp.source.usdc.toLowerCase()) return { available: false, reason: EXIT_TESTNET_DISABLED_MESSAGE };
+  return { available: true };
 }
 
 // ---------------------------------------------------------------------------------------------
