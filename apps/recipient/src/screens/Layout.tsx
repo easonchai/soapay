@@ -1,6 +1,6 @@
 import { Outlet, useLocation, useNavigate } from "react-router";
 import { Shell, type ShellTab } from "@soapay/ui";
-import { chainName, ENV } from "../config.js";
+import { chainName, ENV, exitOffered } from "../config.js";
 import { useServices } from "../services/ServicesProvider.js";
 import { Badge } from "../ui/kit.js";
 import { useVault } from "../vault/VaultProvider.js";
@@ -9,7 +9,6 @@ const NAV = [
   { to: "/", label: "Payments" },
   { to: "/spend", label: "Send" },
   { to: "/exit", label: "Exit" },
-  { to: "/convert", label: "Convert" },
   { to: "/labels", label: "Labels" },
   { to: "/name", label: "Name" },
   { to: "/settings", label: "Settings" },
@@ -22,7 +21,8 @@ export function Layout() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const tabs: ShellTab[] = [
-    ...NAV.map((n) => ({
+    // No Exit on the Base Sepolia demo: the mock pay token can't bridge (D-52).
+    ...NAV.filter((n) => n.to !== "/exit" || exitOffered(svc.settings.chainId)).map((n) => ({
       label: n.label,
       active: n.to === "/" ? pathname === "/" : pathname.startsWith(n.to),
       onSelect: () => void navigate(n.to),

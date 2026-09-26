@@ -9,7 +9,7 @@ import {
   sealWithKey,
   toBase64,
 } from "../src/vault/crypto.js";
-import { newVaultData, settingsOf, swapProxyUrl } from "../src/vault/types.js";
+import { newVaultData, paymasterUrl, settingsOf } from "../src/vault/types.js";
 
 const PASS = "correct horse battery";
 
@@ -56,15 +56,15 @@ describe("vault crypto", () => {
 });
 
 describe("settings", () => {
-  it("fills defaults for old vaults and drops the legacy client-side Uniswap key", () => {
-    const s = settingsOf({ settings: { chainId: 84532, apiUrl: "https://api.x", uniswapApiKey: "secret" } as never });
+  it("fills defaults for old vaults and drops the legacy Uniswap key and Convert setting", () => {
+    const s = settingsOf({ settings: { chainId: 84532, apiUrl: "https://api.x", uniswapApiKey: "secret", swapViaApi: true } as never });
     expect("uniswapApiKey" in s).toBe(false);
+    expect("swapViaApi" in s).toBe(false);
     expect(s.knownPayers).toEqual([]);
-    expect(typeof s.swapViaApi).toBe("boolean");
   });
 
-  it("routes Convert through the API proxy only when enabled", () => {
-    expect(swapProxyUrl({ apiUrl: "https://api.x/", swapViaApi: true })).toBe("https://api.x/uniswap");
-    expect(swapProxyUrl({ apiUrl: "https://api.x", swapViaApi: false })).toBe("");
+  it("sponsors testnet gas through the API's /paymaster", () => {
+    expect(paymasterUrl({ apiUrl: "https://api.x/" })).toBe("https://api.x/paymaster");
+    expect(paymasterUrl({ apiUrl: "" })).toBe("");
   });
 });

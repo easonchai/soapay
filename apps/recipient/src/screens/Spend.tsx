@@ -2,11 +2,11 @@ import { useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { offersExit, type ExitPrefill } from "../features/exit/entry.js";
 import { useExit } from "../hooks/useExit.js";
-import type { QueueWindow } from "@soapay/sdk";
+import { defaultPaymasterMode, type QueueWindow } from "@soapay/sdk";
 import { useQueue } from "../hooks/useQueue.js";
 import { useSpendFlow } from "../hooks/useSpendFlow.js";
 import { useWallet } from "../hooks/useWallet.js";
-import { explorerTxUrl } from "../config.js";
+import { explorerTxUrl, exitOffered } from "../config.js";
 import { useServices } from "../services/ServicesProvider.js";
 import { Addr, Alert, Button, Card, CardHeader, Field, Input, PageHeader } from "../ui/kit.js";
 import { formatUsdc, windowTime } from "../ui/format.js";
@@ -106,7 +106,9 @@ export function Spend() {
       <PageHeader
         eyebrow="Send"
         title="Send"
-        description="Each source address sends in its own transaction, with gas paid in USDC. Sends are queued, one address per random window of hours, so your addresses aren't linked by timing."
+        description={`Each source address sends in its own transaction, ${
+          defaultPaymasterMode(svc.settings.chainId) === "sponsored" ? "with gas sponsored (testnet)" : "with gas paid in USDC"
+        }. Sends are queued, one address per random window of hours, so your addresses aren't linked by timing.`}
       />
       {!flow.ready && <Alert variant="warning">{flow.unavailableReason}</Alert>}
 
@@ -159,7 +161,7 @@ export function Spend() {
               The most these addresses can deliver is {formatUsdc(s.draft.allocation.maxReceivable)} USDC.
             </Alert>
           )}
-          {offersExit(s.draft.plan) && (
+          {offersExit(s.draft.plan) && exitOffered(svc.settings.chainId) && (
             <ExitOffer
               disabledReason={exit.ready ? undefined : exit.unavailableReason}
               onExit={() => {

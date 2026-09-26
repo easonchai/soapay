@@ -159,6 +159,8 @@ function buildSpendClients(cfg: ExitConfig, p: { bundlerUrl: string; rpcUrl: str
       chainId,
       publicClient,
       bundlerUrl,
+      // CCTP burns Circle USDC and the exit pays gas in it: always the Circle paymaster (never the testnet sponsorship).
+      paymaster: "circle-usdc",
       ...(bundlerUrl.includes("pimlico") ? { estimateFeesPerGas: pimlicoFeesPerGas } : {}),
     });
   };

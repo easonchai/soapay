@@ -4,6 +4,7 @@
  */
 import {
   createSpendClient,
+  defaultPaymasterMode,
   estimateSpend,
   spendMany,
   type SpendClient,
@@ -40,6 +41,8 @@ export function createSdkSpendService(opts: {
   chainId: number;
   bundlerUrl: string;
   publicClient: PublicClient<Transport, Chain>;
+  /** The Soapay API's `/paymaster` (sponsored gas on Base Sepolia, D-52). Unused where gas is paid in USDC. */
+  paymasterUrl?: string;
 }): SpendService {
   if (!opts.bundlerUrl) {
     return {
@@ -49,9 +52,22 @@ export function createSdkSpendService(opts: {
       sendAll: () => Promise.reject(new Error("No bundler URL configured")),
     };
   }
+  if (defaultPaymasterMode(opts.chainId) === "sponsored" && !opts.paymasterUrl) {
+    return {
+      ready: false,
+      unavailableReason: "Add the Soapay API URL in Settings: gas on this testnet is sponsored through it.",
+      quote: () => Promise.reject(new Error("No Soapay API URL configured")),
+      sendAll: () => Promise.reject(new Error("No Soapay API URL configured")),
+    };
+  }
   let client: SpendClient | null = null;
   const get = () =>
-    (client ??= createSpendClient({ chainId: opts.chainId, bundlerUrl: opts.bundlerUrl, publicClient: opts.publicClient }));
+    (client ??= createSpendClient({
+      chainId: opts.chainId,
+      bundlerUrl: opts.bundlerUrl,
+      publicClient: opts.publicClient,
+      ...(opts.paymasterUrl ? { paymasterUrl: opts.paymasterUrl } : {}),
+    }));
   return {
     ready: true,
     async quote(stealthKey, to) {
