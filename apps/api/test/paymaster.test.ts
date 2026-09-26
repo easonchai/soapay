@@ -116,15 +116,11 @@ describe("POST /paymaster (Pimlico sponsorship proxy)", () => {
     expect(f).not.toHaveBeenCalled();
   });
 
-  it("rate-limits per IP per minute", async () => {
+  it("has no rate limits (mock token, testnet)", async () => {
     const f = upstream();
-    const t = makeTestApp({ env: { PIMLICO_API_KEY: "k", RATE_LIMIT_PAYMASTER_PER_IP_PER_MINUTE: "2" }, paymasterFetch: f as unknown as typeof fetch });
+    const t = makeTestApp({ env: { PIMLICO_API_KEY: "k" }, paymasterFetch: f as unknown as typeof fetch });
     const body = stub(op(exec(MOCK_USDC_BASE_SEPOLIA)));
-    expect((await rpc(t, body)).status).toBe(200);
-    expect((await rpc(t, body)).status).toBe(200);
-    expect((await rpc(t, body)).status).toBe(429);
-    t.setIp("10.0.0.2");
-    expect((await rpc(t, body)).status).toBe(200);
+    for (let i = 0; i < 100; i++) expect((await rpc(t, body)).status).toBe(200);
   });
 
   it("maps an unreachable upstream to 502 and upstream errors to 502", async () => {

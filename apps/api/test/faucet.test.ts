@@ -68,24 +68,13 @@ describe("POST /faucet (testnet welcome drop)", () => {
     expect(w3.sendEth).not.toHaveBeenCalled();
   });
 
-  it("caps new claims per day across all IPs, and per IP", async () => {
-    const t = makeTestApp({ env: { FAUCET_PER_DAY: "2", FAUCET_PER_IP_PER_DAY: "10" }, faucetWallet: fakeWallet() });
+  it("has no rate limits: many wallets from one IP each get their drop once", async () => {
+    const w = fakeWallet();
+    const t = makeTestApp({ faucetWallet: w });
     const addr = (i: number) => `0x${i.toString(16).padStart(40, "0")}`;
-    expect((await claim(t, addr(1))).status).toBe(200);
-    t.setIp("10.0.0.9");
-    expect((await claim(t, addr(2))).status).toBe(200);
-    const capped = await claim(t, addr(3));
-    expect(capped.status).toBe(429);
-    expect(await j(capped)).toMatchObject({ error: { code: "faucet_daily_cap" } });
-    // Already-claimed callers are answered even at the cap (the app calls on every connect).
+    for (let i = 1; i <= 150; i++) expect((await claim(t, addr(i))).status).toBe(200);
+    expect(w.mint).toHaveBeenCalledTimes(150);
     expect(await j(await claim(t, addr(1)))).toMatchObject({ status: "already_claimed" });
-    // The next UTC day opens again.
-    t.setNow(NOW + 86_400);
-    expect((await claim(t, addr(3))).status).toBe(200);
-
-    const p = makeTestApp({ env: { FAUCET_PER_IP_PER_DAY: "1" }, faucetWallet: fakeWallet() });
-    expect((await claim(p, addr(1))).status).toBe(200);
-    expect((await claim(p, addr(2))).status).toBe(429);
   });
 
   it("forgets a failed drop so the wallet can try again", async () => {

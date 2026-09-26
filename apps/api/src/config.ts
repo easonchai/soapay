@@ -80,9 +80,6 @@ export type Config = {
     sponsorshipPolicyId: string | undefined;
     /** Call targets a sponsored userOp may touch: pay token, Permit2, Universal Router, StealthDisperse, Announcer (+ PAYMASTER_EXTRA_TARGETS). */
     allowedTargets: Address[];
-    perIpPerMinute: number;
-    /** Sponsorship requests per UTC day, all IPs together. */
-    perDay: number;
   };
   /** POST /faucet: the welcome drop for wallets that open the company app (testnet only, D-52). */
   faucet: {
@@ -93,10 +90,6 @@ export type Config = {
     ethDripWei: bigint;
     /** No ETH drip while the relayer holds less than this, wei (default 0.02 ETH). */
     minRelayerEthWei: bigint;
-    /** Wallets served per UTC day, all IPs together. */
-    perDay: number;
-    /** New claims per IP per UTC day. */
-    perIpPerDay: number;
   };
 };
 
@@ -316,16 +309,12 @@ export function loadConfig(env: Env = process.env): Config {
       upstreamUrl: (url(env, "PIMLICO_PAYMASTER_URL", false) ?? `https://api.pimlico.io/v2/${TESTNET_SPONSOR_CHAIN_ID}/rpc`).replace(/\/+$/, ""),
       sponsorshipPolicyId: str(env, "PIMLICO_SPONSORSHIP_POLICY_ID"),
       allowedTargets: [...new Set(allowedTargets)],
-      perIpPerMinute: int(env, "RATE_LIMIT_PAYMASTER_PER_IP_PER_MINUTE", 60, 1),
-      perDay: int(env, "PAYMASTER_PER_DAY", 5_000, 1),
     },
     faucet: {
       enabled: chainId === TESTNET_SPONSOR_CHAIN_ID && bool(env, "FAUCET_ENABLED", true),
       usdcAmount: BigInt(faucetUsdc),
       ethDripWei: wei(env, "FAUCET_ETH_WEI", 0n),
       minRelayerEthWei: wei(env, "FAUCET_MIN_RELAYER_ETH_WEI", 20_000_000_000_000_000n),
-      perDay: int(env, "FAUCET_PER_DAY", 100, 0),
-      perIpPerDay: int(env, "FAUCET_PER_IP_PER_DAY", 5, 0),
     },
   };
 }

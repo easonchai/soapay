@@ -1,7 +1,7 @@
 import { getAddress, parseAbi, type Address, type Hash } from "viem";
 import type { Config } from "./config.js";
 import type { Db } from "./db.js";
-import { ApiError, enforceRateLimits, type Logger } from "./util.js";
+import { ApiError, type Logger } from "./util.js";
 
 /** MockUSDC.mint (contracts/src/MockUSDC.sol): MINTER_ROLE only, held by the relayer key. */
 export const mockUsdcMintAbi = parseAbi(["function mint(address to, uint256 amount)"]);
@@ -25,8 +25,6 @@ export type FaucetDrop = {
 };
 export type FaucetResult = FaucetDrop | { status: "already_claimed"; address: Address };
 
-const DAY = 86_400;
-
 /** One send at a time from the relayer, so concurrent claims never race for a nonce. */
 let queue: Promise<unknown> = Promise.resolve();
 function serial<T>(fn: () => Promise<T>): Promise<T> {
@@ -39,10 +37,10 @@ function serial<T>(fn: () => Promise<T>): Promise<T> {
  * The testnet welcome drop (D-52): once per address, mint `faucet.usdcAmount` mock USDC and, if the
  * wallet holds less than `faucet.ethDripWei`, top it up to that much ETH (skipped while the relayer
  * holds less than `faucet.minRelayerEthWei`). Claims live in sqlite; a failed drop is forgotten so
- * the wallet can try again. Daily global and per-IP caps apply to new claims only.
+ * the wallet can try again. No rate limits: it is a mock token on a testnet (owner, 09-26).
  */
 export async function claimFaucet(
-  deps: { config: Config; db: Db; logger: Logger; now: () => number; wallet: FaucetWallet; payToken: Address; ip: string },
+  deps: { config: Config; db: Db; logger: Logger; now: () => number; wallet: FaucetWallet; payToken: Address },
   rawAddress: Address,
 ): Promise<FaucetResult> {
   const { config, db, logger, wallet } = deps;
@@ -52,11 +50,6 @@ export async function claimFaucet(
 
   const existing = db.prepare("SELECT status FROM faucet_claims WHERE address = ?").get(address) as { status: string } | undefined;
   if (existing) return { status: "already_claimed", address };
-
-  const dayStart = now - (now % DAY);
-  const today = (db.prepare("SELECT COUNT(*) AS n FROM faucet_claims WHERE created_at >= ?").get(dayStart) as { n: number }).n;
-  if (today >= cfg.perDay) throw new ApiError(429, "faucet_daily_cap", "Today's test-funds drops are used up; try again tomorrow (UTC)");
-  enforceRateLimits(db, [{ bucket: "faucet:ip", key: deps.ip, limit: cfg.perIpPerDay }], DAY, now);
 
   // Reserve the claim first, so a concurrent request for the same address gets already_claimed.
   try {

@@ -233,4 +233,4 @@ metadata:
   - Deployed on Base Sepolia: MockUSDC `0x028D969c20b740582428f5043954c380686214Bb` (minter = API relayer), mock USDC / WETH 0.05% pool `0x820537A74A4ECf64882c8049Dde2FAabE1920b14` (created before the Uniswap scope was dropped). Addresses and txs in docs/testnet-deployment.md.
   - Live: welcome drop through the API and two sponsored 7702 spends (Pimlico via `POST /paymaster`, 0 ETH, no fee). The deployer holds 1,000,000 mock USDC.
   - Needs on Railway: `PIMLICO_API_KEY` (set per the owner), faucet vars, and a web rebuild (VITE_PAY_TOKEN optional). ETH drip is off (`FAUCET_ETH_WEI=0`) pending the owner.
-  - Agent decisions to confirm (flagged in D-52): faucet per-IP cap, paymaster limits, open CORS on /paymaster, Coinbase factory in initCode, testnet-only override, `version()` view, Review confirmation above the drop.
+  - Agent decisions to confirm (flagged in D-52): open CORS on /paymaster, Coinbase factory in initCode, testnet-only override, `version()` view, Review confirmation above the drop.
