@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { CredentialRequest, IDKitErrorCodes, type ConstraintNode, type IDKitResultSession, type RpContext } from "@worldcoin/idkit";
-import { IDKit, selfieCheck, type IDKitRequest } from "@worldcoin/idkit-core";
+import { IDKit, setDebug, type IDKitRequest } from "@worldcoin/idkit-core";
 import QRCode from "qrcode";
 
 export type { IDKitResultSession } from "@worldcoin/idkit";
@@ -86,10 +86,9 @@ const CANCEL_CODES = new Set<string>([IDKitErrorCodes.UserRejected, IDKitErrorCo
 /**
  * World ID check for Soapay's single trust moment: key rotation (docs/worldid.md).
  *
- * Builds the session request with IDKit core's `createSession` / `proveSession(...).preset(selfieCheck())`,
- * exactly as World's session-proof docs show. IDKit 4.3's `IDKitSessionWidget` only takes hand-built
- * `constraints`, and a `CredentialRequest("selfie")` constraint made the production World App answer
- * `generic_error` (2026-09-26), so we render the QR code and poll ourselves.
+ * Builds the session request with IDKit core's `createSession` / `proveSession(...).constraints(...)` and
+ * renders the QR code and polling itself, so a failure can surface IDKit's debug report (the exact
+ * request and World App's raw response) instead of a bare `generic_error`.
  */
 export function HumanCheck(props: HumanCheckProps) {
   const { mode, apiUrl, sessionId, signal, onResult, actionDescription } = props;
@@ -102,6 +101,9 @@ export function HumanCheck(props: HumanCheckProps) {
   const cbs = useRef({ onCancel: props.onCancel, onError: props.onError, onOpenChange: props.onOpenChange, onResult });
   cbs.current = { onCancel: props.onCancel, onError: props.onError, onOpenChange: props.onOpenChange, onResult };
   const abort = useRef<AbortController | null>(null);
+  const activeRequest = useRef<IDKitRequest | null>(null);
+  const [debug, setDebugText] = useState<string | null>(null);
+  const pendingError = useRef<HumanCheckError | null>(null);
 
   const setOpen = useCallback(
     (v: boolean) => {
@@ -118,6 +120,10 @@ export function HumanCheck(props: HumanCheckProps) {
       setOpen(false);
       return;
     }
+    setDebug(true); // keeps IDKit's debug report for this request; nothing secret is in it
+    setDebugText(null);
+    activeRequest.current = null;
+    pendingError.current = null;
     const ac = new AbortController();
     abort.current = ac;
     setUri(null);
@@ -134,7 +140,10 @@ export function HumanCheck(props: HumanCheckProps) {
           ...(actionDescription ? { action_description: actionDescription } : {}),
         };
         const builder = mode === "rotate" && sessionId ? IDKit.proveSession(sessionId, config) : IDKit.createSession(config);
-        request = await builder.preset(selfieCheck({ signal }));
+        // IDKit 4.3 rejects presets for session flows ("Use .constraints() instead"), although
+        // World's session docs show `.preset(selfieCheck())`.
+        request = await builder.constraints(selfieCheckConstraint(signal));
+        activeRequest.current = request;
       } catch (e) {
         if (ac.signal.aborted) return;
         cbs.current.onError?.(e instanceof HumanCheckError ? e : new HumanCheckError("start_failed", `World ID failed to start: ${String(e)}`));
@@ -161,16 +170,31 @@ export function HumanCheck(props: HumanCheckProps) {
         }
         return;
       }
-      if (CANCEL_CODES.has(done.error)) cbs.current.onCancel?.();
-      else cbs.current.onError?.(new HumanCheckError(done.error, `World ID failed: ${done.error}`));
-      setOpen(false);
+      if (CANCEL_CODES.has(done.error)) {
+        cbs.current.onCancel?.();
+        setOpen(false);
+        return;
+      }
+      // Keep the panel open with the debug report, so the cause can be copied.
+      let report = "";
+      try {
+        report = JSON.stringify(activeRequest.current?.getDebugReport() ?? null, null, 2);
+      } catch {
+        report = "(no debug report)";
+      }
+      // Report the error when the user closes the panel, so the details stay readable until then.
+      pendingError.current = new HumanCheckError(done.error, `World ID failed: ${done.error}`);
+      setDebugText(`error: ${done.error}\n${report}`);
     })();
     return () => ac.abort();
   }, [open, mode, sessionId, apiUrl, signal, actionDescription, props.fetch, setOpen]);
 
   const cancel = () => {
     abort.current?.abort();
-    cbs.current.onCancel?.();
+    const err = pendingError.current;
+    pendingError.current = null;
+    if (err) cbs.current.onError?.(err);
+    else cbs.current.onCancel?.();
     setOpen(false);
   };
 
@@ -195,8 +219,17 @@ export function HumanCheck(props: HumanCheckProps) {
               <span>{status === "confirming" ? "Verifying…" : "Waiting for World App…"}</span>
             </>
           )}
+          {debug && (
+            <>
+              <span>World App returned an error. Copy the details and send them to the team.</span>
+              <textarea readOnly value={debug} rows={6} style={{ width: "100%", fontFamily: "monospace", fontSize: 11 }} data-testid="worldid-debug" />
+              <button type="button" onClick={() => void navigator.clipboard?.writeText(debug).catch(() => undefined)}>
+                Copy details
+              </button>
+            </>
+          )}
           <button type="button" onClick={cancel} data-testid="worldid-cancel">
-            Cancel
+            {debug ? "Close" : "Cancel"}
           </button>
         </div>
       )}
