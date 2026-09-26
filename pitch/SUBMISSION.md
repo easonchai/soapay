@@ -42,6 +42,16 @@ The MCP server gives agents the same identities. create_agent_identity registers
 
 Two smaller hacks worth mentioning. The ScopeLift stealth SDK cannot be loaded by plain Node, so Vite bundles it for the apps, Vitest inlines it, esbuild bundles it for the MCP server and the tools run under tsx. And the demo's coworker view rebuilds an entire pay-run batch from the transaction receipt alone, announcements plus USDC transfer logs, so the audience sees exactly what the chain shows a colleague, then flips to the recipient's view where only their viewing key lights up their lines.
 
+## How AI tools were used
+
+Form field: "Describe how AI tools were used in your project (if applicable). Be specific about which tools were used and explain which parts of the projects they were used for." Counts below come from the commit trailers and `docs/decision-log.md` on main as of 2026-09-26.
+
+```text
+Claude Code was the main coding agent for the whole monorepo, running Claude Opus 5.5 and Claude Fable 5.1: 152 of the 289 commits on main carry its session trailer. Under the team's design decisions it wrote most of the SDK (stealth derivation, the batch planner, the scanner, the consolidation guard, the exit and swap modules), the StealthDisperse contract with its unit, fuzz and fork tests, the ENSv2 issuer and the Foundry fork test against the live ENSv2 contracts, the World ID verifier and attestation flow, the employee and company apps, the Hono API, the MCP server and the CLI. Every product and architecture decision is logged in docs/decision-log.md with who made it: 35 by the owner, 16 proposed by an agent and then confirmed or overruled by the owner, 2 by the team. Shared agent memory is committed in .claude/memory so every session and every teammate starts from the same facts. Claude Opus research agents built the pitch evidence: they pulled the incident reports, vendor pages and docs (Tempo, Base Ledgers, Toku, Fluidkey, Visa, the sponsor prize pages, the ENSv2, World ID and Uniswap docs) through Firecrawl, and every quote in the deck and README was matched against the page text; Context7 served library docs. OpenAI Codex (GPT-6 Astra) was the second model, used for deep-reasoning tasks and independent review of Claude's diffs. Claude Design on claude.ai hosted and iterated the pitch deck and design explorations. Every AI-written change was reviewed by a person, tested (809 tests across the workspace, plus fork tests against real Base USDC and the live ENSv2 deployment) and merged by pull request.
+```
+
+Check the Codex model name before pasting: the repo's commit history carries no Codex trailer, so that name comes from the team, not from the code.
+
 ## Before submitting
 
 - The compliant exit through Privacy Pools is described as built, matching the README table. If it will not be shown live, soften it to "wired end to end on testnet".
