@@ -75,7 +75,7 @@ Fluidkey and Umbra use the same ERC-5564 and ERC-6538 standards, and both hide y
 
 **Documents**
 - [Docs site](https://soapay.up.railway.app/docs/) (source in [`apps/docs`](apps/docs/README.md))
-- [Pitch](pitch/README.md) · [PRD](PRD.md) · [Design brief](DESIGN_BRIEF.md) · [Privacy model](docs/privacy-model.md) · [Demo flow with screenshots](docs/demo-flow.md)
+- [Pitch](pitch/README.md) · [PRD](PRD.md) · [Design brief](docs/design-brief.md) · [Privacy model](docs/privacy-model.md) · [Demo flow with screenshots](docs/demo-flow.md)
 - [Architecture](docs/architecture.md) · [World ID](docs/worldid.md) · [Bounty integrations, how to verify](docs/bounty-integrations.md) · [Desktop demo script](docs/demo-desktop.md)
 - [StealthDisperse plan](contracts/PLAN.md) · [MVP spec](docs/mvp-spec.md) · [Decision log](docs/decision-log.md) · [Testnet deployment](docs/testnet-deployment.md)
 
