@@ -19,3 +19,12 @@ export function WalletGlyph({ size = 18, style }: { size?: number; style?: CSSPr
     </svg>
   );
 }
+
+/** Coinbase Wallet mark: filled circle with a rounded-square cut-out. currentColor. */
+export function CoinbaseMark({ size = 18, style }: { size?: number; style?: CSSProperties }) {
+  return (
+    <svg viewBox="0 0 32 32" width={size} height={size} aria-hidden data-brand="coinbase" style={{ display: 'block', flex: '0 0 auto', ...style }}>
+      <path fillRule="evenodd" clipRule="evenodd" fill="currentColor" d="M16 2a14 14 0 1 0 0 28 14 14 0 0 0 0-28Zm-4.2 8.6h8.4c.66 0 1.2.54 1.2 1.2v8.4c0 .66-.54 1.2-1.2 1.2h-8.4a1.2 1.2 0 0 1-1.2-1.2v-8.4c0-.66.54-1.2 1.2-1.2Z" />
+    </svg>
+  );
+}

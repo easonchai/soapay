@@ -24,19 +24,19 @@ describe("Landing", () => {
     for (const l of links) expect(l.querySelector("svg")).not.toBeNull();
   });
 
-  it("renders each wallet's own icon monotone, and a glyph when a connector has none", () => {
+  it("renders each wallet's own icon, a bundled Coinbase mark, and a glyph for the browser wallet last", () => {
     mount([
-      { id: "a", name: "MetaMask", icon: ICON },
-      { id: "b", name: "Injected" },
+      { id: "injected", name: "Injected" },
+      { id: "coinbaseWalletSDK", name: "Coinbase Wallet" },
+      { id: "io.metamask", name: "MetaMask", icon: ICON },
     ]);
     fireEvent.click(screen.getByRole("button", { name: /login with wallet/i }));
     const dialog = screen.getByRole("dialog", { name: /choose a wallet/i });
-    const mm = dialog.querySelector("button:nth-of-type(1)")!;
-    const inj = dialog.querySelector("button:nth-of-type(2)")!;
-    expect(mm.textContent).toContain("MetaMask");
-    expect(mm.querySelector("img.wallet-icon")?.getAttribute("src")).toBe(ICON);
-    expect(inj.textContent).toContain("Injected");
-    expect(inj.querySelector("img")).toBeNull();
-    expect(inj.querySelector("svg")).not.toBeNull();
+    const buttons = [...dialog.querySelectorAll("button")];
+    expect(buttons.map((b) => b.textContent?.trim())).toEqual(["Coinbase Wallet", "MetaMask", "Browser wallet"]);
+    expect(buttons[0]!.querySelector("svg[data-brand=coinbase]")).not.toBeNull();
+    expect(buttons[1]!.querySelector("img.wallet-icon")?.getAttribute("src")).toBe(ICON);
+    expect(buttons[2]!.querySelector("img")).toBeNull();
+    expect(buttons[2]!.querySelector("svg")).not.toBeNull();
   });
 });

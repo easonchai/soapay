@@ -66,3 +66,33 @@ export function Lockup({ height = 24, style, title = 'Soapay' }: { height?: numb
     </svg>
   );
 }
+
+/**
+ * The mark as a loader: its dots light up in a wave from the tab outward. CSS-driven
+ * (`.logo-loader` in styles.css), so it obeys reduced-motion and data-motion=off.
+ */
+export function LogoLoader({ size = 40, label = 'Loading', style }: { size?: number; label?: string; style?: CSSProperties }) {
+  return (
+    <svg viewBox="0 0 32 32" width={size} height={size} className="logo-loader" role="img" aria-label={label} style={{ display: 'block', ...style }}>
+      <path className="ld-tab" d="M3 12 a5 5 0 0 1 5 -5 h9 v18 h-9 a5 5 0 0 1 -5 -5 z" fill="currentColor" />
+      <g fill="currentColor">
+        <rect className="ld d1" x="19.5" y="8" width="4" height="4" rx="1.4" />
+        <rect className="ld d1" x="19.5" y="14" width="4" height="4" rx="1.4" />
+        <rect className="ld d1" x="19.5" y="20" width="4" height="4" rx="1.4" />
+        <rect className="ld d2" x="25.5" y="11" width="2.5" height="2.5" rx="0.9" />
+        <rect className="ld d2" x="25.5" y="18.5" width="2.5" height="2.5" rx="0.9" />
+        <rect className="ld d3" x="29.5" y="15" width="1.5" height="1.5" rx="0.55" />
+      </g>
+    </svg>
+  );
+}
+
+/** Centered loader with an optional line under it. */
+export function Loading({ label = 'Loading…', size = 40 }: { label?: string; size?: number }) {
+  return (
+    <div className="loading" role="status" aria-live="polite">
+      <LogoLoader size={size} label={label} />
+      <span className="loading-label">{label}</span>
+    </div>
+  );
+}

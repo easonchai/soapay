@@ -17,12 +17,15 @@ export function Dots({
   mode = 'right',
   color = '30,58,95',
   animate = false,
+  minWidth = 0,
   className,
   style,
 }: {
   mode?: DotsMode;
   color?: string;
   animate?: boolean;
+  /** Draw nothing when the canvas is narrower than this (avoids a stray blob in tight headers). */
+  minWidth?: number;
   className?: string;
   style?: React.CSSProperties;
 }) {
@@ -45,6 +48,12 @@ export function Dots({
       const W = c.offsetWidth;
       const H = c.offsetHeight;
       if (!W || !H) return;
+      if (W < minWidth) {
+        const ctx = c.getContext('2d');
+        ctx?.clearRect(0, 0, c.width, c.height);
+        size = '';
+        return;
+      }
       const key = `${W}x${H}`;
       if (key !== size) {
         size = key;
@@ -150,6 +159,6 @@ export function Dots({
       window.removeEventListener('mouseleave', onLeave);
       document.removeEventListener('mouseleave', onLeave);
     };
-  }, [mode, color, animate]);
+  }, [mode, color, animate, minWidth]);
   return <canvas ref={ref} className={`dots${className ? ` ${className}` : ''}`} style={style} aria-hidden />;
 }

@@ -1,8 +1,24 @@
 import { useState } from "react";
-import { Dots, GitHubMark, Lockup, Reveal, WalletGlyph } from "@soapay/ui";
+import { CoinbaseMark, Dots, GitHubMark, Lockup, Reveal, WalletGlyph } from "@soapay/ui";
 import type { WalletState } from "../hooks/usePayPath.js";
 
 export const GITHUB = "https://github.com/easonchai/soapay";
+
+type Conn = { id: string; name: string; icon?: string | undefined };
+const isGeneric = (c: Conn) => /^injected$/i.test(c.id) || /^injected$/i.test(c.name);
+const isCoinbase = (c: Conn) => /coinbase/i.test(c.id) || /coinbase/i.test(c.name);
+/** Named wallets first, the generic browser provider last. */
+function orderConnectors<T extends Conn>(list: T[]): T[] {
+  return [...list].sort((a, b) => Number(isGeneric(a)) - Number(isGeneric(b)));
+}
+function walletLabel(c: Conn): string {
+  return isGeneric(c) ? "Browser wallet" : c.name;
+}
+function walletIcon(c: Conn) {
+  if (c.icon) return <img className="wallet-icon" src={c.icon} alt="" />;
+  if (isCoinbase(c)) return <CoinbaseMark size={18} style={{ opacity: 0.85 }} />;
+  return <WalletGlyph size={18} style={{ opacity: 0.8 }} />;
+}
 
 export type LandingProps = {
   wallet: Pick<WalletState, "isConnected" | "connectors" | "connecting" | "connectError">;
@@ -72,10 +88,10 @@ export function Landing({ wallet, onLogin, employeeUrl }: LandingProps) {
         {choosing && !wallet.isConnected && (
           <div className="panel panel-pad connectors" style={{ minWidth: 280 }} role="dialog" aria-label="Choose a wallet">
             <span className="eyebrow">Choose a wallet</span>
-            {wallet.connectors.map((c) => (
+            {orderConnectors(wallet.connectors).map((c) => (
               <button key={c.id} onClick={() => c.connect()} disabled={wallet.connecting}>
-                {c.icon ? <img className="wallet-icon" src={c.icon} alt="" /> : <WalletGlyph size={18} style={{ opacity: 0.8 }} />}
-                {c.name}
+                {walletIcon(c)}
+                {walletLabel(c)}
               </button>
             ))}
           </div>
