@@ -121,7 +121,7 @@ sequenceDiagram
 - App: `app_0cc7167efe114ac2e0ef7d9827098353` ("Soapay"), World ID 4.0.
 - RP: `rp_3ede5fe1cab9af48`, registered on-chain for staging and production. The signer address is `0xCaf38A54bA7B0C15Eb253cb513f0B0A93AAA349D`; its private key lives only in the operator's `apps/api/.env` as `WORLD_RP_SIGNING_KEY` and is never committed.
 - Action `soapay-enroll` exists in staging and production but is **unused**: sessions take no action, and the enrollment gate it was made for was dropped.
-- `WORLD_ENV=staging` for the demo (the simulator), `production` with the real World App. Selfie Check testing in the World docs runs in the **sandbox** environment (`WORLD_ENV=sandbox`), so use that if the staging simulator doesn't offer the Selfie Check credential.
+- `WORLD_ENV=production` on the live demo since 2026-09-26 (D-51): the real World App. `staging` uses the simulator. Selfie Check testing in the World docs runs in the **sandbox** environment (`WORLD_ENV=sandbox`), so use that if the staging simulator doesn't offer the Selfie Check credential.
 - Server: `apps/api/.env` from `apps/api/.env.example`, then `WORLD_RP_SIGNING_KEY` and `ATTESTER_PRIVATE_KEY`. `GET /worldid/config` shows what the API runs with.
 
 ## What we store
