@@ -48,18 +48,18 @@ Suggested: **7**. The server side was easy (the Developer Portal v4 verify endpo
 **Additional feedback for the sponsor**
 
 ```text
-Time to first success: a session verified at the Portal on the first try on a fresh RP (2026-09-26). On our first RP, sessions never succeeded.
+Time to first success: a session verified at the Portal on the first try on a fresh RP (2026-09-26). Our first RP never got there.
 
-Went well: the v4 verify endpoint takes the IDKit result unchanged, so our server is local checks plus one call. signRequest made the RP context five lines, and its nonce doubled as our replay guard. Sessions are the right primitive for "same human again".
+Went well: the v4 verify endpoint takes the IDKit result unchanged, so our server is local checks plus one call. signRequest made the RP context five lines, and its nonce doubled as our replay guard.
 
 Friction:
-1. Our first RP silently did not support sessions: verification_rejected in World App, bare bad_request in the simulator, synced: false in the portal, no explanation. Cost most of a day.
+1. Our first RP silently did not support sessions: verification_rejected in World App, bad_request in the simulator, synced: false in the portal. Cost most of a day.
 2. The session docs show preset={selfieCheck()}, but IDKit 4.3 sessions only accept constraints. A hand-built constraint returned generic_error with no cause.
-3. Staging verifies repeat proofs with the same nullifier; production returns nullifier_replayed. Correct rule, easy to miss.
-4. Staging verification needs x-staging-verification-token and the portal's staging window. Neither is in the integration guide.
-5. The Portal defaults environment to production, so a mismatch fails silently unless you check it yourself.
+3. Staging accepts repeat proofs with the same nullifier; production returns nullifier_replayed. Easy to miss.
+4. Staging verification needs x-staging-verification-token and the portal's staging window. Neither is documented.
+5. The Portal defaults environment to production, so a mismatch fails silently.
 
-Biggest fix: make an RP that does not support sessions fail loudly, with a specific error code or a portal status.
+Biggest fix: make an RP that does not support sessions fail loudly.
 ```
 
 ## ENS ($10,000): Best Use of ENSv2
