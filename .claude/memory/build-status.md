@@ -181,3 +181,8 @@ metadata:
   - Deploy prep for Railway: the api Dockerfile has no VOLUME (use a platform volume at /data); `scripts/web.Dockerfile` serves both apps plus the /api proxy (API_TARGET = the private api URL); serve-demo honours HOST; `.railwayignore`.
   - **Railway is blocked:** the personal workspace trial has expired (create_project fails). The Aqua0 team workspace exists. Waiting on the owner.
   - Shielded rail research DONE (docs/shielded-rail-research.md): no production shielded pool on Base. Demoable on testnet: Fhenix CoFHE on Base Sepolia (needs our own unaudited FHERC20 wrapper holding funds, which breaks the no-custody rule; about 3 days) or Privacy Pools v2 (Ethereum Sepolia; SDK early access from 0xbow). The timing fix recommendation is a client-side randomized queue of one address per window across sessions (pre-signed userOps can't carry time windows with Simple7702Account + the Circle paymaster).
+- Checkpoint 20 (2026-09-26): **PUBLIC DEMO LIVE on Railway**: https://web-production-9b930.up.railway.app (Aqua0 workspace, project `soapay` e8c49139…; services `web` + `api` with a /data volume; the api is private-network only).
+  - Verified: both apps 200, /api/health, /api/worldid/config, and a /api/uniswap quote.
+  - Deployed from `yudhishthra`; redeploy after the CK merge.
+  - Drift audit in docs/drift-audit.md.
+  - Shielded rail: the PRD names Railgun or **Privacy Pools v2** (after M5). Fhenix would break "nothing custom holds funds", so the recommendation is to request 0xbow PP v2 SDK early access (awaiting the owner).
