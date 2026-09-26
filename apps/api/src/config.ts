@@ -36,6 +36,10 @@ export type Config = {
     /** POST /invites, per employer address and per IP (docs/mvp-spec.md §7). */
     invitesPerEmployer: number;
     invitesPerIp: number;
+    /** PUT /backups/:address, per wallet (after its signature checks) and per IP; GET per IP. */
+    backupWritesPerAddress: number;
+    backupWritesPerIp: number;
+    backupReadsPerIp: number;
   };
   indexer: {
     enabled: boolean;
@@ -272,6 +276,9 @@ export function loadConfig(env: Env = process.env): Config {
       namesPerIp: int(env, "RATE_LIMIT_NAMES_PER_IP", 10, 1),
       invitesPerEmployer: int(env, "RATE_LIMIT_INVITES_PER_EMPLOYER", 50, 1),
       invitesPerIp: int(env, "RATE_LIMIT_INVITES_PER_IP", 20, 1),
+      backupWritesPerAddress: int(env, "RATE_LIMIT_BACKUP_WRITES_PER_ADDRESS", 60, 1),
+      backupWritesPerIp: int(env, "RATE_LIMIT_BACKUP_WRITES_PER_IP", 120, 1),
+      backupReadsPerIp: int(env, "RATE_LIMIT_BACKUP_READS_PER_IP", 300, 1),
     },
     indexer: {
       enabled: bool(env, "INDEXER_ENABLED", true),

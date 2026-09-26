@@ -7,6 +7,8 @@ import { useServices } from "../services/ServicesProvider.js";
 import { Addr, Alert, Button, Card, CardHeader, Checkbox, Field, Input, PageHeader, errorMessage } from "../ui/kit.js";
 import type { Settings as S } from "../vault/types.js";
 import { LockSetting } from "./LockSetting.js";
+import { BackupSetting } from "./BackupSetting.js";
+import { useBackupSync } from "../vault/BackupSync.js";
 
 type TextKey = "apiUrl" | "rpcUrl" | "bundlerUrl" | "l1RpcUrl";
 
@@ -17,6 +19,7 @@ const CHECK = "[&_input]:w-4!";
 export function Settings() {
   const st = useSettings();
   const svc = useServices();
+  const backup = useBackupSync();
   const [draft, setDraft] = useState<S>(st.settings);
   const [saved, setSaved] = useState(false);
   const [payer, setPayer] = useState({ address: "", name: "" });
@@ -211,6 +214,11 @@ export function Settings() {
           <Row k="Lock">
             <LockSetting />
           </Row>
+          {backup && (
+            <Row k="Passkey backup">
+              <BackupSetting />
+            </Row>
+          )}
           <div className="row">
             <span className="k">Backup</span>
             <div className="v">

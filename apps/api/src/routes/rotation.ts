@@ -6,12 +6,15 @@ import {
   metaRotationTypedData,
   rotationClaimTypedData,
   rotationSignal,
+  SESSION_LOOKUP_MAX_TTL_SECONDS,
+  sessionLookupTypedData,
   sessionSignal,
 } from "@soapay/sdk";
 import { jsonBody, type AppDeps } from "../app.js";
 import { tx, type Db } from "../db.js";
 import type { Prepared, RegistrationRelay } from "../relay.js";
 import { topUpRegistrant } from "../topup.js";
+import { nameSession } from "../worldid/verifier.js";
 import { ApiError, enforceRateLimits, parseMetaAddress, redactSig, requireHex } from "../util.js";
 import { getName, parseDeadline } from "./names.js";
 
@@ -52,6 +55,8 @@ async function signedBy(address: Address, typed: TypedDataDefinition, signature:
 /**
  * World ID session routes (docs/worldid.md, docs/mvp-spec.md §2.1 and §5):
  * - POST /names/:label/session attaches a Proof of Human session to a name claimed without one.
+ * - POST /names/:label/session/lookup returns that session id to the name's registrant (D-64), so an
+ *   account restored from its recovery phrase can prove the session again.
  * - POST /names/:label/rotation re-verifies that session (proveSession), signs the
  *   MetaRotation attestation sender apps require before auto-accepting a changed pin,
  *   relays the registrant's ERC-6538 `registerKeysOnBehalf` for the new meta-address (so
@@ -143,6 +148,47 @@ export function rotationRoutes(deps: AppDeps, relay: RegistrationRelay): Hono {
       { label, sessionId: bound.session_id, attachedAt: bound.attached_at, rotationAllowedFrom: bound.attached_at + config.worldId.attachCooldownSeconds },
       201,
     );
+  });
+
+  // ---------------------------------------------------------------------------
+  // Read the linked session back (D-64): a recovery-phrase restore recreates the registrant key but
+  // not the vault that held the session id, and IDKit.proveSession needs it. Only the registrant may
+  // read it; GET /names/:label never serves it (it would show which names share one human).
+
+  r.post("/names/:label/session/lookup", async (c) => {
+    const name = loadName(c.req.param("label"));
+    const label = name.label;
+    const body = await jsonBody(c);
+    const deadline = parseDeadline(body.deadline);
+    const signature = requireHex(body.signature, "signature", 65);
+    const now = BigInt(deps.now());
+    if (deadline <= now) throw new ApiError(400, "expired", "deadline has passed");
+    if (deadline > now + BigInt(SESSION_LOOKUP_MAX_TTL_SECONDS)) {
+      throw new ApiError(400, "deadline_too_far", `deadline must be within ${SESSION_LOOKUP_MAX_TTL_SECONDS}s`);
+    }
+    enforceRateLimits(
+      db,
+      [{ bucket: "session-lookup:ip", key: deps.getIp(c), limit: config.rateLimit.namesPerIp }],
+      config.rateLimit.windowSeconds,
+      deps.now(),
+    );
+
+    const ok = await signedBy(
+      name.registrant,
+      sessionLookupTypedData({ label, deadline, chainId: config.chainId }) as unknown as TypedDataDefinition,
+      signature,
+    );
+    if (!ok) throw new ApiError(401, "bad_signature", "SessionLookup signature does not recover to the name's registrant");
+
+    const bound = nameSession(db, label);
+    if (!bound) throw new ApiError(404, "no_session", "this name has no World ID session");
+    const cooldown = bound.via === "attach" ? config.worldId.attachCooldownSeconds : 0;
+    return c.json({
+      label,
+      sessionId: bound.session_id,
+      attachedAt: bound.attached_at,
+      rotationAllowedFrom: bound.attached_at + cooldown,
+    });
   });
 
   // ---------------------------------------------------------------------------

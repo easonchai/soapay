@@ -19,6 +19,7 @@ import { ServicesProvider, useServices } from "./services/ServicesProvider.js";
 import { exitOffered } from "./config.js";
 import { Alert } from "./ui/kit.js";
 import { VaultProvider, useVault } from "./vault/VaultProvider.js";
+import { BackupSync } from "./vault/BackupSync.js";
 
 /**
  * Vault gate: loading → onboarding (no vault / unfinished) → unlock (locked) → the app.
@@ -83,9 +84,11 @@ export function App() {
   return (
     <VaultProvider>
       <ServicesProvider>
-        <InviteProvider>
-          <Gate />
-        </InviteProvider>
+        <BackupSync>
+          <InviteProvider>
+            <Gate />
+          </InviteProvider>
+        </BackupSync>
       </ServicesProvider>
     </VaultProvider>
   );

@@ -182,6 +182,16 @@ const MIGRATIONS: string[] = [
   `
   CREATE INDEX name_sessions_session ON name_sessions(session_id);
   `,
+  // D-62: encrypted app backups (PUT/GET /backups/:address, docs/mvp-spec.md §4). One row per
+  // wallet; the server only ever sees the client-encrypted envelope, never plaintext or keys.
+  `
+  CREATE TABLE vault_backups (
+    address       TEXT PRIMARY KEY,       -- checksummed wallet that signed the latest write
+    version       INTEGER NOT NULL,       -- strictly increasing per address (no rollback)
+    ciphertext    TEXT NOT NULL,          -- base64, at most 512 KiB decoded
+    updated_at    INTEGER NOT NULL
+  );
+  `,
 ];
 
 export function migrate(db: Db): void {

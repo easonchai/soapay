@@ -26,6 +26,15 @@ type RawNameSessionRow = Omit<NameSessionRow, "session_id"> & { session_id: stri
 
 type NonceRow = { nonce: string; kind: string; expires_at: number; used_at: number | null; bind: string | null };
 
+/** A name's World ID session, if any (also read with World ID disabled). A D-58 nullifier-only row is not a session link. */
+export function nameSession(db: Db, label: string): NameSessionRow | undefined {
+  const row = db.prepare("SELECT label, session_id, attached_at, via FROM name_sessions WHERE label = ?").get(label) as
+    | RawNameSessionRow
+    | undefined;
+  if (!row || row.session_id === null) return undefined;
+  return { label: row.label, session_id: row.session_id, attached_at: row.attached_at, via: row.via };
+}
+
 /** 0x hex (or decimal) field element → canonical decimal string; throws on anything else. */
 export function fieldToDecimal(v: unknown, what: string): string {
   if (typeof v !== "string" || !/^(0x[0-9a-fA-F]{1,64}|\d{1,78})$/.test(v)) {
@@ -97,11 +106,7 @@ export class WorldId {
 
   /** The name's World ID session, if any. A D-58 nullifier-only row is not a session link. */
   sessionForLabel(label: string): NameSessionRow | undefined {
-    const row = this.deps.db.prepare("SELECT label, session_id, attached_at, via FROM name_sessions WHERE label = ?").get(label) as
-      | RawNameSessionRow
-      | undefined;
-    if (!row || row.session_id === null) return undefined;
-    return { label: row.label, session_id: row.session_id, attached_at: row.attached_at, via: row.via };
+    return nameSession(this.deps.db, label);
   }
 
   // -------------------------------------------------------------------------

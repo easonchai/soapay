@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { KeyRound, ShieldCheck } from "lucide-react";
 import { Collapse, Copy, Fade, LogoLoader, Presence, toast } from "@soapay/ui";
 import { useRotation } from "../hooks/useRotation.js";
+import { useSessionRestore } from "../hooks/useSessionRestore.js";
 import { useServices } from "../services/ServicesProvider.js";
 import { exitOffered } from "../config.js";
 import { Link } from "react-router";
@@ -124,6 +125,17 @@ export function NameSettings() {
   const v = useUnlocked();
   const [attaching, setAttaching] = useState(false);
   const s = r.state;
+  // Self-heal after a recovery-phrase restore (D-64); "World ID link restored" is shown once.
+  useSessionRestore();
+  const restoredNotice = Boolean(r.recovery?.restored && !r.recovery.restoredNoticeShown);
+  const [showRestored, setShowRestored] = useState(false);
+  useEffect(() => {
+    if (!restoredNotice) return;
+    setShowRestored(true);
+    void v.update((d) =>
+      d.profile.recovery ? { ...d, profile: { ...d.profile, recovery: { ...d.profile.recovery, restoredNoticeShown: true } } } : d,
+    );
+  }, [restoredNotice, v]);
 
   // One toast per completed rotation (the `done` state persists until the next action).
   const toasted = useRef(false);
@@ -198,6 +210,13 @@ export function NameSettings() {
             <div className="row">
               <span className="k">Status</span>
               <div className="v">
+                {showRestored && (
+                  <Alert variant="success" title="World ID link restored">
+                    <span data-testid="worldid-restored">
+                      Your name's World ID session was read back from Soapay after restoring your recovery phrase. Key changes can be attested again.
+                    </span>
+                  </Alert>
+                )}
                 {linked ? (
                   <p>World ID (Proof of Human) is linked to this name. Key changes are attested and your employer's app accepts them automatically.</p>
                 ) : r.cooldownUntil ? (
