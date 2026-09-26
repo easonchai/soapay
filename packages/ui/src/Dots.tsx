@@ -119,8 +119,9 @@ export function Dots({
       }
     };
 
+    let visible = true;
     const frame = (t: number) => {
-      if (!document.hidden && t - last >= 33) {
+      if (!document.hidden && visible && t - last >= 33) {
         last = t;
         paint(t);
       }
@@ -145,6 +146,14 @@ export function Dots({
     const t0 = window.setTimeout(() => paint(live ? performance.now() : 0), 300);
     const ro = new ResizeObserver(() => paint(live ? performance.now() : 0));
     ro.observe(c);
+    // Off-screen canvases skip their frames (a long page can hold several animated textures).
+    const io =
+      live && typeof IntersectionObserver !== 'undefined'
+        ? new IntersectionObserver((entries) => {
+            for (const e of entries) visible = e.isIntersecting;
+          })
+        : null;
+    io?.observe(c);
     if (live) {
       raf = requestAnimationFrame(frame);
       window.addEventListener('mousemove', onMove, { passive: true });
@@ -154,6 +163,7 @@ export function Dots({
     return () => {
       window.clearTimeout(t0);
       ro.disconnect();
+      io?.disconnect();
       cancelAnimationFrame(raf);
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseleave', onLeave);

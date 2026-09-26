@@ -275,12 +275,12 @@ td.num, th.num { text-align: right; }
 .figure .unit, .figure .mono { font-size: 16px; color: var(--ink2); letter-spacing: 0; margin-left: 10px; }
 
 /* Landing */
-.land { min-height: 100vh; min-height: 100dvh; background: var(--surface); display: flex; flex-direction: column; overflow: hidden; }
-.land-bar { display: flex; align-items: center; justify-content: space-between; height: 60px; padding: 0 48px; border-bottom: 1px solid var(--hairline); }
+.land { min-height: 100vh; min-height: 100dvh; background: var(--surface); display: flex; flex-direction: column; overflow-x: clip; }
+.land-bar { position: sticky; top: 0; z-index: 20; background: rgba(255, 255, 255, 0.92); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: space-between; height: 60px; padding: 0 48px; border-bottom: 1px solid var(--hairline); }
 .land-bar .links { display: flex; gap: 28px; color: var(--ink2); }
 .land-bar .links a { color: var(--ink2); }
 .land-bar .links a:hover { color: var(--ink); }
-.land-hero { position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 20px; padding: 48px; overflow: hidden; }
+.land-hero { position: relative; min-height: calc(100dvh - 60px); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 20px; padding: 48px; overflow: hidden; }
 .land-hero .dots { position: absolute; top: 50%; width: 420px; height: 420px; transform: translateY(-55%); }
 .land-hero .dots.l { left: -40px; }
 .land-hero .dots.r { right: -40px; }

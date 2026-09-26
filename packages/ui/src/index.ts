@@ -28,3 +28,5 @@ export { Toaster, toast } from './motion/Toaster.js';
 export { Presence, motionOff } from './motion/Presence.js';
 export { Fade } from './motion/Fade.js';
 export { Bloom, BLOOM_IN_S, BLOOM_OUT_S } from './motion/Bloom.js';
+export { InView } from './motion/InView.js';
+export { useInViewLoop, useVisible } from './motion/useInViewLoop.js';

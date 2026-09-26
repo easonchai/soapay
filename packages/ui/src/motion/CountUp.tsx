@@ -1,12 +1,13 @@
 import { animate, useMotionValue, useReducedMotion } from 'framer-motion';
 import { useEffect, useState } from 'react';
+import { motionOff } from './Presence.js';
 
 /**
  * Tweens between numeric values; `format` renders the current number. Numbers are passed as
  * plain floats (already scaled from base units by the caller).
  */
 export function CountUp({ value, format, duration = 0.6, className }: { value: number; format: (n: number) => string; duration?: number; className?: string }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotion() || motionOff();
   const mv = useMotionValue(value);
   const [text, setText] = useState(() => format(value));
   useEffect(() => {

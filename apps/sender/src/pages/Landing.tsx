@@ -1,5 +1,12 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CoinbaseMark, Dots, GitHubMark, Lockup, Reveal, WalletGlyph } from "@soapay/ui";
+import "../landing.css";
+import { Compare } from "./landing/Compare.js";
+import { HowItWorks } from "./landing/HowItWorks.js";
+import { Showcase } from "./landing/Showcase.js";
+import { ChainView } from "./landing/ChainView.js";
+import { Guarantees } from "./landing/Guarantees.js";
+import { CtaBand } from "./landing/CtaBand.js";
 import type { WalletState } from "../hooks/usePayPath.js";
 
 export const GITHUB = "https://github.com/easonchai/soapay";
@@ -28,10 +35,22 @@ export type LandingProps = {
   employeeUrl: string;
 };
 
-/** CK's hero-only landing (Marketing 5a). Login connects a wallet; App then shows the vault gate. */
+type SectionId = "how" | "product" | "chain";
+
+/** Marketing landing (5a + 5b + trust): hero, before/after, how it works, product, what the chain sees, guarantees, CTA. Login connects a wallet; App then shows the vault gate. */
 export function Landing({ wallet, onLogin, employeeUrl }: LandingProps) {
   const [choosing, setChoosing] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const hero = useRef<HTMLElement>(null);
+  const sections = useRef<Record<SectionId, HTMLElement | null>>({ how: null, product: null, chain: null });
   const one = wallet.connectors.length === 1 ? wallet.connectors[0] : undefined;
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 40);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   function login() {
     onLogin();
@@ -39,6 +58,21 @@ export function Landing({ wallet, onLogin, employeeUrl }: LandingProps) {
     if (one) one.connect();
     else setChoosing(true);
   }
+  /** Login from further down the page: the wallet chooser lives in the hero, so bring it into view. */
+  function loginFromBand() {
+    login();
+    if (!wallet.isConnected && !one) hero.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  /** Smooth-scroll to a section without touching the hash (the app's hash router would read it after login). */
+  function jump(id: SectionId) {
+    return (e: React.MouseEvent) => {
+      e.preventDefault();
+      sections.current[id]?.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+  }
+  const bind = (id: SectionId) => (el: HTMLDivElement | null) => {
+    sections.current[id] = el;
+  };
 
   const cta = wallet.connecting ? "Connecting…" : wallet.connectors.length ? "Login with wallet" : "Install a wallet to continue";
   return (
@@ -48,8 +82,14 @@ export function Landing({ wallet, onLogin, employeeUrl }: LandingProps) {
           <Lockup height={22} />
         </div>
         <div className="links">
-          <a href={`${GITHUB}/blob/main/PRD.md`} target="_blank" rel="noreferrer">
+          <a href="#how" onClick={jump("how")}>
             How it works
+          </a>
+          <a href="#product" onClick={jump("product")}>
+            Product
+          </a>
+          <a href="#chain" onClick={jump("chain")}>
+            What the chain sees
           </a>
           <a href={GITHUB} target="_blank" rel="noreferrer" className="link-with-mark">
             <GitHubMark size={15} />
@@ -60,7 +100,7 @@ export function Landing({ wallet, onLogin, employeeUrl }: LandingProps) {
           {wallet.connecting ? "Connecting…" : "Login"}
         </button>
       </div>
-      <section className="land-hero">
+      <section className="land-hero" ref={hero}>
         <Dots mode="diamond" animate className="dots l" />
         <Dots mode="diamond" animate className="dots r" />
         <Reveal delay={0.05}>
@@ -96,7 +136,13 @@ export function Landing({ wallet, onLogin, employeeUrl }: LandingProps) {
             ))}
           </div>
         )}
-        <p className="hint">{wallet.connectError ?? "For companies: your wallet is your login. Nothing to sign up for."}</p>
+        <p className="hint">
+          {wallet.connectError ?? "For companies: your wallet is your login. Nothing to sign up for."}{" "}
+          <a href="?demo=1" data-testid="demo-door" style={{ fontWeight: 500, textDecoration: "underline" }}>
+            Or try the demo with sample data
+          </a>
+          .
+        </p>
         <p className="hint" data-testid="employee-door">
           Getting paid with Soapay?{" "}
           <a href={employeeUrl} style={{ fontWeight: 500, textDecoration: "underline" }}>
@@ -104,10 +150,32 @@ export function Landing({ wallet, onLogin, employeeUrl }: LandingProps) {
           </a>
           . An invite link from your employer takes you straight there.
         </p>
+        <div className={`scroll-cue${scrolled ? " hidden" : ""}`} aria-hidden>
+          <span>Scroll</span>
+          <span className="line" />
+        </div>
       </section>
+      <Compare />
+      <div ref={bind("how")}>
+        <HowItWorks />
+      </div>
+      <div ref={bind("product")}>
+        <Showcase />
+      </div>
+      <div ref={bind("chain")}>
+        <ChainView />
+      </div>
+      <Guarantees />
+      <CtaBand onLogin={loginFromBand} disabled={wallet.connecting || !wallet.connectors.length} label={wallet.connecting ? "Connecting…" : "Login with your wallet"} employeeUrl={employeeUrl} />
       <div className="land-foot">
         <span>© 2026 Soapay</span>
         <div className="links">
+          <a href="#how" onClick={jump("how")}>
+            How it works
+          </a>
+          <a href="#chain" onClick={jump("chain")}>
+            Trust
+          </a>
           <a href={`${GITHUB}/blob/main/PRD.md`} target="_blank" rel="noreferrer">
             Docs
           </a>

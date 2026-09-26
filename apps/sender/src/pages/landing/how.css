@@ -1,0 +1,67 @@
+/* How it works: flow diagram + step columns. Swiss-report register: thin navy lines, mono labels, small squares. */
+.how-flow { position: relative; }
+.how-nodes { display: flex; align-items: stretch; }
+.how-node { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; border: 1px solid var(--line); background: var(--surface); }
+.how-tag { font: 500 11px/1 var(--mono); color: var(--accent); letter-spacing: 0.01em; padding: 12px 16px; border-bottom: 1px solid var(--hairline); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.how-body { flex: 1; min-height: 132px; padding: 18px 16px; display: flex; flex-direction: column; justify-content: center; gap: 6px; }
+.how-cap { padding: 10px 16px 12px; border-top: 1px solid var(--hairline); font-size: 12px; line-height: 1.45; color: var(--ink2); text-wrap: pretty; }
+
+/* Rows: label left, value right; the value drops under the label when the card is narrow. */
+.how-row { display: flex; flex-wrap: wrap; justify-content: space-between; column-gap: 12px; font: 12px/1.6 var(--mono); font-variant-numeric: tabular-nums; min-height: 19px; }
+.how-row .k { color: var(--ink2); white-space: nowrap; }
+.how-row .v { color: var(--ink); white-space: nowrap; }
+.how-row.roster .k { color: var(--ink); }
+.how-caret { display: inline-block; width: 6px; height: 11px; margin-left: 3px; vertical-align: -1px; background: var(--accent); }
+
+/* One transaction: two figures side by side. */
+.how-stats { display: flex; justify-content: center; gap: 28px; }
+.how-stat { display: flex; flex-direction: column; gap: 6px; min-width: 64px; }
+.how-fig { font: 500 40px/1 var(--mono); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; color: var(--ink); }
+.how-stat .k { font: 12px/1 var(--mono); color: var(--ink2); }
+
+/* Fresh addresses: 4 x 7 hollow squares that fill as packets arrive. */
+.how-grid { display: grid; grid-template-columns: repeat(7, 10px); gap: 4px; margin: 0 auto; }
+.how-cell { width: 10px; height: 10px; border: 1px solid var(--accent); background: transparent; transition: background 0.25s ease; }
+.how-cell.on { background: var(--accent); }
+.how-sum { margin-top: 12px; text-align: center; font: 12px/1.5 var(--mono); color: var(--ink2); font-variant-numeric: tabular-nums; }
+
+/* Connectors: a drawn hairline with packets running along it. */
+.how-conn { flex: 0 0 56px; align-self: center; position: relative; height: 8px; }
+.how-conn svg { display: block; width: 100%; height: 8px; overflow: visible; }
+.how-conn path { stroke: var(--accent); stroke-width: 1; fill: none; }
+.how-packet { position: absolute; left: 0; top: 1px; width: 6px; height: 6px; background: var(--accent); }
+
+.how-strip { margin-top: 20px; text-align: center; font: 13px/1.5 var(--mono); color: var(--ink2); font-variant-numeric: tabular-nums; }
+
+/* Step columns */
+.how-steps { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 56px; }
+.how-col { display: flex; flex-direction: column; border: 1px solid var(--line); background: var(--surface); }
+.how-col-head { display: flex; flex-direction: column; gap: 8px; padding: 20px 24px; border-bottom: 1px solid var(--line); }
+.how-col-head .how-tag { padding: 0; border: 0; }
+.how-col-title { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; margin: 0; }
+.how-step { display: grid; grid-template-columns: 32px 1fr; padding: 18px 24px; }
+.how-step + .how-step { border-top: 1px solid var(--hairline); }
+.how-step .n { font: 500 12px/1.6 var(--mono); color: var(--accent); }
+.how-step .t { font-size: 14px; font-weight: 500; line-height: 1.4; }
+.how-step .d { margin-top: 2px; font-size: 13px; line-height: 1.5; color: var(--ink2); text-wrap: pretty; }
+.how-col-foot { margin-top: auto; padding: 14px 24px; border-top: 1px solid var(--hairline); font: 12px/1.5 var(--mono); color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+@media (max-width: 1150px) {
+  .how-conn { flex-basis: 36px; }
+  .how-tag, .how-cap { padding-left: 12px; padding-right: 12px; }
+  .how-body { padding: 16px 12px; }
+  .how-stats { gap: 16px; }
+  .how-fig { font-size: 34px; }
+}
+
+@media (max-width: 900px) {
+  .how-nodes { flex-direction: column; align-items: stretch; }
+  .how-node { flex: none; }
+  .how-body { min-height: 0; }
+  /* Vertical rule between stacked cards; the drawn line and packets stay off. */
+  .how-conn { flex: 0 0 28px; width: 1px; height: 28px; align-self: center; background: var(--line-strong); }
+  .how-conn svg, .how-packet { display: none; }
+  .how-steps { grid-template-columns: 1fr; gap: 16px; margin-top: 40px; }
+  .how-col-head, .how-step, .how-col-foot { padding-left: 16px; padding-right: 16px; }
+  .how-col-foot { white-space: normal; }
+}
