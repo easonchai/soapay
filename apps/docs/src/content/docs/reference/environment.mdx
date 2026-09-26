@@ -5,41 +5,33 @@ sidebar:
   order: 2
 ---
 
-Defaults below come from application code. An empty value means unset unless another fallback is shown. Values prefixed with `VITE_` are compiled into browser bundles and must never contain secrets.
+Defaults come from code. Empty means unset. Browser-exposed `VITE_` values must never contain secrets.
 
 ## Company app (`apps/sender`)
 
 | Variable | Meaning | Default |
 | --- | --- | --- |
 | `VITE_CHAIN_ID` | Pay chain | `84532` |
-| `VITE_STEALTH_DISPERSE` | Plain-account batch contract | SDK chain deployment, or empty |
-| `VITE_STEALTH_DISPERSE_ADDRESS` | Alias for the preceding variable | empty |
-| `VITE_RPC_URL` | Pay-chain RPC | public chain RPC |
-| `VITE_ENS_RPC_URL` | ENS-chain RPC | public chain RPC |
+| `VITE_STEALTH_DISPERSE` / `VITE_STEALTH_DISPERSE_ADDRESS` | Batch contract and alias | SDK deployment / empty |
+| `VITE_RPC_URL` / `VITE_ENS_RPC_URL` | Pay and ENS RPCs | public RPCs |
 | `VITE_PAY_TOKEN` | Base Sepolia pay-token override | Soapay mock USDC |
 | `VITE_API_URL` | Soapay API base | `http://localhost:8787` |
 | `VITE_ATTESTER` | Pinned rotation attester | empty, manual approval required |
-| `VITE_RECIPIENT_URL` | Invite-link base | `http://localhost:5173` |
-| `VITE_OTHER_APP_URL` | Receive navigation link | recipient URL |
-| `VITE_DOCS_URL` | Documentation link | `/docs/` |
+| `VITE_RECIPIENT_URL` / `VITE_OTHER_APP_URL` / `VITE_DOCS_URL` | Invite, Receive, and Docs links | `http://localhost:5173` / recipient URL / `/docs/` |
 | `VITE_WALLETCONNECT_PROJECT_ID` | Optional WalletConnect connector | empty |
-| `VITE_MOCK_ENS` | Development-only name and attestation mocks | `0` |
-| `VITE_DEMO` | Default in-browser demo mode | unset |
+| `VITE_MOCK_ENS` / `VITE_DEMO` | Development mocks and default demo mode | `0` / unset |
 
 ## Employee app (`apps/recipient`)
 
 | Variable | Meaning | Default |
 | --- | --- | --- |
-| `VITE_API_URL` | Registration, names, index, and paymaster API | `http://localhost:8787` |
-| `VITE_CHAIN_ID` | Pay chain | `84532` |
+| `VITE_API_URL` / `VITE_CHAIN_ID` | API and pay chain | `http://localhost:8787` / `84532` |
 | `VITE_BUNDLER_URL` | ERC-4337 bundler | empty, set in Settings |
-| `VITE_STEALTH_DISPERSE` | Trusted metadata-payer deployments | empty |
-| `VITE_RPC_URL` | Balances and log fallback RPC | public chain RPC |
+| `VITE_STEALTH_DISPERSE` / `VITE_STEALTH_DISPERSE_ADDRESS` | Trusted deployments and alias | empty |
+| `VITE_RPC_URL` / `VITE_L1_RPC_URL` | Pay and ENS RPCs | public RPCs |
 | `VITE_MOCK_API` | In-browser API, chain, and bundler | `0` |
-| `VITE_L1_RPC_URL` | ENSv2 rotation-write RPC | public Ethereum Sepolia RPC |
 | `VITE_PAY_TOKEN` | Base Sepolia pay-token override | Soapay mock USDC |
 | `VITE_OTHER_APP_URL` | Pay navigation link | `http://localhost:5174` in development, `/` in builds |
-| `VITE_STEALTH_DISPERSE_ADDRESS` | Alias for `VITE_STEALTH_DISPERSE` | empty |
 | `VITE_RELAY_URL` | Alias whose origin supplies the API URL | empty |
 
 ## API (`apps/api`)
@@ -48,43 +40,33 @@ Defaults below come from application code. An empty value means unset unless ano
 | --- | --- | --- |
 | `RPC_URL` | Base JSON-RPC | required; example uses `https://sepolia.base.org` |
 | `CHAIN_ID` | Supported SDK chain | `84532` |
-| `PORT` / `DB_PATH` | HTTP port and SQLite path | `8787` / `./data/soapay.db` |
-| `CORS_ORIGINS` | Allowed SPA origins | local ports `5173,5174` |
-| `TRUST_PROXY` / `BODY_LIMIT_BYTES` | Proxy IP trust and request limit | `false` / `16384` |
+| `PORT` / `DB_PATH` / `CORS_ORIGINS` | Server and storage | `8787` / `./data/soapay.db` / `http://localhost:5173,http://localhost:5174` |
+| `TRUST_PROXY` / `BODY_LIMIT_BYTES` | Proxy trust and body limit | `false` / `16384` |
 | `PARENT_NAME` / `L1_RPC_URL` | ENS parent and Ethereum RPC | `soapay.eth` / unset |
 | `ISSUER_PRIVATE_KEY` | ENSv2 registrar key | secret, never commit; unset |
-| `ENS_SUBNAME_REGISTRY` / `ENS_RESOLVER_ADMIN` | Optional ENSv2 address overrides | looked up on chain |
+| `ENS_SUBNAME_REGISTRY` / `ENS_RESOLVER_ADMIN` | ENSv2 overrides | on-chain lookup |
 | `RELAYER_PRIVATE_KEY` | ERC-6538 relayer and faucet minter | secret, never commit; unset |
 | `RECEIPT_TIMEOUT_MS` | Registration receipt wait | `60000` |
-| `WORLD_APP_ID` / `WORLD_RP_ID` | Public World ID identifiers | deployed app and RP IDs |
+| `WORLD_APP_ID` / `WORLD_RP_ID` | Public World identifiers | `app_0cc7167efe114ac2e0ef7d9827098353` / `rp_3ede5fe1cab9af48` |
 | `WORLD_RP_SIGNING_KEY` | World relying-party signer | secret, never commit; required unless disabled |
-| `WORLD_ENV` / `WORLD_ID_DISABLED` | World environment and switch | `staging` / `false` |
-| `WORLD_RP_TTL_SECONDS` | RP context lifetime | `300` |
-| `WORLD_ATTACH_COOLDOWN_SECONDS` | Late-session rotation delay | `259200` |
-| `WORLD_VERIFY_BASE_URL` | World verification service | `https://developer.world.org` |
-| `RATE_LIMIT_RP_CONTEXT_PER_IP` | RP contexts per IP and window | `60` |
+| `WORLD_ENV` / `WORLD_ID_DISABLED` | Environment and switch | `staging` / `false` |
+| `WORLD_RP_TTL_SECONDS` / `WORLD_ATTACH_COOLDOWN_SECONDS` | Context life and late-attach delay | `300` / `259200` |
+| `WORLD_VERIFY_BASE_URL` / `RATE_LIMIT_RP_CONTEXT_PER_IP` | Verifier and context limit | `https://developer.world.org` / `60` |
 | `ATTESTER_PRIVATE_KEY` | MetaRotation signer | secret, never commit; unset |
 | `L1_RELAYER_PRIVATE_KEY` | ENS rotation gas top-up key | secret, never commit; unset |
-| `TOPUP_GAS` / `TOPUP_CAP_WEI` | Gas target and wei cap | `150000` / `2000000000000000` |
-| `TOPUP_PER_REGISTRANT_PER_DAY` / `TOPUP_PER_DAY` | Top-up limits | `3` / `100` |
-| `UNISWAP_API_KEY` | Trading API credential | secret, never commit; unset |
-| `UNISWAP_API_URL` | Trading API base | `https://trade-api.gateway.uniswap.org/v1` |
+| `TOPUP_GAS` / `TOPUP_CAP_WEI` / `TOPUP_PER_REGISTRANT_PER_DAY` / `TOPUP_PER_DAY` | Top-up controls | `150000` / `2000000000000000` / `3` / `100` |
+| `UNISWAP_API_KEY` / `UNISWAP_API_URL` | Trading credential and base | secret, never commit; unset / `https://trade-api.gateway.uniswap.org/v1` |
 | `RATE_LIMIT_UNISWAP_PER_IP_PER_MINUTE` / `UNISWAP_BODY_LIMIT_BYTES` | Quote-proxy limits | `30` / `8192` |
 | `PAY_TOKEN` | Base Sepolia token override | Soapay mock USDC |
 | `STEALTH_DISPERSE` | Paymaster allow-list deployment | Base Sepolia deployment on `84532` |
-| `PIMLICO_API_KEY` | Sponsorship credential | secret, never commit; unset |
-| `PIMLICO_PAYMASTER_URL` | Sponsorship upstream | `https://api.pimlico.io/v2/84532/rpc` |
-| `PIMLICO_SPONSORSHIP_POLICY_ID` / `PAYMASTER_EXTRA_TARGETS` | Optional policy and extra targets | unset |
-| `FAUCET_ENABLED` / `FAUCET_USDC_AMOUNT` | Welcome drop switch and base units | `true` on `84532` / `1000000000000` |
-| `FAUCET_ETH_WEI` / `FAUCET_MIN_RELAYER_ETH_WEI` | ETH drip and relayer floor | `0` / `20000000000000000` |
-| `RATE_LIMIT_WINDOW_SECONDS` | Fixed rate-limit window | `3600` |
-| `RATE_LIMIT_REGISTER_PER_IP` / `RATE_LIMIT_REGISTER_PER_REGISTRANT` | Registration limits | `3` / `3` |
-| `RATE_LIMIT_NAMES_PER_IP` | Name, session, and rotation limit | `10` |
-| `RATE_LIMIT_INVITES_PER_EMPLOYER` / `RATE_LIMIT_INVITES_PER_IP` | Invite limits | `50` / `20` |
-| `INDEXER_ENABLED` / `INDEXER_START_BLOCK` | Indexer switch and first block | `true` / chain announcer start |
-| `INDEXER_CHUNK_SIZE` / `INDEXER_POLL_MS` / `INDEXER_REORG_DEPTH` | Index range, poll, and rescan depth | `10000` / `4000` / `10` |
+| `PIMLICO_API_KEY` / `PIMLICO_PAYMASTER_URL` | Sponsorship credential and upstream | secret, never commit; unset / `https://api.pimlico.io/v2/84532/rpc` |
+| `PIMLICO_SPONSORSHIP_POLICY_ID` / `PAYMASTER_EXTRA_TARGETS` | Policy and extra targets | unset |
+| `FAUCET_ENABLED` / `FAUCET_USDC_AMOUNT` / `FAUCET_ETH_WEI` / `FAUCET_MIN_RELAYER_ETH_WEI` | Faucet controls | `true` / `1000000000000` / `0` / `20000000000000000` |
+| `RATE_LIMIT_WINDOW_SECONDS` / `RATE_LIMIT_REGISTER_PER_IP` / `RATE_LIMIT_REGISTER_PER_REGISTRANT` | Registration limits | `3600` / `3` / `3` |
+| `RATE_LIMIT_NAMES_PER_IP` / `RATE_LIMIT_INVITES_PER_EMPLOYER` / `RATE_LIMIT_INVITES_PER_IP` | Name and invite limits | `10` / `50` / `20` |
+| `INDEXER_ENABLED` / `INDEXER_START_BLOCK` / `INDEXER_CHUNK_SIZE` / `INDEXER_POLL_MS` / `INDEXER_REORG_DEPTH` | Indexer controls | `true` / chain start / `10000` / `4000` / `10` |
 
-The checked-in example sets `INDEXER_CHUNK_SIZE=1000`, but omitting the variable uses the code default `10000`. The live demo sets `WORLD_ENV=production`, even though the local code default is `staging`.
+The example pins `INDEXER_CHUNK_SIZE=1000`; the code default is `10000`. The live demo sets `WORLD_ENV=production`.
 
 ## CLI (`apps/cli`)
 
@@ -96,25 +78,20 @@ The checked-in example sets `INDEXER_CHUNK_SIZE=1000`, but omitting the variable
 | `SOAPAY_ATTESTER` | Pinned rotation signer | deployed attester on chain `84532` |
 | Variable named by `--mnemonic-env` | Recovery phrase used by `scan` | secret, never commit; required |
 
-Command flags provide RPC, ENS RPC, API, attester, and contract overrides. The CLI is dry-run by default.
-
 ## MCP server (`apps/mcp`)
 
 | Variable | Meaning | Default |
 | --- | --- | --- |
 | `API_URL` / `CHAIN_ID` | API and chain | `http://localhost:8787` / `84532` |
-| `RPC_URL` / `ENS_RPC_URL` | Base and ENS RPCs | public Base Sepolia and Ethereum Sepolia RPCs |
-| `BUNDLER_URL` | ERC-4337 bundler | public Pimlico Base Sepolia endpoint |
-| `PAYMASTER_URL` | ERC-7677 sponsorship endpoint | `${API_URL}/paymaster` |
+| `RPC_URL` / `ENS_RPC_URL` | Pay and ENS RPCs | `https://sepolia.base.org` / `https://ethereum-sepolia-rpc.publicnode.com` |
+| `BUNDLER_URL` / `PAYMASTER_URL` | Bundler and sponsor | public Pimlico / `${API_URL}/paymaster` |
 | `PAY_TOKEN` | Base Sepolia token override | Soapay mock USDC |
 | `STEALTH_DISPERSE` | Batch contract | `0x6B7a1cC570Af2DDd427DA694351438F0FE8039CA` |
 | `AGENT_MNEMONIC` | Agent recipient seed | secret, never commit; unset |
 | `AGENT_PAYER_PRIVATE_KEY` | Agent payer key | secret, never commit; unset |
 | `STATE_DIR` | Pins, caps, and guard state | `~/.soapay-mcp` |
 | `MAX_PER_CALL_USDC` / `MAX_PER_DAY_USDC` | Value caps | `5` / `20` |
-| `PAYEE_ALLOWLIST` | Allowed payee names | unset |
-| `KNOWN_PAYERS` | Payers trusted during scans | unset |
-| `IDENTIFIABLE_ADDRESSES` | Extra guard labels | unset |
+| `PAYEE_ALLOWLIST` / `KNOWN_PAYERS` / `IDENTIFIABLE_ADDRESSES` | Pay and guard lists | unset |
 | `PLAN_TTL_SECONDS` | Confirmation-plan lifetime | `600`, maximum `600` |
 
 ## Documentation (`apps/docs`)
@@ -123,4 +100,4 @@ Command flags provide RPC, ENS RPC, API, attester, and contract overrides. The C
 | --- | --- | --- |
 | `SITE_ORIGIN` | Canonical site and sitemap origin | `https://soapay.up.railway.app` |
 
-The docs always build with base path `/docs`. The deployment script passes the public origin as `SITE_ORIGIN`; it does not change the route base. See [Architecture](/docs/reference/architecture/) for how the static site and API are served.
+Docs use `/docs`; `SITE_ORIGIN` only sets canonical URLs and the sitemap. See [Architecture](/docs/reference/architecture/).

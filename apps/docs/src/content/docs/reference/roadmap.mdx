@@ -1,0 +1,54 @@
+---
+title: Roadmap
+description: Current milestone status, remaining product gaps, open privacy questions, and key decisions.
+sidebar:
+  order: 6
+---
+
+The original README milestone statuses predate the current implementation. The status below follows the architecture, live deployment notes, and later entries in the [decision log](https://github.com/easonchai/soapay/blob/main/docs/decision-log.md).
+
+## Milestones
+
+| Area | Current status | What remains |
+| --- | --- | --- |
+| M1, SDK, sender, scanner | Implemented and deployed on Base Sepolia | Deploy `StealthDisperse` and configure production services on Base mainnet |
+| M2, spend | EIP-7702 spend, paymaster integration, ledger, cluster graph, guard, and timing queue are implemented | Mainnet operation uses the Circle Paymaster |
+| M3, gateway | Deferred to tier 2 by D-17 | CCIP-Read gateway, a self-host image, and a hosted service |
+| M4, exits and amounts | Default denominations are implemented; the CCTP and Privacy Pools exit ran once with Circle USDC on testnets | Configure a mainnet route; pursue a shielded amount rail after the hackathon |
+| M5, agents | MCP tools and ENSIP-26 agent names are implemented and ran live | A live ERC-8004 registry binding; per-request agent payments remain a cost and privacy question |
+
+Longer-term items named in the product requirements are a Privacy Pools v2 shielded payroll rail, Arbitrum and Optimism, per-application stealth addresses through Kohaku, and multisig recipients. Gateway derivation would let ordinary wallets pay a name, but it is outside v1.
+
+## Known gaps
+
+- **Amounts remain public.** A coworker who knows a salary may identify its line. Denominations reduce that signal, but consolidating chunks during a spend reveals their relationship again.
+- **Small teams remain weak.** With fewer than 10 recipients, amount or elimination can identify people. The apps warn rather than claiming privacy they cannot provide.
+- **The plain-account contract is a chokepoint.** `StealthDisperse` is immutable, but USDC could blacklist it. Moving the EOA path to a redeployment is a configuration change.
+- **Soapay's Base mainnet contract is not deployed.** The canonical Registry, Announcer, and Circle USDC exist there, but `StealthDisperse` does not.
+- **Some choices remain unconfirmed.** The README calls out the two pay-run paths, the assumed BIP-39 seed format, and whether scanners should require a known payer by default.
+- **Two integrated browser runs remain unverified live.** The deployment notes list a complete mock-token pay, scan, and sponsored-spend session through both apps, plus a real Coinbase Smart Wallet EIP-5792 batch using `paymasterService`.
+
+The repository does not publish a fixed test count here because it changes. The suite runs on every merge; see [README: Tests](https://github.com/easonchai/soapay#tests).
+
+## PRD review issues
+
+The PRD review recorded three amount and guard questions. Consolidating denominated chunks still reveals a total. Rounding no longer underpays or overpays: the sender emits one exact smaller remainder line, which is itself visible. Coworker-known wallets are now treated as identifiable by the SDK guard, while the small-team risk is handled with an explicit warning and remains a product limitation.
+
+## Decisions worth knowing
+
+| Decision | Effect |
+| --- | --- |
+| [D-05](https://github.com/easonchai/soapay/blob/main/docs/decision-log.md) | The coworker is the only adversary; the employer is trusted; ENS meta-addresses are pinned |
+| [D-17](https://github.com/easonchai/soapay/blob/main/docs/decision-log.md) | Gateway derivation is deferred to tier 2 |
+| [D-18](https://github.com/easonchai/soapay/blob/main/docs/decision-log.md) | The Privacy Pools exit is in v1 |
+| [D-31](https://github.com/easonchai/soapay/blob/main/docs/decision-log.md) | One company-wide denomination is on by default; shielded amounts come later |
+| [D-44](https://github.com/easonchai/soapay/blob/main/docs/decision-log.md) | Onboarding saves a recovery kit instead of testing memorisation |
+| [D-45](https://github.com/easonchai/soapay/blob/main/docs/decision-log.md) | New wallet-signature accounts were removed; legacy accounts can still recover |
+| [D-46](https://github.com/easonchai/soapay/blob/main/docs/decision-log.md) | Every push to `main` deploys both Railway services through GitHub Actions |
+| [D-52](https://github.com/easonchai/soapay/blob/main/docs/decision-log.md) | Base Sepolia uses mock USDC, sponsored gas, a welcome drop, and no Exit tab |
+| [D-53](https://github.com/easonchai/soapay/blob/main/docs/decision-log.md) | The employee web app has no Convert screen; SDK and MCP swap support remains |
+| [D-54](https://github.com/easonchai/soapay/blob/main/docs/decision-log.md) | Recovery uses World ID Proof of Human |
+| [D-56](https://github.com/easonchai/soapay/blob/main/docs/decision-log.md) | Agents join with the same invite link as people |
+| [D-58](https://github.com/easonchai/soapay/blob/main/docs/decision-log.md) | The docs are a static Starlight site served at `/docs/` on the app origin |
+
+For operational addresses and current network deployment, use [Addresses](/docs/reference/addresses/).

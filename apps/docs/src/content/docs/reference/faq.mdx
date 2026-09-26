@@ -1,0 +1,98 @@
+---
+title: FAQ
+description: Answers about Soapay privacy, wallets, names, recovery, testnet behavior, exits, and agents.
+sidebar:
+  order: 5
+---
+
+## What can a coworker see on chain?
+
+A coworker sees the employer, every fresh stealth address and amount in the batch, and later activity from those addresses. They cannot tell which line belongs to which person without the viewing key; see [What the chain sees](/docs/concepts/what-the-chain-sees/).
+
+## Does Soapay hide payment amounts?
+
+No. Denominated payouts split salaries into identical chunks, but the payroll total, chunk size, and any smaller remainder stay public; see [Denominated payouts](/docs/concepts/denominated-payouts/).
+
+## Does my employer see my main wallet?
+
+No. The trusted employer learns your name, stealth address, and amount, but never your main wallet or keys; see [Threat model](/docs/concepts/threat-model/).
+
+## Does Soapay hold my money or keys?
+
+No Soapay service holds funds, and spending keys never leave the client. `StealthDisperse` holds no funds, keeps no state, and has no owner; see [Architecture](/docs/reference/architecture/).
+
+## What do I share to get paid?
+
+Share one pay name, such as `alice.soapay.eth`, rather than a wallet address. A sender resolves and pins its stealth meta-address before paying; see [Names](/docs/concepts/names/).
+
+## Can I use my own ENS name?
+
+Yes, any pinned ENS name carrying the required stealth records can be paid. World ID rotation attestations exist only for direct `*.soapay.eth` names; see [Names](/docs/concepts/names/).
+
+## Why does a Soapay name have no `addr` record?
+
+A static `addr` record would let an ordinary wallet reuse one address and link every payment. Soapay names expose the stealth record instead; see [Stealth addresses](/docs/concepts/stealth-addresses/).
+
+## Which wallets can a company pay from?
+
+Smart accounts and 7702 wallets can use EIP-5792 batching, while plain accounts use `StealthDisperse` and approve before paying. The app chooses the path for the connected wallet; see [Review and sign](/docs/company-app/review-and-sign/).
+
+## How does a Safe pay a run?
+
+The company app exports the run for Safe Transaction Builder. Each part delegates to `MultiSendCallOnly`, never `MultiSend`; see [Review and sign](/docs/company-app/review-and-sign/).
+
+## Who pays gas?
+
+Recipient spends are sponsored on Base Sepolia and use the Circle Paymaster to pay gas in USDC on Base mainnet, so stealth addresses receive no ETH. A plain-account employer still needs ETH for its approve and pay transactions; see [Send](/docs/employee-app/send/).
+
+## How large can a pay run be?
+
+One transaction holds at most 350 payment lines. Larger runs are sorted globally and cut into roughly equal transactions, never partitioned by employee; see [Pay run](/docs/company-app/pay-run/).
+
+## Why does the app warn about small teams?
+
+With fewer than 10 recipients, coworkers can often identify lines by amount or elimination even when denominations are on. The warning does not claim that a chunked small-team run is private; see [Denominated payouts](/docs/concepts/denominated-payouts/).
+
+## What is the privacy guard?
+
+The local guard tracks address clusters and blocks sends to labelled identifiable destinations such as a main wallet, exchange, or coworker-known address unless the user overrides where allowed. It cannot undo links already published on chain; see [Send](/docs/employee-app/send/).
+
+## Why are sends queued?
+
+Spending several stealth addresses close together can link them by timing. The client releases sources in separate randomized windows, while Send now accepts the timing leak; see [Send](/docs/employee-app/send/).
+
+## What is in the recovery kit?
+
+The kit contains the 12-word recovery phrase and restore instructions. That phrase rebuilds addresses, ledger entries, and pool secrets without the company; see [Keys and recovery](/docs/employee-app/keys-and-recovery/).
+
+## What if I lose the recovery phrase?
+
+Nobody can reset it, including Soapay and the employer, so losing every copy loses access to the funds. Keep the recovery kit separate from the device; see [Keys and recovery](/docs/employee-app/keys-and-recovery/).
+
+## Is a passkey a backup?
+
+A passkey unlocks the local vault and does not replace the recovery kit. A synced passkey may be a second backup, but never the only one; see [Keys and recovery](/docs/employee-app/keys-and-recovery/).
+
+## Do I need World ID to onboard?
+
+No, there is no World ID enrollment gate and no Orb requirement. Without a Proof of Human session, a later key change needs manual employer approval; see [Key rotation and recovery](/docs/concepts/key-rotation-and-recovery/).
+
+## What does World ID recovery protect?
+
+It protects future pay by letting the API attest that a key rotation belongs to the same human. A stolen recovery phrase can still spend funds already received, so rotate and move them promptly; see [Key rotation and recovery](/docs/concepts/key-rotation-and-recovery/).
+
+## What differs between testnet and mainnet?
+
+Base Sepolia uses Soapay mock USDC, sponsored gas, and a one-time welcome drop, while Base mainnet uses Circle USDC and the Circle Paymaster. The Privacy Pools exit is hidden on Base Sepolia because mock USDC cannot cross CCTP; see [Testnet](/docs/getting-started/testnet/).
+
+## Why is there no Exit tab in the demo?
+
+The exit only moves Circle USDC, while the live demo pays in Soapay mock USDC. The exit implementation remains available for a configured mainnet route and has been run once with Circle USDC on testnets; see [Compliant exit](/docs/concepts/compliant-exit/).
+
+## Can an AI agent use Soapay?
+
+Yes, the MCP server lets an agent claim a `*.soapay.eth` name, receive the same invite as a person, pay names, scan, check balances, and spend. Value moves use expiring plans, caps, optional allowlists, pins, and a guard that cannot override a block; see [MCP server](/docs/developers/mcp/).
+
+## What does demo mode do?
+
+Opening the company app at [/?demo=1](/?demo=1) loads sample data, mock names, a demo wallet, and an in-memory chain. It never calls the API or sends an on-chain transaction; see [Testnet](/docs/getting-started/testnet/).
