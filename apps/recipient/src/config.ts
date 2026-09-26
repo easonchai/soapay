@@ -44,7 +44,8 @@ export function readEnv(env: Record<string, string | boolean | undefined> = impo
     // Ours wins; CK's VITE_STEALTH_DISPERSE_ADDRESS is the fallback name.
     stealthDisperse: parseAddressList(str("VITE_STEALTH_DISPERSE") || str("VITE_STEALTH_DISPERSE_ADDRESS")),
     mockApi: str("VITE_MOCK_API") === "1" || str("VITE_MOCK_API") === "true",
-    l1RpcUrl: str("VITE_L1_RPC_URL"),
+    // The company app's VITE_ENS_RPC_URL (set in the web Dockerfile) is accepted too.
+    l1RpcUrl: str("VITE_L1_RPC_URL") || str("VITE_ENS_RPC_URL"),
     payToken: str("VITE_PAY_TOKEN"),
     // Dev: the sender's dev server. Build: scripts/build-demo.sh serves the company app (and landing) at /.
     otherAppUrl: str("VITE_OTHER_APP_URL") || (dev ? "http://localhost:5174" : "/"),
