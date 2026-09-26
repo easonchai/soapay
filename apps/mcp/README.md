@@ -42,7 +42,7 @@ The server is bundled because the ScopeLift SDK can't load in plain Node. Every 
 | --- | --- |
 | `whoami` | Name, meta-address, payer address with USDC/ETH balances, remaining caps |
 | `resolve_name(name)` | ENSv2 `stealth` record, cross-checked against the ERC-6538 registry on Base |
-| `create_agent_identity(label, description?, capabilities?, endpoints?)` | Sponsored ERC-6538 registration, then `<label>.soapay.eth` with ENSIP-26 records |
+| `create_agent_identity(label?, invite?, description?, capabilities?, endpoints?)` | Sponsored ERC-6538 registration, then `<label>.soapay.eth` with ENSIP-26 records. With `invite` (an employer's invite link or code), the label comes from the invite and the employer's app sees it as joined |
 | `pay(payments[{name, amount}])` → `pay(confirm)` | One pay run through StealthDisperse. The plan shows lines, total, txs and gas; the confirm approves the exact total, waits until the allowance is visible, then pays |
 | `scan` | Received payments: real on-chain balances, payer, ledger flags |
 | `balance` | Total received, grouped into clusters of addresses already linked |
@@ -53,9 +53,20 @@ The server is bundled because the ScopeLift SDK can't load in plain Node. Every 
 Example prompts:
 
 - "Create an agent identity called ledger-bot that pays contractors."
+- "Join Meridian Labs payroll with this invite: https://…/#/join?code=0x…&label=invoice-agent&org=Meridian%20Labs"
 - "Pay alice.soapay.eth 2 USDC and bob.soapay.eth 1.5 USDC." (the agent shows the plan, then confirms)
 - "What did I receive?" (`scan`) · "What's my balance?" (`balance`)
 - "Send 1 USDC to carol.soapay.eth." · "Swap 0.5 USDC to ETH in place."
+
+## Joining an employer's payroll with an invite
+
+An employer invites an agent exactly like an employee: in the company app, **Recipients → Invite employee**, type the label (say `invoice-agent`), then **Copy link**. The link reserves that label on the API for its lifetime, so nobody else can claim it. Paste the link to the agent in chat; it calls `create_agent_identity({ invite: "<link>" })`.
+
+- The tool accepts the full link (`<recipient app>/#/join?code=0x…&label=…&org=…`, as `buildInviteLink` in the SDK builds it) or the bare 0x-prefixed 32-byte code.
+- It looks the invite up with `GET /invites/:codeHash`. The **API's reserved label is the truth**; the link's `label` is only a hint. `label` may be omitted. If the agent passes a different label, the tool fails with `invite_label_mismatch` before anything is registered.
+- The claim goes to `POST /names` with `inviteCode`, which marks the invite claimed in the same transaction as the name. The company app's invite poller then sees `claimed`, resolves the name, and pins its meta-address like any employee's: the row flips to joined.
+- Errors: `invalid_invite` (not a join link or code), `invite_not_found`, `invite_claimed` (used by someone else), `invite_expired`. Re-running after a successful join returns the existing name (`created: false`).
+- The code is a bearer secret. It is sent only to the API and never appears in tool output or logs (those carry the code hash).
 
 ## Guardrails
 

@@ -1,7 +1,7 @@
-import { PARENT_NAME, SoapayNameError, isValidLabel, pinnedMetaChanged, signNameClaim, signRegisterKeysOnBehalf } from "@soapay/sdk";
+import { PARENT_NAME, SoapayNameError, inviteCodeHash, isBytes32, isValidLabel, parseInviteLink, pinnedMetaChanged, signNameClaim, signRegisterKeysOnBehalf } from "@soapay/sdk";
 import { AGENT_CONTEXT_MAX, agentTextRecords, type AgentMetadata } from "@soapay/sdk/ensv2";
-import { formatEther } from "viem";
-import { ApiError, type Ctx } from "../context.js";
+import { formatEther, type Hex } from "viem";
+import { ApiError, type Ctx, type InviteRecord } from "../context.js";
 import { checkAllowlist, normalizeName } from "../guardrails.js";
 import { update } from "../state.js";
 import { errorMessage, formatUsdc, ToolError } from "../util.js";
@@ -108,14 +108,69 @@ export function agentContext(p: { name: string; description?: string | undefined
   return s;
 }
 
+/**
+ * An employer invite, as the agent received it: the full link the company app copies
+ * (`<recipient>/#/join?code=0x…&label=…&org=…`) or the bare 32-byte code.
+ * Returns the code and the link's label hint; the API's invite record is the truth.
+ */
+export function parseInvite(raw: string): { code: Hex; labelHint: string | undefined } {
+  const s = raw.trim();
+  if (isBytes32(s)) return { code: s.toLowerCase() as Hex, labelHint: undefined };
+  const parsed = parseInviteLink(s);
+  if (!parsed) {
+    throw new ToolError(
+      "invalid_invite",
+      "invite must be the invite link from the company app (…/#/join?code=0x…&label=…) or its 0x-prefixed 32-byte code",
+    );
+  }
+  return { code: parsed.code, labelHint: parsed.label };
+}
+
+/** Looks the invite up on the API and settles the label: the invite's reserved label wins. */
+async function resolveInvite(ctx: Ctx, raw: string, requestedLabel: string | undefined) {
+  const { code, labelHint } = parseInvite(raw);
+  const codeHash = inviteCodeHash(code);
+  let inv: InviteRecord | null;
+  try {
+    inv = await ctx.api.getInvite(codeHash);
+  } catch (e) {
+    if (e instanceof ApiError) throw new ToolError(`invite_${e.code}`, `GET /invites failed: ${e.message}`);
+    throw e;
+  }
+  if (!inv) throw new ToolError("invite_not_found", "the API doesn't know this invite; ask the employer for a fresh link");
+  const reserved = inv.label.toLowerCase();
+  if (requestedLabel && requestedLabel !== reserved) {
+    throw new ToolError(
+      "invite_label_mismatch",
+      `this invite reserves ${reserved}.${PARENT_NAME}, not ${requestedLabel}.${PARENT_NAME}. ` +
+        `Call again without a label (or with label "${reserved}") to join with it.`,
+      { reservedLabel: reserved, requestedLabel },
+    );
+  }
+  if (labelHint && labelHint !== reserved) ctx.log.warn("invite link label differs from the API's; using the API's", { codeHash });
+  return { code, codeHash, label: reserved, status: inv.status, org: inv.org ?? null };
+}
+
 export async function createAgentIdentity(
   ctx: Ctx,
-  input: { label: string; description?: string | undefined; capabilities?: string[] | undefined; endpoints?: Record<string, string> | undefined },
+  input: {
+    label?: string | undefined;
+    invite?: string | undefined;
+    description?: string | undefined;
+    capabilities?: string[] | undefined;
+    endpoints?: Record<string, string> | undefined;
+  },
 ) {
   const keys = requireKeys(ctx);
-  const label = input.label.toLowerCase();
-  if (!isValidLabel(label)) throw new ToolError("invalid_label", "label must be 3-32 of [a-z0-9-], no leading/trailing hyphen");
+  const requested = input.label?.toLowerCase();
+  if (requested !== undefined && !isValidLabel(requested)) {
+    throw new ToolError("invalid_label", "label must be 3-32 of [a-z0-9-], no leading/trailing hyphen");
+  }
+  const invite = input.invite ? await resolveInvite(ctx, input.invite, requested) : null;
+  const label = invite?.label ?? requested;
+  if (!label) throw new ToolError("invalid_input", "pass a label, or an invite link from the employer (which carries the label)");
   const name = `${label}.${PARENT_NAME}`;
+  const joined = invite ? { org: invite.org, codeHash: invite.codeHash } : undefined;
 
   const existing = await ctx.api.getName(label);
   if (existing) {
@@ -123,7 +178,23 @@ export async function createAgentIdentity(
       throw new ToolError("label_taken", `${name} belongs to someone else`);
     }
     update(ctx.state, (d) => void (d.identity = { label, name, registrant: keys.registrantAddress }));
-    return { name, metaAddress: keys.metaAddressURI, registrant: keys.registrantAddress, created: false, txHash: existing.txHash, records: null };
+    return {
+      name,
+      metaAddress: keys.metaAddressURI,
+      registrant: keys.registrantAddress,
+      created: false,
+      txHash: existing.txHash,
+      records: null,
+      invite: joined ?? null,
+    };
+  }
+  if (invite && invite.status !== "pending") {
+    throw new ToolError(
+      invite.status === "claimed" ? "invite_claimed" : "invite_expired",
+      invite.status === "claimed"
+        ? "this invite was already used by someone else; ask the employer for a new one"
+        : "this invite has expired; ask the employer for a new one",
+    );
   }
 
   const agent: AgentMetadata = {
@@ -173,13 +244,14 @@ export async function createAgentIdentity(
       deadline: deadline.toString(),
       signature,
       agent,
+      ...(invite ? { inviteCode: invite.code } : {}),
     });
   } catch (e) {
     if (e instanceof ApiError) throw new ToolError(`names_${e.code}`, `POST /names failed: ${e.message}`);
     throw e;
   }
   update(ctx.state, (d) => void (d.identity = { label, name, registrant: keys.registrantAddress }));
-  ctx.log.info("agent identity created", { name, registrant: keys.registrantAddress });
+  ctx.log.info("agent identity created", { name, registrant: keys.registrantAddress, ...(invite ? { invite: invite.codeHash } : {}) });
   return {
     name: rec.name,
     metaAddress: keys.metaAddressURI,
@@ -188,6 +260,7 @@ export async function createAgentIdentity(
     registration,
     txHash: rec.txHash,
     records: Object.fromEntries(records.map((r) => [r.key, r.value])),
+    invite: joined ?? null,
   };
 }
 

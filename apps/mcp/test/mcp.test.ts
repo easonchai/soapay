@@ -27,6 +27,16 @@ describe("MCP server (in-memory client)", () => {
     expect(tools.find((t) => t.name === "whoami")!.annotations?.readOnlyHint).toBe(true);
   });
 
+  it("tells the model it can join an employer's payroll with an invite link", async () => {
+    const { client } = await connect();
+    const { tools } = await client.listTools();
+    const create = tools.find((t) => t.name === "create_agent_identity")!;
+    expect(create.description).toMatch(/invite link/);
+    expect(Object.keys(create.inputSchema.properties ?? {})).toEqual(expect.arrayContaining(["label", "invite"]));
+    expect(create.inputSchema.required ?? []).not.toContain("label");
+    expect(client.getInstructions()).toMatch(/invite/);
+  });
+
   it("calls whoami", async () => {
     const { client } = await connect();
     const r: any = await client.callTool({ name: "whoami", arguments: {} });
