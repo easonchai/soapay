@@ -7,8 +7,8 @@
 // Circle paymaster takes it in USDC). It holds no payer key and no ETH.
 //
 //   pnpm --filter @soapay/mcp build
-//   pnpm --filter @soapay/examples demo:agent claim
-//   AGENT_SINCE_BLOCK=<block before the pay run> pnpm --filter @soapay/examples demo:agent receive
+//   pnpm --filter @soapay/examples demo:pluggable-agent claim
+//   AGENT_SINCE_BLOCK=<block before the pay run> pnpm --filter @soapay/examples demo:pluggable-agent receive
 //
 // Env: SOAPAY_MCP_API (default the public demo API), RPC_URL, ENS_RPC_URL,
 //      AGENT_SPEND_TO (default dividend-cleo.soapay.eth), AGENT_SPEND_USDC (default 0.02), SPEND_DRY=1.
@@ -31,7 +31,7 @@ const explorer = (h: string) => `${chain.chain.blockExplorers!.default.url}/tx/$
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const command = process.argv[2];
-if (command !== "claim" && command !== "receive") throw new Error("usage: agent.ts claim | receive");
+if (command !== "claim" && command !== "receive") throw new Error("usage: pluggable-agent.ts claim | receive");
 if (!existsSync(SERVER)) throw new Error(`build the MCP server first: pnpm --filter @soapay/mcp build (${SERVER} is missing)`);
 
 const local = loadOrCreateLocal();
