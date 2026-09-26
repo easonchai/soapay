@@ -204,9 +204,21 @@ export function defaultSettings(): Settings {
 }
 
 /** Settings with defaults filled in, so vaults written by older builds keep working. */
+/** Public RPCs earlier builds saved into vaults as defaults. A saved one yields to the configured RPC. */
+export const LEGACY_PUBLIC_RPCS: ReadonlySet<string> = new Set([
+  "https://sepolia.base.org",
+  "https://mainnet.base.org",
+  "https://ethereum-sepolia-rpc.publicnode.com",
+]);
+
 export function settingsOf(data: Pick<VaultData, "settings"> | null | undefined): Settings {
   const { uniswapApiKey: _legacy, swapViaApi: _convert, ...rest } = (data?.settings ?? {}) as Settings & { uniswapApiKey?: string; swapViaApi?: boolean };
-  return { ...defaultSettings(), ...rest };
+  const defaults = defaultSettings();
+  const merged = { ...defaults, ...rest };
+  // A saved public default is not a user choice: follow the deploy's (paid) RPC instead.
+  if (LEGACY_PUBLIC_RPCS.has(merged.rpcUrl) || !merged.rpcUrl) merged.rpcUrl = defaults.rpcUrl;
+  if (LEGACY_PUBLIC_RPCS.has(merged.l1RpcUrl) || !merged.l1RpcUrl) merged.l1RpcUrl = defaults.l1RpcUrl;
+  return merged;
 }
 
 export function emptyChainState(): ChainState {

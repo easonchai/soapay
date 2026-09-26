@@ -80,6 +80,13 @@ function safeStorage(): Storage | null {
   }
 }
 
+/** Public RPCs earlier builds saved as defaults. A saved one yields to the configured (paid) RPC. */
+const LEGACY_PUBLIC_RPCS = new Set(["https://sepolia.base.org", "https://mainnet.base.org", "https://ethereum-sepolia-rpc.publicnode.com"]);
+
+function withoutPublicRpcs(m: Partial<Record<SupportedChainId, string>> | undefined): Partial<Record<SupportedChainId, string>> {
+  return Object.fromEntries(Object.entries(m ?? {}).filter(([, url]) => url && !LEGACY_PUBLIC_RPCS.has(url))) as Partial<Record<SupportedChainId, string>>;
+}
+
 export function loadSettings(): Settings {
   const defaults = envDefaults();
   const raw = safeStorage()?.getItem(SETTINGS_KEY);
@@ -89,8 +96,8 @@ export function loadSettings(): Settings {
     return {
       chainId: s.chainId && isSupportedChainId(s.chainId) ? s.chainId : defaults.chainId,
       stealthDisperse: { ...defaults.stealthDisperse, ...(s.stealthDisperse ?? {}) },
-      rpcUrl: { ...defaults.rpcUrl, ...(s.rpcUrl ?? {}) },
-      ensRpcUrl: { ...defaults.ensRpcUrl, ...(s.ensRpcUrl ?? {}) },
+      rpcUrl: { ...defaults.rpcUrl, ...withoutPublicRpcs(s.rpcUrl) },
+      ensRpcUrl: { ...defaults.ensRpcUrl, ...withoutPublicRpcs(s.ensRpcUrl) },
     };
   } catch {
     return defaults;
