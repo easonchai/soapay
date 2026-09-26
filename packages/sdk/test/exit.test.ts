@@ -22,6 +22,7 @@ import {
   buildBurnCalls,
   cctpMaxFee,
   derivePoolSecrets,
+  exitLegMinimum,
   getExitConfig,
   keysFromMnemonic,
   loadPrivacyPoolsSdk,
@@ -149,6 +150,11 @@ function makeWorld(opts: { stealthKey: Hex; sourceBalance: bigint }) {
     crashAfterSubmit: false,
     /** When crashing, whether the op still lands on-chain. */
     landsAnyway: false,
+    /** The relayer's response is lost (the request itself went through when `relayLands`). */
+    relayLost: false,
+    relayLands: false,
+    spentNullifiers: new Set<bigint>(),
+    withdrawnLogs: [] as { tx: Hash; nullifier: bigint }[],
   };
   const nextTx = () => tx(w.txCounter++);
 
@@ -163,6 +169,8 @@ function makeWorld(opts: { stealthKey: Hex; sourceBalance: bigint }) {
           return w.usedNonce ? 1n : 0n;
         case "latestRoot":
           return w.latestRoot;
+        case "nullifierHashes":
+          return w.spentNullifiers.has(a.args![0] as bigint);
         default:
           throw new Error(`readContract ${a.functionName}`);
       }
@@ -173,6 +181,8 @@ function makeWorld(opts: { stealthKey: Hex; sourceBalance: bigint }) {
     async getLogs(a: { address: Address; args?: Record<string, unknown> }) {
       if (getAddress(a.address) === ENTRYPOINT_V08)
         return w.opLogs.filter((l) => l.chain === chain).map((l) => ({ transactionHash: l.tx, args: { nonce: l.nonce, success: l.success } }));
+      if (getAddress(a.address) === getAddress(CONFIG.pool.pool))
+        return w.withdrawnLogs.map((l) => ({ transactionHash: l.tx, args: { _spentNullifier: l.nullifier } }));
       return [{ transactionHash: tx(999) }];
     },
     async getTransactionReceipt({ hash }: { hash: Hash }) {
@@ -273,10 +283,18 @@ function makeWorld(opts: { stealthKey: Hex; sourceBalance: bigint }) {
       });
     }
     if (url.endsWith("/relayer/request")) {
-      const body = JSON.parse(init!.body!);
+      const body = JSON.parse(init!.body!) as { publicSignals: string[] };
       w.relays.push(body);
       const hash = nextTx();
       w.receipts.set(hash, { status: "success", logs: [] });
+      if (w.relayLost) {
+        if (w.relayLands) {
+          const n = BigInt(body.publicSignals[1]!);
+          w.spentNullifiers.add(n);
+          w.withdrawnLogs.push({ tx: hash, nullifier: n });
+        }
+        throw new Error("socket hang up");
+      }
       return json({ success: true, txHash: hash, requestId: "r", timestamp: 0 });
     }
     throw new Error(`unexpected fetch ${url}`);
@@ -561,5 +579,124 @@ describe("advanceExitLeg (mocked chain, ASP and relayer)", () => {
     expect(calls).toEqual([{ message: "0xabcd", attestation: "0xa77e", dest: DST }]);
     expect(leg.status).toBe("awaiting-mint");
     expect(leg.txs.mint).toBe(tx(4242));
+  });
+});
+
+describe("exitLegMinimum (the real leg minimum)", () => {
+  /** The step machine's arithmetic at a given source balance, with the estimated prefunds. */
+  const simulate = (balance: bigint) => {
+    const m = (f: bigint) => f + f / 10n;
+    const burn = balance - m(CONFIG.estimates.sourceGas);
+    const minted = burn - (burn * 130n + 999_999n) / 1_000_000n - CONFIG.estimates.forwardFee;
+    return minted - CONFIG.ragequitReserve - m(CONFIG.estimates.destGas);
+  };
+
+  it("testnet: ≈ 16.4 USDC (pool minimum + CCTP fee + forward fee + paymaster prefunds), exact at the edge", () => {
+    const { minimum, breakdown } = exitLegMinimum(CONFIG);
+    expect(minimum).toBeGreaterThan(16_300_000n);
+    expect(minimum).toBeLessThan(16_600_000n);
+    expect(minimum).toBeGreaterThan(12_660_000n); // the old, underestimated planner minimum
+    expect(simulate(minimum)).toBeGreaterThanOrEqual(CONFIG.pool.minDeposit);
+    expect(simulate(minimum - 1n)).toBeLessThan(CONFIG.pool.minDeposit);
+    expect(breakdown.minDeposit).toBe(10_000_000n);
+    expect(breakdown.destGas).toBe(CONFIG.estimates.destGas + CONFIG.estimates.destGas / 10n);
+    expect(breakdown.minDeposit + breakdown.destGas + breakdown.forwardFee + breakdown.cctpProtocolFee + breakdown.sourceGas).toBe(minimum);
+  });
+
+  it("follows live quotes: pricier gas or forwarding raises it, a standard (free) transfer lowers it", () => {
+    const base = exitLegMinimum(CONFIG).minimum;
+    const pricier = exitLegMinimum(CONFIG, { destGas: 5_000_000n }).minimum; // +1.25 prefund, +10% headroom, + its CCTP bps
+    expect(pricier - base).toBeGreaterThanOrEqual(1_375_000n);
+    expect(pricier - base).toBeLessThan(1_376_000n);
+    expect(exitLegMinimum(CONFIG, { forwardFee: 1_530_000n }).minimum).toBeLessThan(base);
+    const standard = exitLegMinimum({ ...CONFIG, cctp: { ...CONFIG.cctp, minFinalityThreshold: 2000 } });
+    expect(standard.breakdown.cctpProtocolFee).toBe(0n);
+    expect(exitLegMinimum(CONFIG, { cctpMinimumFeeBps: 0 }).minimum).toBe(standard.minimum);
+  });
+
+  it("planExit flags legs below it (and passes the ones at it)", () => {
+    const min = exitLegMinimum(CONFIG).minimum;
+    const a = privateKeyToAccount(generatePrivateKey()).address;
+    const b = privateKeyToAccount(generatePrivateKey()).address;
+    const plan = planExit({ sources: [{ stealthAddress: a, amount: min }, { stealthAddress: b, amount: min - 1n }], destination: DEST_WALLET, config: CONFIG });
+    expect(plan.minimum).toBe(min);
+    expect(plan.belowMinimum).toEqual([b]);
+    expect(plan.warnings.some((w) => w.includes(b) && w.includes(`below the ${min}`))).toBe(true);
+    expect(plan.warnings.some((w) => w.includes(a) && w.includes("below"))).toBe(false);
+  });
+});
+
+describe("withdrawal persistence (relayer response lost)", () => {
+  const SPENT = 777n;
+  const proverWith = (signals: string[]) => ({
+    proveWithdrawal: async () => ({ proof: { pi_a: ["1", "2", "1"], pi_b: [["3", "4"], ["5", "6"], ["1", "0"]], pi_c: ["7", "8", "1"] }, publicSignals: signals }),
+    proveCommitment: async () => ({ proof: { pi_a: ["1", "2"], pi_b: [["3", "4"], ["5", "6"]], pi_c: ["7", "8"] }, publicSignals: ["1", "2", "3", "4"] }),
+  });
+
+  async function toApproved(landing: boolean) {
+    const { stealthKey, world, leg: planned } = freshLeg();
+    const ctx = makeCtx(world, stealthKey, { prover: proverWith(["5", String(SPENT), "9", "0", "0", "0", "0", "0"]) });
+    let leg = await toPendingAsp(ctx, world, planned);
+    world.w.aspLeaves = [1n, world.w.label, 2n];
+    const pp = await loadPrivacyPoolsSdk();
+    world.w.latestRoot = pp.generateMerkleProof(world.w.aspLeaves, world.w.label).root;
+    leg = await step(ctx, leg);
+    expect(leg.status).toBe("approved");
+    ctx.clock.t += 1_000;
+    world.w.relayLost = true;
+    world.w.relayLands = landing;
+    const before = ctx.persisted.length;
+    leg = await step(ctx, leg);
+    // Saved with the pending marker before the request left, and still on the returned leg.
+    expect(ctx.persisted.length).toBe(before + 1);
+    expect(ctx.persisted.at(-1)!.pendingWithdraw).toMatchObject({ spentNullifier: String(SPENT), child: 0 });
+    expect(leg.status).toBe("approved");
+    expect(leg.pendingWithdraw?.spentNullifier).toBe(String(SPENT));
+    expect(leg.error).toMatch(/hang up/);
+    world.w.relayLost = false;
+    return { ctx, world, leg };
+  }
+
+  it("landed: resume adopts the Withdrawn tx and never relays again", async () => {
+    const { ctx, world, leg: crashed } = await toApproved(true);
+    // Resume from the vault copy (what persist saved), as after a reload.
+    const leg = await step(ctx, ctx.persisted.at(-1)!);
+    expect(leg.status).toBe("withdrawing");
+    expect(leg.txs.withdraw).toBe(world.w.withdrawnLogs[0]!.tx);
+    expect(leg.withdrawals).toEqual([{ amount: crashed.pendingWithdraw!.amount, child: 0, tx: world.w.withdrawnLogs[0]!.tx }]);
+    expect(leg.pendingWithdraw).toBeUndefined();
+    expect(world.w.relays).toHaveLength(1);
+    const confirmed = await step(ctx, leg);
+    expect(confirmed.withdrawals[0]!.done).toBe(true);
+  });
+
+  it("not landed: waits out the retry window, then relays once more", async () => {
+    const { ctx, world, leg } = await toApproved(false);
+    const waiting = await advanceExitLeg(ctx, leg); // inside the window: no relay
+    expect(waiting).toMatchObject({ status: "approved", pendingWithdraw: leg.pendingWithdraw });
+    expect(world.w.relays).toHaveLength(1);
+    ctx.clock.t += 5 * 60_000;
+    const next = await step(ctx, leg);
+    expect(next.status).toBe("withdrawing");
+    expect(next.pendingWithdraw).toBeUndefined();
+    expect(world.w.relays).toHaveLength(2);
+  });
+
+  it("a relayer refusal clears the marker (nothing went out)", async () => {
+    const { stealthKey, world, leg: planned } = freshLeg();
+    const ctx = makeCtx(world, stealthKey, { prover: proverWith(["5", String(SPENT)]) });
+    let leg = await toPendingAsp(ctx, world, planned);
+    world.w.aspLeaves = [1n, world.w.label, 2n];
+    const pp = await loadPrivacyPoolsSdk();
+    world.w.latestRoot = pp.generateMerkleProof(world.w.aspLeaves, world.w.label).root;
+    leg = await step(ctx, leg);
+    ctx.clock.t += 1_000;
+    const f = ctx.fetch!;
+    ctx.fetch = async (url, init) =>
+      url.endsWith("/relayer/request") ? { ok: true, status: 200, json: async () => ({ success: false, error: "nope" }), text: async () => "" } : f(url, init);
+    leg = await step(ctx, leg);
+    expect(leg.status).toBe("approved");
+    expect(leg.pendingWithdraw).toBeUndefined();
+    expect(leg.error).toMatch(/nope/);
   });
 });

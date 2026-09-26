@@ -219,3 +219,6 @@ metadata:
   - **Agent decisions awaiting owner confirmation:** D-19, the CSP inline-styles change, D-32, D-33, D-34, D-36, D-37, D-38, D-39, D-40.
   - In flight: `onboarding-passkey` (D-35: passkey/WebAuthn PRF unlock by default, passphrase fallback, phrase still shown once, wallet signature under Advanced; owner-approved). Demo "wow" work (owner: "start on all 4"): `demo-views` (D-41: coworker view vs my view + gasless proof panel), `exit-live` (D-42: exit gaps + live exit run; needs ~18 USDC per leg), `demo-pluggable` (D-43: live `soapay distribute --preset dividend` + MCP agent gets paid).
   - Open question for the PRD team (in prd-open-questions): defer the phrase backup until the first withdrawal? Is passkey sync acceptable as the only backup?
+- Checkpoint 28 (2026-09-26): **exit fixes merged from `exit-live`** (9724373, D-42, agent decision: **confirm**).
+  - Leg minimum derived in the SDK (`exitLegMinimum`, ≈ 16.4 USDC testnet); the recipient planner uses it. Persist-before-send for userOps (runner/Retry now pass `persist`) and relayed withdrawals (`pendingWithdraw`). "Start now" starts queued legs immediately.
+  - Live exit NOT run: the deployer holds 12.2 USDC on Base Sepolia (needs 18). Funding + the one-line command are in docs/testnet-deployment.md "Live exit".

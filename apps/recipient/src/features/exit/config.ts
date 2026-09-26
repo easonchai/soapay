@@ -17,21 +17,17 @@ export function exitConfigFor(sourceChainId: number): ExitConfig | null {
 }
 
 /**
- * Fee estimates for the planner, in USDC base units (6 dp). Sources: docs/exit-research.md §1, §3.
- * Paymaster gas is our estimate for one 7702 userOp paid in USDC through the Circle paymaster.
+ * Planner-only fee figures, in USDC base units (6 dp). Sources: docs/exit-research.md §1, §3. The
+ * worst-case forward fee, both paymaster gas reserves and the leg minimum come from the SDK route
+ * config (`exitLegMinimum`), so the planner and the step machine never disagree.
  */
 export const EXIT_FEES = {
-  /** Circle Forwarding Service, live quote low / high (1.54 / 2.21 USDC). */
-  forwardLow: 1_540_000n,
-  forwardHigh: 2_210_000n,
+  /** Circle Forwarding Service, live quote low tier (1.53 USDC on 2026-09-26): the best case. */
+  forwardLow: 1_530_000n,
   /** CCTP fast-transfer protocol fee: 1.3 bps, as a fraction over 100_000. */
   cctpProtocolPer100k: 13n,
   /** 0xbow relayer fee, bps of the withdrawn amount. */
   relayerBps: 10n,
-  /** Paymaster gas for the burn userOp on the source chain. */
-  sourceGas: 50_000n,
-  /** Paymaster gas for the approve + deposit userOp on the destination chain. */
-  destGas: 400_000n,
 } as const;
 
 const EXPLORERS: Record<number, { name: string; url: string }> = {

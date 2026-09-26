@@ -40,6 +40,45 @@ App `app_0cc7167efe114ac2e0ef7d9827098353`, RP `rp_3ede5fe1cab9af48` (registered
 - Through the API, 3/3 runs: `POST /register` (sponsored ERC-6538 registration) → `POST /names` (ENSv2 subname issued) → the SDK's `resolveStealthMeta` pins the right meta-address. Re-registering a new meta-address through `/register` (the manual rotation path) also works.
 - Bug found and fixed: `POST /names` could return `meta_mismatch` right after `/register` because of read-after-write lag on load-balanced public RPCs. It now re-reads at the relay's block for registrations the API itself relayed.
 
+## Live exit (Privacy Pools v1 via CCTP V2)
+
+Route: Base Sepolia stealth address → CCTP V2 burn with the Forwarding Service → minted back to the **same** stealth address on Ethereum Sepolia → 0xbow USDC pool deposit (`0x0b062Fe3…4C0f`, Entrypoint `0x34A20681…21cB`) → ASP approval → relayed withdrawal to a fresh destination. The stealth address and the destination never hold ETH.
+
+**Status (2026-09-26): not run yet, blocked on test USDC. Nothing was spent.**
+
+- The smallest exit leg is **≈ 16.40 USDC** on one stealth address (`exitLegMinimum`: 10 USDC pool minimum + ≈ 2.21 forward fee + ≈ 0.002 CCTP fee + ≈ 4.13 USDC Sepolia paymaster prefund + ≈ 0.06 Base Sepolia prefund, the prefunds with 10% headroom; the unused prefund is refunded to the address). The run pays **18 USDC** for margin.
+- Wallets we control (addresses derived from the git-ignored env files; balances read 2026-09-26):
+
+| Wallet | Address | Base Sepolia USDC | Base Sepolia ETH | Sepolia ETH |
+| --- | --- | --- | --- | --- |
+| Deployer (`contracts/.env`, also the MCP agent payer) | `0x7757A7C9f4eD02a02353A7929cfb399e9286f52c` | **12.20** | 0.40 | 0 |
+| ERC-6538 relayer | `0x509aD63D73f41FA9DD7162F7FcD3876090C8157F` | 0 | 0.10 | 0 |
+| `soapay.eth` owner | `0xC33FcD38117b76CC05dab2F3DD2d9B71111358dB` | 0 | 0 | 0.26 |
+| Issuer | `0x20E69b1fdEB0C945CE8FE758CF3B3B4BBfC0068b` | 0 | 0 | 0.11 |
+| L1 relayer | `0x8F4003C7404bAf73ba1182C0E9Ad09D993d1aC2a` | 0 | 0 | 0.12 |
+| Attester | `0x62377F8ad1151f5b1917708FFD67220F37dF2574` | 0 | 0 | 0 |
+
+- **Funding needed:** at least **5.80 USDC more on Base Sepolia to the deployer `0x7757A7C9f4eD02a02353A7929cfb399e9286f52c`** (12.20 → 18). One request at [faucet.circle.com](https://faucet.circle.com) (Base Sepolia, 10 USDC) covers it. Its 0.40 ETH covers the approve + pay txs. Nothing is needed on Ethereum Sepolia: Circle's forwarder mints, the Circle paymaster takes gas in USDC, and the 0xbow relayer pays the withdrawal.
+- **Run it** (resumable; state incl. the throwaway recipient mnemonic in the git-ignored `packages/sdk/.exit-live.json`; keys are never printed):
+
+```sh
+cd packages/sdk
+set -a; source ../../contracts/.env; set +a
+EXIT_LIVE=1 EMPLOYER_KEY=$DEPLOYER_PRIVATE_KEY PAY_AMOUNT=18000000 EXIT_LIVE_MINUTES=45 \
+  pnpm exec vitest run test/exit.live.test.ts --disable-console-intercept
+```
+
+  It pays one fresh stealth address through StealthDisperse, scans for it, then drives the leg (burn → attestation → forwarded mint → deposit → ASP → withdrawal) and prints each tx's explorer link. If the ASP hasn't approved within `EXIT_LIVE_MINUTES`, **re-run the same command** later: it resumes from the state file and finishes the withdrawal. Record the printed links in the table below.
+
+| Step | Tx |
+| --- | --- |
+| Pay run (Base Sepolia) | pending funding |
+| CCTP burn (Base Sepolia) | pending |
+| Forwarded mint (Ethereum Sepolia) | pending |
+| Pool deposit (Ethereum Sepolia) | pending |
+| ASP approval | pending |
+| Relayed withdrawal (Ethereum Sepolia) | pending |
+
 ## Not yet run live
 
 - A pay run, scan and spend on Base Sepolia: needs test USDC in the employer wallet (faucet.circle.com). The same flow passes on a Base mainnet fork (`packages/sdk/test/payroll.e2e.test.ts`).

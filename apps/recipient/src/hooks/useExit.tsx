@@ -71,13 +71,24 @@ export function ExitProvider({ children, random }: { children: ReactNode; random
 
   const records = useMemo(() => state.exits ?? [], [state.exits]);
 
+  // Every write refreshes dataRef at once (not on the next render), so the runner's next read, a
+  // persist-before-send and "Start now" all see the state that is already in the vault.
+  const write = useCallback(
+    async (fn: (d: VaultData) => VaultData) => {
+      const next = await update(fn);
+      dataRef.current = next;
+      return next;
+    },
+    [update],
+  );
+
   const updateExits = useCallback(
     (fn: (r: ExitRecord[]) => ExitRecord[]) =>
-      update((d) => {
+      write((d) => {
         const cs = chainState(d, chainId);
         return { ...d, chains: { ...d.chains, [String(chainId)]: { ...cs, exits: fn(cs.exits ?? []) } } };
       }),
-    [update, chainId],
+    [write, chainId],
   );
 
   const save = useCallback(
@@ -106,20 +117,29 @@ export function ExitProvider({ children, random }: { children: ReactNode; random
     });
   }, []);
 
+  const again = useRef(false);
   const tick = useCallback(async () => {
-    if (!service.ready || running.current) return;
+    if (!service.ready) return;
+    // A tick asked for while one runs (e.g. "Start now" mid-poll) runs right after it, not a poll later.
+    if (running.current) {
+      again.current = true;
+      return;
+    }
     running.current = true;
     try {
-      await tickExits({
-        records: exitsOf(dataRef.current, chainId),
-        service,
-        keysFor,
-        now: Date.now,
-        ...(random ? { random } : {}),
-        save,
-        onError,
-        isQueued: (legId) => isLegQueued(queueOf(chainState(dataRef.current, chainId)), legId),
-      });
+      do {
+        again.current = false;
+        await tickExits({
+          records: exitsOf(dataRef.current, chainId),
+          service,
+          keysFor,
+          now: Date.now,
+          ...(random ? { random } : {}),
+          save,
+          onError,
+          isQueued: (legId) => isLegQueued(queueOf(chainState(dataRef.current, chainId)), legId),
+        });
+      } while (again.current);
     } finally {
       running.current = false;
     }
@@ -192,7 +212,7 @@ export function ExitProvider({ children, random }: { children: ReactNode; random
       const legSources = sources.filter((s) => picked.has(s.stealthAddress.toLowerCase()));
       try {
         let id = "";
-        await update((d) => {
+        await write((d) => {
           const first = d.profile.nextExitPoolIndex ?? 0;
           const plan = service.planExit({ sources: legSources, destination, firstPoolIndex: first });
           const now = Date.now();
@@ -226,12 +246,12 @@ export function ExitProvider({ children, random }: { children: ReactNode; random
         return { error: errorMessage(e) };
       }
     },
-    [service, sources, wallet.balances, state.matches, update, chainId, random],
+    [service, sources, wallet.balances, state.matches, write, chainId, random],
   );
 
   const startNow = useCallback(
     async (exitId: string) => {
-      await update((d) => {
+      await write((d) => {
         const cs = chainState(d, chainId);
         const q = queueOf(cs);
         const ids = q.items.filter((i) => i.kind === "exit" && i.meta?.exitId === exitId && i.status === "queued").map((i) => i.id);
@@ -241,7 +261,7 @@ export function ExitProvider({ children, random }: { children: ReactNode; random
       });
       await tick();
     },
-    [update, chainId, random, tick],
+    [write, chainId, random, tick],
   );
 
   const withdrawNow = useCallback(
@@ -261,6 +281,7 @@ export function ExitProvider({ children, random }: { children: ReactNode; random
         const next = await service.advance(loadLeg(stored), keysFor(loadLeg(stored)), {
           destination: record.destination,
           roundWithdrawals: record.privacy.roundWithdrawals,
+          persist: (l) => save(exitId, legId, { leg: storeLeg(l) }),
         });
         onError(legId, null);
         await save(exitId, legId, { leg: storeLeg(next) });

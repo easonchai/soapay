@@ -25,7 +25,16 @@ export type ExitKeys = {
   spendingKey: Hex;
 };
 
-export type AdvanceOptions = { destination: Address; roundWithdrawals: boolean };
+export type AdvanceOptions = {
+  destination: Address;
+  roundWithdrawals: boolean;
+  /**
+   * Saves the leg mid-step. The SDK calls it right before anything goes on-chain (a userOp to the
+   * bundler, a withdrawal to the relayer), with the in-flight marker set, so a crash or closed tab
+   * resumes from the vault without sending twice. The runner always passes it.
+   */
+  persist?: (leg: ExitLeg) => Promise<void>;
+};
 
 export type ExitService = {
   mock: boolean;
@@ -139,5 +148,6 @@ export function buildCtx(
     fetch: fetchFn as unknown as NonNullable<ExitContext["fetch"]>,
     withdrawParts: 1,
     leaveChange: opts.roundWithdrawals,
+    ...(opts.persist ? { persist: opts.persist } : {}),
   };
 }
