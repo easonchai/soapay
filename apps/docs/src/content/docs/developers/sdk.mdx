@@ -1,0 +1,279 @@
+---
+title: SDK reference
+description: Public TypeScript APIs for keys, registration, pay runs, scanning, spending, swaps, exits, chains, and assets.
+sidebar:
+  order: 2
+---
+
+`@soapay/sdk` is the protocol boundary for every Soapay app. It is a private workspace package today. Add it to another workspace package as `"@soapay/sdk": "workspace:*"`, then build it before consuming its `dist` output. A Node entry point must also follow the bundling rule below.
+
+```bash
+pnpm --filter @soapay/sdk build
+```
+
+Most exports come from `@soapay/sdk`. ENSv2 exports are also available from `@soapay/sdk/ensv2`.
+
+## Node and the ScopeLift dependency
+
+`@scopelift/stealth-address-sdk@1.0.0-beta.5` is ESM but contains extensionless and directory imports. Plain Node loading fails with `ERR_UNSUPPORTED_DIR_IMPORT`. Use one of these supported paths:
+
+- Bundle a Node entry point with esbuild, as the API, CLI, and MCP packages do.
+- Run TypeScript through `tsx`.
+- Inline the dependency in Vitest with `server.deps.inline: ["@scopelift/stealth-address-sdk"]`.
+- Let Vite bundle browser code.
+
+Do not publish a Node entry point that imports the SDK output without one of those treatments.
+
+## Derivation: `keys.ts`
+
+| Export | Purpose |
+| --- | --- |
+| `generateMnemonic(strength: 128 \| 160 \| 192 \| 224 \| 256 = 128): string` | Generate an English BIP-39 phrase, 12 words by default |
+| `validateMnemonic(mnemonic: string): boolean` | Validate its word list and checksum |
+| `keysFromMnemonic(mnemonic: string, passphrase?: string): SoapayKeys` | Derive spending, viewing, and registrant keys deterministically |
+| `parseMetaAddress(input: string): Hex` | Validate a URI or raw 66-byte scheme-1 meta-address |
+| `formatMetaAddressURI(metaAddress: string): string` | Return canonical lowercase `st:eth:0x...` form |
+| `assertPlainEoa(address: Address, code: Hex \| undefined): void` | Reject wallet-signature derivation for accounts with code |
+| `assertPlainEoaSignature(params: { address: Address; code: Hex \| undefined; signature: Hex }): Promise<void>` | Validate a plain 65-byte ECDSA wallet signature |
+| `keysFromSignature(signature: Hex): SoapayKeys` | Derive keys from the fixed `SIGN_MESSAGE` signature |
+| `keysFromWalletSignature(params: { address: Address; code: Hex \| undefined; signature: Hex; confirmSignature?: Hex \| undefined }): Promise<SoapayKeys>` | Run all plain-EOA and determinism checks, then derive keys |
+
+`SoapayKeys` contains secret `spendingKey`, `viewingKey`, and `registrantKey` values plus `spendingPublicKey`, `viewingPublicKey`, `registrantAddress`, and `metaAddressURI`. The BIP-32 paths are `m/5564'/1'/0'`, `m/5564'/1'/1'`, and `m/5564'/1'/2'`.
+
+```ts
+import { generateMnemonic, keysFromMnemonic } from "@soapay/sdk";
+
+const phrase = generateMnemonic();
+const keys = keysFromMnemonic(phrase);
+console.log(keys.metaAddressURI);
+```
+
+## Registry and names: `registration.ts`, `names.ts`, `registry.ts`
+
+| Export | Purpose |
+| --- | --- |
+| `registryDomain(chainId: number, registry: Address = ERC6538_REGISTRY)` | Build the ERC-6538 EIP-712 domain |
+| `registerKeysTypedData(params: RegisterKeysTypedDataParams)` | Build typed data for `registerKeysOnBehalf` |
+| `signRegisterKeysOnBehalf(params: RegisterKeysTypedDataParams & { registrantKey: Hex }): Promise<Hex>` | Sign a sponsored registration |
+| `recoverRegisterKeysSigner(params: RegisterKeysTypedDataParams & { signature: Hex }): Promise<Address>` | Recover the registration signer |
+| `getRegistryNonce(publicClient: RegistryReader, registrant: Address, registry: Address = ERC6538_REGISTRY): Promise<bigint>` | Read the registrant nonce |
+| `buildRegisterKeysOnBehalfCall(params: MetaAddressInput & { registrant: Address; signature: Hex; registry?: Address }): { to: Address; data: Hex }` | Encode relay calldata |
+| `isValidLabel(label: string): boolean` | Enforce Soapay's 3 to 32 character label rules |
+| `nameClaimDomain(chainId: number)` | Build the Soapay Names EIP-712 domain |
+| `nameClaimTypedData(claim: NameClaim)` | Build canonical typed data for a name claim |
+| `signNameClaim(claim: NameClaim & { registrantKey: Hex }): Promise<Hex>` | Sign a name claim |
+| `verifyNameClaim(claim: NameClaim & { signature: Hex; nowSeconds?: bigint }): Promise<NameClaimVerification>` | Validate label, meta-address, deadline, and signer |
+| `findRegistrationBlock(client: RegistrationLogsClient, registrant: Address, fromBlock: bigint, registry: Address = ERC6538_REGISTRY): Promise<bigint \| null>` | Find the first scheme-1 registration log |
+| `resolveStealthMeta(params: { ensClient: EnsTextReader; baseClient: RegistryReader; name: string; registry?: Address }): Promise<ResolvedStealthMeta>` | Cross-check ENS `stealth` and `soapay:registrant` records against ERC-6538 |
+| `pinnedMetaChanged(pinned: string, current: string): boolean` | Compare canonical meta-addresses and treat malformed data as changed |
+
+Chain and asset registration is process-global:
+
+| Export | Purpose |
+| --- | --- |
+| `registerChain(config: ChainRegistration): RegisteredChain` | Register or replace an EVM chain |
+| `getChain(chainId: number): RegisteredChain` | Read a registered chain or throw `UnknownChainError` |
+| `tryGetChain(chainId: number): RegisteredChain \| undefined` | Read without throwing |
+| `listChains(): RegisteredChain[]` | List current registrations |
+| `unregisterChain(chainId: number): boolean` | Remove one registration |
+| `isTestnetChain(chainId: number): boolean` | Check the viem flag or known testnet ids |
+| `resolveAsset(chainId: number, symbolOrAddress: string): Asset` | Resolve a symbol or ERC-20 address |
+| `assetCapabilities(asset: Asset \| AssetKind): AssetCapabilities` | Report support for distribute, scan, spend, and denominate |
+| `assertAssetSupports(asset: Asset, capability: AssetCapability): void` | Throw `UnsupportedAssetError` when unsupported |
+| `assertDistributable(asset: Asset): asserts asset is Erc20Asset` | Narrow a distribution asset to ERC-20 |
+| `erc20Asset(address: string, opts: { symbol?: string; decimals?: number } = {}): Erc20Asset` | Construct a checked ERC-20 descriptor |
+| `nativeAsset(opts: { symbol?: string; decimals?: number } = {}): NativeAsset` | Construct a native-asset descriptor |
+| `assetAddress(asset: Asset): Address` | Return the transferable token address |
+| `assertCompliant(hook: ComplianceHook, addresses: readonly Address[], asset: Asset): Promise<void>` | Run a caller-supplied receive policy over derived addresses |
+| `configurePayToken(chainId: number, token: string \| undefined \| null): void` | Apply the Base Sepolia pay-token override and update the registry |
+| `resetChainRegistry(): void` | Restore the built-in Base registrations |
+
+Only ERC-20 assets are supported today. Native assets, ERC-721, and ERC-1155 are typed but report unsupported capabilities.
+
+## Announce and pay runs: `payrun.ts`
+
+| Export | Purpose |
+| --- | --- |
+| `compareAddresses(a: Address, b: Address): number` | Compare addresses numerically |
+| `derivePayRun(params: DerivePayRunParams): PayRunLine[]` | Derive fresh lines, globally sort them, and reject repeats |
+| `assertPayRunInvariants(lines: readonly PayRunLine[]): void` | Check amount, order, address, and ephemeral-key invariants |
+| `chunkLines<T>(lines: readonly T[], max: number = MAX_LINES_PER_TX): T[][]` | Make balanced consecutive chunks |
+| `encodeHead(f: HeadFields): bigint` | Pack address, uint80 amount, view tag, and key prefix |
+| `decodeHead(head: bigint): HeadFields` | Decode the packed word |
+| `buildMetadata57(m: MetadataFields): Hex` | Encode standard ERC-5564 ERC-20 metadata |
+| `buildMetadata77(m: MetadataFields & { payer: Address }): Hex` | Append the StealthDisperse payer hint |
+| `packLine(l: PayRunLine): PackedPayment` | Convert a derived line to the contract tuple |
+| `encodeStealthDisperseCalls(params: { stealthDisperse: Address; token: Address; lines: readonly PayRunLine[]; maxLinesPerTx?: number }): StealthDisperseCalls` | Encode exact-total approval plus `pay` calls |
+| `encodeBatchCalls(params: { token: Address; lines: readonly PayRunLine[]; announcer?: Address; maxLinesPerTx?: number }): BatchCallsChunk[]` | Encode atomic transfer and announce pairs for EIP-5792 |
+| `estimatePayRunGas(lines: readonly PayRunLine[], maxLinesPerTx: number = MAX_LINES_PER_TX): PayRunEstimate` | Return line, recipient, transaction, amount, and gas totals |
+
+```ts
+import { derivePayRun, encodeStealthDisperseCalls } from "@soapay/sdk";
+
+const lines = derivePayRun({
+  recipients: [{ metaAddressURI, amount: 1_000_000n, id: "alice" }],
+});
+const calls = encodeStealthDisperseCalls({ stealthDisperse, token, lines });
+```
+
+The ABI exports are `announcerAbi`, `registryAbi`, `stealthDisperseAbi`, `offchainResolverAbi`, `resolverServiceAbi`, `resolverRecordsAbi`, and `erc20Abi`.
+
+## Scan: `scan.ts`
+
+| Export | Purpose |
+| --- | --- |
+| `fetchAnnouncements(params: { apiUrl: string; fromBlock?: bigint; toBlock?: bigint; limit?: number; maxPages?: number; fetch?: FetchLike }): Promise<{ announcements: AnnouncementRecord[]; skipped: number }>` | Page through the API index |
+| `fetchAnnouncementsRpc(params: { client: LogsClient; fromBlock: bigint; toBlock: bigint; chunkSize?: number; concurrency?: number; announcer?: Address }): Promise<AnnouncementRecord[]>` | Fetch and sort Announcer logs over RPC |
+| `parseMetadata(metadata: Hex): MetadataHints \| null` | Parse 57-byte or 77-byte untrusted metadata |
+| `metadataViewTag(metadata: Hex): number \| undefined` | Read the first metadata byte |
+| `scanAnnouncementsWithStats(announcements: readonly AnnouncementRecord[], keys: ScanKeys): { matches: ScanMatch[]; stats: ScanStats }` | Apply the view-tag prefilter and full ownership check |
+| `scanAnnouncements(announcements: readonly AnnouncementRecord[], keys: ScanKeys): ScanMatch[]` | Return matches without statistics |
+| `deriveStealthKey(match: Pick<ScanMatch, "announcement">, keys: { spendingPrivateKey: Hex; viewingPrivateKey: Hex }): Hex` | Derive and verify the private key controlling a match |
+| `verifyBalances(params: { client: MulticallClient; matches: readonly Pick<ScanMatch, "announcement">[]; tokens: readonly Address[] }): Promise<BalanceRow[]>` | Read real token balances with multicall |
+| `buildLedger(matches: readonly ScanMatch[], balances: readonly BalanceRow[], knownPayers: readonly Address[] = [], opts: { stealthDisperse?: readonly Address[] } = {}): LedgerEntry[]` | Build trusted balance rows with payer and metadata flags |
+
+```ts
+const { announcements } = await fetchAnnouncements({ apiUrl, fromBlock });
+const { matches, stats } = scanAnnouncementsWithStats(announcements, {
+  spendingPublicKey: keys.spendingPublicKey,
+  viewingPrivateKey: keys.viewingKey,
+});
+const balances = await verifyBalances({ client: publicClient, matches, tokens: [usdc] });
+const ledger = buildLedger(matches, balances, [knownPayer], { stealthDisperse: [disperse] });
+```
+
+## Spend: `spend.ts`
+
+| Export | Purpose |
+| --- | --- |
+| `parseDelegationDesignator(code: Hex \| undefined \| null): Address \| null` | Decode exact EIP-7702 designator bytecode |
+| `isDelegated(client: Pick<PublicClient, "getCode">, address: Address, expected: Address = SIMPLE_7702_ACCOUNT): Promise<DelegationStatus>` | Classify an EOA, delegation, or contract |
+| `createSpendClient<chain extends Chain = Chain>(options: CreateSpendClientOptions<chain>): SpendClient` | Configure chain RPC, bundler, and paymaster |
+| `resolvePaymaster(chainId: number, mode: CreateSpendClientOptions["paymaster"], paymasterUrl?: string): PaymasterAdapter` | Resolve Circle or sponsored gas behavior |
+| `buildTransferCall(token: Address, to: Address, amount: bigint): SpendCall` | Encode one ERC-20 transfer |
+| `maxSendable(balance: bigint, fee: bigint): bigint` | Subtract a fee without going below zero |
+| `estimateSpend(client: SpendClient, params: SpendParams): Promise<SpendEstimate>` | Prepare and price a transfer user operation |
+| `estimateExecute(client: SpendClient, params: ExecuteParams): Promise<ExecuteEstimate>` | Prepare and price arbitrary zero-value calls |
+| `executeFromStealth(client: SpendClient, params: ExecuteParams, options: SpendOptions = {}): Promise<ExecuteResult>` | Send one user operation from one stealth address |
+| `spendFromStealth(client: SpendClient, params: SpendParams, options: SpendOptions = {}): Promise<SpendResult>` | Transfer a fixed amount or `"max"` |
+| `spendMany(client: SpendClient, spends: readonly SpendParams[], options: SpendManyOptions = {}): Promise<SpendResult[]>` | Send sequentially, one user operation per address |
+
+`SpendParams` is `{ stealthKey, to, amount, token?, maxFeeUsdc? }`. `ExecuteParams` is `{ stealthKey, calls, maxFeeUsdc?, feeTokenSpend?, allowValue? }`. The default fee cap is `1_000_000n`, one USDC in base units.
+
+```ts
+const spend = createSpendClient({
+  chainId: 84532,
+  bundlerUrl: "https://public.pimlico.io/v2/84532/rpc",
+  publicClient,
+  paymasterUrl: `${apiUrl}/paymaster`,
+  estimateFeesPerGas: pimlicoFeesPerGas,
+});
+
+const stealthKey = deriveStealthKey(match, {
+  spendingPrivateKey: keys.spendingKey,
+  viewingPrivateKey: keys.viewingKey,
+});
+await spendFromStealth(spend, { stealthKey, to, amount: "max" });
+```
+
+The spend module also exports the `PaymasterAdapter` types, Circle, Pimlico, and sponsored adapters. `pimlicoErc20Paymaster` is experimental and not live-verified.
+
+## Swap: `swap.ts`
+
+| Export | Purpose |
+| --- | --- |
+| `universalRouterFor(chainId: number): Address` | Read a supported Universal Router address |
+| `minOutFor(amountOut: bigint, slippageBps: number): bigint` | Apply a basis-point output floor |
+| `buildPermit2ApprovalCalls(args: { token: Address; router: Address; amount: bigint; expiration: bigint }): StealthCall[]` | Approve Permit2 and the router |
+| `buildBalanceGuardCall(args: { router: Address; owner: Address; token: Address; minBalance: bigint; deadline: bigint }): StealthCall` | Encode a post-swap balance check |
+| `encodeV3ExactInSwap(args: { tokenIn: Address; tokenOut: Address; weth: Address; feeTier: number; amountIn: bigint; minOut: bigint; recipient: Address; deadline: bigint }): Hex` | Encode an exact-input V3 Universal Router call |
+| `assertSwapStaysInPlace(args: { chainId: number; stealthAddress: Address; tx: { to: Address; data: Hex; value?: bigint }; routers?: readonly Address[] }): ValidatedSwapCall` | Reject calldata that pays another recipient |
+| `randomPlaceholderSwapper(): Address` | Generate a throwaway quote identity |
+| `assertNoStealthAddress(stealthAddress: Address, ...parts: string[]): void` | Prevent quote requests from carrying the stealth address |
+| `defaultSwapSource(params: Pick<SwapQuoteParams, "chainId" \| "apiKey" \| "apiUrl">): SwapSource` | Select Trading API or on-chain quoting |
+| `encodeQuotedRouteExactIn(args: { route: unknown; tokenIn: Address; tokenOut: Address; weth: Address; amountIn: bigint; minOut: bigint; slippageBps: number; recipient: Address; deadline: bigint }): Hex` | Rebuild supported V2 or V3 quote routes locally |
+| `quoteSwapInPlace(params: SwapQuoteParams): Promise<SwapQuote>` | Quote calls that pay back to the same address |
+| `swapInPlace(client: SpendClient, params: SwapInPlaceParams, options: SpendOptions = {}): Promise<SwapInPlaceResult>` | Quote and execute one in-place user operation |
+
+Only the Trading API `quote` endpoint is used. The SDK never sends a stealth address to the quote service and never asks it to build the final swap calldata. The web employee app has no swap screen; this API is available to SDK and MCP integrators.
+
+## Exit: `exit.ts`
+
+The exit is a serializable, resumable state machine. Its main public surface is:
+
+| Export | Purpose |
+| --- | --- |
+| `getExitConfig(source: number, dest: number): ExitConfig` | Select a configured route |
+| `exitAvailability(source: number, dest?: number): ExitAvailability` | Require Circle USDC on the source chain |
+| `derivePoolSecrets(keys: { spendingKey: Hex }, poolIndex: number, child = 0): PoolSecrets` | Recover deterministic Privacy Pools secrets |
+| `loadPrivacyPoolsSdk(): Promise<PPModule>` | Load the Privacy Pools SDK lazily |
+| `privacyPoolsProver(baseUrl: string, fromFs = false): ExitProver` | Load proving artifacts from HTTP or files |
+| `formatGroth16(p: Groth16)` | Format a proof in contract tuple order |
+| `cctpMaxFee(amount: bigint, row: CctpFeeRow, tier: "low" \| "med" \| "high"): bigint` | Calculate the CCTP forwarding fee cap |
+| `planRoundWithdrawals(value: bigint, opts: { unit: bigint; parts?: number; leaveChange?: boolean; min?: bigint }): bigint[]` | Split withdrawals into rounded parts |
+| `suggestedDelayMs(config: Pick<ExitConfig, "withdrawDelayMs">, random: () => number = Math.random): number` | Choose a delay inside the configured window |
+| `paymasterPrefundUsdc(gasPriceWei: bigint, gasUnits = EXIT_DEPOSIT_PREFUND_GAS, usdcPerEth = EXIT_PAYMASTER_USDC_PER_ETH): bigint` | Estimate destination paymaster prefunding |
+| `defaultDestFeeCap(config: Pick<ExitConfig, "estimates">, gasPriceWei?: bigint): bigint` | Select the destination fee ceiling |
+| `relayFeeFor(config: Pick<ExitConfig, "estimates">, amount: bigint, live: ExitFeeInputs = {}): bigint` | Calculate the relay fee |
+| `relayFeeBpsOf(amount: bigint, fee: bigint): bigint` | Express a fee in basis points |
+| `relayFeeCap(fee: bigint): bigint` | Add the retry headroom stored in a plan |
+| `isRelayable(config: ExitConfig, amount: bigint, live: ExitFeeInputs = {}): boolean` | Check the pool's relay-fee limit |
+| `minRelayableWithdrawal(config: ExitConfig, live: ExitFeeInputs = {}, unit = 1n): bigint` | Find the smallest relayable rounded withdrawal |
+| `exitLegMinimum(config: ExitConfig, live: ExitFeeInputs = {}, opts: { roundTo?: bigint; via?: ExitWithdrawVia } = {}): ExitLegMinimum` | Estimate the smallest viable leg |
+| `exitLegCost(config: ExitConfig, amount: bigint, opts: { live?: ExitFeeInputs; withdrawParts?: number; leaveChange?: boolean; withdrawUnit?: bigint; via?: ExitWithdrawVia } = {}): ExitLegCost` | Estimate fees and delivered value |
+| `planExit(p: PlanExitParams): ExitPlan` | Create one independent leg per stealth address |
+| `fetchExitFeeQuote(config: ExitConfig, opts: { fetch?: ExitFetch; quoteAmount?: bigint; destGasPriceWei?: bigint; now?: () => number } = {}): Promise<ExitFeeQuote>` | Fetch current CCTP and relay pricing |
+| `buildBurnCalls(config: ExitConfig, stealth: Address, amount: bigint, maxFee: bigint): StealthCall[]` | Encode approve and CCTP burn calls |
+| `buildDepositCalls(config: ExitConfig, amount: bigint, precommitment: bigint): StealthCall[]` | Encode approve and Privacy Pools deposit calls |
+| `checkAspStatus(ctx: Pick<ExitContext, "config" \| "fetch">, label: bigint): Promise<AspStatus>` | Read screening status |
+| `withdrawToDestination(ctx: ExitContext, leg: ExitLeg, opts: { amount?: bigint } = {}): Promise<WithdrawResult>` | Submit a relayed withdrawal |
+| `withdrawDirect(ctx: ExitContext, leg: ExitLeg): Promise<WithdrawResult>` | Send a direct withdrawal from the destination |
+| `checkRelayQuote(config: Pick<ExitConfig, "pool">, amount: bigint, relayFeeBps: bigint, caps: { maxBps?: bigint; maxUsdc?: bigint } = {}): string \| null` | Reject a relay quote above user or pool limits |
+| `advanceExitLeg(ctx: ExitContext, leg: ExitLeg): Promise<ExitLeg>` | Advance exactly one idempotent state transition |
+| `isExitLegFinal(leg: ExitLeg): boolean` | Check for done, refunded, or failed state |
+| `bpsToPercent(bps: bigint): string` | Format basis points for display |
+
+Only `84532:11155111`, Base Sepolia to Ethereum Sepolia, is configured. The default Base Sepolia pay token is MockUSDC, so `exitAvailability` disables the route unless the source uses Circle USDC.
+
+## Backups, session lookup and dApp sessions: `backup.ts`, `rotation.ts`, `dapp.ts`
+
+| Export | Purpose |
+| --- | --- |
+| `backupMessage(args: { address: Address; version: number; ciphertext: string }): string` | Build the EIP-191 message an app signs for `PUT /backups/:address` |
+| `httpBackupClient(apiUrl: string, fetchFn?: typeof fetch): BackupClient` | Read and write encrypted vault backups through the API |
+| `sessionLookupTypedData(a: SessionLookup)` | Build the EIP-712 `SessionLookup` typed data for `POST /names/:label/session/lookup` |
+| `signSessionLookup(a: SessionLookup & { registrantKey: Hex; registrant?: Address }): Promise<Hex>` | Sign a session lookup with the registrant key |
+| `checkDappPrivacy(p: DappPrivacyInput): DappPrivacyCheck` | Run the privacy guard over a WalletConnect request before the employee app approves it |
+
+The SDK only builds messages and encrypts nothing itself: each app encrypts its vault client-side (the company app under its wallet-signature or passphrase lock, the employee app under a key derived from its passkey) and stores ciphertext through these helpers.
+
+## Constants and defaults
+
+| Constant | Value |
+| --- | --- |
+| `SCHEME_ID` | `1` |
+| `ANNOUNCER_ADDRESS` | `0x55649E01B5Df198D18D95b5cc5051630cfD45564` |
+| `REGISTRY_ADDRESS` | `0x6538E6bf4B0eBd30A8Ea093027Ac2422ce5d6538` |
+| `ENTRYPOINT_V08` | `0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108` |
+| `SIMPLE_7702_ACCOUNT` | `0xe6Cae83BdE06E4c305530e199D7217f42808555B` |
+| `CREATE2_DEPLOYER` | `0x4e59b44847b379578588920cA78FbF26c0B4956C` |
+| `STEALTH_DISPERSE_BASE_SEPOLIA` | `0x6B7a1cC570Af2DDd427DA694351438F0FE8039CA` |
+| `MOCK_USDC_BASE_SEPOLIA` | `0x028D969c20b740582428f5043954c380686214Bb` |
+| `MAX_LINES_PER_TX` | `350` |
+| `MAX_LINE_AMOUNT` | `(1n << 80n) - 1n` |
+| `DEFAULT_CHAIN_ID` | `84532` |
+| `PARENT_NAME` | `soapay.eth` |
+
+`CIRCLE_USDC` maps Base `8453`, Base Sepolia `84532`, and Ethereum Sepolia `11155111` to their Circle token addresses. `CHAINS` registers Base with Circle USDC and Base Sepolia with MockUSDC. `SPEND_ONLY_CHAINS` adds Ethereum Sepolia for exit spending.
+
+| Configuration export | Purpose |
+| --- | --- |
+| `setPayTokenOverride(chainId: number, token: string \| undefined \| null): void` | Set or clear a testnet pay-token override |
+| `payTokenFor(chainId: number): Address` | Return the current pay token |
+| `isCircleUsdcPayToken(chainId: number): boolean` | Compare the pay token with Circle USDC |
+| `getChainConfig(chainId: number): SoapayChainConfig` | Return a payroll-chain configuration |
+| `getSpendChainConfig(chainId: number): SpendChainConfig` | Return a payroll or spend-only chain configuration |
+| `defaultPaymasterMode(chainId: number): PaymasterMode` | Select sponsored or Circle-USDC gas |
+| `circleUsdcFor(chainId: number): Address` | Return Circle USDC for a supported chain |
+
+`CIRCLE_USDC` contains Base `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`, Base Sepolia `0x036CbD53842c5426634e7929541eC2318f3dCF7e`, and Ethereum Sepolia `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238`.

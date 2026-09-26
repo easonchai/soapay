@@ -1,0 +1,77 @@
+---
+title: Examples
+description: Run the dividend, grant, and pluggable agent demonstrations from the repository.
+sidebar:
+  order: 7
+---
+
+The examples use real `@soapay/sdk` entry points and default to dry runs. They generate demo recipients locally, plan full distributions, print the plan, and send only when explicitly enabled.
+
+## Dividend run
+
+`examples/dividend-run.ts` creates 12 demo holders, allocates one USDC total pro rata with the largest-remainder method, and divides every allocation into common denominations. Integer allocations sum exactly to the requested total.
+
+```bash
+pnpm --filter @soapay/examples dividend
+
+EXECUTE=1 PAYER_PRIVATE_KEY=0x... \
+  pnpm --filter @soapay/examples dividend
+```
+
+The source selects Base Sepolia. On a testnet it plans 2.5 USDC in 0.1 USDC chunks. On a non-testnet it uses 25,000 USDC in 100 USDC chunks. `examples/shared.ts` sends only when `EXECUTE=1`, and accepts `RPC_URL` as an optional transport override.
+
+This example proves that `dividend`, `denominated`, and `planDistribution` can turn a share register into globally sorted stealth lines without leaking holder order. It also exercises `encodeDistribution` and `executeDistribution` when sending is enabled.
+
+## Grant round and vesting
+
+`examples/grant-round.ts` creates ten fixed awards, checks them against a budget, and separately calculates a vesting tranche.
+
+```bash
+pnpm --filter @soapay/examples grant
+
+EXECUTE=1 PAYER_PRIVATE_KEY=0x... \
+  pnpm --filter @soapay/examples grant
+```
+
+The grant budget is 50,000 USDC on a non-testnet and 5 test USDC on Base Sepolia. The vesting schedule is 12,000 USDC over 360 days, with a 90-day cliff and 30-day periods. Testnet amounts are divided by 10,000. The program prints both plans, but sends only the grant round.
+
+This example proves that a distribution can enforce a grant budget and calculate deterministic vesting releases before using the same private-payment rail.
+
+## Pluggable CLI and agent demo
+
+The live demo connects the API, CLI, SDK, ENSv2 names, and MCP server. Its public input is `examples/demo/holders.csv`:
+
+```csv
+recipient,holdings,id
+dividend-ana.soapay.eth,4000,ana
+dividend-ben.soapay.eth,2500,ben
+dividend-cleo.soapay.eth,1500,cleo
+st:eth:0x02...,500,dana
+invoice-agent.soapay.eth,1500,invoice-agent
+```
+
+Run the one-time setup against a local API, then rehearse or execute the script:
+
+```bash
+SOAPAY_API=http://localhost:8787 \
+  pnpm --filter @soapay/examples demo:setup
+
+DEMO_DRY=1 scripts/demo-pluggable.sh
+scripts/demo-pluggable.sh
+DEMO_REPLAY=1 scripts/demo-pluggable.sh
+```
+
+The setup claims the three human names and writes `holders.csv`. Recovery phrases stay in the Git-ignored `scripts/.demo-recipients.local.json` with mode 0600 and are never printed. The agent name is claimed by the MCP server during the live script.
+
+The script runs four steps:
+
+1. The agent calls `create_agent_identity` to claim `invoice-agent.soapay.eth` with ENSIP-26 records.
+2. One `soapay distribute` dividend command pays three names, one raw meta-address, and the agent. Defaults are 0.5 USDC total and 0.05 USDC chunks.
+3. `dividend-ana` runs `soapay scan` with her phrase and sees only her lines.
+4. The agent scans through MCP, finds only its lines, then plans and confirms a gas-sponsored spend.
+
+`DEMO_DRY=1` stops after the distribution plan. `DEMO_REPLAY=1` replays the recorded terminal output without network access. A live run needs a funded `PAYER_PRIVATE_KEY`, or a configured payer key file accepted by the script. `SOAPAY_DEMO_API`, `RPC_URL`, `ENS_RPC_URL`, `DIVIDEND_TOTAL`, and `DIVIDEND_CHUNK` override the defaults.
+
+This demo proves that recipients are pluggable. A person, a raw ERC-5564 meta-address, and an AI agent enter one CSV and receive indistinguishable lines through the same transaction.
+
+For application code rather than runnable programs, continue to [Integration recipes](/docs/developers/integrate/).

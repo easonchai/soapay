@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// One-origin demo server: company app + CK's landing at /, employee app at /app/, API proxied at /api.
-// The old layout (/sender/, and invite links at /#/join) redirects to the new one.
+// One-origin demo server: company app + CK's landing at /, employee app at /app/, the docs at /docs/,
+// API proxied at /api. The old layout (/sender/, and invite links at /#/join) redirects to the new one.
 // Put it behind `tailscale serve` (HTTPS, so WebCrypto works) to use the apps from another device.
 //
 //   node scripts/serve-demo.mjs            # PORT=4300, API_TARGET=http://localhost:8787
@@ -15,6 +15,8 @@ const HOST = process.env.HOST ?? "127.0.0.1";
 const API = new URL(process.env.API_TARGET ?? "http://localhost:8787");
 const ROOT = new URL("..", import.meta.url).pathname;
 const MOUNTS = [
+  // Docs first: the most specific prefix must win over "/". A static site, so it has a real 404 page.
+  { prefix: "/docs/", dir: join(ROOT, "apps/docs/dist"), notFound: "404.html" },
   { prefix: "/app/", dir: join(ROOT, "apps/recipient/dist") },
   { prefix: "/", dir: join(ROOT, "apps/sender/dist") },
 ];
@@ -31,27 +33,33 @@ const TYPES = {
   ".woff": "font/woff",
 };
 
-function sendFile(res, path) {
+function sendFile(res, path, status = 200) {
   const type = TYPES[extname(path)] ?? "application/octet-stream";
-  // Hashed assets can be cached; index.html must not be.
-  const cache = path.endsWith("index.html") ? "no-store" : "public, max-age=31536000, immutable";
-  res.writeHead(200, { "content-type": type, "cache-control": cache });
+  // Hashed assets can be cached; HTML must not be.
+  const cache = path.endsWith(".html") ? "no-store" : "public, max-age=31536000, immutable";
+  res.writeHead(status, { "content-type": type, "cache-control": cache });
   createReadStream(path).pipe(res);
 }
 
 function serveStatic(req, res) {
   const url = new URL(req.url, "http://x");
   if (url.pathname === "/app") return res.writeHead(301, { location: "/app/" }).end();
+  if (url.pathname === "/docs") return res.writeHead(301, { location: "/docs/" }).end();
   if (url.pathname === "/sender" || url.pathname.startsWith("/sender/")) return res.writeHead(301, { location: "/" }).end();
   const mount = MOUNTS.find((m) => url.pathname.startsWith(m.prefix));
   const rel = normalize(decodeURIComponent(url.pathname.slice(mount.prefix.length))).replace(/^(\.\.[/\\])+/, "");
   const candidate = join(mount.dir, rel);
   if (!candidate.startsWith(mount.dir)) return res.writeHead(400).end();
   try {
-    if (statSync(candidate).isFile()) return sendFile(res, candidate);
+    const st = statSync(candidate);
+    if (st.isFile()) return sendFile(res, candidate);
+    // Static-site directory (the docs build one folder per page): serve its index.
+    if (st.isDirectory()) return sendFile(res, join(candidate, "index.html"));
   } catch {
-    /* fall through to the SPA entry (hash routing) */
+    /* fall through */
   }
+  // A static site has a real 404 page; the SPAs fall back to their entry (hash routing).
+  if (mount.notFound) return sendFile(res, join(mount.dir, mount.notFound), 404);
   sendFile(res, join(mount.dir, "index.html"));
 }
 
@@ -71,5 +79,5 @@ function proxyApi(req, res) {
 createServer((req, res) => (req.url.startsWith("/api/") || req.url === "/api" ? proxyApi(req, res) : serveStatic(req, res))).listen(
   PORT,
   HOST,
-  () => console.log(`demo server on http://${HOST}:${PORT} (company /, employee /app/, api /api → ${API.origin})`),
+  () => console.log(`demo server on http://${HOST}:${PORT} (company /, employee /app/, docs /docs/, api /api → ${API.origin})`),
 );

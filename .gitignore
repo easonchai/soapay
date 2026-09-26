@@ -21,3 +21,6 @@ scripts/*.local.txt
 scripts/.demo-state/
 # soapay distribute meta-address pins (next to each CSV)
 .soapay/
+
+# Astro build cache (apps/docs)
+.astro/

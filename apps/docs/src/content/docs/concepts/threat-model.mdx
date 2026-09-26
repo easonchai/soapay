@@ -1,0 +1,72 @@
+---
+title: Threat model
+description: The coworker is the only adversary, the employer is trusted, and ENS is only a reference.
+sidebar:
+  order: 2
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+Soapay's privacy claims are precise because the adversary is precise. This is the team's agreed model. Where the product requirements document differs, this model wins.
+
+## The adversary
+
+The only adversary is a **coworker**: a co-recipient in the same payroll batch who knows their own line, sees the whole batch on chain, and likely knows colleagues' main wallets.
+
+That is a strong adversary for the thing that matters. The coworker does not need chain analysis. They are paid in the same transaction, so they can open it on an explorer, find their own line, and try to put names to the others. Everything Soapay does in the pay run is aimed at making that fail.
+
+## Who is trusted
+
+| Party | Trusted? | What they must not learn |
+| --- | --- | --- |
+| Coworker in the same batch | No, the only adversary | Which line is mine, my other stealth addresses, my balance |
+| Employer, payroll admins, Safe signers | Yes | Nothing. They may know name, stealth address and amount |
+| ENS | Reference only | The sender pins each ERC-6538 meta-address at enrollment and alerts the employer if it changes |
+
+**The employer is trusted** and may know everything: name, stealth address, amount. Payroll admins and Safe signers count as "the company". The employer can also follow what happens on those addresses after payday. What the employer never gets is the employee's keys or the employee's other income.
+
+**ENS is only a reference identifier.** It still controls where salaries go, so the company app resolves a name once at enrollment and pins the ERC-6538 meta-address. If the record ever changes, the employer is alerted before any money moves. Caching the meta-address is safe. Caching a stealth address is not: a stealth address is used once, and paying it again would link two payments.
+
+## Out of scope for v1
+
+- **Chain analysts.** Someone correlating the whole chain, rather than one batch, is not the adversary.
+- **RPC and bundler linkage.** The RPC provider sees balance reads grouped by IP. The bundler sees each user operation and the submitting IP. Neither holds keys, and neither is addressed in v1.
+- **Gateway derivation mode.** Paying a name from any ordinary wallet, through a resolver that derives on your behalf, is deferred to the roadmap.
+
+<Aside type="caution" title="Amounts stay visible">
+  Stealth addresses hide who received a line, not the number on it. A coworker who knows a colleague's salary can find the line. Denominated payouts make lines identical so the number identifies nobody, and in teams of fewer than 10 recipients the app warns that amounts alone can identify people. See [Denominated payouts](/docs/concepts/denominated-payouts/).
+</Aside>
+
+## Why the compliant exit is in scope
+
+A coworker knows your main wallet. Without a screened exit, an employee cannot cash out to that wallet without revealing which lines were theirs: the moment a stealth address sends to a known wallet, the two are linked on chain. So the exit through Privacy Pools is part of v1, not an extra. It breaks the link between a stealth address and the wallet you cash out to. See [Compliant exit](/docs/concepts/compliant-exit/).
+
+## What is guaranteed
+
+These hold by construction, and each one is a test in the repository.
+
+| Guaranteed | How |
+| --- | --- |
+| Lines are cryptographically unlinkable | A fresh ephemeral key per line. Without the viewing key a line cannot be tied to a meta-address or to another line |
+| The batch structure reveals no grouping | Lines are strictly ascending by stealth address, enforced on chain. Multi-transaction runs are sorted globally and cut into roughly equal transactions, never per employee |
+| No gas-funding link | Spends run as one EIP-7702 user operation with gas paid in USDC by the Circle Paymaster on mainnet, or sponsored on the testnet. No ETH ever reaches a stealth address |
+| The consolidation guard | Before any spend, the guard models the clusters a coworker can see and blocks merges into identifiable wallets (main, coworker-known, exchange) |
+| The compliant exit | Privacy Pools breaks the link between a stealth address and the cash-out wallet |
+| The platform never sees stealth addresses in swaps | Quotes use a placeholder address and the swap is built on the device |
+
+## What is not guaranteed
+
+| Not guaranteed | Status |
+| --- | --- |
+| Amounts | Visible on chain. Mitigated by default denominations. A shielded rail is post-hackathon |
+| Timing | Spends from different addresses close together in time can be linked. Mitigated by the randomized spend queue, one address per random window of 2 to 12 hours |
+| Consolidation | If you override the guard and merge addresses, they are linked |
+| The shared 7702 delegate | Every spending stealth address points at the same `Simple7702Account`, which marks it as "probably Soapay". That groups you with every other wallet using that implementation rather than with your coworkers, but it is not zero |
+| Employer visibility | Trusted by design |
+| Infrastructure linkage | RPC, bundler and IP-level correlation are out of scope |
+
+## What the Soapay API sees
+
+The API relays registrations, issues names, verifies World ID proofs and indexes announcements. It never holds viewing keys, and it serves all announcements unfiltered, so it cannot tell who scans for what. Spending keys never leave the client. Nothing of Soapay holds money.
+
+Next: [What the chain sees](/docs/concepts/what-the-chain-sees/).

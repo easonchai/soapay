@@ -42,6 +42,8 @@ export type AppConfig = {
   recipientUrl: string;
   /** Recipient app link in the top bar ("Receive"): VITE_OTHER_APP_URL, else recipientUrl. */
   otherAppUrl: string;
+  /** Docs site URL for the landing page links (VITE_DOCS_URL). Default: same origin, /docs/. */
+  docsUrl: string;
 };
 
 const SETTINGS_KEY = "soapay.sender.settings.v1";
@@ -153,9 +155,10 @@ export function pinnedAttester(env: ImportMetaEnv = import.meta.env): Address | 
   return a && isAddress(a) ? getAddress(a) : undefined;
 }
 
-export function recipientAppUrls(env: ImportMetaEnv = import.meta.env): { recipientUrl: string; otherAppUrl: string } {
+export function recipientAppUrls(env: ImportMetaEnv = import.meta.env): { recipientUrl: string; otherAppUrl: string; docsUrl: string } {
   const recipientUrl = envString(env.VITE_RECIPIENT_URL) ?? "http://localhost:5173";
-  return { recipientUrl, otherAppUrl: envString(env.VITE_OTHER_APP_URL) ?? recipientUrl };
+  // The docs are a static site served next to the apps (scripts/serve-demo.mjs), so the default is same-origin.
+  return { recipientUrl, otherAppUrl: envString(env.VITE_OTHER_APP_URL) ?? recipientUrl, docsUrl: envString(env.VITE_DOCS_URL) ?? "/docs/" };
 }
 
 // Company name in the top bar (CK's setting). Not a secret: plain localStorage.

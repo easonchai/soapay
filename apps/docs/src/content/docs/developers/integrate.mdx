@@ -1,0 +1,260 @@
+---
+title: Integration recipes
+description: Supported recipes for paying names, scanning and spending, issuing identities, and exporting Safe transactions.
+sidebar:
+  order: 8
+---
+
+These recipes use public exports that exist today. Keep keys client-side, persist name pins, and preserve the invariants described in [Developer overview](/docs/developers/overview/).
+
+## Pay a list of names
+
+Create pay-chain and ENS-chain clients, resolve every identifier, and pin the canonical meta-address. `compositeResolver` accepts raw meta-addresses, registrant addresses, and ENS names.
+
+```ts
+import { createPublicClient, http } from "viem";
+import { baseSepolia, sepolia } from "viem/chains";
+import {
+  applyPinDecision,
+  checkMetaPin,
+  compositeResolver,
+  emptyPinBook,
+  encodeDistribution,
+  ensNameResolver,
+  erc6538Resolver,
+  getChain,
+  metaAddressResolver,
+  payroll,
+  pinKey,
+  planDistribution,
+  resolveAsset,
+  type Recipient,
+} from "@soapay/sdk";
+
+const baseClient = createPublicClient({ chain: baseSepolia, transport: http() });
+const ensClient = createPublicClient({ chain: sepolia, transport: http() });
+const resolver = compositeResolver([
+  metaAddressResolver(),
+  erc6538Resolver({ client: baseClient }),
+  ensNameResolver({ ensClient, baseClient }),
+]);
+
+let pinBook = emptyPinBook(); // Load and save this in the payer's durable store.
+const input = [
+  { name: "alice.soapay.eth", amount: 1_000_000n },
+  { name: "bob.soapay.eth", amount: 2_000_000n },
+];
+
+const recipients: Recipient[] = [];
+for (const row of input) {
+  const resolved = await resolver.resolve(row.name);
+  const decision = await checkMetaPin({
+    identifier: row.name,
+    pin: pinBook.pins[pinKey(row.name)],
+    resolvedMeta: resolved.metaAddressURI,
+  });
+  if (decision.state === "blocked") throw new Error(decision.attestation.reason);
+  pinBook = applyPinDecision(pinBook, {
+    identifier: row.name,
+    resolved,
+    decision,
+    now: Date.now(),
+  });
+  recipients.push({ metaAddressURI: resolved.metaAddressURI, amount: row.amount, id: row.name });
+}
+
+const plan = planDistribution({
+  ...payroll(recipients),
+  asset: resolveAsset(84532, "USDC"),
+});
+const chain = getChain(84532);
+const encoded = encodeDistribution(plan, {
+  via: "disperse",
+  stealthDisperse: chain.stealthDisperse!,
+});
+```
+
+For a plain EOA, pass the `disperse` result to `executeDistribution`. It sends the exact-total approval, then waits for each pay receipt. For a smart wallet, call `encodeDistribution(plan, { via: "batch" })` and submit each `batches[i].calls` through the wallet's EIP-5792 `wallet_sendCalls` implementation. The SDK encodes batches but does not send them.
+
+Always derive the full run before signing. The SDK globally sorts lines, rejects repeated ephemeral keys, and chunks at 350 lines by default.
+
+## Scan and spend
+
+Use the API index or the RPC fallback, then verify real balances. Derive a stealth private key only when it is needed for a spend.
+
+```ts
+import {
+  ClusterGraph,
+  applySpend,
+  assertDistributable,
+  buildLedger,
+  createSpendClient,
+  deriveStealthKey,
+  fetchAnnouncements,
+  keysFromMnemonic,
+  pimlicoFeesPerGas,
+  planSpend,
+  resolveAsset,
+  scanAnnouncementsWithStats,
+  spendFromStealth,
+  verifyBalances,
+} from "@soapay/sdk";
+
+const keys = keysFromMnemonic(phrase);
+const { announcements } = await fetchAnnouncements({ apiUrl, fromBlock });
+const { matches } = scanAnnouncementsWithStats(announcements, {
+  spendingPublicKey: keys.spendingPublicKey,
+  viewingPrivateKey: keys.viewingKey,
+});
+
+const usdc = resolveAsset(84532, "USDC");
+assertDistributable(usdc);
+const balances = await verifyBalances({
+  client: publicClient,
+  matches,
+  tokens: [usdc.address],
+});
+const ledger = buildLedger(matches, balances, [knownPayer], {
+  stealthDisperse: [stealthDisperse],
+});
+const firstMatch = matches[0];
+const firstEntry = ledger[0];
+if (!firstMatch || !firstEntry) throw new Error("No spendable payment");
+
+const graph = new ClusterGraph();
+for (const match of matches) {
+  graph.addStealth(match.announcement.stealthAddress, {
+    runId: match.announcement.txHash,
+  });
+}
+const guard = planSpend(graph, { from: [firstEntry.stealthAddress], to });
+if (guard.decision === "block") throw new Error(guard.reason);
+
+const client = createSpendClient({
+  chainId: 84532,
+  bundlerUrl: "https://public.pimlico.io/v2/84532/rpc",
+  publicClient,
+  paymasterUrl: `${apiUrl}/paymaster`,
+  estimateFeesPerGas: pimlicoFeesPerGas,
+});
+const stealthKey = deriveStealthKey(firstMatch, {
+  spendingPrivateKey: keys.spendingKey,
+  viewingPrivateKey: keys.viewingKey,
+});
+await spendFromStealth(client, { stealthKey, to, amount: "max" });
+applySpend(graph, guard);
+```
+
+Persist the guard graph after a successful spend. Use `spendMany` for several sources; it sends one user operation per stealth address and never combines them. On Base mainnet, omit `paymasterUrl` to use the default Circle USDC paymaster. Never fund a stealth address with ETH.
+
+## Issue a subname or agent identity
+
+The normal recipient flow uses sponsored registration and API issuance:
+
+```ts
+import {
+  getRegistryNonce,
+  keysFromMnemonic,
+  signNameClaim,
+  signRegisterKeysOnBehalf,
+} from "@soapay/sdk";
+
+const keys = keysFromMnemonic(phrase);
+const nonce = await getRegistryNonce(baseClient, keys.registrantAddress);
+const registrationSig = await signRegisterKeysOnBehalf({
+  registrantKey: keys.registrantKey,
+  metaAddressURI: keys.metaAddressURI,
+  chainId: 84532,
+  nonce,
+});
+await fetch(`${apiUrl}/register`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({
+    registrant: keys.registrantAddress,
+    metaAddress: keys.metaAddressURI,
+    signature: registrationSig,
+  }),
+});
+
+const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600);
+const nameSig = await signNameClaim({
+  label: "alice",
+  registrant: keys.registrantAddress,
+  metaAddress: keys.metaAddressURI,
+  deadline,
+  chainId: 84532,
+  registrantKey: keys.registrantKey,
+});
+await fetch(`${apiUrl}/names`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({
+    label: "alice",
+    registrant: keys.registrantAddress,
+    metaAddress: keys.metaAddressURI,
+    deadline: deadline.toString(),
+    signature: nameSig,
+  }),
+});
+```
+
+An operator with `ROLE_REGISTRAR` can issue directly on Ethereum Sepolia:
+
+```ts
+import { createEnsV2NameIssuer } from "@soapay/sdk/ensv2";
+
+const issuer = createEnsV2NameIssuer({
+  walletClient,
+  publicClient: sepoliaClient,
+  parent: "soapay.eth",
+  registry: ensSubnameRegistry,
+  resolverAdmin,
+});
+const result = await issuer.issue({
+  label: "alice",
+  registrant: keys.registrantAddress,
+  metaAddress: keys.metaAddressURI,
+  agent: {
+    context: JSON.stringify({ name: "alice.soapay.eth" }),
+    endpoints: { web: "https://example.com" },
+  },
+});
+```
+
+Issuance takes two transactions: deploy and configure the name's Permissioned Resolver, then register the subname. It recovers idempotently when an interrupted earlier attempt already issued the same name and meta-address.
+
+## Pay from a Safe
+
+The Safe path is an export. Soapay does not propose, sign, or execute a Safe transaction.
+
+```ts
+import {
+  encodeBatchCalls,
+  encodeSafeMultiSendCallOnly,
+  toSafeTxBuilderJson,
+} from "@soapay/sdk";
+
+const batches = encodeBatchCalls({ token: usdc.address, lines: plan.lines });
+for (const [index, batch] of batches.entries()) {
+  const builderJson = toSafeTxBuilderJson(batch.calls, {
+    chainId: 84532,
+    safeAddress,
+    name: `Soapay pay run ${index + 1} of ${batches.length}`,
+    createdAt: Date.now(),
+  });
+  const multiSend = encodeSafeMultiSendCallOnly(batch.calls);
+  console.log(JSON.stringify(builderJson), multiSend);
+}
+```
+
+Import the builder JSON into Safe Wallet Transaction Builder, or pass `multiSend` to a Safe integration. The Safe delegates only to canonical `MultiSendCallOnly` v1.4.1 at `0x9641d764fc13c8B624c04430C7356C1C7C8102e2`. Every inner operation is `CALL` with operation 0. Each chunk is one Safe transaction, and every chunk must execute.
+
+## Not supported today
+
+- **Not supported today:** native-token, ERC-721, or ERC-1155 distributions. Use an ERC-20 such as USDC or WETH.
+- **Not supported today:** SDK proposal, signing, or execution of Safe transactions. The SDK exports payloads only.
+- **Not supported today:** Safe payments through `executeDistribution` or the CLI. Those paths use StealthDisperse from an EOA.
+- **Not supported today:** issuing below an ENS parent you do not control or where the issuer lacks `ROLE_REGISTRAR`.
+- **Not supported today:** `updateMeta` through the ENSv2 issuer. The registrant writes its `stealth` text record; the API verifies and attests rotation separately.
+- **Not supported today:** gateway derivation mode. Name resolution and address derivation remain client-side.

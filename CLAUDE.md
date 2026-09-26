@@ -12,6 +12,7 @@ Stealth-address payroll on Base. Product spec: `PRD.md`. PRD review: `docs/prd-a
 | `apps/api` | Hono on Node: registration relayer (`POST /register`, and `POST /relay` for CK's request shape), ENSv2 subname issuer, World ID verification, announcement indexer (docs/mvp-spec.md §4). Gateway *derivation* mode is out of scope (proposed cut) |
 | `apps/mcp` | `@soapay/mcp`: stdio MCP server (spec §8), so agents get `<label>.soapay.eth` identities with ENSIP-26 records and can pay, scan and spend. Bundled with esbuild |
 | `apps/cli` | `@soapay/cli`: headless `soapay distribute` (CSV → plan, dry run by default, `--execute` via StealthDisperse) and `soapay scan`. Bundled with esbuild |
+| `apps/docs` | `@soapay/docs`: the public docs site (Astro Starlight, Ledger theme), served at `/docs/` by the one-origin web service next to the apps. Content in `src/content/docs/<section>/*.mdx`; links carry the `/docs/` base; `scripts/check-links.mjs` runs as its test |
 | `examples` | `@soapay/examples`: `dividend-run.ts`, `grant-round.ts` (tsx, dry run by default); `demo/` drives the live "plug it into anything" beat (`scripts/demo-pluggable.sh`) |
 | `packages/ui` | `@soapay/ui`: Direction A Ledger tokens (light, navy #1E3A5F, IBM Plex, 2px), `TopBar`, `PageHead`, `Dots`, `NavyPanel`, `Toggle`, `FreshMark`, `Pill`, `Copy`, `ErrorLine`, `Shell`/`Steps`. Source-only, no build |
 | `contracts` | `@soapay/contracts`: Foundry, `StealthDisperse`, the testnet-only `MockUSDC` (+ deploy and pool scripts), plus `tools/derive.ts` for test vectors |
@@ -20,7 +21,7 @@ Stealth-address payroll on Base. Product spec: `PRD.md`. PRD review: `docs/prd-a
 
 - `git submodule update --init --recursive` once, for the Foundry libraries.
 - `pnpm install` · `pnpm build` · `pnpm test` · `pnpm typecheck` · `pnpm dev`, all run through turbo. `pnpm test` includes `forge test`.
-- Dev ports: recipient 5173, sender 5174, api 8787. Copy each app's `.env.example` to `.env.local` (Base Sepolia); the api needs `RELAYER_PRIVATE_KEY` for registration (`POST /register`, `POST /relay`) and the faucet, and `PIMLICO_API_KEY` for sponsored gas (`POST /paymaster`).
+- Dev ports: recipient 5173, sender 5174, docs 5175, api 8787. Copy each app's `.env.example` to `.env.local` (Base Sepolia); the api needs `RELAYER_PRIVATE_KEY` for registration (`POST /register`, `POST /relay`) and the faucet, and `PIMLICO_API_KEY` for sponsored gas (`POST /paymaster`).
 - **Testnet vs mainnet (D-52):** on Base Sepolia the pay token is Soapay's **mock USDC** `0x028D969c20b740582428f5043954c380686214Bb` (`MOCK_USDC_BASE_SEPOLIA`; override with `VITE_PAY_TOKEN` / `PAY_TOKEN`), stealth spends are **gas-sponsored** through the API's `/paymaster` proxy, wallets get a one-time **welcome drop** (`/faucet`), and the **exit is hidden** (CCTP needs Circle USDC). Base mainnet keeps Circle USDC and the Circle paymaster; never change mainnet paths for the demo. Fund a wallet with `scripts/fund-usdc.sh`.
 - Frontend M1 design and task record: `docs/frontend-m1-design.md`, `docs/frontend-m1-plan.md`.
 - One package: `pnpm --filter @soapay/sdk test`, `pnpm --filter @soapay/contracts test`.

@@ -1,0 +1,46 @@
+---
+// Override of Starlight's ThemeProvider (dist/components/ThemeProvider.astro). One change: a first
+// visit stores "light", so the docs open light like the company and employee apps (which do not
+// follow the OS colour scheme either) and the header picker shows Light. Starlight's ThemeSelect
+// script re-resolves "Auto" from the OS on load, so a stored choice is the only reliable default.
+// Dark and Auto stay available in the picker and are remembered per browser.
+import { Icon } from "@astrojs/starlight/components";
+---
+
+{/* This is intentionally inlined to avoid FOUC. */}
+<script is:inline>
+  window.StarlightThemeProvider = (() => {
+    let storedTheme = null;
+    try {
+      storedTheme = localStorage.getItem("starlight-theme");
+      if (!storedTheme) localStorage.setItem("starlight-theme", (storedTheme = "light"));
+    } catch {
+      /* storage blocked: fall through to light */
+    }
+    const theme = storedTheme || "light";
+    document.documentElement.dataset.theme = theme === "dark" ? "dark" : "light";
+    return {
+      updatePickers(theme = storedTheme || "auto") {
+        document.querySelectorAll("starlight-theme-select").forEach((picker) => {
+          const select = picker.querySelector("select");
+          if (select) select.value = theme;
+          /** @type {HTMLTemplateElement | null} */
+          const tmpl = document.querySelector(`#theme-icons`);
+          const newIcon = tmpl && tmpl.content.querySelector("." + theme);
+          if (newIcon) {
+            const oldIcon = picker.querySelector("svg.label-icon");
+            if (oldIcon) {
+              oldIcon.replaceChildren(...newIcon.cloneNode(true).childNodes);
+            }
+          }
+        });
+      },
+    };
+  })();
+</script>
+
+<template id="theme-icons">
+  <Icon name="sun" class="light" />
+  <Icon name="moon" class="dark" />
+  <Icon name="laptop" class="auto" />
+</template>

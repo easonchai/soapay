@@ -1,0 +1,85 @@
+---
+title: Developer overview
+description: Repository layout, local commands, configuration, and the rules every Soapay integration must preserve.
+sidebar:
+  order: 1
+---
+
+Soapay is a pnpm monorepo for stealth-address payments on Base. Node 24, pnpm 9.15.0, Turbo, and Foundry are the supported toolchain. Protocol behavior belongs in `@soapay/sdk`; applications compose that behavior into user and agent workflows.
+
+## Repository layout
+
+| Path | Purpose |
+| --- | --- |
+| `packages/sdk` | `@soapay/sdk`, the only home for derivation, registry, announce, scan, spend, distribution, exit, and integration logic |
+| `packages/ui` | Shared Ledger design tokens and React components |
+| `packages/worldid-react` | The IDKit session component used during key rotation |
+| `apps/recipient` | Employee Vite and React app: onboarding, keys, scanner, ledger, guarded spending, exit, and rotation |
+| `apps/sender` | Company Vite and React app: recipients, pay-run planning, signing, history, and Safe export |
+| `apps/api` | Hono API: registration relay, ENSv2 issuance, World ID verification, announcement index, faucet, and paymaster proxy |
+| `apps/cli` | Headless `soapay distribute` and `soapay scan` commands |
+| `apps/mcp` | Stdio MCP server for agent identities, payments, scans, and spends |
+| `apps/docs` | This Astro Starlight site, served below `/docs/` |
+| `contracts` | Foundry project with `StealthDisperse`, testnet-only `MockUSDC`, deployment scripts, and test-vector tools |
+| `examples` | Dividend, grant, agent, and recovery examples |
+
+Gateway derivation mode is deferred. There is no `apps/gateway` package in the repository today. The compatibility `POST /relay` route lives in `apps/api`.
+
+## Install and run
+
+Clone with the Foundry submodules, select Node 24, then install once:
+
+```bash
+git submodule update --init --recursive
+nvm use
+pnpm install
+```
+
+The root commands run through Turbo:
+
+```bash
+pnpm build
+pnpm test
+pnpm typecheck
+pnpm dev
+```
+
+`pnpm test` includes the SDK suites and `forge test`. The development servers use these ports:
+
+| Service | URL |
+| --- | --- |
+| Employee app | `http://localhost:5173` |
+| Company app | `http://localhost:5174` |
+| Docs | `http://localhost:5175/docs/` |
+| API | `http://localhost:8787` |
+
+The docs package intentionally has no `typecheck` script. Its build validates the Starlight content schema.
+
+## Environment files
+
+Copy the example beside each app you run and keep secrets out of Git:
+
+| File | Main settings |
+| --- | --- |
+| `apps/api/.env.example` | `RPC_URL`, relay and issuer keys, World ID, attester, paymaster, faucet, indexer, and SQLite settings |
+| `apps/mcp/.env.example` | API, RPCs, bundler, agent keys, limits, allowlist, and local state |
+| `apps/recipient/.env.example` | API, chain, bundler, trusted StealthDisperse callers, RPCs, and pay token |
+| `apps/sender/.env.example` | Chain, RPCs, pay token, API, attester, recipient app, wallet connector, and docs URL |
+| `contracts/.env.example` | Deployment, ENSv2, RPC, and explorer credentials |
+
+The CLI has no `.env.example`. It reads `PAYER_PRIVATE_KEY`, optional `PAY_TOKEN`, `SOAPAY_API_URL`, `SOAPAY_ATTESTER`, and the recovery-phrase variable named by `--mnemonic-env`. See the complete tables in [Environment](/docs/reference/environment/).
+
+## Integration rules
+
+These rules are part of the protocol boundary, not implementation suggestions:
+
+- Import protocol logic from `@soapay/sdk`. Do not create private derivation, scanning, or spend paths in an app or API route.
+- Spending, viewing, and registrant private keys stay on the client. Never log them, send them to the API, or put them in MCP output.
+- `StealthDisperse` is the only custom production contract. It pulls tokens from the payer, announces each line, holds no funds, keeps no state, and has no owner. `MockUSDC` is testnet only.
+- Derive every line for a run, sort the full run by stealth address, then cut it into chunks of at most 350 lines. Never partition transactions by employee.
+- Use a fresh ephemeral key for every line. Reuse can link payments and indicates a broken random source.
+- Approve or sign a permit for the exact run total, never an unlimited amount.
+- Treat announcement metadata as an untrusted hint. Recompute the stealth address and read the real token balance.
+- Resolve a name, cross-check its ENS record against ERC-6538, and pin the meta-address. Never cache a stealth address.
+
+Start with the [SDK reference](/docs/developers/sdk/) or use a complete [integration recipe](/docs/developers/integrate/).
