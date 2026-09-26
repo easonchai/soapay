@@ -85,7 +85,7 @@ node -e 'import("viem").then(async({createPublicClient,http})=>{const{sepolia}=a
 **Why this credential:** see [docs/worldid.md](worldid.md#why-proof-of-human-is-the-proportionate-credential) (D-54): recovery moves future salary, so the strongest same-human proof (Proof of Human) is proportionate; Selfie Check is medium-assurance.
 
 **Where:**
-- `apps/api/src/humanVerifier/worldid.ts`, `routes/names.ts` + `routes/rotation.ts` (link, rotation, attestations), `routes/worldid.ts` (rp-context, config);
+- `apps/api/src/worldid/verifier.ts`, `routes/names.ts` + `routes/rotation.ts` (link, rotation, attestations), `routes/worldid.ts` (rp-context, config);
 - `packages/worldid-react` (`<HumanCheck mode="create-session"|"rotate">`);
 - `packages/sdk/src/rotation.ts` (typed data);
 - `apps/sender/src/lib/attestation.ts` (enforcement).

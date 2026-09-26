@@ -23,7 +23,7 @@ pnpm --filter @soapay/docs test     # link checker over dist/ (turbo builds firs
 - Internal links include the base and a trailing slash: `/docs/concepts/threat-model/`. Starlight prefixes the
   links it generates itself, not the ones inside content. Links to the apps stay root-relative: `/`, `/app/`,
   `/?demo=1`. `scripts/check-links.mjs` fails the build on a broken link or a root link without the base.
-- Screenshots live in `src/assets/screens/` (copied from `docs/demo-screens/`) and are embedded with relative
+- Screenshots live in `src/assets/screens/` (originally from the demo screenshots) and are embedded with relative
   paths, so Astro optimises them.
 - No em dashes anywhere. Use a comma, colon, parentheses or a period.
 
