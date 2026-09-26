@@ -38,7 +38,10 @@ export function worldIdRoutes(deps: AppDeps): Hono {
       config.rateLimit.windowSeconds,
       deps.now(),
     );
-    return c.json(deps.worldId.issueRpContext());
+    if (body.bind !== undefined && (typeof body.bind !== "string" || body.bind.length === 0 || body.bind.length > 512)) {
+      throw new ApiError(400, "invalid_bind", "bind must be the Soapay signal string for this request");
+    }
+    return c.json(deps.worldId.issueRpContext(body.bind as string | undefined));
   });
 
   return r;

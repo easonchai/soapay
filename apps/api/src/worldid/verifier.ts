@@ -21,7 +21,7 @@ export type RpContextResponse = {
 
 export type NameSessionRow = { label: string; session_id: string; attached_at: number; via: "enroll" | "attach" };
 
-type NonceRow = { nonce: string; kind: string; expires_at: number; used_at: number | null };
+type NonceRow = { nonce: string; kind: string; expires_at: number; used_at: number | null; bind: string | null };
 
 /** 0x hex (or decimal) field element → canonical decimal string; throws on anything else. */
 export function fieldToDecimal(v: unknown, what: string): string {
@@ -65,14 +65,18 @@ export class WorldId {
   // -------------------------------------------------------------------------
   // RP context (POST /worldid/rp-context)
 
-  /** Signs a fresh RP context for one session request (create or prove). Sessions take no action. */
-  issueRpContext(): RpContextResponse {
+  /**
+   * Signs a fresh RP context for one session request (create or prove). Sessions take no action.
+   * `bind` is the Soapay signal the proof is for (`sessionSignal` / `rotationSignal`); it's stored
+   * with the single-use nonce because session requests go to World App without a signal.
+   */
+  issueRpContext(bind?: string): RpContextResponse {
     const cfg = this.cfg;
     const sig = signRequest({ signingKeyHex: cfg.signingKey!, ttl: cfg.rpTtlSeconds });
     const now = this.deps.now();
     this.deps.db
-      .prepare("INSERT INTO worldid_requests (nonce, kind, created_at, expires_at) VALUES (?, 'session', ?, ?)")
-      .run(sig.nonce.toLowerCase(), now, now + cfg.rpTtlSeconds);
+      .prepare("INSERT INTO worldid_requests (nonce, kind, created_at, expires_at, bind) VALUES (?, 'session', ?, ?, ?)")
+      .run(sig.nonce.toLowerCase(), now, now + cfg.rpTtlSeconds, bind ?? null);
     return {
       rp_context: { rp_id: cfg.rpId!, nonce: sig.nonce, created_at: sig.createdAt, expires_at: sig.expiresAt, signature: sig.sig },
       app_id: cfg.appId,
@@ -91,7 +95,7 @@ export class WorldId {
   // -------------------------------------------------------------------------
   // Structural checks (before spending a portal call)
 
-  private checkNonce(nonce: unknown): string {
+  private checkNonce(nonce: unknown): NonceRow {
     if (typeof nonce !== "string") throw new ApiError(403, "proof_malformed", "result has no nonce");
     const key = nonce.toLowerCase();
     const row = this.deps.db.prepare("SELECT * FROM worldid_requests WHERE nonce = ?").get(key) as NonceRow | undefined;
@@ -102,7 +106,7 @@ export class WorldId {
     if (this.deps.now() > row.expires_at + PROOF_GRACE_SECONDS) {
       throw new ApiError(403, "request_expired", "this World ID request expired; verify again");
     }
-    return key;
+    return row;
   }
 
   /** Parses an IDKitResultSession and runs every local check. Throws 403 with a precise code. */
@@ -128,16 +132,20 @@ export class WorldId {
     const items = Array.isArray(r.responses) ? r.responses : [];
     const item = items.find((i: any) => isObj(i) && IDENTIFIERS.has(i.identifier) && i.issuer_schema_id === WORLD_ID_SCHEMA_ID);
     if (!item) throw new ApiError(403, "wrong_credential", "a World ID Proof of Human credential is required");
-    if (!sameField(item.signal_hash, worldIdSignalHash(signal))) {
-      throw new ApiError(403, "signal_mismatch", "proof is not bound to this request (signal mismatch)");
-    }
     const sn = Array.isArray(item.session_nullifier) ? item.session_nullifier[0] : undefined;
     const sessionNullifier = fieldToDecimal(sn, "session_nullifier");
     if (this.deps.db.prepare("SELECT 1 FROM worldid_session_nullifiers WHERE session_nullifier = ?").get(sessionNullifier)) {
       throw new ApiError(403, "session_replayed", "this session proof was already used");
     }
-    const nonce = this.checkNonce(r.nonce);
-    return { nonce, sessionId: r.session_id as string, sessionNullifier };
+    const row = this.checkNonce(r.nonce);
+    // Binding: either the proof carries our signal, or (sessions, which World App runs without a
+    // signal) the single-use request it answers was issued for exactly this signal.
+    const signedSignal = !isZeroField(item.signal_hash) && sameField(item.signal_hash, worldIdSignalHash(signal));
+    const boundRequest = row.bind !== null && row.bind === signal;
+    if (!signedSignal && !boundRequest) {
+      throw new ApiError(403, "signal_mismatch", "proof is not bound to this request (fetch the rp-context for this exact change)");
+    }
+    return { nonce: row.nonce, sessionId: r.session_id as string, sessionNullifier };
   }
 
   private async verify(result: unknown, signal: string, expectedSessionId?: string): Promise<VerifiedSession> {
@@ -211,4 +219,14 @@ export class WorldId {
 
 export function pruneWorldIdRequests(db: Db, nowSeconds: number): void {
   db.prepare("DELETE FROM worldid_requests WHERE expires_at < ?").run(nowSeconds - 86_400);
+}
+
+/** True for an absent or all-zero field element (IDKit sends `0x0` when a request has no signal). */
+function isZeroField(v: unknown): boolean {
+  if (v === undefined || v === null || v === "") return true;
+  try {
+    return BigInt(String(v)) === 0n;
+  } catch {
+    return false;
+  }
 }
