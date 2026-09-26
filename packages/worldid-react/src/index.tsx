@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { IDKit, type IDKitRequest } from "@worldcoin/idkit-core";
+import QRCode from "qrcode";
 import {
   IDKitErrorCodes,
-  IDKitRequestWidget,
   proofOfHuman,
   setDebug,
   type IDKitResult,
@@ -99,8 +100,8 @@ const CANCEL_CODES = new Set<string>([IDKitErrorCodes.UserRejected, IDKitErrorCo
 /**
  * World ID check for Soapay's single trust moment: account recovery (docs/worldid.md).
  *
- * Uses IDKit's own `IDKitRequestWidget`, configured like World's integration docs: a one-time
- * request on the recovery action, `allow_legacy_proofs={false}`, the API's `environment`, and
+ * Builds the one-time request with IDKit core (as World's integration docs show) and renders its
+ * QR code inline, inside the app's own screen: a request on the recovery action, `allow_legacy_proofs={false}`, the API's `environment`, and
  * `preset={proofOfHuman({ signal })}`. The server also binds the proof to the signal through
  * the RP nonce (`bind`, D-57). On failure the widget's debug report (the request and World
  * App's raw response) is kept for "Copy details".
@@ -153,6 +154,69 @@ export function HumanCheck(props: HumanCheckProps) {
     setOpen(false);
   };
 
+  // Build the one-time request ourselves and show its QR inline (no pop-up), then poll World.
+  const [uri, setUri] = useState<string | null>(null);
+  const [qr, setQr] = useState<string | null>(null);
+  useEffect(() => {
+    if (!open || !ctx) return;
+    let live = true;
+    const ac = new AbortController();
+    setUri(null);
+    setQr(null);
+    void (async () => {
+      let request: IDKitRequest;
+      try {
+        request = await IDKit.request({
+          app_id: ctx.app_id,
+          action: ctx.action ?? HUMAN_CHECK_ACTION,
+          rp_context: ctx.rp_context,
+          allow_legacy_proofs: false,
+          environment: ctx.environment,
+          ...(actionDescription ? { action_description: actionDescription } : {}),
+        }).preset(humanCheckPreset(signal));
+      } catch (e) {
+        if (!live) return;
+        cbs.current.onError?.(new HumanCheckError("start_failed", `World ID failed to start: ${String(e)}`));
+        setOpen(false);
+        return;
+      }
+      if (!live) return;
+      setUri(request.connectorURI);
+      QRCode.toDataURL(request.connectorURI, { width: 220, margin: 1, errorCorrectionLevel: "M" })
+        .then((d) => live && setQr(d))
+        .catch(() => undefined);
+      const done = await request
+        .pollUntilCompletion({ signal: ac.signal, timeout: 300_000 })
+        .catch(() => ({ success: false as const, error: IDKitErrorCodes.Cancelled }));
+      if (!live) return;
+      if (done.success) {
+        try {
+          await cbs.current.onResult(done.result as never);
+        } finally {
+          setOpen(false);
+        }
+        return;
+      }
+      if (CANCEL_CODES.has(done.error)) {
+        close();
+        return;
+      }
+      pendingError.current = new HumanCheckError(done.error, `World ID failed: ${done.error}`);
+      let text = "";
+      try {
+        text = JSON.stringify(request.getDebugReport() ?? null, null, 2);
+      } catch {
+        text = "(no debug report)";
+      }
+      setDebugText(`error: ${done.error}\n${text}`);
+    })();
+    return () => {
+      live = false;
+      ac.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, ctx]);
+
   return (
     <>
       {!controlled && (
@@ -160,42 +224,21 @@ export function HumanCheck(props: HumanCheckProps) {
           {props.children ?? (mode === "rotate" ? "Confirm it's you with World ID" : "Protect with World ID")}
         </button>
       )}
-      {ctx && !debug && (
-        <IDKitRequestWidget
-          open={open}
-          onOpenChange={(v) => {
-            if (!v && !pendingError.current) close();
-          }}
-          app_id={ctx.app_id}
-          action={ctx.action ?? HUMAN_CHECK_ACTION}
-          rp_context={ctx.rp_context}
-          allow_legacy_proofs={false}
-          environment={ctx.environment}
-          preset={humanCheckPreset(signal)}
-          {...(actionDescription ? { action_description: actionDescription } : {})}
-          onSuccess={async (result) => {
-            try {
-              await cbs.current.onResult(result);
-            } finally {
-              setOpen(false);
-            }
-          }}
-          onError={(code, report) => {
-            if (CANCEL_CODES.has(code)) {
-              close();
-              return;
-            }
-            // Keep the details readable; the error is reported when the user closes the panel.
-            pendingError.current = new HumanCheckError(code, `World ID failed: ${code}`);
-            let text = "";
-            try {
-              text = JSON.stringify(report ?? null, null, 2);
-            } catch {
-              text = "(no debug report)";
-            }
-            setDebugText(`error: ${code}\n${text}`);
-          }}
-        />
+      {open && !debug && (
+        <div aria-label="Verify with World ID" data-testid="worldid-panel" style={panel}>
+          <strong>{mode === "rotate" ? "Confirm it's you" : "Link World ID"}</strong>
+          <span style={{ fontSize: 13, opacity: 0.8 }}>Scan with your phone camera to open the World ID app, then approve Proof of Human.</span>
+          {qr ? <img src={qr} width={220} height={220} alt="World ID QR code" /> : <div style={{ width: 220, height: 220 }} aria-busy />}
+          {uri && (
+            <a href={uri} data-testid="worldid-open-app" style={{ fontWeight: 600 }}>
+              On this phone? Open the World ID app
+            </a>
+          )}
+          <span style={{ fontSize: 13, opacity: 0.8 }}>{uri ? "Waiting for the World ID app…" : "Preparing…"}</span>
+          <button type="button" onClick={close} data-testid="worldid-cancel">
+            Cancel
+          </button>
+        </div>
       )}
       {open && debug && (
         <div role="dialog" aria-label="World ID error" data-testid="worldid-panel" style={panel}>
