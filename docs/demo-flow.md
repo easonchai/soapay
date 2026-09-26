@@ -29,10 +29,10 @@ There is no slack in the budget. If a live step stalls for more than **~8 s**, t
 ## 1. Employer invites a person and an agent (0:00–0:20)
 
 - **Screen:** the company app (https://soapay.up.railway.app/), already logged in with the company wallet, on **Recipients**. The roster shows the prepared names (Before the demo, item 3). The welcome drop already arrived, so the wallet holds 1,000,000 mock USDC.
-- **Clicks:** under **Invite employee**: Name `alex-demo`, Salary per run `1.5`, Organisation `Meridian Labs` → **Sign and create link** → sign in the wallet → the QR code appears ("Link for **alex-demo.soapay.eth**"). Leave the QR on screen for Alex's phone. Then the same form: Name `billing-agent`, Salary per run `1`, **Sign and create link** → **Copy link**. Both rows show **Invited (pending)**.
+- **Clicks:** under **Invite employee**: Name `alex-meridian`, Salary per run `1.5`, Organisation `Meridian Labs` → **Sign and create link** → sign in the wallet → the QR code appears ("Link for **alex-meridian.soapay.eth**"). Leave the QR on screen for Alex's phone. Then the same form: Name `billing-agent`, Salary per run `1`, **Sign and create link** → **Copy link**. Both rows show **Invited (pending)**.
 - **Say:** "Meridian Labs pays in USDC on Base. Paying a person or an agent starts the same way: we invite a name, not a wallet. Alex gets a QR code; our billing agent gets the same link, in chat."
 - **Bounty:** none yet (the name is reserved on the API; ENSv2 lands in section 2).
-- **Pre-staging:** company wallet logged in and vault unlocked; `alex-demo` and `billing-agent` not yet claimed (check with `curl https://soapay.up.railway.app/api/names/alex-demo`, which must say `not_found`).
+- **Pre-staging:** company wallet logged in and vault unlocked; `alex-meridian` and `billing-agent` not yet claimed (check with `curl https://soapay.up.railway.app/api/names/alex-meridian` and `…/names/billing-agent`, which must both say `not_found`); `…/names/alex-demo` returns the fallback persona's name. `alex-demo` itself was claimed live on 2026-09-26, so it is only the fallback, never the live sign-up.
 - **Fallback:** if signing an invite fails, use invites created the morning of the demo (a pending row has its own **Copy link**; the QR is only on the fresh card, so print the link as a QR beforehand).
 
 > **Agent label:** the owner's brief said `invoice-agent`, but `invoice-agent.soapay.eth` is **already taken** (claimed live on 2026-09-26 by the CLI demo's agent, D-43), so the invite form would refuse it. This script uses **`billing-agent`** (free on 2026-09-26). Any unclaimed label works; say the one you pick.
@@ -40,17 +40,17 @@ There is no slack in the budget. If a live step stalls for more than **~8 s**, t
 ## 2. The person signs up (0:20–0:55, phone)
 
 - **Screen:** Alex's phone, mirrored.
-- **Clicks:** scan the QR with the camera → the employee app opens on the invite: **Invited by Meridian Labs**, "Your pay name will be alex-demo.soapay.eth" ([r01](demo-screens/r01-invite-welcome.png)) → **Create a new account** → **Save your recovery kit**: **Copy phrase** (into the password manager; faster than downloading on a phone) → tick "I saved my recovery kit somewhere safe" → **Continue** ([r02](demo-screens/r02-onboard-phrase.png)) → **Lock this device** → **Use Face ID / fingerprint (passkey)** → Face ID ([r03b](demo-screens/r03b-onboard-lock.png)) → **Publish your payment address** ("Passkey saved on this device", [r03c](demo-screens/r03c-onboard-passkey-saved.png)) → **Register for free** ([r04](demo-screens/r04-onboard-register.png)) → **Your pay name**, "Set by your invite." → **Continue** ([r05](demo-screens/r05-onboard-name.png)) → **Enable self-service key recovery** → **Set up with World ID** → World App opens: approve **Proof of Human** → back in the browser the name is claimed with World ID linked → **Share this one string with your employer**.
-- **On the laptop:** within ~5 s the `alex-demo` invite row disappears and `alex-demo.soapay.eth` appears in **All recipients** (the company app polls every 5 s and resolves and pins the name).
-- **Say (while tapping):** "Alex's keys are made on this phone and locked with Face ID. No wallet, no gas: we relay the registration. Alex gets `alex-demo.soapay.eth`." At the World ID step: "And one tap of World ID, Proof of Human. That's what lets Alex recover their pay later if a key leaks. You'll see why in a minute."
+- **Clicks:** scan the QR with the camera → the employee app opens on the invite: **Invited by Meridian Labs**, "Your pay name will be alex-meridian.soapay.eth" ([r01](demo-screens/r01-invite-welcome.png)) → **Create a new account** → **Save your recovery kit**: **Copy phrase** (into the password manager; faster than downloading on a phone) → tick "I saved my recovery kit somewhere safe" → **Continue** ([r02](demo-screens/r02-onboard-phrase.png)) → **Lock this device** → **Use Face ID / fingerprint (passkey)** → Face ID ([r03b](demo-screens/r03b-onboard-lock.png)) → **Publish your payment address** ("Passkey saved on this device", [r03c](demo-screens/r03c-onboard-passkey-saved.png)) → **Register for free** ([r04](demo-screens/r04-onboard-register.png)) → **Your pay name**, "Set by your invite." → **Continue** ([r05](demo-screens/r05-onboard-name.png)) → **Enable self-service key recovery** → **Set up with World ID** → World App opens: approve **Proof of Human** → back in the browser the name is claimed with World ID linked → **Share this one string with your employer**.
+- **On the laptop:** within ~5 s the `alex-meridian` invite row disappears and `alex-meridian.soapay.eth` appears in **All recipients** (the company app polls every 5 s and resolves and pins the name).
+- **Say (while tapping):** "Alex's keys are made on this phone and locked with Face ID. No wallet, no gas: we relay the registration. Alex gets `alex-meridian.soapay.eth`." At the World ID step: "And one tap of World ID, Proof of Human. That's what lets Alex recover their pay later if a key leaks. You'll see why in a minute."
 - **Bounty:** ENSv2 (an on-chain subname issued at sign-up); World IDKit (a Proof of Human session linked at enrollment, proved again at recovery).
 - **Pre-staging:** the phone has the World App installed, verified and logged in; the recipient URL is warm in the phone browser; Face ID set up; the password manager unlocked. World ID linked later normally needs a 72 h wait before it can back a key change; the testnet demo API sets `WORLD_ATTACH_COOLDOWN_SECONDS=0` (`attach_cooldown_seconds: 0` on `GET /api/worldid/config`), so a link made from Name settings works at once too. Keep the 72 h default anywhere real pay is at stake.
-- **Fallback:** the sign-up is the slowest live step. If Register or the claim hangs past ~8 s (Sepolia read-after-write lag, the World App round trip), switch the mirror to the **backup phone profile** (`alex-backup`, fully onboarded the day before with World ID linked at sign-up, already in the roster) and say "here's one I made earlier". Last resort: the pre-recorded sign-up clip.
+- **Fallback:** the sign-up is the slowest live step. If Register or the claim hangs past ~8 s (Sepolia read-after-write lag, the World App round trip), switch the mirror to the **backup phone profile** (`alex-demo`, the pre-onboarded fallback persona: already claimed live, World ID linked, already in the roster) and say "here's one I made earlier". Last resort: the pre-recorded sign-up clip.
 
 ## 3. What the name holds (0:55–1:10)
 
-- **Screen:** Alex's phone, **Name** tab. Header `alex-demo.soapay.eth`, "Your employer pays this name. It points to your current meta-address."; **Current keys** shows the `st:eth:0x…` meta-address; **Self-service recovery** shows the **World ID** badge: "World ID (Proof of Human) is linked to this name…" (that's the "linked" confirmation).
-- **Optional (laptop, 5 s):** a terminal with the one-liner from Before the demo, item 9, printing `stealth st:eth:0x…` and `addr null` for `alex-demo.soapay.eth`, then the name's own resolver on Sepolia Etherscan.
+- **Screen:** Alex's phone, **Name** tab. Header `alex-meridian.soapay.eth`, "Your employer pays this name. It points to your current meta-address."; **Current keys** shows the `st:eth:0x…` meta-address; **Self-service recovery** shows the **World ID** badge: "World ID (Proof of Human) is linked to this name…" (that's the "linked" confirmation).
+- **Optional (laptop, 5 s):** a terminal with the one-liner from Before the demo, item 9, printing `stealth st:eth:0x…` and `addr null` for `alex-meridian.soapay.eth`, then the name's own resolver on Sepolia Etherscan.
 - **Say:** "This is what the name holds: one `stealth` record, the key the employer pays to. It lives on Alex's own ENSv2 resolver, and only Alex's key can change it. There's no `addr` record, on purpose: nobody can pay Alex at a fixed address that coworkers could watch."
 - **Bounty:** ENSv2 (per-employee Permissioned Resolver, EAC on `stealth`, no `addr`).
 - **Pre-staging:** the terminal command typed and ready (it takes ~3 s).
@@ -63,12 +63,13 @@ There is no slack in the budget. If a live step stalls for more than **~8 s**, t
 - **Say:** "The agent got the same link. It registers its own keys, claims `billing-agent.soapay.eth` with an ENSIP-26 agent record next to its `stealth` record, and the company sees it join, exactly like Alex."
 - **Bounty:** ENSv2 (the same name, plus ENSIP-26 agent records set at issuance).
 - **Pre-staging:** the MCP server built from this branch (the `invite` parameter is new, D-56); a fresh agent mnemonic; Claude Code open in a clean session.
+- **Terminal alternative (no LLM):** `pnpm demo:agent join`, paste the link at the prompt → the same `create_agent_identity` call through the same MCP server, printing the name, the ENSIP-26 records and the Etherscan link (see [demo-desktop.md](demo-desktop.md), "Agent beats from the terminal").
 - **Fallback:** a **pre-joined agent**: if the tool errors or the model dithers, say "it joined before we came on" and show a second agent label joined in rehearsal (already in the roster). The row flip is the point; don't debug on stage.
 
 ## 5. Disbursement, behind the scenes (1:25–1:55)
 
 - **Screen:** company app.
-- **Clicks:** **Start pay run** → Run label `September payroll` → **Resolve names** (each row: "Verified · N fresh addresses"; alex-demo and billing-agent included, [s08](demo-screens/s08-sender-resolved.png)) → **Review** → the headline reads "*X USDC to N people, on M fresh addresses.*" with "On chain: M payments of about 0.50 USDC to M strangers." and the **First fresh address** column ([s09](demo-screens/s09-sender-review.png)) → **Sign and send** (smart wallet, one signature) → the run page → its Basescan link: one transaction, many unrelated addresses. Then Alex's phone: **Payments** → **Rescan** → **Pay runs** → **Two views** on the newest run: **Coworker view** (every line, owner unknown) → toggle **My view** (Alex's lines highlighted, "3 of M lines are yours").
+- **Clicks:** **Start pay run** → Run label `September payroll` → **Resolve names** (each row: "Verified · N fresh addresses"; alex-meridian and billing-agent included, [s08](demo-screens/s08-sender-resolved.png)) → **Review** → the headline reads "*X USDC to N people, on M fresh addresses.*" with "On chain: M payments of about 0.50 USDC to M strangers." and the **First fresh address** column ([s09](demo-screens/s09-sender-review.png)) → **Sign and send** (smart wallet, one signature) → the run page → its Basescan link: one transaction, many unrelated addresses. Then Alex's phone: **Payments** → **Rescan** → **Pay runs** → **Two views** on the newest run: **Coworker view** (every line, owner unknown) → toggle **My view** (Alex's lines highlighted, "3 of M lines are yours").
 - **Say (read the headline):** "Ten people and an agent, M fresh addresses, one signature. On Basescan it's one transaction to M strangers." On the phone: "This is what a coworker sees: the whole batch, nobody's name. And this is Alex's view: the same transaction, only Alex's key lights up Alex's lines."
 - **Bounty:** none directly: this is the product claim. (ENSv2 underneath: every name is re-resolved and checked against its pin.)
 - **Pre-staging:** roster of 10 or more (item 3); Settings chunk `0.5`; a smart-wallet company account so the run is one prompt (with a plain EOA it's **Approve and send**: two prompts, approve then pay, and it needs a little Base Sepolia ETH); Basescan warm in a tab.
@@ -77,7 +78,8 @@ There is no slack in the budget. If a live step stalls for more than **~8 s**, t
 ## 6. The agent spends (1:55–2:25)
 
 - **Screen:** Claude Code.
-- **Clicks:** "What was I paid? Then send 0.5 USDC to alex-demo.soapay.eth." → the agent calls **`scan`** ("the pay run has M lines; 2 are mine", real on-chain balances) → **`spend`** returns a plan (from one stealth address, to a fresh address for Alex, sponsored gas) → reply "yes, confirm" → **`spend`** with the planId → a Basescan link. Open the agent's source stealth address on Basescan: **0 ETH**; the userOp's gas was paid by the sponsoring paymaster.
+- **Clicks:** "What was I paid? Then send 0.5 USDC to alex-meridian.soapay.eth." → the agent calls **`scan`** ("the pay run has M lines; 2 are mine", real on-chain balances) → **`spend`** returns a plan (from one stealth address, to a fresh address for Alex, sponsored gas) → reply "yes, confirm" → **`spend`** with the planId → a Basescan link. Open the agent's source stealth address on Basescan: **0 ETH**; the userOp's gas was paid by the sponsoring paymaster.
+- **Terminal alternative (no LLM):** `pnpm demo:agent spend 0.5 alex-meridian` → `scan` ("N lines in this pay run; 2 are mine"), the `spend` plan, a confirm prompt, the Basescan link and "source address … ETH: 0".
 - **Say:** "The agent finds its two lines among everyone's, and pays Alex from one of them. Look at that address: zero ETH. It never needed gas; a paymaster sponsored it. On mainnet, Circle's paymaster takes the fee in USDC. And Alex receives it at yet another fresh address."
 - **Bounty:** none (product claim; ENSv2 again: the agent pays a *name*).
 - **Pre-staging:** the agent's salary is `1` with a `0.5` chunk, so it gets exactly 2 lines and 0.5 USDC is one line from one address (one userOp, no consolidation). Caps default to 5 USDC per call. The API indexer is healthy (`GET /api/health`).
@@ -87,13 +89,13 @@ There is no slack in the budget. If a live step stalls for more than **~8 s**, t
 
 - **Say (setup):** "Say Alex's recovery phrase leaked."
 - **Clicks (phone):** **Name** → **Rotate to new keys** → "You'll confirm with World ID. Your employer's app then accepts the change automatically." → **Continue to World ID** → **Prove it's still you** → **Confirm with World ID** → World App: Proof of Human → **Keys rotated**: "Your name points at the new keys, with a World ID attestation."
-- **Clicks (company app):** **Start pay run** → **Resolve names** (or **Recipients** → **Re-verify all**) → `alex-demo.soapay.eth`: **Verified** with the **Re-verified by World ID** pill (the owner's "new keys, verified by World ID ✓"); the run accepts it.
+- **Clicks (company app):** **Start pay run** → **Resolve names** (or **Recipients** → **Re-verify all**) → `alex-meridian.soapay.eth`: **Verified** with the **Re-verified by World ID** pill (the owner's "new keys, verified by World ID ✓"); the run accepts it.
 - **Say:** "Same human, proven in the World App, so the company's app follows the new keys by itself. And a thief?"
 - **Clicks (terminal, then company app):** the terminal shows `pnpm demo:attacker sam-demo` (run live at the start of section 6 in a second terminal, ~15 s, or beforehand): "Record rewritten on-chain ✓. Attestation: refused (…). At the next pay run, the company app will block sam-demo's line." Back in the company app, **Resolve names** again → `sam-demo.soapay.eth`: **Blocked · record changed** ([s13](demo-screens/s13-sender-rotation-status.png) shows both pills).
 - **Say (close of the beat):** "The thief had sam's phrase, so they could rewrite sam's ENS record. But they're not sam, so there's no World ID proof, and the company's app refuses to pay the new keys. World ID protects future pay: a thief can rewrite the record, but the money doesn't follow."
 - **Bounty:** World IDKit (Proof of Human session, same-session recovery, EIP-712 attestation enforced by the payer's app).
-- **Pre-staging:** alex's World ID linked at sign-up (section 2), so no cooldown; the attacker command typed in a second terminal; one full rotation rehearsed on `alex-backup`; `sam-demo` in the roster and pinned **before** it is hijacked.
-- **Fallback:** World App flaky past ~8 s: cancel, switch to `alex-backup` (rotated in rehearsal) and show its **Re-verified by World ID** pill, or the recorded rotation clip. Attacker slow: it was also run in rehearsal, so show its Etherscan link and the company app's blocked pill ([s13](demo-screens/s13-sender-rotation-status.png) as a screenshot of last resort).
+- **Pre-staging:** alex's World ID linked at sign-up (section 2), so no cooldown; the attacker command typed in a second terminal; one full rotation rehearsed on `alex-demo`; `sam-demo` in the roster and pinned **before** it is hijacked.
+- **Fallback:** World App flaky past ~8 s: cancel, switch to `alex-demo` (rotated in rehearsal) and show its **Re-verified by World ID** pill, or the recorded rotation clip. Attacker slow: it was also run in rehearsal, so show its Etherscan link and the company app's blocked pill ([s13](demo-screens/s13-sender-rotation-status.png) as a screenshot of last resort).
 
 **When to hijack sam.** If sam is hijacked before section 5, sam's line shows **Blocked · record changed** during the pay run and spoils the reveal (the run still goes ahead without sam). Best: start `pnpm demo:attacker sam-demo` in the second terminal as the pay run is signed (section 5) or as section 6 starts; it finishes in ~15 s, well before section 7. If you must run it beforehand, just don't comment on sam's line in section 5.
 
@@ -107,7 +109,7 @@ The day before:
 
 1. **Company wallet:** a Coinbase Smart Wallet (one-signature pay run, gas-sponsored through the API's paymaster) logged in to the company app on the demo laptop; the vault created ("Use a device key (no passphrase)"). The **welcome drop** (1,000,000 mock USDC) arrives on first login. A plain EOA works too, but needs a little Base Sepolia ETH and two prompts.
 2. **Settings:** chunk `0.5` USDC, **Denominated payouts** on.
-3. **Roster of 10 or more names, pinned** (Recipients → Add by name → **Resolve and pin**), with salaries between 0.5 and 2 USDC. It must include **`sam-demo`** and, after the live sign-up, **`alex-demo`** and **`billing-agent`** join through their invites. Live names you can use: `sam-demo`, `dividend-ana`, `dividend-ben`, `dividend-cleo`, `pay392111`, `pay730021`, `invoice-agent`, `mcp-agent-7c1e`, plus the backups `alex-backup` and a pre-joined second agent. Run **Resolve names** once to check that every row is **Verified**. Ten or more people also keeps the small-team warning off the Review page.
+3. **Roster of 10 or more names, pinned** (Recipients → Add by name → **Resolve and pin**), with salaries between 0.5 and 2 USDC. It must include **`sam-demo`** and, after the live sign-up, **`alex-meridian`** and **`billing-agent`** join through their invites. Live names you can use: `sam-demo`, `dividend-ana`, `dividend-ben`, `dividend-cleo`, `pay392111`, `pay730021`, `invoice-agent`, `mcp-agent-7c1e`, plus the backups `alex-demo` and a pre-joined second agent. Run **Resolve names** once to check that every row is **Verified**. Ten or more people also keeps the small-team warning off the Review page.
 4. **sam-demo:** `pnpm demo:setup-recovery` (idempotent; claims `sam-demo.soapay.eth` through the live API; the phrase stays in the git-ignored `scripts/.demo-recipients.local.json`). Rehearse the whole hijack without a browser with `pnpm demo:recovery-check` (≈ 2 min, live txs, restores at the end). `DEMO_DRY=1 pnpm demo:attacker sam-demo` shows the plan without sending.
 5. **MCP in Claude Code**, built from this branch (the `invite` parameter, D-56): `pnpm install && pnpm build`, then
 
@@ -122,14 +124,16 @@ The day before:
      -- node /abs/path/apps/mcp/dist/index.js
    ```
 
+   For the terminal version of sections 4 and 6 instead: `pnpm demo:agent init` (writes a fresh phrase to the git-ignored `scripts/.demo-agent.local.env`, never printed), then `pnpm demo:agent status`. Its payer is `contracts/.env`'s deployer key unless `AGENT_PAYER_PRIVATE_KEY` is set there.
+
    Use a **fresh** mnemonic (the one behind `invoice-agent` already owns a name). Ask the agent to call **`get_test_funds`** once, so its payer holds test USDC (it only needs it for `pay`; spends from stealth addresses are sponsored). Keep the env out of the mirrored screen.
-6. **Backups made the same way as the live flow:** `alex-backup` (phone profile 2) fully onboarded **with World ID linked at sign-up** and in the roster; a second agent joined through an invite with a second MCP config (the "pre-joined agent").
-7. **One full rehearsal on the live stack:** invite → sign-up (on `alex-backup`) → pay run → agent scan and spend → rotation with World ID → `pnpm demo:attacker sam-demo` → **Blocked** → `pnpm demo:attacker sam-demo --restore` → Resolve names shows sam **Verified** again. Record the rehearsal (clips for every fallback). The rehearsal run also leaves the agent and Alex with lines from an earlier run.
-8. **World ID:** the API runs `WORLD_ENV=production` with **Proof of Human** (D-51, D-54): `curl https://soapay.up.railway.app/api/worldid/config` shows `"credential":"proof_of_human"`. The World App on Alex's phone is verified. The same World ID can link `alex-backup`, `alex-demo` and other demo names: each name stores the session it was linked with, and one session may back several names (D-59). The API must run on the session-capable RP (`WORLD_RP_ID` = `rp_25e1826d2548c1d9`); names linked before D-59 (under D-58's nullifier) count as unlinked, so re-link them in rehearsal.
+6. **Backups made the same way as the live flow:** `alex-demo` (phone profile 2), the pre-onboarded fallback persona: it is **already claimed live** (so it can't be the live sign-up; that's `alex-meridian`), and must have **World ID linked** (link it from Name settings in rehearsal if it isn't) and be in the roster; a second agent joined through an invite with a second MCP config (the "pre-joined agent").
+7. **One full rehearsal on the live stack:** invite → sign-up (on `alex-demo`) → pay run → agent scan and spend → rotation with World ID → `pnpm demo:attacker sam-demo` → **Blocked** → `pnpm demo:attacker sam-demo --restore` → Resolve names shows sam **Verified** again. Record the rehearsal (clips for every fallback). The rehearsal run also leaves the agent and Alex with lines from an earlier run.
+8. **World ID:** the API runs `WORLD_ENV=production` with **Proof of Human** (D-51, D-54): `curl https://soapay.up.railway.app/api/worldid/config` shows `"credential":"proof_of_human"`. The World App on Alex's phone is verified. The same World ID can link `alex-demo`, `alex-meridian` and other demo names: each name stores the session it was linked with, and one session may back several names (D-59). The API must run on the session-capable RP (`WORLD_RP_ID` = `rp_25e1826d2548c1d9`); names linked before D-59 (under D-58's nullifier) count as unlinked, so re-link them in rehearsal.
 9. **Terminal one-liner for section 3** (from `packages/sdk`, where viem is installed):
 
    ```bash
-   node -e 'import("viem").then(async({createPublicClient,http})=>{const{sepolia}=await import("viem/chains");const c=createPublicClient({chain:sepolia,transport:http("https://ethereum-sepolia-rpc.publicnode.com")});const n="alex-demo.soapay.eth";console.log("stealth",await c.getEnsText({name:n,key:"stealth"}));console.log("addr",await c.getEnsAddress({name:n}));console.log("resolver",await c.getEnsResolver({name:n}))})'
+   node -e 'import("viem").then(async({createPublicClient,http})=>{const{sepolia}=await import("viem/chains");const c=createPublicClient({chain:sepolia,transport:http("https://ethereum-sepolia-rpc.publicnode.com")});const n="alex-meridian.soapay.eth";console.log("stealth",await c.getEnsText({name:n,key:"stealth"}));console.log("addr",await c.getEnsAddress({name:n}));console.log("resolver",await c.getEnsResolver({name:n}))})'
    ```
 
    Checked on `sam-demo.soapay.eth` (2026-09-26): prints the `st:eth:0x…` record, `addr null`, and the name's own resolver address, which opens on Sepolia Etherscan.
@@ -138,7 +142,8 @@ Fifteen minutes before:
 
 - Phones charged, Do Not Disturb on, screen mirroring for the laptop **and** the phone tested on the venue's display.
 - Tabs open and warm: company app, Basescan (it has a Cloudflare check; pass it by hand), Sepolia Etherscan, the fallback clips.
-- `curl https://soapay.up.railway.app/api/health` answers; `alex-demo` and `billing-agent` are still `not_found`; the company wallet's welcome drop is visible.
+- `curl https://soapay.up.railway.app/api/health` answers; `alex-meridian` and `billing-agent` are still `not_found` (`curl https://soapay.up.railway.app/api/names/<label>`) and `alex-demo` resolves; the company wallet's welcome drop is visible.
+- `pnpm demo:agent status` answers in the agent terminal (no name yet, 0 USDC; the join comes in section 4).
 - The attacker command typed in the second terminal (not run, unless you chose to run it beforehand).
 - Claude Code open in a clean session with the Soapay MCP connected (`/mcp` lists `soapay`).
 - **No deploys during the demo.** Pushes to `main` deploy automatically (D-46); a restart of the API can interrupt a name claim mid-flight. Freeze merges to `main` an hour before.
@@ -149,8 +154,8 @@ After the demo: `pnpm demo:attacker sam-demo --restore`. The agent pinned Alex's
 
 | Risk | Likelihood | Fallback |
 | --- | --- | --- |
-| Live sign-up is slow (six steps on a phone, Sepolia lag after Register) | High | Switch the mirror to `alex-backup`; last resort the sign-up clip |
-| World App round trip flaky (sign-up or rotation) | Medium | `alex-backup` (World ID linked, rotated in rehearsal) or the recorded clip; never retry twice on stage |
+| Live sign-up is slow (six steps on a phone, Sepolia lag after Register) | High | Switch the mirror to `alex-demo`; last resort the sign-up clip |
+| World App round trip flaky (sign-up or rotation) | Medium | `alex-demo` (World ID linked, rotated in rehearsal) or the recorded clip; never retry twice on stage |
 | Invite signing or the invite poller slow | Low | Invites created that morning; the row flips within one 5 s poll, so keep talking |
 | Agent errors (model asks questions, tool error, `label_taken`) | Medium | The pre-joined agent; for the spend, the recorded gasless spend tx; the clip |
 | Wallet prompt or Base Sepolia stalls on the pay run | Medium | The rehearsal run's Basescan tab and its **Two views** on the phone |
@@ -158,6 +163,7 @@ After the demo: `pnpm demo:attacker sam-demo --restore`. The agent pinned Alex's
 | Paymaster or bundler down (agent spend) | Low | Recorded spend tx; `GET /api/health` beforehand |
 | Attacker script slow or RPC error | Low | Run it beforehand; show its Etherscan link and the **Blocked · record changed** pill |
 | An API deploy restarts mid-claim | Low if frozen | Merge freeze (D-46); re-run the tool (idempotent) |
+| `register_rate_limited` on the agent join (the API allows 3 registrations per IP per hour) | Low | Don't rehearse registrations from the venue network in the last hour; the pre-joined agent |
 
 Keep a slide with screenshots in script order as the last-resort deck (see the screenshot list below).
 
@@ -180,7 +186,7 @@ In [`demo-screens/`](demo-screens/). Referenced above only where they still matc
 - **r06** (Recovery step): says "Selfie Check"; now "Proof of Human with World ID" (D-54).
 - **r08, r08a, r08b, r08c** (Payments, Pay runs, Two views): the nav still shows **Convert** and **Exit** (removed / hidden, D-52, D-53).
 - **r19, r20, r21, r22** (Name, rotation): Convert/Exit in the nav, and "Selfie Check" copy.
-- **s05** (invite link card): matches, but retake with `alex-demo` / Meridian Labs for the deck.
+- **s05** (invite link card): matches, but retake with `alex-meridian` / Meridian Labs for the deck.
 - **s01** and **live-sender-landing**: check against the current landing copy before using.
 - New shots wanted: the agent joining in Claude Code (section 4), the agent's scan and spend (section 6), the section 3 terminal output, the attacker summary (section 7).
 
