@@ -10,7 +10,9 @@
 
 [![Soapay landing page: Public chain. Private payments. Every payment lands on a fresh address only the recipient can open](docs/demo-screens/landing-hero.png)](https://soapay.up.railway.app/)
 
-**Live demo:** [soapay.up.railway.app](https://soapay.up.railway.app/) (company app) · [soapay.up.railway.app/app/](https://soapay.up.railway.app/app/) (employee app), on Base Sepolia. **Docs:** [soapay.up.railway.app/docs/](https://soapay.up.railway.app/docs/).
+**Live demo, company app:** [soapay.up.railway.app](https://soapay.up.railway.app/), on Base Sepolia.  
+**Live demo, employee app:** [soapay.up.railway.app/app/](https://soapay.up.railway.app/app/), on Base Sepolia.  
+**Docs:** [soapay.up.railway.app/docs/](https://soapay.up.railway.app/docs/).
 
 > [!NOTE]
 > **Testnet notes (D-52).** On Base Sepolia the apps pay in **Soapay's mock USDC** ([`0x028D…14Bb`](https://sepolia.basescan.org/address/0x028D969c20b740582428f5043954c380686214Bb)), not Circle's, so you don't need a faucet: the first time a wallet opens the company app it gets **1,000,000 test USDC** once. Stealth spends are **gas-sponsored** (on mainnet the Circle Paymaster takes gas in USDC), and smart-wallet employers paying by EIP-5792 batch are sponsored too; a plain EOA employer still needs a little Base Sepolia ETH. The compliant **exit is hidden** on the testnet build, because CCTP only bridges Circle USDC. Details: [docs/testnet-deployment.md](docs/testnet-deployment.md).
