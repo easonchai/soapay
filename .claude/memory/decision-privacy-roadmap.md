@@ -14,3 +14,12 @@ Owner decisions 2026-09-26, after reviewing the privacy guarantees:
   1. CK merge → main → repo public → public demo URL.
   2. A live World ID Selfie Check run (success plus a refused path), then finish the debrief.
   3. Uniswap: API key, a live Base Sepolia swap, the feedback form, and an upstream PR fixing Uniswap's outdated skill.
+- **Next after the CK merge (owner, 2026-09-26): platform-agnostic SDK refactor.**
+  - Generic vocabulary (`planDistribution`; payroll, dividends, grants and vesting as presets).
+  - Pluggable adapters (name resolvers, announcement sources, paymasters beyond USDC, signers, storage, relayers).
+  - A chain and asset registry (any EVM chain; ERC-20/native/721/1155) with a compliance hook for allowlisted security tokens.
+  - Layered packages (core, distribute, wallet, names, optional react).
+  - A headless CLI and examples (dividend run, grant round).
+  - Self-hostable issuer under any ENS parent.
+  Start with vocabulary + adapters + CLI.
+
