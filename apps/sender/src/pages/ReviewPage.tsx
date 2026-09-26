@@ -66,7 +66,7 @@ export function ReviewPage({ run, plan, wallet, payPath, chainName, onBack }: Re
   return (
     <div className="split" style={{ display: "grid", gridTemplateColumns: "420px 1fr", gap: 48, padding: "8px 0" }}>
       <div className="stack-lg">
-        <span className="eyebrow">Review · pay run</span>
+        <span className="eyebrow">Review · {run.label.trim() || "pay run"}</span>
         <h1>
           <CountUp value={Number(plan.total) / 10 ** USDC_DECIMALS} format={(n) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} duration={0.8} /> USDC
           to {plural(people.length, "person", "people")}, on {plural(plan.lines.length, "fresh address", "fresh addresses")}.

@@ -2,7 +2,7 @@
 // explicit re-approval of a changed meta-address, pause, amount edits, and in dev
 // mock mode a simulated key rotation. UI-agnostic.
 import { useCallback, useState } from "react";
-import { parseRosterCsv, normalizeEnsName, type CsvIssue } from "../lib/csv.js";
+import { notAPayeeName, parseRosterCsv, normalizeEnsName, type CsvIssue } from "../lib/csv.js";
 import { tryParseUsdc } from "../lib/amount.js";
 import {
   describeResolveError,
@@ -62,7 +62,7 @@ export function useRoster(): RosterState {
     (input: { ensName: string; amount: string; label?: string }) =>
       guard(async () => {
         const name = normalizeEnsName(input.ensName);
-        if (!name) throw new Error(`"${input.ensName}" is not an ENS name, e.g. alice.soapay.eth`);
+        if (!name) throw new Error(notAPayeeName(input.ensName));
         const amount = tryParseUsdc(input.amount);
         if (!amount.ok) throw new Error(amount.error);
         let e: Employee;

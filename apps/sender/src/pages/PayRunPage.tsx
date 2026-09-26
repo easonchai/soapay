@@ -9,7 +9,7 @@ import { toInputUsdc, tryParseUsdc, USDC_DECIMALS } from "../lib/amount.js";
 import { CSV_TEMPLATE } from "../lib/csv.js";
 import { draftPreview } from "../lib/preview.js";
 import { displayName } from "../lib/roster.js";
-import type { Denomination } from "../lib/run.js";
+import { MAX_RUN_LABEL, type Denomination } from "../lib/run.js";
 import { Notice, plural, short, usdc } from "../ui/kit.js";
 import { AttestedBadge, RecordStatus } from "../ui/status.js";
 
@@ -216,9 +216,12 @@ export function PayRunPage({ run, roster, wallet, payPath, chainName, onReview, 
                     </button>
                   )}
                 </div>
-                {/* TODO(clash): CK's paste list was per run and accepted raw st:eth meta-addresses and registrant
-                    addresses; ours enrolls ENS names into the pinned roster and salaries persist. See the report. */}
-                <span className="hint">Pasted names join the roster (pinned); the amount becomes their salary for every run.</span>
+                {/* Roster only (owner decision 2026-09-26): this box bulk-imports `name, salary` into the pinned
+                    roster; raw st:eth meta-addresses and plain addresses are rejected (lib/csv.ts payeeRejection). */}
+                <span className="hint">
+                  Every payee is a pinned, verified ENS name. Pasted names join the roster and the amount becomes their salary for every run;
+                  meta-addresses and plain addresses are rejected.
+                </span>
               </div>
             )}
           </Collapse>
@@ -304,6 +307,16 @@ export function PayRunPage({ run, roster, wallet, payPath, chainName, onReview, 
         </div>
 
         <div className="stack">
+          <label className="field">
+            <span>Run label (optional)</span>
+            <input
+              value={run.label}
+              maxLength={MAX_RUN_LABEL}
+              placeholder="September payroll"
+              aria-label="Run label"
+              onChange={(e) => run.setLabel(e.target.value)}
+            />
+          </label>
           <div className="panel panel-pad stack">
             <div className="between">
               <span style={{ fontWeight: 500 }}>Denominated payouts</span>

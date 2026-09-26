@@ -30,6 +30,27 @@ export function normalizeEnsName(input: string): string | null {
   }
 }
 
+/**
+ * Why `input` can't be a payee, or null when it is not an ENS name for some other reason.
+ * Owner decision 2026-09-26 (roster only): every payee is a pinned, verified ENS name, so the raw
+ * `st:eth:` meta-addresses and plain addresses CK's per-run paste list accepted are refused.
+ */
+export function payeeRejection(input: string): string | null {
+  const t = input.trim();
+  if (/^st:/i.test(t)) {
+    return "Stealth meta-addresses can't be paid directly. Every payee is a pinned, verified ENS name: invite them (Invite employee) or ask for their soapay.eth name.";
+  }
+  if (/^0x[0-9a-f]*$/i.test(t)) {
+    return "Plain addresses can't be paid. Every payee is a pinned, verified ENS name: invite them (Invite employee) or ask for their soapay.eth name.";
+  }
+  return null;
+}
+
+/** Error text for a roster name that isn't usable. */
+export function notAPayeeName(input: string): string {
+  return payeeRejection(input) ?? `"${input.trim() || "(empty)"}" is not an ENS name, e.g. alice.soapay.eth`;
+}
+
 export function parseRosterCsv(text: string): CsvImport {
   const parsed = Papa.parse<string[]>(text.replace(/^﻿/, ""), { skipEmptyLines: "greedy" });
   const rows: CsvRow[] = [];
@@ -56,7 +77,7 @@ export function parseRosterCsv(text: string): CsvImport {
     if (!rawName && !rawAmount) return;
     const ensName = normalizeEnsName(rawName);
     if (!ensName) {
-      issues.push({ line, message: `"${rawName || "(empty)"}" is not an ENS name, e.g. alice.soapay.eth` });
+      issues.push({ line, message: notAPayeeName(rawName) });
       return;
     }
     const amount = tryParseUsdc(rawAmount);

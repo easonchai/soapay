@@ -7,7 +7,7 @@ import { useAccount } from "wagmi";
 import { getAddress, isAddress, type Address } from "viem";
 import { formatUsdc } from "../lib/amount.js";
 import { payability, recordChanges, verifyRoster, displayName, type Employee, type Payability, type PinCheck } from "../lib/roster.js";
-import { attemptFromPlan, planRun, type Denomination, type RunPlan, type RunRecord } from "../lib/run.js";
+import { attemptFromPlan, normalizeRunLabel, planRun, type Denomination, type RunPlan, type RunRecord } from "../lib/run.js";
 import { buildSafeExport, downloadJson, type SafeExportChunk } from "../lib/safeExport.js";
 import type { Funding } from "../lib/wallet.js";
 import type { Services } from "../lib/services.js";
@@ -67,6 +67,9 @@ export type PayRunState = {
   /** Id of the record created by execute/exportSafe. */
   runId: string | null;
   safeChunks: SafeExportChunk[] | null;
+  /** Optional run title (stored on the RunRecord). */
+  label: string;
+  setLabel(label: string): void;
   verify(): Promise<void>;
   preview(denomination: Denomination | null): void;
   execute(): Promise<void>;
@@ -87,6 +90,7 @@ export function usePayRun(): PayRunState {
   const [error, setError] = useState<string | null>(null);
   const [runId, setRunId] = useState<string | null>(null);
   const [safeChunks, setSafeChunks] = useState<SafeExportChunk[] | null>(null);
+  const [label, setLabel] = useState("");
 
   const reset = useCallback(() => {
     setStage("idle");
@@ -95,6 +99,7 @@ export function usePayRun(): PayRunState {
     setError(null);
     setRunId(null);
     setSafeChunks(null);
+    setLabel("");
   }, []);
 
   const verify = useCallback(async () => {
@@ -157,10 +162,11 @@ export function usePayRun(): PayRunState {
           .filter((r) => !r.payability.payable)
           .map((r) => ({ employeeId: r.employee.id, name: displayName(r.employee), reason: r.payability.payable ? "" : r.payability.message })),
         attempts: [attemptFromPlan(p, 0, now)],
+        ...(normalizeRunLabel(label) ? { label: normalizeRunLabel(label)! } : {}),
         ...extra,
       };
     },
-    [app, rows],
+    [app, rows, label],
   );
 
   const execute = useCallback(async () => {
@@ -199,7 +205,7 @@ export function usePayRun(): PayRunState {
         chainId: app.chainId,
         safeAddress: safe,
         createdAt: run.createdAt,
-        runLabel: new Date(run.createdAt).toISOString().slice(0, 10),
+        runLabel: run.label ?? new Date(run.createdAt).toISOString().slice(0, 10),
       });
       await upsertRun(run);
       setRunId(run.id);
@@ -227,6 +233,8 @@ export function usePayRun(): PayRunState {
     error,
     runId,
     safeChunks,
+    label,
+    setLabel,
     verify,
     preview,
     execute,

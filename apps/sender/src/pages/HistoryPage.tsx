@@ -5,6 +5,7 @@ import { explorerTx, fmtDate } from "@soapay/sdk";
 import type { RunView } from "../hooks/useRunActions.js";
 import { USDC_DECIMALS } from "../lib/amount.js";
 import type { RunPath, RunStatus } from "../lib/run.js";
+import { runTitle } from "../lib/run.js";
 import { plural, short, usdc } from "../ui/kit.js";
 
 export type HistoryPageProps = {
@@ -114,7 +115,7 @@ export function HistoryPage({ runs, openRunId, onOpenRun, onStartRun, onExportCs
                 >
                   <span className="ink2">{fmtDate(run.createdAt)}</span>
                   <span style={{ fontWeight: 500, display: "flex", gap: 8, alignItems: "center" }}>
-                    {PATH_LABEL[run.path]}
+                    {runTitle(run, PATH_LABEL[run.path])}
                     <Pill tone={STATUS_TONE[v.status]}>{v.executing ? "executing" : v.status}</Pill>
                   </span>
                   <span className="r mono">{lines}</span>

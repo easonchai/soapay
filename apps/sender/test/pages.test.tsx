@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach } from "vitest";
+afterEach(cleanup);
 import type { Address } from "viem";
 import { PayRunPage } from "../src/pages/PayRunPage.js";
 import type { PayRunState } from "../src/hooks/usePayRun.js";
@@ -46,6 +48,8 @@ const run = (over: Partial<PayRunState> = {}): PayRunState => ({
   error: null,
   runId: null,
   safeChunks: null,
+  label: "",
+  setLabel: () => {},
   verify: noop,
   preview: () => undefined,
   execute: noop,
@@ -75,6 +79,21 @@ describe("Pay run screen (CK design on our hooks)", () => {
     expect(screen.getByRole("button", { name: "Re-approve" })).toBeInTheDocument();
     expect(screen.getByText("Re-verified by World ID")).toBeInTheDocument();
     expect(screen.getByText(/1 recipient payable/)).toBeInTheDocument();
+  });
+
+  it("has an optional run label wired to usePayRun", async () => {
+    const setLabel = vi.fn();
+    render(<PayRunPage run={run({ label: "Sep", setLabel })} roster={roster([emp("alice")])} wallet={wallet} payPath={payPath} chainName="Base Sepolia" onReview={() => undefined} onOpenRecipients={() => undefined} />);
+    const input = screen.getByRole("textbox", { name: "Run label" }) as HTMLInputElement;
+    expect(input.value).toBe("Sep");
+    fireEvent.change(input, { target: { value: "September payroll" } });
+    expect(setLabel).toHaveBeenCalledWith("September payroll");
+  });
+
+  it("says the paste box is roster only", async () => {
+    render(<PayRunPage run={run()} roster={roster([])} wallet={wallet} payPath={payPath} chainName="Base Sepolia" onReview={() => undefined} onOpenRecipients={() => undefined} />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Paste rows" })[0]!);
+    expect(await screen.findByText(/Every payee is a pinned, verified ENS name/)).toBeInTheDocument();
   });
 
   it("needs a Resolve before Review", () => {

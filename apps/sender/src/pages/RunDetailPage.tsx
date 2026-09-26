@@ -2,6 +2,7 @@ import { ErrorLine, FreshMark, NavyPanel, PageHead, Pill } from "@soapay/ui";
 import { fmtDate } from "@soapay/sdk";
 import type { RunActions } from "../hooks/useRunActions.js";
 import type { StepStatus } from "../lib/run.js";
+import { runTitle } from "../lib/run.js";
 import { Notice, short, usdc } from "../ui/kit.js";
 import { PATH_LABEL, STATUS_TONE } from "./HistoryPage.js";
 
@@ -52,7 +53,7 @@ export function RunDetailPage(p: RunDetailPageProps) {
             ← History
           </a>
         }
-        title={`${PATH_LABEL[run.path]} · ${fmtDate(run.createdAt)}`}
+        title={runTitle(run, `${PATH_LABEL[run.path]} · ${fmtDate(run.createdAt)}`)}
         line={executing ? "Paying… confirm each step in your wallet." : `Created ${new Date(run.createdAt).toLocaleString()}.`}
         actions={
           <>

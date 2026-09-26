@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseRosterCsv, CSV_TEMPLATE } from "../src/lib/csv.js";
+import { parseRosterCsv, CSV_TEMPLATE, notAPayeeName, payeeRejection } from "../src/lib/csv.js";
 
 describe("parseRosterCsv", () => {
   it("parses a headed file with labels", () => {
@@ -9,6 +9,17 @@ describe("parseRosterCsv", () => {
       { line: 2, ensName: "alice.soapay.eth", amount: 5_000_000_000n, label: "Alice (Design)" },
       { line: 3, ensName: "bob.soapay.eth", amount: 4_250_500_000n, label: "Bob" },
     ]);
+  });
+
+  it("roster only: rejects raw meta-addresses and plain addresses with a clear message", () => {
+    const meta = `st:eth:0x02${"11".repeat(32)}03${"22".repeat(32)}`;
+    const r = parseRosterCsv(`${meta},1000\n0x00000000000000000000000000000000000000aa,500\nalice.soapay.eth,10\n`);
+    expect(r.rows.map((x) => x.ensName)).toEqual(["alice.soapay.eth"]);
+    expect(r.issues).toHaveLength(2);
+    expect(r.issues[0]).toMatchObject({ line: 1, message: expect.stringMatching(/Stealth meta-addresses can't be paid directly.*pinned, verified ENS name/) });
+    expect(r.issues[1]).toMatchObject({ line: 2, message: expect.stringMatching(/Plain addresses can't be paid.*pinned, verified ENS name/) });
+    expect(payeeRejection("alice.soapay.eth")).toBeNull();
+    expect(notAPayeeName("alice")).toMatch(/not an ENS name/);
   });
 
   it("parses a headerless file and normalizes names", () => {
