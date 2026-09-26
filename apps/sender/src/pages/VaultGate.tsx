@@ -2,7 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Dots, ErrorLine, Loading, motionOff } from "@soapay/ui";
 
-/** The diamond behind the gate: blooms in on arrival, flows outward when the user proceeds. */
+/** Exit sequence: content fades first, then the halo flows outward, then the loader takes over. */
+const CONTENT_OUT_S = 0.5;
+const HALO_OUT_S = 1.1;
+const LEAVE_MS = (CONTENT_OUT_S + HALO_OUT_S) * 1000;
+
+/** The diamond behind the gate: blooms in on arrival, flows outward once the content has gone. */
 function Halo({ leaving }: { leaving: boolean }) {
   if (motionOff()) return <div className="halo" aria-hidden><Dots mode="diamond" className="dots" /></div>;
   return (
@@ -11,23 +16,27 @@ function Halo({ leaving }: { leaving: boolean }) {
       aria-hidden
       initial={{ scale: 0.55, opacity: 0 }}
       animate={leaving ? { scale: 1.45, opacity: 0 } : { scale: 1, opacity: 0.55 }}
-      transition={leaving ? { duration: 1.1, ease: [0.4, 0, 0.6, 1] } : { duration: 2.4, ease: [0.16, 1, 0.3, 1] }}
+      transition={leaving ? { duration: HALO_OUT_S, delay: CONTENT_OUT_S, ease: [0.4, 0, 0.6, 1] } : { duration: 2.4, ease: [0.16, 1, 0.3, 1] }}
     >
       <Dots mode="diamond" animate className="dots" />
     </motion.div>
   );
 }
 
-/** Copy and card rise in a beat after the halo starts. */
-function Rise({ children, delay = 0, className }: { children: React.ReactNode; delay?: number; className?: string }) {
+/** Copy and card rise in a beat after the halo starts, and sink away first when leaving. */
+function Rise({ children, delay = 0, className, leaving = false }: { children: React.ReactNode; delay?: number; className?: string; leaving?: boolean }) {
   if (motionOff()) return <div {...(className ? { className } : {})}>{children}</div>;
   return (
-    <motion.div {...(className ? { className } : {})} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.9, delay, ease: [0.16, 1, 0.3, 1] }}>
+    <motion.div
+      {...(className ? { className } : {})}
+      initial={{ opacity: 0, y: 14 }}
+      animate={leaving ? { opacity: 0, y: -10 } : { opacity: 1, y: 0 }}
+      transition={leaving ? { duration: CONTENT_OUT_S, ease: [0.4, 0, 0.6, 1] } : { duration: 0.9, delay, ease: [0.16, 1, 0.3, 1] }}
+    >
       {children}
     </motion.div>
   );
 }
-const LEAVE_MS = 1100;
 import type { VaultPhase } from "../hooks/store.js";
 import type { VaultMode } from "../lib/vault.js";
 
@@ -52,7 +61,7 @@ export function VaultGate(p: VaultGateProps) {
   useEffect(() => {
     primary.current?.focus();
   }, [p.phase, p.vaultMode]);
-  /** Let the halo flow out, then hand over. Instant when motion is off. */
+  /** Fade the content, let the halo flow out, then hand over. Instant when motion is off. */
   function proceed(fn: () => void) {
     if (leaving) return;
     if (motionOff()) return fn();
@@ -87,12 +96,12 @@ export function VaultGate(p: VaultGateProps) {
       <div className="gate-wrap">
         <div className="gate">
           <Halo leaving={leaving} />
-          <Rise delay={0.6}>
+          <Rise delay={0.6} leaving={leaving}>
             <span className="eyebrow">Payroll vault · locked</span>
             <h1 style={{ marginTop: 8 }}>Unlock your payroll</h1>
             <p className="lead">Your roster and run history are encrypted in this browser.</p>
           </Rise>
-          <Rise delay={0.85} className="card">
+          <Rise delay={0.85} leaving={leaving} className="card">
             {device ? (
               <>
                 <button ref={primary} className={`btn-primary btn-xl full${leaving ? "" : " pulse"}`} disabled={leaving} onClick={() => proceed(() => p.onUnlock())}>
@@ -116,7 +125,7 @@ export function VaultGate(p: VaultGateProps) {
             )}
             <ErrorLine error={p.error} />
           </Rise>
-          <Rise delay={1.1}>
+          <Rise delay={1.1} leaving={leaving}>
             <p className="foot">{FOOT}</p>
           </Rise>
         </div>
@@ -129,12 +138,12 @@ export function VaultGate(p: VaultGateProps) {
     <div className="gate-wrap">
       <div className="gate">
         <Halo leaving={leaving} />
-        <Rise delay={0.6}>
+        <Rise delay={0.6} leaving={leaving}>
           <span className="eyebrow">Payroll vault · new</span>
           <h1 style={{ marginTop: 8 }}>Set up the payroll vault</h1>
           <p className="lead">Choose how this browser unlocks your roster and history.</p>
         </Rise>
-        <Rise delay={0.85}>
+        <Rise delay={0.85} leaving={leaving}>
         <form
           className="card"
           onSubmit={(e) => {
@@ -177,7 +186,7 @@ export function VaultGate(p: VaultGateProps) {
           <ErrorLine error={p.error} />
         </form>
         </Rise>
-        <Rise delay={1.1}>
+        <Rise delay={1.1} leaving={leaving}>
           <p className="foot">{FOOT}</p>
         </Rise>
       </div>
