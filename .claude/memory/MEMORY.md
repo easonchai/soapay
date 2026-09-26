@@ -10,3 +10,4 @@
 - [Bounties](decision-bounties.md) — ENSv2 + World IDKit + Uniswap API; Intercepta rejected (needs agents)
 - [CK's UI](team-ui-ck.md) — teammate CK builds a separate UI; keep ours simple with logic in hooks for a later merge/compare
 - [CK integration](decision-ck-integration.md) — CK's UI + our engine; keys, spend, sender-mode, backend and names decisions for the merge
+- [Privacy roadmap](decision-privacy-roadmap.md) — build shielded rail + timing fix + swap-proxy fix; IDKit only; pre-submission order
