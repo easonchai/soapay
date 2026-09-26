@@ -39,7 +39,6 @@ The question: has the product drifted from the PRD's goal? The goal is **"one na
 | Addition | Anchored on | Drift risk |
 | --- | --- | --- |
 | World ID Selfie Check for key rotation, plus EIP-712 attestations the sender app enforces | Name ownership / Flow 1 | Low: optional, and it protects the PRD's "ENS controls where salary goes" risk |
-| Uniswap swap-in-place | Flow 4 spending | Low: privacy-neutral. The proxy leaked stealth addresses to the platform; the fix (platform-free default) is queued |
 | Invite links | Flow 1 onboarding | Low: pure UX |
 | ENSIP-26 agent names | M5 | Low |
 | Address-level rate limits, a relayer and an indexer (`apps/api`) | Implicit in the PRD (a relayer and scanning) | Low |
@@ -65,8 +64,7 @@ Watch the combined surface area: every addition is more to demo and maintain. Th
    - **"reveal private key" spending** breaks Goal 3 (the wallet needs ETH, which links addresses) → our gasless spend;
    - **the non-atomic "sequential" pay mode** breaks invariant 3 → dropped;
    - **wallet-signature-only keys** differ from the PRD's "single seed the employee backs up" → phrase by default, signature as an option.
-2. **The platform can see stealth addresses via the Uniswap proxy.** That contradicts the PRD's trust claims → a platform-free default is queued.
-3. **Unlinkability in the UI:** the PRD's promise is unlinkability, but the demo doesn't yet *show* it (pending: the "coworker view vs my view" visual).
+2. **Unlinkability in the UI:** the PRD's promise is unlinkability, but the demo doesn't yet *show* it (pending: the "coworker view vs my view" visual).
 4. **The threat model is narrower than the PRD** (chain analysts are out of scope). That's fine for v1, but the PRD's positioning table still claims chain-analyst protection, so either update the PRD or don't claim it in the pitch.
 
 ## Recommended PRD edits (v1.1 changelog)
@@ -74,6 +72,6 @@ Watch the combined surface area: every addition is more to demo and maintain. Th
 - Threat model: coworker-first; chain analysts are partial (guard + exit), with no RPC/bundler protection.
 - Architecture: add `StealthDisperse` (no funds, no state) and the ENSv2 per-employee resolver; `addr` unset.
 - Gateway: tier 2 / roadmap.
-- Add the World ID rotation, Uniswap swap-in-place, invites and agent names as v1 features.
+- Add the World ID rotation, invites and agent names as v1 features.
 - Exit: minted to the same address; production chain TBD.
 - Shielded rail: Privacy Pools v2 (Railgun unavailable on Base).

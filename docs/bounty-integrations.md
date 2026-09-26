@@ -2,11 +2,11 @@
 
 A single page for checking each integration against the prize criteria. Status as of 2026-09-26. "Live" means it ran on a public testnet, not a fork or a mock.
 
-| | ENSv2 | World ID (IDKit) | Uniswap API |
-| --- | --- | --- | --- |
-| Role in the product | Pay-by-name identity; the employee alone controls where salary goes | Self-service key rotation (salary-redirect protection) | Convert salary *in place* inside a stealth address |
-| Live on testnet | **Yes**, end to end | **Production mode live** (D-51); the World App run is the last step | **Yes** for swap-in-place (Base Sepolia, on-chain quote); Trading API live on Base mainnet (placeholder-swapper quote, executed on a fork) |
-| Deep docs | `contracts/ENSV2.md` | `docs/worldid.md` | `FEEDBACK.md` |
+| | ENSv2 | World ID (IDKit) |
+| --- | --- | --- |
+| Role in the product | Pay-by-name identity; the employee alone controls where salary goes | Self-service key rotation (salary-redirect protection) |
+| Live on testnet | **Yes**, end to end | **Production mode live** (D-51); the World App run is the last step |
+| Deep docs | `contracts/ENSV2.md` | `docs/worldid.md` |
 
 ---
 
@@ -36,16 +36,6 @@ Requirement text is quoted from the ETHGlobal Tokyo 2026 prize page (fetched 202
 | "Demonstrate a successful verification" | Production mode is live (D-51). The run with a real World App is the last step | ⏳ owner runs it with the World App |
 | "…and one meaningful alternative path (cancellation, unavailable credential, rejection, ineligible user)" | No World ID session, cancelled proof, another person's session, expired or replayed proof: no attestation, so the company app **blocks** the line with "meta change unverified" until the employer approves by hand. A World ID linked after onboarding also has a 72-hour wait | ✅ in code; ⏳ show it in the demo video |
 | "Integration debrief/feedback: time to first success, friction, missing capability or documentation, the one improvement with the greatest impact" | [docs/worldid.md → Integration debrief](worldid.md#integration-debrief) | ⏳ fill in "time to first success" after the live run |
-
-### Uniswap: Best Uniswap Stack Contribution ($6,000)
-
-| Requirement | How Soapay meets it | Status |
-| --- | --- | --- |
-| "A public GitHub repository with open-source code" | https://github.com/easonchai/soapay | ✅ |
-| "A FEEDBACK.md file" | [FEEDBACK.md](../FEEDBACK.md), with live-verified findings and line pointers | ✅ |
-| "A completed submission to the Uniswap Developer Feedback Form … that includes the link to your FEEDBACK.md" | Draft answers in [docs/submission/uniswap-feedback-form.md](submission/uniswap-feedback-form.md) | ⏳ owner submits |
-| "README clearly points to the relevant contracts and lines of code" | README "Uniswap integration": `swap.ts` placeholder-swapper quote, route re-encoding, `/quote`-only client, in-place checks, entry points; `spend.ts` userOp pipeline; the fork E2E (line ranges updated 2026-09-26) | ✅ |
-| Integration in the product | Convert salary **in place** inside a stealth address: Trading API quote (placeholder swapper, V2/V3 route rebuilt by us) → one 7702 userOp with Permit2 + Universal Router, gas in USDC. Live swap: [0x2bf6…5c81](https://sepolia.basescan.org/tx/0x2bf66ce2b28b118becdd5aba49d612a444bcffaa006c33b09b92165b5ec55c81) | ✅ |
 
 ---
 
@@ -117,37 +107,7 @@ node -e 'import("viem").then(async({createPublicClient,http})=>{const{sepolia}=a
 
 ---
 
-## Uniswap: swap-in-place live on Base Sepolia; Trading API live on mainnet
-
-**What:** an employee converts part of a stealth address's USDC (e.g. to ETH or WETH) **inside the same address**, in one EIP-7702 userOp: `approve` → Permit2 → Universal Router swap, with gas paid in USDC by the Circle paymaster. No funds move between addresses, so no privacy clusters merge. The conversion preference stays local, never in a public record.
-
-**Why it fits:** the PRD's spending flow is "spend without linking". Swapping in place is the one kind of spend that needs no destination at all, so it's privacy-neutral by construction.
-
-**How the Trading API is used (D-27):** `/quote` only, with a fresh random **placeholder swapper** per quote. The SDK never calls `/swap`; it re-encodes the quoted V2/V3 route as Universal Router 2.1.2 commands paying the stealth address. A guard (`assertNoStealthAddress`) refuses any request that would carry the stealth address, so neither Uniswap nor our own API proxy ever sees it. Default on Base mainnet. On Base Sepolia (the API times out there), or for routes it can't rebuild exactly, the SDK quotes on-chain with QuoterV2 instead. Who sees what: [`docs/privacy-model.md`](privacy-model.md).
-
-**Where:**
-- `packages/sdk/src/swap.ts` (placeholder-swapper `/quote`, route re-encoder, privacy guard, on-chain QuoterV2 path; any calldata that pays anyone but the stealth address is rejected);
-- `packages/sdk/src/spend.ts` (`executeFromStealth`);
-- `apps/api` `POST /uniswap/quote` (a proxy so the API key never ships in the browser; `/swap` and `/check_approval` are closed);
-- the recipient app's Convert screen.
-
-**Proof (Base mainnet fork, real contracts, `packages/sdk/test/fork.e2e.test.ts`):**
-- 20 USDC → 0.007419 WETH at the stealth address;
-- 10 USDC → 0.00371 native ETH at the stealth address;
-- every tokenOut transfer landed only at the stealth address, and allowances returned to 0;
-- the stealth address never held ETH.
-
-**Proof (live Trading API, 2026-09-26):** a real Base mainnet `/quote` through our proxy with a placeholder swapper, re-encoded locally and executed on a Base mainnet fork: 10 USDC → 0.00372 WETH and 10 USDC → 0.00372 native ETH at the stealth address, each above the quoted minimum; the only request body never contained the stealth address (`SWAP_API_URL=http://localhost:8787/uniswap FORK_E2E=1 …`).
-
-**Not yet live:** a Trading API swap broadcast on Base mainnet itself (it runs on a mainnet fork; the testnet demo uses the on-chain quote).
-
-**Prize requirements:** `FEEDBACK.md` at the repo root, with line pointers and live-verified findings: Base Sepolia routing times out upstream; a quote works with a placeholder swapper (now our default); the apparent spec-vs-skill conflict on the `/swap` body resolved (both forms are valid); chain ids accept numbers too. The team must also submit the Uniswap feedback form with a link to FEEDBACK.md.
-
-**Verify yourself:** `FORK_E2E=1 pnpm --filter @soapay/sdk vitest run test/fork.e2e.test.ts`.
-
----
-
-## Core payroll: live (context for all three)
+## Core payroll: live (context for both)
 
 - **`StealthDisperse`** is deployed on Base Sepolia at `0x6B7a1cC570Af2DDd427DA694351438F0FE8039CA` (CREATE2).
 - **Live run:** two employees onboarded via the API with ENSv2 names, then resolved and pinned by the employer, then one pay run ([pay tx](https://sepolia.basescan.org/tx/0x24f23d610d1917905d3896e282243b07a038afb2bf266f94f11f31ea9e5b492d)). Each employee's scan found exactly their own line, and a gasless 7702 spend with the Circle paymaster went through ([spend tx](https://sepolia.basescan.org/tx/0x1167b83dfab7476ac32b286b890fdcfdba396766d9389778568d949cbffc1bae)).
@@ -156,5 +116,4 @@ node -e 'import("viem").then(async({createPublicClient,http})=>{const{sepolia}=a
 ## Before judging: run these live
 
 1. A World ID Proof of Human session link → rotate (same session), with a human and the World ID app.
-2. A Uniswap swap-in-place on Base Sepolia (done, on-chain quote); the Trading API path is proven with a live mainnet quote on a fork.
-3. One compliant exit leg (needs a faucet top-up).
+2. One compliant exit leg (needs a faucet top-up).

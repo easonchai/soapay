@@ -60,7 +60,6 @@ Fluidkey and Umbra use the same ERC-5564 and ERC-6538 standards, and both hide y
 - [Repository](#repository)
 
 **Integrations**
-- [Uniswap: convert salary in place (SDK and MCP)](#uniswap-integration)
 - [ENSv2: names and key rotation](#ensv2-integration)
 - [Agents (MCP)](#agents-mcp)
 - [World ID: attested recovery](#world-id-integration)
@@ -103,7 +102,7 @@ The team's agreed model. Where it differs from the PRD, this model wins ([`CLAUD
 
 ## How it works
 
-The full picture, with every flow and where ENS, World ID and Uniswap come in, is in [docs/architecture.md](docs/architecture.md).
+The full picture, with every flow and where ENS and World ID come in, is in [docs/architecture.md](docs/architecture.md).
 
 ![Soapay on chain: names on Ethereum Sepolia, people and keys off chain, payments on Base Sepolia, five numbered steps](docs/diagrams/soapay-system-overview.png)
 
@@ -183,36 +182,7 @@ Both are built on ERC-5564 and ERC-6538, and both hide your wallet from stranger
 | `@soapay/contracts` | 44 | 2 fork tests, need `BASE_RPC_URL` | forge |
 | `@soapay/cli` | 17 | | vitest |
 
-The skipped tests are the Base and Sepolia fork end-to-ends (a full payroll run, gasless 7702 spend, in-place swap, Privacy Pools exit). They pass with a fork RPC set; see [Getting started](#getting-started).
-
-## Uniswap integration
-
-> [!NOTE]
-> Since D-53 the employee **web app has no Convert tab** (the Uniswap bounty is no longer targeted). Swap in place lives on in the SDK and the MCP server's `swap_in_place` tool.
-
-**Convert salary in place.** An employee can turn part of a stealth address's USDC into WETH or ETH **inside that same address**. Moving funds to a "swap wallet" would link the two addresses, and a coworker who spots the link can tie a salary line to a person. So the swap runs where the money already is, and nothing leaves the address.
-
-- **One userOp per address.** The stealth address delegates to `Simple7702Account` (EIP-7702) on first use and runs one batch: exact `USDC.approve(Permit2)`, then exact `Permit2.approve(UniversalRouter)`, then the Universal Router swap, then a `BALANCE_CHECK_ERC20` floor. Both allowances end at zero.
-- **Gas in USDC.** The Circle Paymaster takes gas from the same USDC balance, so the address never needs ETH, which would itself have to come from somewhere linkable. (On the Base Sepolia demo the gas is sponsored instead, D-52.)
-- **Quotes never reveal the address** (D-27). On Base mainnet the SDK asks the Uniswap Trading API `/quote` for a **random placeholder swapper**, then re-encodes the quoted V2/V3 route itself as Universal Router 2.1.2 commands paying the stealth address; it never calls `/swap`, and a guard refuses any request containing the stealth address. On Base Sepolia (where the API times out), or without a key, it quotes on-chain with QuoterV2.
-- **Nothing pays a third party.** The SDK decodes every Universal Router command, v4 actions included, and refuses to sign if any output could go anywhere but the stealth address: a transfer, a fee portion, or a different recipient.
-- **Preferences stay local.** The conversion preference lives only in the recipient app, never in a public record ([spec §6](docs/mvp-spec.md#6-uniswap-convert-salary-in-place)).
-
-| What | Code |
-| --- | --- |
-| `quoteSwapInPlace`, `swapInPlace`, placeholder-swapper Trading API client, calldata checks | [`packages/sdk/src/swap.ts`](packages/sdk/src/swap.ts): Trading API quote with a placeholder swapper and the address guard [L594-L610](packages/sdk/src/swap.ts#L594-L610), re-encoding the quoted V2/V3 route [L645-L726](packages/sdk/src/swap.ts#L645-L726), `/quote`-only client [L727-L830](packages/sdk/src/swap.ts#L727-L830), in-place checks (every output stays at the stealth address) [L350-L499](packages/sdk/src/swap.ts#L350-L499), entry points [L831-L874](packages/sdk/src/swap.ts#L831-L874) |
-| `executeFromStealth`: one 7702 userOp, any calls, gas in USDC | [`packages/sdk/src/spend.ts`](packages/sdk/src/spend.ts): the userOp pipeline (session, 7702 authorization, paymaster permit, send) [L216-L498](packages/sdk/src/spend.ts#L216-L498), entry point [L499-L504](packages/sdk/src/spend.ts#L499-L504) |
-| Base mainnet fork E2E | [`packages/sdk/test/fork.e2e.test.ts`](packages/sdk/test/fork.e2e.test.ts) |
-| Developer feedback for Uniswap | [`FEEDBACK.md`](FEEDBACK.md) |
-
-The fork E2E starts its own anvil fork of Base and plays the bundler, so it needs [Foundry](https://getfoundry.sh) but no keys. It runs a first spend (delegation plus USDC gas), USDC to WETH in place, and USDC to native ETH in place:
-
-```bash
-FORK_E2E=1 pnpm --filter @soapay/sdk vitest run test/fork.e2e.test.ts
-# optional: FORK_RPC_URL=<Base RPC>, default https://mainnet.base.org
-```
-
-With a running API that has a key, the same suite also takes a live Base mainnet `/quote` (placeholder swapper) and executes the locally built swap on the fork: `SWAP_API_URL=http://localhost:8787/uniswap FORK_E2E=1 …`. Keep the key server-side: the API proxies only `POST /uniswap/quote` with `UNISWAP_API_KEY` ([`apps/api/src/routes/uniswap.ts`](apps/api/src/routes/uniswap.ts)), so apps pass `apiUrl: "<api>/uniswap"`. Without a key the proxy answers 503 `uniswap_disabled` and the SDK falls back to the on-chain quote.
+The skipped tests are the Base and Sepolia fork end-to-ends (a full payroll run, gasless 7702 spend, Privacy Pools exit). They pass with a fork RPC set; see [Getting started](#getting-started).
 
 ## ENSv2 integration
 
@@ -259,7 +229,7 @@ ISSUER_PRIVATE_KEY=0x... pnpm ensv2:issue-demo alice # issue, resolve, rotate, r
 [`apps/mcp`](apps/mcp) is a stdio MCP server over the SDK and API. Add it to Claude Code with `claude mcp add soapay -- node /abs/path/apps/mcp/dist/index.js`:
 
 - `create_agent_identity` registers the agent and claims its name with **ENSIP-26** records: `agent-context` (what the agent does and how to pay it) and `agent-endpoint[mcp|a2a|web]`. The ENSv2 issuer writes them atomically in the resolver's `initialize`, beside `stealth`. The same `agent` field accepts **ENSIP-25** `agent-registration[registry][id]` bindings for when a registry lists the agent.
-- `pay`, `scan`, `balance`, `spend` and `swap_in_place` cover the whole flow: pay names through StealthDisperse, find payments, send them on through 7702 + a USDC paymaster, and swap in place through Uniswap.
+- `pay`, `scan`, `balance`, `spend` and `swap_in_place` cover the whole flow: pay names through StealthDisperse, find payments, send them on through 7702 + a USDC paymaster, and convert in place.
 - **Guardrails:**
   - every value move is a dry run, then a confirm of a single-use plan that expires in 10 minutes;
   - per-call and per-day USDC caps;

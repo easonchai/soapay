@@ -7,7 +7,7 @@ Written 2026-09-26. `yudhishthra` is 96 commits ahead of the merge base. `main` 
 | | `yudhishthra` | `main` (CK) |
 | --- | --- | --- |
 | Employee keys | BIP-39 recovery phrase (`packages/sdk/src/keys.ts`) | Signature from the employee's wallet (`SIGN_MESSAGE`, `deriveKeysFromSignature`) |
-| Backend | `apps/api`: ERC-6538 relayer, ENSv2 subname issuer, World ID, announcement indexer, invites, Uniswap proxy | `apps/gateway` stub (renamed to `apps/api` on our side) |
+| Backend | `apps/api`: ERC-6538 relayer, ENSv2 subname issuer, World ID, announcement indexer, invites | `apps/gateway` stub (renamed to `apps/api` on our side) |
 | SDK | keys, registration, names, payrun, scan, spend (7702 + Circle paymaster), guard, denominations, Safe, ENSv2, rotation, invites, swap (183 tests) | keys, derive, scan, register, recipient, batch/sendCalls, stores |
 | Apps | Simple UIs with all logic in hooks (see each app's README, "How to plug in another UI") | Designed UIs: glass theme, landing with wallet login, company history with per-wallet live balances, `packages/ui` |
 | Contracts | `StealthDisperse` with the packed calldata ABI (64 B/line) | `StealthDisperse` with the original struct ABI |

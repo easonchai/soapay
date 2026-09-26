@@ -57,7 +57,7 @@ Judges can try everything without Circle's faucet. On Base Sepolia the pay token
 | Minter (`MINTER_ROLE`) | the API relayer `0x509aD63D73f41FA9DD7162F7FcD3876090C8157F` (derived from `RELAYER_PRIVATE_KEY`) |
 | Source verification | Blockscout: verified ([base-sepolia.blockscout.com](https://base-sepolia.blockscout.com/address/0x028D969c20b740582428f5043954c380686214Bb)). Basescan: not verified (no `BASESCAN_API_KEY` in the env) |
 
-**Sponsored gas:** stealth spends (recipient app, MCP) and smart-wallet employers' EIP-5792 batches (`paymasterService` capability) go through `POST /paymaster`, which forwards ERC-7677 `pm_getPaymasterStubData` / `pm_getPaymasterData` (and `pm_sponsorUserOperation`) to `https://api.pimlico.io/v2/84532/rpc`. It sponsors only chain 84532, EntryPoint v0.8 (and v0.6/v0.7 for smart wallets), execute/executeBatch calls whose targets are the mock token, Permit2, the Universal Router, StealthDisperse or the Announcer, with no ETH value. No rate limits (mock token, testnet). Without `PIMLICO_API_KEY` it answers 503 `sponsorship_disabled` and the apps say so.
+**Sponsored gas:** stealth spends (recipient app, MCP) and smart-wallet employers' EIP-5792 batches (`paymasterService` capability) go through `POST /paymaster`, which forwards ERC-7677 `pm_getPaymasterStubData` / `pm_getPaymasterData` (and `pm_sponsorUserOperation`) to `https://api.pimlico.io/v2/84532/rpc`. It sponsors only chain 84532, EntryPoint v0.8 (and v0.6/v0.7 for smart wallets), execute/executeBatch calls whose targets are the mock token, the swap contracts, StealthDisperse or the Announcer, with no ETH value. No rate limits (mock token, testnet). Without `PIMLICO_API_KEY` it answers 503 `sponsorship_disabled` and the apps say so.
 
 **Welcome drop:** `POST /faucet {address}` mints 1,000,000 mock USDC once per address (sqlite `faucet_claims`); no other limits. An ETH drip is implemented but **off by default** (`FAUCET_ETH_WEI=0`, owner decision pending; when on, it tops a wallet up to that amount and stops while the relayer holds under `FAUCET_MIN_RELAYER_ETH_WEI`, 0.02 ETH). Plain-EOA employers (MetaMask) still need a little Base Sepolia ETH for the approve + pay txs.
 
@@ -69,20 +69,6 @@ Judges can try everything without Circle's faucet. On Base Sepolia the pay token
 | Sponsored spend from that EOA (7702 authorization in the userOp, 0 ETH, no fee taken) | [0x15ea6dcd…265c](https://sepolia.basescan.org/tx/0x15ea6dcd7f489ff829365c6e9dfef0b86859aba4cdc97e0a010fa761e418265c) |
 | Second sponsored spend (already delegated) | [0x1c10b505…2d8f](https://sepolia.basescan.org/tx/0x1c10b505c4d5e43306e1c518ffa8e7ba407391dfeed0539d472d614aed452d8f) |
 | `scripts/fund-usdc.sh`: 1,000,000 mock USDC to the deployer (the CLI/MCP payer) | [0xe085c3e5…7fd6](https://sepolia.basescan.org/tx/0xe085c3e597b082b5878595f9d414798999de9f86fae3e357728d8ff5a8ef7fd6) |
-
-### Uniswap v3 pool (created, then out of scope)
-
-Created before the owner dropped the Uniswap bounty (D-53); nothing in the product depends on it, but the SDK's on-chain swap path (QuoterV2 + Universal Router, fee tier 500) finds it (10 mock USDC quoted to 0.00312 WETH). `contracts/script/SetupMockPool.s.sol`, from the deployer:
-
-| What | Value |
-| --- | --- |
-| Pool mock USDC / WETH, 0.05% | [`0x820537A74A4ECf64882c8049Dde2FAabE1920b14`](https://sepolia.basescan.org/address/0x820537A74A4ECf64882c8049Dde2FAabE1920b14), initialised at 3000 USDC per ETH |
-| Liquidity | full range, 150 mock USDC + 0.05 WETH, position NFT #82411 (NonfungiblePositionManager `0x27F971cb582BF9E50F397e4d29a5C7A34f11faA2`, owner the deployer) |
-| Txs | grant minter [0x1150a475…95f8](https://sepolia.basescan.org/tx/0x1150a47574c03c9027777aac4ce1f2546e2e5e0e1a498146d1978aad827895f8), mint 150 [0xa376074d…0f0a](https://sepolia.basescan.org/tx/0xa376074d36e787dbe27c9a800104e20ae33af202933c8b31e0259a30f4e2af0a), revoke [0xffc879d3…8260](https://sepolia.basescan.org/tx/0xffc879d30cc5cbbb4122531a5b51ba1bed4ca738168e86fcb3d9c6e3c4578260), wrap [0xbb6e7180…c9ee](https://sepolia.basescan.org/tx/0xbb6e718064468c3b9c1cce1ebe522a4f3828e46899c6efd648ad0255e7dfc9ee), approvals [0x6223af70…c78f](https://sepolia.basescan.org/tx/0x6223af708231523008c73c0be699798d55d159c3601397eca2b6a8423102c78f) / [0x52f74181…99ac](https://sepolia.basescan.org/tx/0x52f74181ded19a50115a346db405e714d8245db9834763ae1675561dc6e199ac), create + initialise [0xd621f166…2e19](https://sepolia.basescan.org/tx/0xd621f166ef3d998958863e56b1161d78d608fc10ae7a24204bb2b76d4ad02e19), add liquidity [0x858ad14a…2593](https://sepolia.basescan.org/tx/0x858ad14ae9d5914ceb9658c52a177ae9c2d6d42d1831764e8caf4a19aa672593) |
-
-No live swap was run (scope dropped).
-
-**Top up (mock USDC):** `scripts/fund-usdc.sh [address] [--amount N] [--via mint|api]`. Default: mint 1,000,000 mock USDC with the relayer's `MINTER_ROLE` (else the deployer grants itself the role for one mint and revokes it). `--via api` uses the welcome drop instead.
 
 ## Funding with Circle USDC (mainnet-like testing, D-47; no longer needed for the demo)
 
