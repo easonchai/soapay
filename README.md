@@ -16,7 +16,7 @@
 
 ## Who sees what you earn?
 
-On a public chain, everyone with a browser: one payroll batch on Base shows every recipient and every amount next to each other, readable forever. Your colleagues too: at Gitcoin DAO a contributor started from their own pay address and put names to fifteen salaries. So companies walk away, and the fixes built for them (Base Ledgers, Tempo Zones, Toku on Aleo) are private ledgers for enterprises: not for everyone, since you apply for access, and not fully private, since the operator sees everything. Everyone else still pays in public.
+On a public chain, everyone with a browser: one payroll batch on Base shows every recipient and every amount next to each other, readable forever. Your colleagues too: at Gitcoin DAO a contributor started from their own pay address and put names to fifteen salaries. So companies walk away, and the fixes built for them (Base Ledgers, Tempo Zones, Toku on Aleo) are private ledgers for enterprises: not for everyone, since you apply for access, and not fully private, since every payment goes through the company running them, which sees it and decides what you can withdraw. Everyone else still pays in public.
 
 Three apps on open standards, and nothing of ours holds money. The full argument, with sources, is in the [pitch deck](pitch/README.md).
 
