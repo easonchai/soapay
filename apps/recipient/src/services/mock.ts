@@ -316,7 +316,8 @@ export function createMockFetch(chainId: number): ApiFetch {
       );
       const page = rows.slice(cursor, cursor + limit);
       return respond(200, {
-        items: page.map((a) => ({ ...a, blockNumber: a.blockNumber.toString() })),
+        // The indexer serves announcements only; the Transfer side lives in receipts.
+        items: page.map(({ transfer: _t, ...a }) => ({ ...a, blockNumber: a.blockNumber.toString() })),
         nextCursor: cursor + limit < rows.length ? String(cursor + limit) : null,
       });
     }

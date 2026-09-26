@@ -24,7 +24,7 @@ import { lastSpendTx, payRunGroups } from "../src/hooks/useChainViews.js";
 import { BatchTable } from "../src/screens/PayRunViews.js";
 import { GaslessProofView, proofHeadline, proofRows } from "../src/screens/GaslessProof.js";
 import { GuardDecision, linkTxHashes } from "../src/screens/GuardDecision.js";
-import { MOCK_EMPLOYER, createMockPublicClient, createMockSpendService, setMockIdentity } from "../src/services/mock.js";
+import { MOCK_EMPLOYER, createMockFetch, createMockPublicClient, createMockSpendService, setMockIdentity } from "../src/services/mock.js";
 
 const CHAIN = 84532;
 const UNIT = 1_000_000n;
@@ -176,6 +176,17 @@ describe("mock pay runs rebuild from receipts", () => {
     expect(addrs.every((a, i) => i === 0 || a > addrs[i - 1]!)).toBe(true);
     expect(owned.lines.every((l) => l.payer === getAddress(MOCK_EMPLOYER) && l.amount !== null && l.amount <= 500n * UNIT)).toBe(true);
     expect(getChainConfig(CHAIN).usdc).toBe(b.token);
+  });
+});
+
+describe("mock announcement indexer", () => {
+  it("serves announcements as JSON (the Transfer side stays in receipts)", async () => {
+    setMockIdentity(keysFromMnemonic(generateMnemonic()).metaAddressURI);
+    const res = await createMockFetch(CHAIN)("http://mock.local/announcements?limit=5");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { items: Record<string, unknown>[] };
+    expect(body.items).toHaveLength(5);
+    expect(body.items[0]).not.toHaveProperty("transfer");
   });
 });
 

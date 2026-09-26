@@ -57,6 +57,8 @@ smart wallet (refused) instead of a browser wallet.
 | Send with the guard | `src/spend/flow.ts` (`prepareSpend`, `executeSpend`) | PRD Flow 4 |
 | Convert in place | `features/convert/swap.ts` over SDK `quoteSwapInPlace` / `swapInPlace` | §6 |
 | Key rotation | `features/rotation/` (`prepareRotation`, `submitRotation`, `finishRotation`) | §2.1 |
+| Pay runs: coworker view / my view (D-41) | `screens/PayRunViews.tsx`, `hooks/useChainViews.ts` over SDK `fetchPayRunBatch` / `markOwnLines` | Goal 2 |
+| Gas proof after a spend (D-41) | `screens/GaslessProof.tsx` over SDK `readGaslessProof` | Flow 4 |
 | Compliant exit | `features/exit/` (planner, runner, SDK seam `sdk.ts`, mock), `hooks/useExit.tsx` | §9 |
 
 ### Convert and the Uniswap API key
