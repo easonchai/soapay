@@ -38,9 +38,11 @@ The team's agreed model. Where it differs from the PRD, this model wins ([`CLAUD
 | **Employer**, payroll admins, Safe signers | Yes | Nothing. They may know name → stealth address → amount |
 | **ENS** | Reference only | The sender pins each ERC-6538 meta-address at enrollment and alerts the employer if it changes |
 
-**Out of scope for v1:** chain analysts, RPC and bundler linkage, gateway mode, the Privacy Pools exit. Amounts stay visible, and in small teams they can identify people ([open issues](CLAUDE.md#open-issues-from-the-prd-review)).
+**Out of scope for v1:** chain analysts, RPC and bundler linkage, gateway mode. The compliant exit through Privacy Pools is in scope. Amounts stay visible, and in small teams they can identify people ([open issues](CLAUDE.md#open-issues-from-the-prd-review)).
 
 ## How it works
+
+The full picture, with every flow and where ENS, World ID and Uniswap come in, is in [docs/architecture.md](docs/architecture.md).
 
 ```mermaid
 flowchart LR
@@ -55,7 +57,7 @@ flowchart LR
   RA -->|"7702 auth + userOp, USDC paymaster"| ST
 ```
 
-- **Onboard once.** The recipient app derives spending and viewing keys from one seed. It registers the meta-address through a throwaway registrant and issues an off-chain subname.
+- **Onboard once.** The recipient app derives spending and viewing keys from one seed. It registers the meta-address through a throwaway registrant, and the API issues an on-chain ENSv2 subname under `soapay.eth`.
 - **Pay in one transaction.** The sender app derives a fresh stealth address for every line, sorts them in ascending order, and pays and announces them atomically:
   - a **plain EOA** employer goes through `StealthDisperse`;
   - a **smart account, 7702 or Safe** employer sends a contract-less EIP-5792 batch of `[USDC.transfer, Announcer.announce] × N`.
