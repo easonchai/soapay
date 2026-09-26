@@ -164,7 +164,7 @@ sequenceDiagram
   D->>X: announce each line (view tag + payer)
 ```
 
-Smart-account, 7702 and Safe employers send the same lines as an EIP-5792 batch instead of going through `StealthDisperse`.
+Which path a company wallet takes (D-67): **any EOA** (a plain MetaMask account, or one MetaMask already upgraded with EIP-7702) goes through `StealthDisperse` whenever it's deployed: one approval, then one `pay` per chunk of up to 350 lines. Wallets cap EIP-5792 batches far below a payroll run (MetaMask: "Batch size cannot exceed 10", i.e. 5 lines of `[transfer, announce]`). **Smart-contract wallets** (Coinbase Smart Wallet) send the lines as an EIP-5792 atomic batch, gas-sponsored through the API's paymaster; **Safes** export a MultiSendCallOnly bundle for the Transaction Builder. Retrying a failed run re-checks the path.
 
 ### 3. Find and spend, gasless
 
@@ -424,6 +424,20 @@ We don't enter "World ID for Agents". Our agents are payees, and no agent action
 **Is the recovery kit the same as the recovery phrase?** Yes. The kit is a small file with the 12-word phrase plus restore instructions: the same secret, just easier to save. It recovers every payment ever received, even if Soapay disappears.
 
 **How are funds already received protected?** Only by keeping the recovery kit (the phrase) secret. World ID protects **future** pay: a thief with the phrase can rewrite the ENS record, but the employer's app won't follow. A thief with the phrase can still spend what's already in the stealth addresses, so after a leak, rotate and move funds promptly.
+
+**Why doesn't the name have an `addr` record?** An `addr` is one fixed public address: every wallet would pay it, so every salary would pile up where anyone (a coworker) can watch. The name publishes a *key to make addresses from* (`stealth`), and each payment goes to a fresh one. Leaving `addr` empty also makes a non-stealth wallet fail loudly instead of silently paying a linkable address.
+
+**What is the registrant, and why not the employee's real wallet?** A throwaway address derived from the recovery phrase. It's the name's keyholder, not a wallet: it holds `ROLE_SET_TEXT` on the `stealth` record only, owns the ERC-6538 entry on Base, and signs claims and rotations (the relayer pays the gas). It never holds funds. Using the employee's main wallet would tie a wallet coworkers likely know to the pay name. `soapay:registrant` publishes it so anyone can cross-check ENS against ERC-6538.
+
+**Why keep the meta-address in both ENS and ERC-6538?** ENS gives the human name the employer enrolls; ERC-6538 is the standard registry stealth-aware wallets read. The company app pins the keys only when both agree for that registrant, so a tampered record is detectable.
+
+**Can the company change an employee's record?** Yes: it owns `soapay.eth` and holds the root roles on every resolver. That's by design: the employer is trusted in our threat model; the adversary is a coworker.
+
+**What does World ID store on-chain?** Nothing. The link from a name to a World ID session is held by Soapay's API (the attester). A rotation is attested with an EIP-712 `MetaRotation` signature; the new ENS record is on-chain; the payer's app follows a record change only with that attestation. A thief with the phrase can rewrite the record, but without the linked person's World ID there's no attestation, so the line is **Blocked**. A different person's World ID is refused (`session_mismatch`), and a proof can't be replayed (`session_replayed`). See [worldid.md](worldid.md), "Failure path".
+
+**Does a big payroll hit wallet batch limits?** Not for EOAs: a run of up to 350 lines is one `StealthDisperse` transaction (plus one approval). Only smart-contract wallets use EIP-5792 batches.
+
+**Which RPCs does the live demo use?** Paid Chainstack nodes for Ethereum Sepolia (ENS) and Base Sepolia (payments, scanning, indexer), set as deploy variables; public endpoints are only the fallback in code.
 
 ## Who sees what
 
