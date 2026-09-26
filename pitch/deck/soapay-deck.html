@@ -79,10 +79,17 @@
   /* Team: five people across, photo above name, then role and background lines (Marcus, Sep 26). */
   .people { display: grid; grid-template-columns: repeat(5, 1fr); gap: 32px; }
   .person { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 22px; padding: 28px 24px 32px; }
-  .avatar { width: 100%; aspect-ratio: 1 / 1; background: var(--canvas); border: 2px dashed var(--line-strong); display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 24px; color: var(--ink3); }
+  .avatar { width: 100%; aspect-ratio: 1 / 1; background: var(--canvas); border: 2px dashed var(--line-strong); display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 24px; color: var(--ink3); overflow: hidden; }
+  .avatar:has(img) { border: 2px solid var(--line); }
+  .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .person .name { font-size: 36px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.15; }
-  .person .role { font-size: 26px; font-weight: 500; line-height: 1.3; margin-top: 10px; text-wrap: balance; }
-  .person .prev { font-size: 23px; color: var(--ink2); line-height: 1.35; margin-top: 8px; text-wrap: balance; }
+  .person > div { width: 100%; }
+  .person .logos { margin-top: auto; align-self: stretch; padding-top: 18px; border-top: 1px solid var(--hairline); display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+  .person .logos span { display: flex; align-items: center; gap: 10px; font-family: var(--mono); font-size: 16px; color: var(--ink2); white-space: nowrap; }
+  .person .logos img { width: 52px; height: 52px; border-radius: 10px; object-fit: cover; display: block; border: 1px solid var(--hairline); }
+  .person .quals { list-style: none; margin: 14px 0 0; padding: 0; text-align: left; display: flex; flex-direction: column; gap: 10px; }
+  .person .quals li { position: relative; padding-left: 22px; font-size: 24px; font-weight: 600; line-height: 1.3; text-wrap: pretty; }
+  .person .quals li::before { content: ""; position: absolute; left: 0; top: 12px; width: 8px; height: 8px; background: var(--accent); }
 
   /* Statement */
   /* One line (Marcus, Sep 26): sized so the line ends before the dot texture starts. */
@@ -92,8 +99,20 @@
   /* Proof slides: text with facts left, source line, screenshot right, evidence strip. */
   .proof { display: grid; grid-template-columns: 720px 1010px; gap: 60px; align-items: start; }
   .proof > div:first-child { display: flex; flex-direction: column; align-self: stretch; }
-  .proof .txt { font-size: 40px; line-height: 1.36; text-wrap: pretty; }
+  .proof .txt { font-size: 46px; line-height: 1.3; text-wrap: pretty; }
+  .proof .txt .s { display: block; }
+  .proof .txt .s + .s { margin-top: 20px; }
   .src { font-family: var(--mono); font-size: 21px; line-height: 1.5; color: var(--ink2); margin-top: auto; padding-top: 28px; word-break: break-all; }
+  .src .url { display: block; margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--line); color: var(--accent); }
+  .cap { font-family: var(--mono); font-size: 20px; color: var(--ink3); margin-top: 44px; }
+  .quotes { margin-top: 14px; display: flex; flex-direction: column; gap: 16px; }
+  .quotes .q { display: grid; grid-template-columns: 500px 1fr; align-items: center; gap: 24px; }
+  .quotes .who { display: flex; align-items: center; gap: 16px; }
+  .quotes .who img { width: auto; display: block; }
+  .quotes .who b { font-size: 26px; font-weight: 600; white-space: nowrap; }
+  .quotes .who .src { margin: 0; padding: 0; font-size: 17px; word-break: normal; white-space: nowrap; }
+  .quotes .shot.clip { width: 1060px; height: auto; }
+  .quotes .shot.clip img { position: static; display: block; width: 100%; height: auto; }
   .shot { position: relative; overflow: hidden; border: 2px solid var(--line); background: #fff; }
   .shot img { position: absolute; display: block; }
   /* Spotlight overlays are plain divs on purpose: an SVG mask exported to PDF renders as garbage in macOS Preview. */
@@ -113,8 +132,23 @@
   .visa .clips { display: flex; flex-direction: column; gap: 22px; margin-top: 34px; }
   .visa .shot.wide { width: 100%; }
   /* Private payrolls slide: three screenshot cards, then the two flaws as a numbered strip. */
+  .diagram { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
+  .diagram img { width: 100%; height: 100%; object-fit: contain; object-position: center; }
+  .tracks { display: flex; flex-direction: column; }
+  .track { display: grid; grid-template-columns: 500px 1fr; gap: 60px; align-items: center; padding: 38px 0; border-top: 2px dashed var(--line); }
+  .track:last-child { border-bottom: 2px dashed var(--line); }
+  .track .brand { display: flex; align-items: center; gap: 28px; }
+  .track .brand img { height: 76px; width: auto; border-radius: 14px; }
+  .track .brand b { font-size: 48px; font-weight: 600; letter-spacing: -0.02em; }
+  .track .what { display: flex; align-items: baseline; gap: 22px; margin-bottom: 10px; }
+  .track .what b { font-size: 34px; font-weight: 600; color: var(--accent); }
+  .track .what span { font-family: var(--mono); font-size: 18px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink3); }
+  .track .pts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; max-width: 1280px; }
+  .track .pts li { position: relative; padding-left: 28px; font-size: 28px; line-height: 1.35; color: var(--ink); text-wrap: pretty; }
+  .track .pts li::before { content: ""; position: absolute; left: 0; top: 15px; width: 8px; height: 8px; background: var(--accent); }
   .fixes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; }
   .fix .shot { width: 100%; border: 0; border-bottom: 2px solid var(--line); }
+  .fix .body { padding: 22px 26px 24px; }
   .fix .body { padding: 22px 26px 24px; }
   .fix .t { font-size: 30px; font-weight: 600; letter-spacing: -0.01em; margin-bottom: 8px; }
   .fix .d { font-size: 25px; line-height: 1.38; color: var(--ink); text-wrap: pretty; }
@@ -138,18 +172,6 @@
   .clauses > div { text-wrap: balance; max-width: 1840px; margin: 0 auto; }
 
   /* Architecture: four boxes joined by rules and diamond glyphs. */
-  .flow { display: grid; grid-template-columns: 1fr 52px 1fr 52px 1fr 52px 1fr; align-items: stretch; }
-  .box { padding: 32px 34px; }
-  .box .t { font-family: var(--mono); font-size: 25px; font-weight: 500; color: var(--accent); margin-bottom: 14px; }
-  .box .d { font-size: 28px; line-height: 1.38; text-wrap: pretty; }
-  .box.navyp .t { color: var(--on-accent-muted); }
-  .box.navyp .dots { width: 150px; }
-  .conn { position: relative; display: flex; align-items: center; justify-content: center; }
-  .conn::before { content: ''; width: 100%; height: 2px; background: var(--line-strong); }
-  .conn::after { content: ''; position: absolute; width: 14px; height: 14px; border: 3px solid var(--accent); background: #fff; transform: rotate(45deg); }
-  .three { margin-top: auto; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 40px; }
-  .three div { font-size: 28px; line-height: 1.38; padding-top: 22px; border-top: 2px solid var(--line); display: flex; gap: 16px; text-wrap: pretty; }
-  .three .fresh { margin-top: 12px; }
 
   /* Use cases: eight indexed panels, like ledger rows. */
   .uses { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
@@ -232,11 +254,11 @@
       <svg class="dots head" data-mode="right"></svg>
     </div>
     <div class="people">
-      <div class="panel person"><div class="avatar">photo</div><div><div class="name">Eason Chai</div><div class="role">Founder&nbsp;&amp;&nbsp;CEO, Foresight and ELVTD</div><div class="prev">ELVTD: web3 solutions. Previously contracted for Virtuals Protocol</div></div></div>
-      <div class="panel person"><div class="avatar">photo</div><div><div class="name">Yudhishthra</div><div class="role">Co-Founder, Aqua0</div><div class="prev">Ex-Nethermind, ex-Etherscan</div></div></div>
-      <div class="panel person"><div class="avatar">photo</div><div><div class="name">Ee Sheng</div><div class="role">Head&nbsp;of&nbsp;Engineering, Thetanuts</div><div class="prev">Founder, zBase: private payments for agents. Base Batches 003 finalist</div></div></div>
-      <div class="panel person"><div class="avatar">photo</div><div><div class="name">Marcus Tan</div><div class="role">Founding Engineer, Predictefy</div><div class="prev">Ex-engineer, ELVTD</div></div></div>
-      <div class="panel person"><div class="avatar">photo</div><div><div class="name">Cheong Kian</div><div class="role">Founding Engineer, Predictefy</div></div></div>
+      <div class="panel person"><div class="avatar"><img src="assets/team-eason.jpg" alt="Eason Chai"></div><div><div class="name">Eason Chai</div><ul class="quals"><li>Founder&nbsp;&amp;&nbsp;CEO, Foresight and ELVTD</li><li>Ex-engineer, Gitcoin</li><li>Previously contracted for Virtuals Protocol</li></ul></div><div class="logos"><span><img src="assets/co-foresight.png" alt="">Foresight</span><span><img src="assets/co-elvtd.png" alt="">ELVTD</span></div></div>
+      <div class="panel person"><div class="avatar"><img src="assets/team-yudhishthra.jpg" alt="Yudhishthra"></div><div><div class="name">Yudhishthra</div><ul class="quals"><li>Co-Founder, Aqua0</li><li>Ex-engineer, Nethermind</li><li>Ex-engineer, Etherscan</li></ul></div><div class="logos"><span><img src="assets/co-aqua0.png" alt="">Aqua0</span></div></div>
+      <div class="panel person"><div class="avatar"><img src="assets/team-eesheng.jpg" alt="Ee Sheng"></div><div><div class="name">Ee Sheng</div><ul class="quals"><li>Head&nbsp;of&nbsp;Engineering, Thetanuts</li><li>Founder, zBase: private payments for agents (Base Batches 003 finalist)</li></ul></div><div class="logos"><span><img src="assets/co-thetanuts.png" alt="">Thetanuts</span></div></div>
+      <div class="panel person"><div class="avatar"><img src="assets/team-marcus.jpg" alt="Marcus Tan"></div><div><div class="name">Marcus Tan</div><ul class="quals"><li>Founding Engineer, Predictefy</li><li>Ex-engineer, ELVTD</li></ul></div><div class="logos"><span><img src="assets/co-predictefy.png" alt="">Predictefy</span></div></div>
+      <div class="panel person"><div class="avatar"><img src="assets/team-cheongkian.jpg" alt="Cheong Kian"></div><div><div class="name">Cheong Kian</div><ul class="quals"><li>Founding Engineer, Predictefy</li></ul></div><div class="logos"><span><img src="assets/co-predictefy.png" alt="">Predictefy</span></div></div>
     </div>
   </div>
 </section>
@@ -260,8 +282,8 @@
     </div>
     <div class="proof">
       <div>
-        <div class="txt">One Disperse batch on Base. Four recipients. <span class="numhl numline">$17,585 · $55,177 · $16,629 · $31,268</span>Five minutes old when captured. <span class="hl">Readable forever.</span></div>
-        <div class="src">base.blockscout.com · Sep 25 2026<br>base.blockscout.com/address/0xD152f549545093347A162Dce210e7293f1452150</div>
+        <div class="txt">One batch on Base.<br>Four salaries.<span class="numhl numline">$17,585 · $55,177 · $16,629 · $31,268</span><span class="hl">Readable forever.</span></div>
+        <div class="src">base.blockscout.com · Sep 25 2026<span class="url">base.blockscout.com/address/0xD152f549545093347A162Dce210e7293f1452150</span></div>
       </div>
       <!-- Crop x540..2800 y330..1760 of 2880x1800 at s=0.447 -->
       <div class="shot" style="width:1010px; height:639px"><img src="assets/blockscout-disperse.png" style="width:1287px; left:-241px; top:-148px"></div>
@@ -274,24 +296,18 @@
   <div class="stage">
     <div class="pagehead">
       <div class="text">
-        <h1>Your colleagues.</h1>
+        <h1>The chain published it anyway.</h1>
       </div>
       <svg class="dots head" data-mode="right"></svg>
     </div>
     <div class="proof">
       <div>
-        <div class="txt">Gitcoin DAO. A contributor started from their own pay address and found <span class="hl">15 colleagues' exact salaries.</span><br><br>The DAO dropped individual pay disclosure over <span class="hl">"contributor privacy concerns."</span></div>
-        <div class="src">gov.gitcoin.co · Jun 2022, Feb 2023<br>gov.gitcoin.co/t/a-compensation-commitment/10830/24<br>gov.gitcoin.co/t/contributor-compensation-audit/12750</div>
+        <div class="txt"><span class="s">Gitcoin, 2022.</span><span class="s">Contributors refused<br>to publish pay.</span><span class="s">A colleague traced<br><span class="hl">15 exact salaries</span> anyway.</span><span class="s hl">Nothing has changed since.</span></div>
+        <div class="src">gov.gitcoin.co · Jun 2022, Feb 2023<span class="url">gov.gitcoin.co/t/a-compensation-commitment/10830/24<br>gov.gitcoin.co/t/contributor-compensation-audit/12750</span></div>
       </div>
       <!-- Crop x330..2040 y640..1590 of 2880x2000 at s=0.590, title through the highlighted phrase -->
       <!-- Spotlight (Marcus, Sep 26): whole page visible, text above the key sentence faded, the sentence framed in navy. Plain divs only: SVG masks misrender in macOS Preview. -->
       <div class="shot" style="width:1010px; height:590px"><img src="assets/gitcoin-audit.png" style="width:1700px; left:-195px; top:-378px"><div class="dim" style="top:0; height:480px"></div><div class="mark" style="left:78px; top:480px; width:830px; height:106px"></div></div>
-    </div>
-    <div class="strip">
-      <div class="cell"><img src="assets/si-optimism.svg" style="height:32px"><span>grantees traced, judged by name</span></div>
-      <div class="cell"><img src="assets/logo-sushi.com.png" style="height:36px"><span>two public pay fights</span></div>
-      <div class="cell"><b>MakerDAO</b><span>$205k average, published</span></div>
-      <div class="cell"><img src="assets/logo-lido.fi.png" style="height:36px"><span>$132k average, published</span></div>
     </div>
   </div>
 </section>
@@ -312,11 +328,11 @@
         <div class="shot" style="width:851px; height:63px"><img src="assets/visa-press.png" style="width:3686px; left:-1856px; top:-2020px"></div>
       </div>
     </div>
-    <div class="strip">
-      <div class="cell"><img src="assets/si-stripe.svg" style="height:34px"><span>"would publish every salary"</span></div>
-      <div class="cell"><b>Circle</b><span>"payroll should not be market data"</span></div>
-      <div class="cell"><b>J.P. Morgan</b><span>"transparent by design"</span></div>
-      <div class="cell"><b>Fireblocks</b><span>"employees don't want their wages exposed"</span></div>
+    <div class="cap">and the rest agree</div>
+    <div class="quotes">
+      <div class="q"><div class="who"><img src="assets/logo-stripe.png" alt="Stripe" style="height:36px"><span class="src">tempo.xyz · Apr 16 2026</span></div><div class="shot clip"><img src="assets/quote-stripe.png"></div></div>
+      <div class="q"><div class="who"><img src="assets/logo-circle.png" alt="Circle" style="height:38px"><span class="src">arc.io · Jun 10 2026</span></div><div class="shot clip"><img src="assets/quote-circle.png"></div></div>
+      <div class="q"><div class="who"><img src="assets/logo-fireblocks.png" alt="Fireblocks" style="height:30px"><span class="src">fireblocks.com · Apr 20 2026</span></div><div class="shot clip"><img src="assets/quote-fireblocks.png"></div></div>
     </div>
   </div>
 </section>
@@ -331,35 +347,29 @@
     <div class="fixes">
       <div class="panel fix">
         <!-- Crop x560..2320 y380..1210 of 2880x1800 at s=0.337 -->
-        <div class="shot" style="height:280px"><img src="assets/aleo-toku.png" style="width:970px; left:-189px; top:-128px"></div>
+        <div class="shot" style="height:340px"><img src="assets/aleo-toku.png" style="width:970px; left:-189px; top:-128px"></div>
         <div class="body">
           <div class="t">Toku on Aleo</div>
-          <div class="d">Private payroll on a separate chain with its own stablecoin. Enterprise clients only.</div>
-          <div class="src">aleo.org/post/toku-case-study</div>
         </div>
       </div>
       <div class="panel fix">
         <!-- Crop x100..2100 y330..1274 of 2880x2000 at s=0.2965 -->
-        <div class="shot" style="height:280px"><img src="assets/tempo-deel.png" style="width:854px; left:-30px; top:-98px"></div>
+        <div class="shot" style="height:340px"><img src="assets/tempo-deel.png" style="width:854px; left:-30px; top:-98px"></div>
         <div class="body">
           <div class="t">Tempo Zones, used by Deel</div>
-          <div class="d">Private zones for payroll and treasury. Design partners only. "Auditable access for Deel."</div>
-          <div class="src">tempo.xyz/blog/privacy-on-tempo · tempo.xyz/blog/deel-stablecoin-wallet-global-contractors-tempo</div>
         </div>
       </div>
       <div class="panel fix">
         <!-- Crop x700..2520 y330..1189 of 2880x1800 at s=0.326 -->
-        <div class="shot" style="height:280px"><img src="assets/base-ledgers.png" style="width:939px; left:-228px; top:-108px"></div>
+        <div class="shot" style="height:340px"><img src="assets/base-ledgers.png" style="width:939px; left:-228px; top:-108px"></div>
         <div class="body">
           <div class="t">Base Ledgers, by Coinbase</div>
-          <div class="d">A private ledger that settles on Base. Request a demo, early access. An operator runs it.</div>
-          <div class="src">base.org/ledgers · docs.base.org/ledger/overview</div>
         </div>
       </div>
     </div>
     <div class="strip flaws">
-      <div class="cell"><span class="n">1</span><div><b>Not for everyone.</b><span>Enterprise clients, design partners, early access by application.</span></div></div>
-      <div class="cell"><span class="n">2</span><div><b>Not fully private.</b><span>An account in their ledger, or their chain. The operator sees everything.</span></div></div>
+      <div class="cell"><span class="n">1</span><div><b>Permissioned.</b></div></div>
+      <div class="cell"><span class="n">2</span><div><b>Not fully private.</b></div></div>
     </div>
     <div class="closing" style="margin-top:26px">Everyone else still pays in public.</div>
   </div>
@@ -380,39 +390,55 @@
   </div>
 </section>
 
-<!-- 10. Architecture, high level -->
+<!-- 10. Architecture diagram: the on-chain overview from docs/diagrams/soapay-system-overview.png, one image under the title (Marcus, Sep 26). Replaces the four-box flow and the three bullets. -->
 <section class="slide" id="s10">
   <div class="stage">
     <div class="pagehead">
-      <div class="text">
-        <span class="eyebrow">Architecture</span>
-        <h1>Three apps on open standards. Nothing of ours holds money.</h1>
-      </div>
+      <div class="text"><h1>Architecture diagram.</h1></div>
       <svg class="dots head" data-mode="right"></svg>
     </div>
-    <div class="flow">
-      <div class="panel box"><div class="t">Recipient app</div><div class="d">Your keys, your ledger, your guard. Nothing leaves the browser.</div></div>
-      <div class="conn"></div>
-      <div class="panel box"><div class="t">Sender app</div><div class="d">Paste names and amounts. One transaction pays everyone on fresh addresses.</div></div>
-      <div class="conn"></div>
-      <div class="panel box"><div class="t">Optional gateway</div><div class="d">For wallets that cannot derive. Self-host it or use ours. The app checks its work.</div></div>
-      <div class="conn"></div>
-      <div class="box navyp"><svg class="dots" data-mode="right" data-color="255,255,255"></svg><div class="t">Chain</div><div class="d">ENS name. Stealth address registry and announcer. Gasless spend. Screened exit.</div></div>
+    <div class="diagram"><img src="assets/architecture-diagram.png" alt="Soapay on chain: names on Ethereum Sepolia, people and keys off chain, payments on Base Sepolia, five numbered steps"></div>
+  </div>
+</section>
+
+<!-- 11. Partner tracks: where ENS, World and the Curvegrid dashboard track sit in the app (Marcus, Sep 26). Rows like the OpenVerdict deck: mark and name left, what it does right. Three short points each: one job per partner, no protocol detail (Marcus, Sep 26). -->
+<section class="slide" id="s11">
+  <div class="stage">
+    <div class="pagehead">
+      <div class="text"><h1>Partner tracks.</h1></div>
+      <svg class="dots head" data-mode="right"></svg>
     </div>
-    <div class="three">
-      <div><span class="fresh"></span>Every contract we touch is a public standard someone else already audited.</div>
-      <div><span class="fresh"></span>The only thing you ever share is a name.</div>
-      <div><span class="fresh"></span>Everything rebuilds from your seed with every server off.</div>
+    <div class="tracks">
+      <div class="track">
+        <div class="brand"><img src="assets/logo-ens.svg" alt="ENS"><b>ENS</b></div>
+        <div>
+          <div class="what"><b>Names.</b><span>ENSv2 · Sepolia</span></div>
+          <ul class="pts"><li>Every payee gets a subname under soapay.eth</li><li>Only the employee's key can update it</li><li>Pay is sent to the name, never to an address</li></ul>
+        </div>
+      </div>
+      <div class="track">
+        <div class="brand"><img src="assets/logo-world.png" alt="World"><b>World</b></div>
+        <div>
+          <div class="what"><b>Recovery.</b><span>World ID · IDKit · Proof of Human</span></div>
+          <ul class="pts"><li>A lost key can only be replaced by the same human</li><li>The employee re-proves Proof of Human in the World App</li><li>No match, no redirect of future pay</li></ul>
+        </div>
+      </div>
+      <div class="track">
+        <div class="brand"><img src="assets/logo-curvegrid.png" alt="Curvegrid"><b>Curvegrid</b></div>
+        <div>
+          <div class="what"><b>Dashboard.</b><span>Digital asset dashboard track</span></div>
+          <ul class="pts"><li>The employee app is the digital asset dashboard</li><li>Live balances and pay history across every fresh address</li><li>A guard that blocks any spend that would link them</li></ul>
+        </div>
+      </div>
     </div>
   </div>
 </section>
 
-<!-- 11. Use cases: what the rail already handles -->
-<section class="slide" id="s11">
+<!-- 12. Use cases: what the rail already handles -->
+<section class="slide" id="s12">
   <div class="stage">
     <div class="pagehead">
       <div class="text">
-        <span class="eyebrow">Use cases</span>
         <h1>Built for payroll. Ready for any payout.</h1>
       </div>
       <svg class="dots head" data-mode="right"></svg>
@@ -428,8 +454,8 @@
   </div>
 </section>
 
-<!-- 12. Future plan: three additions -->
-<section class="slide" id="s12">
+<!-- 13. Future plan: three additions -->
+<section class="slide" id="s13">
   <div class="stage">
     <div class="pagehead">
       <div class="text">
@@ -446,8 +472,8 @@
   </div>
 </section>
 
-<!-- 13. Demo: one word, the demo itself is live -->
-<section class="slide" id="s13">
+<!-- 14. Demo: one word, the demo itself is live -->
+<section class="slide" id="s14">
   <div class="stage hero">
     <svg class="dots dia l" data-mode="diamond"></svg>
     <svg class="dots dia r" data-mode="diamond"></svg>
@@ -485,7 +511,7 @@
     el.innerHTML = out;
   });
 
-  // ?only=N renders a single slide, used to screenshot each page for visual checks. No param prints all twelve.
+  // ?only=N renders a single slide, used to screenshot each page for visual checks. No param prints all thirteen.
   const only = new URLSearchParams(location.search).get("only");
   if (only) all.forEach((s, i) => { if (String(i + 1) !== only) s.style.display = "none"; });
 </script>
