@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-export function Copy({ value, label = 'Copy' }: { value: string; label?: string }) {
+export function Copy({ value, label = 'Copy', onCopied }: { value: string; label?: string; onCopied?: () => void }) {
   const [state, setState] = useState<'idle' | 'done' | 'failed'>('idle');
   return (
     <button
@@ -10,6 +10,7 @@ export function Copy({ value, label = 'Copy' }: { value: string; label?: string 
         try {
           await navigator.clipboard.writeText(value);
           setState('done');
+          onCopied?.();
         } catch {
           setState('failed');
         }

@@ -49,25 +49,16 @@ function mount(pk: PasskeyAuthenticator) {
   );
 }
 
-/** Welcome → Keys (reveal, confirm the three words) → the Lock step. */
+/** Welcome → Keys (save the recovery kit: show the words, tick the box; no quiz, D-44) → the Lock step. */
 async function throughKeys(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: "Create a new account" }));
   expect(screen.getByText(/the one key to every payment/)).toBeTruthy();
   expect(screen.getByText("Losing the seed loses the funds.")).toBeTruthy();
-  await user.click(screen.getByRole("button", { name: /Reveal phrase/ }));
+  await user.click(screen.getByRole("button", { name: /Show words/ }));
   const list = screen.getByRole("list", { name: "Recovery phrase" });
-  const words = within(list)
-    .getAllByRole("listitem")
-    .map((li) => li.querySelectorAll("span")[1]!.textContent!);
-  expect(words).toHaveLength(12);
-  await user.click(screen.getByLabelText("I wrote down all 12 words, in order"));
+  expect(within(list).getAllByRole("listitem")).toHaveLength(12);
+  await user.click(screen.getByLabelText("I saved my recovery kit somewhere safe"));
   await user.click(screen.getByRole("button", { name: "Continue" }));
-  for (const input of screen.getAllByLabelText(/^Word #\d+$/)) {
-    const label = document.querySelector(`label[for="${input.id}"]`)!.textContent!;
-    const n = Number(label.match(/Word #(\d+)/)![1]);
-    await user.type(input, words[n - 1]!);
-  }
-  await user.click(screen.getByRole("button", { name: "Confirm backup" }));
   expect(await screen.findByRole("heading", { name: "Lock this device" })).toBeTruthy();
 }
 
@@ -76,13 +67,15 @@ beforeEach(async () => {
 });
 
 describe("onboarding Lock step with a passkey", () => {
-  it("welcome keeps the two buttons and hides the wallet signature under Advanced", () => {
+  it("welcome keeps the two buttons and no longer offers a wallet signature (D-45)", () => {
     mount(fakePasskey().pk);
     expect(screen.getByRole("heading", { name: "Get paid without broadcasting your balance" })).toBeTruthy();
     expect(screen.getByText(/You get one private key/)).toBeTruthy();
-    const wallet = screen.getByTestId("use-wallet");
-    expect(wallet.closest("details")).not.toBeNull();
-    expect(wallet.closest("details")!.open).toBe(false);
+    expect(screen.getByRole("button", { name: "Create a new account" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Restore from recovery phrase" })).toBeTruthy();
+    expect(screen.queryByTestId("use-wallet")).toBeNull();
+    expect(screen.queryByText(/wallet signature/i)).toBeNull();
+    expect(document.querySelector("details")).toBeNull();
   });
 
   it("create → passkey lock → register step reached, vault sealed under the passkey", async () => {

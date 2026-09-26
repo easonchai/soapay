@@ -7,7 +7,7 @@ Stealth-address payroll on Base. Product spec: `PRD.md`. PRD review: `docs/prd-a
 | Path | What |
 | --- | --- |
 | `packages/sdk` | `@soapay/sdk`: the only home for derivation, registry, announce, scan and spend logic |
-| `apps/recipient` | Vite + React SPA on CK's Direction A Ledger design: keys (recovery phrase, or a wallet signature for plain EOAs), onboarding, scanner, ledger, guarded Send, Exit, Convert, rotation |
+| `apps/recipient` | Vite + React SPA on CK's Direction A Ledger design: keys (recovery phrase saved as a recovery kit; passkey unlock), onboarding, scanner, ledger, guarded Send, Exit, Convert, rotation |
 | `apps/sender` | Vite + React SPA, the company app on the Direction A Ledger design: hero landing with wallet Login, then Pay run (denominated payouts), Review & sign, History, Recipients, Settings. Pays through StealthDisperse (EOAs) or an EIP-5792 batch (smart accounts) |
 | `apps/api` | Hono on Node: registration relayer (`POST /register`, and `POST /relay` for CK's request shape), ENSv2 subname issuer, World ID verification, announcement indexer (docs/mvp-spec.md §4). Gateway *derivation* mode is out of scope (proposed cut) |
 | `apps/mcp` | `@soapay/mcp`: stdio MCP server (spec §8), so agents get `<label>.soapay.eth` identities with ENSIP-26 records and can pay, scan and spend. Bundled with esbuild |

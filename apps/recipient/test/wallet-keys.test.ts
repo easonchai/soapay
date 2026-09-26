@@ -26,7 +26,7 @@ function fakeProvider(code: `0x${string}` = "0x", sign = (m: string) => eoa.sign
   };
 }
 
-describe("wallet-signature keys in onboarding (plain EOAs only)", () => {
+describe("wallet-signature keys, recovery of older accounts (plain EOAs only)", () => {
   it("a plain EOA signs twice and gets the SDK's keys; the vault stores the signature, not a phrase", async () => {
     const p = fakeProvider();
     const { secret, keys } = await deriveWalletKeys(injectedKeyWallet(p));
@@ -67,9 +67,10 @@ describe("wallet-signature keys in onboarding (plain EOAs only)", () => {
     await expect(deriveWalletKeys(demoSmartWallet())).rejects.toMatchObject({ reason: "has-code" });
   });
 
-  it("the machine routes welcome → wallet → passphrase and back", () => {
+  it("the machine routes restore → wallet → passphrase and back (D-45: recovery of older accounts only)", () => {
     const wallet = { kind: "wallet-signature" as const, signature: "0x01" as const, wallet: eoa.address };
-    let s = reduce({ step: "welcome" }, { type: "USE_WALLET" });
+    expect(reduce({ step: "welcome" }, { type: "USE_WALLET" })).toEqual({ step: "welcome" });
+    let s = reduce({ step: "restore", error: null }, { type: "USE_WALLET" });
     expect(s).toEqual({ step: "wallet", error: null });
     s = reduce(s, { type: "WALLET_FAILED", error: "nope" });
     expect(s).toEqual({ step: "wallet", error: "nope" });
@@ -77,6 +78,6 @@ describe("wallet-signature keys in onboarding (plain EOAs only)", () => {
     expect(s).toEqual({ step: "passphrase", mnemonic: "", origin: "wallet", wallet });
     expect(reduce(s, { type: "BACK" })).toEqual({ step: "wallet", error: null });
     expect(reduce(s, { type: "VAULT_CREATED" })).toEqual({ step: "register" });
-    expect(reduce({ step: "wallet", error: null }, { type: "BACK" })).toEqual({ step: "welcome" });
+    expect(reduce({ step: "wallet", error: null }, { type: "BACK" })).toEqual({ step: "restore", error: null });
   });
 });
