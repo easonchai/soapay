@@ -9,9 +9,9 @@ function Halo({ leaving }: { leaving: boolean }) {
     <motion.div
       className="halo"
       aria-hidden
-      initial={{ scale: 0.6, opacity: 0 }}
-      animate={leaving ? { scale: 1.35, opacity: 0 } : { scale: 1, opacity: 0.55 }}
-      transition={leaving ? { duration: 0.45, ease: [0.4, 0, 1, 1] } : { duration: 1.1, ease: [0.22, 1, 0.36, 1] }}
+      initial={{ scale: 0.55, opacity: 0 }}
+      animate={leaving ? { scale: 1.45, opacity: 0 } : { scale: 1, opacity: 0.55 }}
+      transition={leaving ? { duration: 1.1, ease: [0.4, 0, 0.6, 1] } : { duration: 2.4, ease: [0.16, 1, 0.3, 1] }}
     >
       <Dots mode="diamond" animate className="dots" />
     </motion.div>
@@ -22,12 +22,12 @@ function Halo({ leaving }: { leaving: boolean }) {
 function Rise({ children, delay = 0, className }: { children: React.ReactNode; delay?: number; className?: string }) {
   if (motionOff()) return <div {...(className ? { className } : {})}>{children}</div>;
   return (
-    <motion.div {...(className ? { className } : {})} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay, ease: [0.22, 1, 0.36, 1] }}>
+    <motion.div {...(className ? { className } : {})} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.9, delay, ease: [0.16, 1, 0.3, 1] }}>
       {children}
     </motion.div>
   );
 }
-const LEAVE_MS = 420;
+const LEAVE_MS = 1100;
 import type { VaultPhase } from "../hooks/store.js";
 import type { VaultMode } from "../lib/vault.js";
 
@@ -87,12 +87,12 @@ export function VaultGate(p: VaultGateProps) {
       <div className="gate-wrap">
         <div className="gate">
           <Halo leaving={leaving} />
-          <Rise delay={0.15}>
+          <Rise delay={0.6}>
             <span className="eyebrow">Payroll vault · locked</span>
             <h1 style={{ marginTop: 8 }}>Unlock your payroll</h1>
             <p className="lead">Your roster and run history are encrypted in this browser.</p>
           </Rise>
-          <Rise delay={0.25} className="card">
+          <Rise delay={0.85} className="card">
             {device ? (
               <>
                 <button ref={primary} className={`btn-primary btn-xl full${leaving ? "" : " pulse"}`} disabled={leaving} onClick={() => proceed(() => p.onUnlock())}>
@@ -116,7 +116,7 @@ export function VaultGate(p: VaultGateProps) {
             )}
             <ErrorLine error={p.error} />
           </Rise>
-          <Rise delay={0.35}>
+          <Rise delay={1.1}>
             <p className="foot">{FOOT}</p>
           </Rise>
         </div>
@@ -129,12 +129,12 @@ export function VaultGate(p: VaultGateProps) {
     <div className="gate-wrap">
       <div className="gate">
         <Halo leaving={leaving} />
-        <Rise delay={0.15}>
+        <Rise delay={0.6}>
           <span className="eyebrow">Payroll vault · new</span>
           <h1 style={{ marginTop: 8 }}>Set up the payroll vault</h1>
           <p className="lead">Choose how this browser unlocks your roster and history.</p>
         </Rise>
-        <Rise delay={0.25}>
+        <Rise delay={0.85}>
         <form
           className="card"
           onSubmit={(e) => {
@@ -177,7 +177,7 @@ export function VaultGate(p: VaultGateProps) {
           <ErrorLine error={p.error} />
         </form>
         </Rise>
-        <Rise delay={0.35}>
+        <Rise delay={1.1}>
           <p className="foot">{FOOT}</p>
         </Rise>
       </div>

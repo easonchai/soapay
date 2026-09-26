@@ -7,8 +7,8 @@ afterEach(() => {
   cleanup();
   vi.useRealTimers();
 });
-/** The gate lets its halo flow out for ~420 ms before handing over. */
-const settle = () => vi.advanceTimersByTime(600);
+/** The gate lets its halo flow out for ~1.1 s before handing over. */
+const settle = () => vi.advanceTimersByTime(1400);
 
 describe("VaultGate", () => {
   it("locked with a device key: one pulsing primary button, and it unlocks", () => {
