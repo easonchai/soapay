@@ -9,12 +9,15 @@ import tailwindcss from "@tailwindcss/vite";
  * connect-src allows any https/wss origin because the API, RPC and bundler URLs are user-configurable
  * (Settings). localhost is allowed so a self-hosted API works in development builds.
  * `frame-ancestors` cannot be set from a meta tag; set it as a header where the SPA is hosted.
+ *
+ * style-src allows 'unsafe-inline': framer-motion (in @soapay/ui) writes runtime styles, and a static
+ * SPA can't carry per-load nonces. Scripts stay strict ('self' only), which is what guards the vault.
  */
 export const CSP = [
   "default-src 'self'",
   "script-src 'self'",
   "worker-src 'self'",
-  "style-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data:",
   "font-src 'self'",
   "connect-src 'self' https: wss: http://localhost:* http://127.0.0.1:*",

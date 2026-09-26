@@ -52,6 +52,7 @@ Every product or architecture decision gets an entry here, with the PRD section 
 | Sender approve → pay | `pay` failed with "exceeds allowance" (the same lag) | Live testnet run | 6ced8aa |
 | Exit planner | The leg minimum was underestimated (12.6 → about 16.5 USDC); the runner doesn't persist before sending | SDK agent review | open (see checkpoint 17) |
 | SDK tests | Intermittent `Test timed out in 5000ms` (payrun, exit) only when all packages test in parallel | Repeated forced `turbo run test`; isolated runs were 15/15 and 6/6 green | SDK `testTimeout` raised to 30 s; 3/3 parallel runs green |
+| Recipient CSP | The production build blocked framer-motion's runtime styles (`style-src 'self'`); mock-mode checks ran on the dev server, which has no CSP | Browser check of the live Railway URL | `style-src 'self' 'unsafe-inline'`, scripts still `'self'` only (agent decision, low risk; confirm) |
 | Uniswap proxy | The platform sees stealth addresses | Owner's trust question | queued (D-27) |
 
 ## How to add an entry
