@@ -204,3 +204,8 @@ metadata:
   - The flaky SDK tests were load timeouts, not logic (the SDK testTimeout is now 30 s; 3/3 full parallel runs green); logged in the decision-log corrections table.
   - No agent decisions pending except D-19.
   - Next: redeploy Railway (D-30), then the D-27 → D-31/D-28 queue.
+- Checkpoint 25 (2026-09-26): **Railway redeployed with CK's design on our engine** (aecffdc + CSP fix 8881e5b), https://web-production-9b930.up.railway.app.
+  - The Railway MCP token expired, so deploys now use the CLI: `railway up --service web|api --detach` (the project is linked).
+  - Found in the live check: the production CSP blocked framer-motion styles. Fixed by allowing inline styles only; this is an agent decision awaiting the owner's confirmation, logged.
+  - Open: the landing-copy overclaim (see prd-open-questions).
+  - Next: D-27 (privacy doc + platform-free swap) → D-31/D-28 (denominations default + timing queue) → live World ID → D-29 → demo-flow doc.
