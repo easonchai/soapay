@@ -13,10 +13,12 @@ import {
   createMockEnsWriter,
   createMockFetch,
   createMockPublicClient,
+  createMockDappService,
   createMockSpendService,
   setMockIdentity,
 } from "./mock.js";
 import { createSdkSpendService, type SpendService } from "./spend.js";
+import { createSdkDappService, type DappService } from "./dapp.js";
 import { exitConfigFor } from "../features/exit/config.js";
 import { createMockExitService } from "../features/exit/mock.js";
 import { createSdkExitService, type ExitService } from "../features/exit/sdk.js";
@@ -29,6 +31,8 @@ export type Services = {
   /** Reads: block number, logs, balances, registry nonce; receipts, ETH balance, nonce and code (D-41 views). */
   client: ScanClient & GaslessProofClient & { readContract: PublicClient["readContract"] };
   spend: SpendService;
+  /** dApp calls over WalletConnect (D-61): one userOp from one stealth address, same gas path as Send. */
+  dapp: DappService;
   /** Compliant exit through Privacy Pools (features/exit/sdk.ts is the SDK seam). */
   exit: ExitService;
   /** ENSv2 `stealth` record writer for rotation (Sepolia). */
@@ -57,6 +61,7 @@ export function buildServices(settings: Settings, mock: boolean): Services {
       fetch: fetchFn,
       client: createMockPublicClient(chainId) as unknown as Services["client"],
       spend: createMockSpendService(chainId),
+      dapp: createMockDappService(chainId),
       exit: createMockExitService(),
       ens: createMockEnsWriter(),
       pool: pool(),
@@ -76,6 +81,7 @@ export function buildServices(settings: Settings, mock: boolean): Services {
     fetch: fetchFn,
     client: publicClient as unknown as Services["client"],
     spend: createSdkSpendService({ chainId, bundlerUrl: settings.bundlerUrl, publicClient, paymasterUrl: paymasterUrl(settings) }),
+    dapp: createSdkDappService({ chainId, bundlerUrl: settings.bundlerUrl, publicClient, paymasterUrl: paymasterUrl(settings) }),
     exit: createSdkExitService({
       config: exitConfigFor(chainId),
       bundlerUrl: settings.bundlerUrl,

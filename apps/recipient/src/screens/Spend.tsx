@@ -125,6 +125,11 @@ export function Spend() {
         description={`Each source address sends in its own transaction, ${
           defaultPaymasterMode(svc.settings.chainId) === "sponsored" ? "with gas sponsored (testnet)" : "with gas paid in USDC"
         }. Sends are queued, one address per random window of hours, so your addresses aren't linked by timing.`}
+        action={
+          <Button variant="ghost" size="sm" onClick={() => void navigate("/connect")}>
+            Use a dApp instead
+          </Button>
+        }
       />
       {!flow.ready && <Alert variant="warning">{flow.unavailableReason}</Alert>}
 

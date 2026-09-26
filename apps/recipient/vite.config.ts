@@ -12,7 +12,20 @@ import tailwindcss from "@tailwindcss/vite";
  *
  * style-src allows 'unsafe-inline': framer-motion (in @soapay/ui) writes runtime styles, and a static
  * SPA can't carry per-load nonces. Scripts stay strict ('self' only), which is what guards the vault.
+ *
+ * WalletConnect ("Connect to a dApp", D-61) needs the relay socket, the Verify API, pulse (WalletKit's
+ * event endpoint) and the blockchain API. They sit under `https:`/`wss:` already; they are named here
+ * so the policy still works if connect-src is ever narrowed. Verify may also load in a hidden frame.
  */
+export const WALLETCONNECT_ORIGINS = [
+  "wss://relay.walletconnect.org",
+  "wss://relay.walletconnect.com",
+  "https://verify.walletconnect.org",
+  "https://verify.walletconnect.com",
+  "https://pulse.walletconnect.org",
+  "https://rpc.walletconnect.org",
+] as const;
+
 export const CSP = [
   "default-src 'self'",
   // 'wasm-unsafe-eval' lets IDKit core compile its WebAssembly; JavaScript eval stays blocked.
@@ -21,7 +34,8 @@ export const CSP = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data:",
   "font-src 'self'",
-  "connect-src 'self' https: wss: http://localhost:* http://127.0.0.1:*",
+  `connect-src 'self' https: wss: http://localhost:* http://127.0.0.1:* ${WALLETCONNECT_ORIGINS.join(" ")}`,
+  "frame-src https://verify.walletconnect.org https://verify.walletconnect.com",
   "object-src 'none'",
   "base-uri 'none'",
   "form-action 'none'",

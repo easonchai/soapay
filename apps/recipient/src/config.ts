@@ -15,6 +15,8 @@ export type EnvConfig = {
   payToken: string;
   /** The company (sender) app, for the top bar's "Pay" link (VITE_OTHER_APP_URL). */
   otherAppUrl: string;
+  /** Reown (WalletConnect) project id for "Connect to a dApp" (D-61). Empty = the feature is off. */
+  walletConnectProjectId: string;
 };
 
 export const SUPPORTED_CHAIN_IDS = Object.keys(CHAINS).map(Number);
@@ -46,6 +48,7 @@ export function readEnv(env: Record<string, string | boolean | undefined> = impo
     payToken: str("VITE_PAY_TOKEN"),
     // Dev: the sender's dev server. Build: scripts/build-demo.sh serves the company app (and landing) at /.
     otherAppUrl: str("VITE_OTHER_APP_URL") || (dev ? "http://localhost:5174" : "/"),
+    walletConnectProjectId: str("VITE_WALLETCONNECT_PROJECT_ID"),
   };
 }
 

@@ -151,6 +151,15 @@ export function createApi(apiUrl: string, fetchFn: ApiFetch = (i, init) => fetch
       call<AttachSessionResult>(fetchFn, `${root}/names/${encodeURIComponent(label)}/session`, json(body)),
     rotate: (label: string, body: RotationBody) =>
       call<RotationResult>(fetchFn, `${root}/names/${encodeURIComponent(label)}/rotation`, json(body)),
+    /** The API's current wait (seconds) before a late-linked World ID session can back a rotation; null if unknown. */
+    async getAttachCooldownSeconds(): Promise<number | null> {
+      try {
+        const c = await call<{ attach_cooldown_seconds?: unknown }>(fetchFn, `${root}/worldid/config`);
+        return typeof c.attach_cooldown_seconds === "number" ? c.attach_cooldown_seconds : null;
+      } catch {
+        return null;
+      }
+    },
     /** null when no invite has this code hash. */
     async getInvite(codeHash: Hex): Promise<InviteRecord | null> {
       try {

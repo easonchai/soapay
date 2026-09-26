@@ -1,7 +1,7 @@
 import { Fragment, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { Copy, CountUp } from "@soapay/ui";
-import { chainName, explorerTxUrl } from "../config.js";
+import { chainName, exitOffered, explorerTxUrl } from "../config.js";
 import { describePhase, useScanner } from "../hooks/scanner.js";
 import { useChain } from "../hooks/useChain.js";
 import { lastSpendTx } from "../hooks/useChainViews.js";
@@ -76,9 +76,11 @@ export function Home() {
           <Button variant="ghost" onClick={() => void navigate("/spend")} disabled={n === 0}>
             Send
           </Button>
-          <Button variant="ghost" onClick={() => void navigate("/exit")} disabled={n === 0}>
-            Exit
-          </Button>
+          {exitOffered(svc.settings.chainId) && (
+            <Button variant="ghost" onClick={() => void navigate("/exit")} disabled={n === 0}>
+              Exit
+            </Button>
+          )}
         </div>
       </div>
 
@@ -169,6 +171,14 @@ export function Home() {
                             onClick={() => void navigate("/spend", { state: { amount: formatUsdc(e.balance, { precise: true }).replace(/,/g, "") } })}
                           >
                             Send
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-inline"
+                            title="Use this address with a dApp (WalletConnect)"
+                            onClick={() => void navigate("/connect", { state: { address: e.stealthAddress } })}
+                          >
+                            dApp
                           </button>
                           <button type="button" className="btn-text btn-inline" onClick={() => setOpen(isOpen ? null : key)}>
                             {isOpen ? "Hide" : "Details"}
