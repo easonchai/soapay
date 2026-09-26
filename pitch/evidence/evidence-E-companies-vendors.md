@@ -15,6 +15,7 @@ Read this first. Almost every strong quote comes from a company that sells a pri
 - Numbers (verified, USAD page): stablecoins processed over $33 trillion in 2025. Less than 1% of businesses use crypto for payroll. Toku has processed more than $1 billion in token payroll volume.
 - Slide use: Make this the lead quote. The new ending, "That's where the conversation ends", shows the deal dying. The second quote rules out compliance as the cause.
 - Toku's own pages (verified): "Enterprises generally can't run payroll on glass rails." (April 30, 2026, https://www.toku.com/resources/why-enterprise-companies-have-been-slow-to-adopt-stablecoin-payroll). "Anyone who maps one employee wallet to one person can see that person's pay, every cycle, forever." (July 24, 2026, https://www.toku.com/resources/how-toku-runs-fully-private-stablecoin-payroll-on-aleo-and-usad)
+- Where the data lives, same Toku page (verified): "Payroll funds flow into Toku's platform, compliance is handled in the existing HR stack, and settlement happens privately on Aleo." "The employer keeps the authoritative record." "The confidentiality applies to the public ledger." "Auditor and tax-authority access: through employer records." Private from the public and from coworkers; visible to Toku and the employer. Nothing says Toku sees a wallet after payout.
 
 **2. Visa (Rubail Birwadker, Global Head of Growth Products and Strategic Partnerships)**
 - What: Visa joined the Canton Network as a super validator. It said banks will not move activity onto transparent chains.
@@ -38,6 +39,7 @@ Read this first. Almost every strong quote comes from a company that sells a pri
 - Sources: https://base-a060aa97.mintlify.app/ledgers/overview and https://www.base.org/ledgers
 - Quote (verified, docs): "Pay vendors without broadcasting your supplier list to the public chain."
 - Also verified (product page): "Onchain payroll without publishing what every employee or contractor earns."
+- Docs, fetched live Sep 26 (docs.base.org/get-started/private-transactions and the ledger guides): "An operator gates the ledger with its own KYC and compliance controls." "The operator runs the services that process each step and decides how to authorize withdrawals." "The ledger stays agnostic to the offchain system behind it, so you run your own bookkeeping and custom transaction logic." Product page: "Coinbase runs the Ledger and the compliance" and "balances and transfers stay in your ledger." Transfers inside a ledger are entries in the operator's off-chain books; the chain sees deposits and withdrawals only.
 - October 2025 (verified): CoinDesk quotes Coinbase's announcement, not Armstrong himself: "Privacy is critical for unlocking the full potential of an onchain future," (https://www.coindesk.com/business/2025/10/22/coinbase-is-building-private-transactions-for-base-ceo-brian-armstrong-says)
 - Slide use: Coinbase had to build a private ledger beside its own public chain. Its product page names suppliers and payroll directly.
 
@@ -47,6 +49,7 @@ Read this first. Almost every strong quote comes from a company that sells a pri
 - Source: https://tempo.xyz/blog/privacy-on-tempo/
 - Quote (verified): "A company running payroll would publish every salary."
 - Also verified: "Several enterprises and financial institutions are exploring using Zones"
+- Also verified, same page: body "The zone operator has visibility into all transactions within the zone. This is by design." FAQ "The zone operator can see all transactions. Users can only see their own balances and activity. The public does not see what happens inside the zone." And "Zone operators never have custody." Say sees, never holds.
 - Slide use: Pair this with Deel. Stripe's chain built a private layer because of payroll. Deel is the only named Zones user I found.
 
 **6. Circle (Arc)**
