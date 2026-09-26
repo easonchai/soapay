@@ -296,6 +296,18 @@ Full role table and calls: [contracts/ENSV2.md](../contracts/ENSV2.md).
 
 The first time a name is paid, the company app stores `name → meta-address` locally (the **pin**). Every later run re-resolves the name. If the record changed, it pays only if a valid World ID attestation from the attester it pinned covers exactly *pinned → current*; otherwise the line is blocked until the employer approves by hand. The CLI does the same in `.soapay/pins.json`.
 
+### The company vault and its encrypted backup (D-62)
+
+The company app keeps the roster (names, amounts, pins), invites (codes included) and run history in an encrypted vault in IndexedDB (`apps/sender/src/lib/vault.ts`, AES-GCM-256, each record bound to its slot). A browser data clear used to lose all of it, so the vault now follows the wallet:
+
+- **Lock.** By default the vault key is HKDF-SHA256 over the wallet's `personal_sign` of a fixed message ("Soapay company vault … Wallet: <address> Chain: <id>"). At setup the app asks for that signature twice: EOAs and 7702-delegated EOAs (e.g. MetaMask smart accounts) sign identically, so the same wallet re-derives the same key in any browser. Passkey smart wallets (Coinbase Smart Wallet) sign differently each time; the app then falls back to a passphrase (PBKDF2, 600k) and says so. The device-key option stays, but it can't be backed up; Settings offers to re-lock it with the wallet.
+- **Backup.** The app uploads the vault's encrypted envelope (sealed records plus KDF metadata, never a key or a signature) to `PUT /backups/:walletAddress` with a version counter, signed by the wallet. The API checks the signature (ERC-1271 / 6492 / 7702 too) and that the version only goes up, and stores only ciphertext. Each write needs the wallet's own signature, so the app backs up at the moments that matter, one prompt each: after recipients are enrolled or re-pinned, after invites change, after a pay run is recorded (never mid-run), and on **Back up now** in Settings. Bursts share one prompt (2 s debounce). Settings shows when the last backup ran and whether changes are pending. A newer backup from another browser is never overwritten silently (409 → "Replace with this browser's data").
+- **Restore.** Logging in on a browser with no vault looks up `GET /backups/:address`. If there is one, the gate offers **Restore with wallet** (one signature) or asks for the passphrase; the secret is checked before anything is written. **Start a new vault instead** keeps the old backup until the new vault's first backup replaces it.
+- **Eviction.** Once a vault exists the app calls `navigator.storage.persist()` and shows the result in Settings.
+- **Demo and dev-mock modes** never call the API or ask for a signature.
+
+The employer is trusted (threat model), but the API still learns nothing beyond "this wallet stores a blob of this size, updated at these times".
+
 ### The World ID pieces
 
 | Piece | Contents | Why |
