@@ -98,7 +98,7 @@ node -e 'import("viem").then(async({createPublicClient,http})=>{const{sepolia}=a
 
 **Not yet live:** a swap on Base Sepolia (testnet liquidity may be thin) and a real Trading API call (no API key yet; the API path is tested against mocks, and the fork used the Router fallback).
 
-**Prize requirements:** `FEEDBACK.md` at the repo root, with line pointers and our findings (e.g. Uniswap's own skill is out of date against the live spec: the `{quote}` body, numeric chain ids, Universal Router 2.1.2). The team must also submit the Uniswap feedback form with a link to FEEDBACK.md.
+**Prize requirements:** `FEEDBACK.md` at the repo root, with line pointers and live-verified findings: Base Sepolia routing times out upstream; a quote works with a placeholder swapper; the apparent spec-vs-skill conflict on the `/swap` body resolved (both forms are valid); chain ids accept numbers too. The team must also submit the Uniswap feedback form with a link to FEEDBACK.md.
 
 **Verify yourself:** `FORK_E2E=1 pnpm --filter @soapay/sdk vitest run test/fork.e2e.test.ts`.
 
