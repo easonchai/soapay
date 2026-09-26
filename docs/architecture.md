@@ -226,6 +226,29 @@ sequenceDiagram
 
 Fees are roughly fixed per leg, so the Exit screen shows the whole cost and "you receive ≈ X of Y" before starting (D-48). On testnet the relayer charges about 21.5 USDC per withdrawal, so small exits withdraw directly, with the destination paying a little Sepolia ETH.
 
+## Why EIP-7702 for spending (and not a contract per address)
+
+**Before any spend, a stealth address is a plain account.** ERC-5564 gives you a private key, and so an ordinary externally owned account: no contract, no code, just an address USDC can be sent to like any wallet. That's deliberate. Any sender, including a plain disperse tool, can pay it with a normal transfer, and on a block explorer it looks like every other fresh address.
+
+| Pay day | First spend | After |
+| --- | --- | --- |
+| Stealth EOA, no code, 500 USDC, key derived by you | One type-4 transaction from the bundler: the address signs a 7702 authorization (chain, Simple7702Account, nonce), then `EntryPoint.handleOps` (1) sets the code pointer, (2) validates the userOp against the address's own ECDSA signature, (3) the Circle Paymaster takes gas in USDC (a permit verified through ERC-1271), (4) executes `USDC.transfer` | Code `0xef0100 ‖ Simple7702Account`, 499.99 USDC, key still yours |
+
+**What 7702 does.** Since Pectra (May 2025) an EOA can sign a small authorization saying "my code is whatever lives at this implementation address". A type-4 transaction carrying it writes a 23-byte pointer into the account. From then on, calls to the address run the implementation's code with the address's own storage and balance, so it behaves like a smart account while the private key still controls it. Nothing is deployed: `Simple7702Account` was deployed once by the 4337 team, and every delegated account points at the same bytes.
+
+**Soapay does this lazily.** On the first spend from an address, the employee app signs the authorization and hands it to the bundler together with a 4337 user operation. EntryPoint v0.8 understands that combination, so delegation and the spend land in one transaction, and the Circle Paymaster takes gas from the USDC already sitting there. That's why a stealth address never needs ETH, which would otherwise link it to whoever sent the ETH. It cost about 0.0057 USDC per spend on Base Sepolia.
+
+**Could we deploy a contract per address instead?** Yes, and Fluidkey does: a counterfactual Safe per stealth address (CREATE2 from the stealth key as owner), deployed by a factory on first spend. We chose 7702 for four reasons:
+
+1. **Receiving and spending stay ordinary.** A counterfactual Safe has no code before the spend either, but the factory call and the Safe proxy bytecode then tag the address as a "stealth Safe". A 7702 EOA pointing at the reference account looks like any of the many ordinary wallets that adopted 7702.
+2. **No deploy gas.** A Safe deployment is roughly 200k gas on top of the spend; the 7702 pointer costs a few thousand.
+3. **One audited implementation, zero custom contracts.** The repo rule is that nothing custom holds funds. `Simple7702Account` is the reference implementation, and there's no factory of ours in the path.
+4. **Reversible.** The EOA can re-delegate or clear its code later; a deployed proxy is forever.
+
+**The trade-off.** Every Soapay stealth address ends up pointing at the same implementation, which is a mild shared fingerprint. It's the same fingerprint as every other 7702 wallet using that implementation, so it groups you with the crowd rather than with your coworkers, but it isn't zero.
+
+**Why the paymaster works.** The Circle Paymaster needs a USDC permit signed by the account. Once the EOA has code, USDC verifies that signature through ERC-1271 by asking the account, and `Simple7702Account` answers by recovering the ECDSA signer and checking it equals itself. We verified this on a Base fork (`packages/sdk/test/fork.e2e.test.ts`) after an earlier note wrongly said it would fail; the spend path relies on it.
+
 ## Who sees what
 
 | Party | Sees | Can't see |
