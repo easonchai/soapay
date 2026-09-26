@@ -51,7 +51,7 @@
   .pagehead .text { flex: 0 0 auto; max-width: 1380px; }
   .pagehead .text .eyebrow { display: block; margin-bottom: 18px; }
   .pagehead .dots.head { flex: 1; min-width: 0; height: 140px; align-self: flex-start; }
-  .numline { display: block; font-size: 30px; margin: 8px 0; }
+  .numline { display: block; font-size: 32px; margin: 30px 0; white-space: nowrap; }
 
   /* Dot-matrix texture, same generator as packages/ui Dots. */
   svg.dots { display: block; pointer-events: none; }
@@ -91,8 +91,9 @@
 
   /* Proof slides: text with facts left, source line, screenshot right, evidence strip. */
   .proof { display: grid; grid-template-columns: 720px 1010px; gap: 60px; align-items: start; }
-  .proof .txt { font-size: 33px; line-height: 1.38; text-wrap: pretty; }
-  .src { font-family: var(--mono); font-size: 21px; line-height: 1.5; color: var(--ink2); margin-top: 28px; word-break: break-all; }
+  .proof > div:first-child { display: flex; flex-direction: column; align-self: stretch; }
+  .proof .txt { font-size: 40px; line-height: 1.36; text-wrap: pretty; }
+  .src { font-family: var(--mono); font-size: 21px; line-height: 1.5; color: var(--ink2); margin-top: auto; padding-top: 28px; word-break: break-all; }
   .shot { position: relative; overflow: hidden; border: 2px solid var(--line); background: #fff; }
   .shot img { position: absolute; display: block; }
   /* Spotlight overlays are plain divs on purpose: an SVG mask exported to PDF renders as garbage in macOS Preview. */
@@ -254,7 +255,7 @@
   <div class="stage">
     <div class="pagehead">
       <div class="text">
-        <h1>Everyone with a browser.</h1>
+        <h1>Everyone sees everything.</h1>
       </div>
       <svg class="dots head" data-mode="right"></svg>
     </div>
@@ -300,7 +301,7 @@
 <section class="slide" id="s6">
   <div class="stage">
     <div class="pagehead">
-      <div class="text"><h1>So companies walk away.</h1></div>
+      <div class="text"><h1>Dealbreaker for companies.</h1></div>
       <svg class="dots head" data-mode="right"></svg>
     </div>
     <div class="visa">
@@ -325,7 +326,7 @@
 <section class="slide" id="s7">
   <div class="stage">
     <div class="pagehead">
-      <div class="text"><h1>So they built private payrolls.</h1></div>
+      <div class="text"><h1>Existing solutions today.</h1></div>
       <svg class="dots head" data-mode="right"></svg>
     </div>
     <div class="fixes">
