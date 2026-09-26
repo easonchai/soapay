@@ -7,7 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   /*
-    Thirteen 16:9 slides, 2000x1125 each, in the product's own design system:
+    Twelve 16:9 slides, 2000x1125 each, in the product's own design system:
     Soapay Direction A "Ledger" (packages/ui/src/styles.css). Same tokens, same fonts,
     same components (TopBar, PageHead, panel, NavyPanel, table, Steps, FreshMark, Dots),
     scaled about 2.4x from the 13px app so a projector can read them.
@@ -44,7 +44,10 @@
   .placeholder { color: var(--ink3); font-style: italic; }
 
   /* PageHead: eyebrow, title, dot texture filling the gap. */
-  .pagehead { display: flex; align-items: flex-start; gap: 60px; }
+  /* Even spacing (Marcus, Sep 26): on slides with a heading, the free height splits equally between the gap under the
+     heading, the gap before a bottom block (strip, facts row) and the bottom margin. Hero slides keep their centering. */
+  .pagehead { display: flex; align-items: flex-start; gap: 60px; margin-bottom: auto; }
+  .stage:has(.pagehead)::after { content: ""; margin-top: auto; }
   .pagehead .text { flex: 0 0 auto; max-width: 1380px; }
   .pagehead .text .eyebrow { display: block; margin-bottom: 18px; }
   .pagehead .dots.head { flex: 1; min-width: 0; height: 140px; align-self: flex-start; }
@@ -73,11 +76,13 @@
   .tagline { font-family: var(--mono); font-size: 40px; font-weight: 500; color: var(--accent); }
   .big { font-size: 220px; font-weight: 600; letter-spacing: -0.04em; line-height: 1; }
 
-  /* Team: five people across, photo above name (Marcus, Sep 26). */
-  .people { display: grid; grid-template-columns: repeat(5, 1fr); gap: 32px; margin: auto 0; }
-  .person { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 24px; padding: 28px 24px 32px; }
+  /* Team: five people across, photo above name, then role and background lines (Marcus, Sep 26). */
+  .people { display: grid; grid-template-columns: repeat(5, 1fr); gap: 32px; }
+  .person { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 22px; padding: 28px 24px 32px; }
   .avatar { width: 100%; aspect-ratio: 1 / 1; background: var(--canvas); border: 2px dashed var(--line-strong); display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 24px; color: var(--ink3); }
   .person .name { font-size: 36px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.15; }
+  .person .role { font-size: 26px; font-weight: 500; line-height: 1.3; margin-top: 10px; text-wrap: balance; }
+  .person .prev { font-size: 23px; color: var(--ink2); line-height: 1.35; margin-top: 8px; text-wrap: balance; }
 
   /* Statement */
   /* One line (Marcus, Sep 26): sized so the line ends before the dot texture starts. */
@@ -85,11 +90,14 @@
   .dots.side { position: absolute; right: 0; top: 0; width: 560px; height: 100%; opacity: .55; }
 
   /* Proof slides: text with facts left, source line, screenshot right, evidence strip. */
-  .proof { display: grid; grid-template-columns: 720px 1010px; gap: 60px; align-items: start; margin-top: 36px; }
+  .proof { display: grid; grid-template-columns: 720px 1010px; gap: 60px; align-items: start; }
   .proof .txt { font-size: 33px; line-height: 1.38; text-wrap: pretty; }
   .src { font-family: var(--mono); font-size: 21px; line-height: 1.5; color: var(--ink2); margin-top: 28px; word-break: break-all; }
   .shot { position: relative; overflow: hidden; border: 2px solid var(--line); background: #fff; }
   .shot img { position: absolute; display: block; }
+  /* Spotlight overlays are plain divs on purpose: an SVG mask exported to PDF renders as garbage in macOS Preview. */
+  .shot .dim { position: absolute; left: 0; right: 0; background: rgba(255,255,255,.5); }
+  .shot .mark { position: absolute; border: 3px solid var(--accent); }
   .strip { margin-top: auto; display: grid; grid-template-columns: repeat(4, 1fr); border: 2px solid var(--line); background: var(--surface); }
   .strip .cell { display: flex; align-items: center; gap: 18px; padding: 16px 24px; border-left: 2px solid var(--hairline); min-height: 92px; }
   .strip .cell:first-child { border-left: 0; }
@@ -97,21 +105,39 @@
   .strip b { font-weight: 600; font-size: 24px; white-space: nowrap; }
   .strip span { font-size: 22px; color: var(--ink2); line-height: 1.25; }
   .closing { font-size: 42px; font-weight: 600; letter-spacing: -0.02em; color: var(--accent); }
+  /* Visa slide: logo and source on one row, then two sentence clips. */
+  .visa .head { display: flex; align-items: center; gap: 36px; }
+  .visa .logo { display: block; height: 150px; margin: -44px 0 -40px -6px; }
+  .visa .head .src { margin: 0; }
+  .visa .clips { display: flex; flex-direction: column; gap: 22px; margin-top: 34px; }
+  .visa .shot.wide { width: 100%; }
+  /* Private payrolls slide: three screenshot cards, then the two flaws as a numbered strip. */
+  .fixes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; }
+  .fix .shot { width: 100%; border: 0; border-bottom: 2px solid var(--line); }
+  .fix .body { padding: 22px 26px 24px; }
+  .fix .t { font-size: 30px; font-weight: 600; letter-spacing: -0.01em; margin-bottom: 8px; }
+  .fix .d { font-size: 25px; line-height: 1.38; color: var(--ink); text-wrap: pretty; }
+  .fix .src { font-size: 18px; margin-top: 12px; word-break: break-all; }
+  .flaws { grid-template-columns: 1fr 1fr; }
+  .flaws .cell { gap: 22px; padding: 22px 28px; align-items: center; }
+  .flaws .n { flex: 0 0 auto; width: 56px; height: 56px; background: var(--accent); color: #fff; font-family: var(--mono); font-size: 26px; display: flex; align-items: center; justify-content: center; }
+  .flaws b { display: block; font-size: 28px; font-weight: 600; margin-bottom: 4px; white-space: normal; }
+  .flaws span { font-size: 24px; }
 
   /* Solution: the locked sentence, three registers of the system's status colours. */
   .wordmark-lg { display: block; height: 116px; width: 307px; color: var(--accent); margin: 0 auto 10px; }
   .k { font-family: var(--mono); font-size: 31px; font-weight: 500; color: var(--ink3); margin: 30px 0 16px; }
   /* Colour only, no tinted boxes (Marcus, Sep 26). */
-  .clause { display: inline; font-size: 78px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.25; }
+  .clause { display: inline; font-size: 90px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.22; }
   .clause.cat { color: var(--accent); }
   .clause.mech { color: var(--ok); }
   .clause.out { color: var(--warn); }
   /* Centered as a block (Marcus, Sep 26). */
   .clauses { width: 100%; text-align: center; }
-  .clauses > div { text-wrap: balance; max-width: 1720px; margin: 0 auto; }
+  .clauses > div { text-wrap: balance; max-width: 1840px; margin: 0 auto; }
 
   /* Architecture: four boxes joined by rules and diamond glyphs. */
-  .flow { display: grid; grid-template-columns: 1fr 52px 1fr 52px 1fr 52px 1fr; align-items: stretch; margin-top: 40px; }
+  .flow { display: grid; grid-template-columns: 1fr 52px 1fr 52px 1fr 52px 1fr; align-items: stretch; }
   .box { padding: 32px 34px; }
   .box .t { font-family: var(--mono); font-size: 25px; font-weight: 500; color: var(--accent); margin-bottom: 14px; }
   .box .d { font-size: 28px; line-height: 1.38; text-wrap: pretty; }
@@ -120,13 +146,13 @@
   .conn { position: relative; display: flex; align-items: center; justify-content: center; }
   .conn::before { content: ''; width: 100%; height: 2px; background: var(--line-strong); }
   .conn::after { content: ''; position: absolute; width: 14px; height: 14px; border: 3px solid var(--accent); background: #fff; transform: rotate(45deg); }
-  .three { margin-top: 48px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 40px; }
+  .three { margin-top: auto; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 40px; }
   .three div { font-size: 28px; line-height: 1.38; padding-top: 22px; border-top: 2px solid var(--line); display: flex; gap: 16px; text-wrap: pretty; }
   .three .fresh { margin-top: 12px; }
 
   /* Use cases: eight indexed panels, like ledger rows. */
-  .uses { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; margin-top: 40px; }
-  .use { padding: 30px 30px; min-height: 214px; display: flex; flex-direction: column; justify-content: space-between; }
+  .uses { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
+  .use { padding: 30px 30px; min-height: 250px; display: flex; flex-direction: column; justify-content: space-between; }
   .use .idx { font-family: var(--mono); font-size: 24px; color: var(--ink3); }
   .use .t { font-size: 32px; font-weight: 500; line-height: 1.22; letter-spacing: -0.01em; text-wrap: pretty; }
   /* Iconsax Linear icons (iconsax-react, Marcus, Sep 26), navy, top-left of each tile with the index at top-right. */
@@ -135,8 +161,8 @@
   .use .ico svg { width: 100%; height: 100%; display: block; }
 
   /* Future plan: three Steps. */
-  .next { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; margin-top: 44px; }
-  .step { padding: 44px 40px; min-height: 380px; }
+  .next { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; }
+  .step { padding: 44px 40px; min-height: 430px; }
   .step .n { width: 72px; height: 72px; background: var(--accent); color: #fff; font-family: var(--mono); font-size: 32px; display: flex; align-items: center; justify-content: center; margin-bottom: 40px; }
   .step .t { font-size: 44px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 18px; line-height: 1.1; }
   .step .d { font-size: 30px; color: var(--ink2); line-height: 1.4; text-wrap: pretty; }
@@ -198,7 +224,7 @@
   </div>
 </section>
 
-<!-- 2. Team: heading and five people, photo and name only (Marcus, Sep 26). Bios stay in PITCH.md. -->
+<!-- 2. Team: heading and five people, photo, name, current role and background (Marcus, Sep 26). Longer bios stay in PITCH.md. -->
 <section class="slide" id="s2">
   <div class="stage">
     <div class="pagehead">
@@ -206,11 +232,11 @@
       <svg class="dots head" data-mode="right"></svg>
     </div>
     <div class="people">
-      <div class="panel person"><div class="avatar">photo</div><div class="name">Eason Chai</div></div>
-      <div class="panel person"><div class="avatar">photo</div><div class="name">Marcus</div></div>
-      <div class="panel person"><div class="avatar">photo</div><div class="name placeholder">[name]</div></div>
-      <div class="panel person"><div class="avatar">photo</div><div class="name placeholder">[name]</div></div>
-      <div class="panel person"><div class="avatar">photo</div><div class="name placeholder">[name]</div></div>
+      <div class="panel person"><div class="avatar">photo</div><div><div class="name">Eason Chai</div><div class="role">Founder&nbsp;&amp;&nbsp;CEO, Foresight and ELVTD</div><div class="prev">ELVTD: web3 solutions. Previously contracted for Virtuals Protocol</div></div></div>
+      <div class="panel person"><div class="avatar">photo</div><div><div class="name">Yudhishthra</div><div class="role">Co-Founder, Aqua0</div><div class="prev">Ex-Nethermind, ex-Etherscan</div></div></div>
+      <div class="panel person"><div class="avatar">photo</div><div><div class="name">Ee Sheng</div><div class="role">Head&nbsp;of&nbsp;Engineering, Thetanuts</div><div class="prev">Founder, zBase: private payments for agents. Base Batches 003 finalist</div></div></div>
+      <div class="panel person"><div class="avatar">photo</div><div><div class="name">Marcus Tan</div><div class="role">Founding Engineer, Predictefy</div><div class="prev">Ex-engineer, ELVTD</div></div></div>
+      <div class="panel person"><div class="avatar">photo</div><div><div class="name">Cheong Kian</div><div class="role">Founding Engineer, Predictefy</div></div></div>
     </div>
   </div>
 </section>
@@ -243,7 +269,7 @@
   </div>
 </section>
 
-<!-- 5. Proof 2: colleagues read each other's pay -->
+<!-- 5. Proof 2: colleagues read each other's pay. Two-column version with the key sentence spotlighted (Marcus, Sep 26). -->
 <section class="slide" id="s5">
   <div class="stage">
     <div class="pagehead">
@@ -258,7 +284,8 @@
         <div class="src">gov.gitcoin.co · Jun 2022, Feb 2023<br>gov.gitcoin.co/t/a-compensation-commitment/10830/24<br>gov.gitcoin.co/t/contributor-compensation-audit/12750</div>
       </div>
       <!-- Crop x330..2040 y640..1590 of 2880x2000 at s=0.590, title through the highlighted phrase -->
-      <div class="shot" style="width:1010px; height:560px"><img src="assets/gitcoin-audit.png" style="width:1700px; left:-195px; top:-378px"></div>
+      <!-- Spotlight (Marcus, Sep 26): whole page visible, text above the key sentence faded, the sentence framed in navy. Plain divs only: SVG masks misrender in macOS Preview. -->
+      <div class="shot" style="width:1010px; height:590px"><img src="assets/gitcoin-audit.png" style="width:1700px; left:-195px; top:-378px"><div class="dim" style="top:0; height:480px"></div><div class="mark" style="left:78px; top:480px; width:830px; height:106px"></div></div>
     </div>
     <div class="strip">
       <div class="cell"><img src="assets/si-optimism.svg" style="height:32px"><span>grantees traced, judged by name</span></div>
@@ -269,74 +296,70 @@
   </div>
 </section>
 
-<!-- 6. Proof 3: CFOs walk away -->
+<!-- 6. Proof 3: companies walk away. Visa only, no prose (Marcus, Sep 26): two sentence clips from the press release at full size. The Toku CFO quote is spoken. -->
 <section class="slide" id="s6">
   <div class="stage">
     <div class="pagehead">
-      <div class="text">
-        <h1>So companies walk away.</h1>
-      </div>
+      <div class="text"><h1>So companies walk away.</h1></div>
       <svg class="dots head" data-mode="right"></svg>
     </div>
-    <div class="proof">
-      <div>
-        <div class="txt">"Every public company CFO we talk to gets excited about stablecoins until they realize <span class="hl">their payroll would be public.</span> That's where the conversation ends."<br><br>Toku, over <span class="numhl">$1B</span> in payroll processed. Compliance "was never the blocker."</div>
-        <div class="src">aleo.org · Jul 29 2026<br>aleo.org/post/toku-case-study</div>
+    <div class="visa">
+      <div class="head"><img class="logo" src="assets/si-visa.svg" alt="Visa"><span class="src">usa.visa.com · Mar 25 2026 · press release</span></div>
+      <div class="clips">
+        <!-- Crop x302..1735 y1122..1181 of 2880x1800 at s=1.28: the sentence with the dealbreaker highlight -->
+        <div class="shot" style="width:1834px; height:76px"><img src="assets/visa-press.png" style="width:3686px; left:-387px; top:-1436px"></div>
+        <!-- Crop x1450..2115 y1578..1627 at s=1.28: "banks cannot run payroll if salaries are public" -->
+        <div class="shot" style="width:851px; height:63px"><img src="assets/visa-press.png" style="width:3686px; left:-1856px; top:-2020px"></div>
       </div>
-      <!-- Crop x560..2320 y380..1350 of 2880x1800 at s=0.574 -->
-      <div class="shot" style="width:1010px; height:557px"><img src="assets/aleo-toku.png" style="width:1653px; left:-321px; top:-218px"></div>
     </div>
     <div class="strip">
-      <div class="cell"><img src="assets/si-visa.svg" style="height:32px"><span>"a dealbreaker" for banks</span></div>
       <div class="cell"><img src="assets/si-stripe.svg" style="height:34px"><span>"would publish every salary"</span></div>
       <div class="cell"><b>Circle</b><span>"payroll should not be market data"</span></div>
       <div class="cell"><b>J.P. Morgan</b><span>"transparent by design"</span></div>
+      <div class="cell"><b>Fireblocks</b><span>"employees don't want their wages exposed"</span></div>
     </div>
   </div>
 </section>
 
-<!-- 7. Proof 4: Deel moved -->
+<!-- 7. Proof 4: private payrolls exist, and every one has the same two flaws (Marcus, Sep 26: Deel and Base Ledgers merged into one slide). -->
 <section class="slide" id="s7">
   <div class="stage">
     <div class="pagehead">
-      <div class="text">
-        <h1>Even the ones who wanted to.</h1>
-      </div>
+      <div class="text"><h1>So they built private payrolls.</h1></div>
       <svg class="dots head" data-mode="right"></svg>
     </div>
-    <div class="proof">
-      <div>
-        <div class="txt">Deel pays for <span class="numhl">40,000+</span> businesses and sent <span class="numhl">$250M</span> in crypto payouts in 2025.<br><br>It chose a private zone "to keep contractor wallet balances and payout history <span class="hl">confidential from public view.</span>"</div>
-        <div class="src">tempo.xyz · Jun 2 2026<br>tempo.xyz/blog/deel-stablecoin-wallet-global-contractors-tempo</div>
+    <div class="fixes">
+      <div class="panel fix">
+        <!-- Crop x560..2320 y380..1210 of 2880x1800 at s=0.337 -->
+        <div class="shot" style="height:280px"><img src="assets/aleo-toku.png" style="width:970px; left:-189px; top:-128px"></div>
+        <div class="body">
+          <div class="t">Toku on Aleo</div>
+          <div class="d">Private payroll on a separate chain with its own stablecoin. Enterprise clients only.</div>
+          <div class="src">aleo.org/post/toku-case-study</div>
+        </div>
       </div>
-      <!-- Crop x100..2100 y330..1500 of 2880x2000 at s=0.505 -->
-      <div class="shot" style="width:1010px; height:591px"><img src="assets/tempo-deel.png" style="width:1454px; left:-50px; top:-167px"></div>
-    </div>
-  </div>
-</section>
-
-<!-- 8. Proof 5: private ledgers, enterprise only -->
-<section class="slide" id="s8">
-  <div class="stage">
-    <div class="pagehead">
-      <div class="text">
-        <h1>The only fix is enterprise only.</h1>
+      <div class="panel fix">
+        <!-- Crop x100..2100 y330..1274 of 2880x2000 at s=0.2965 -->
+        <div class="shot" style="height:280px"><img src="assets/tempo-deel.png" style="width:854px; left:-30px; top:-98px"></div>
+        <div class="body">
+          <div class="t">Tempo Zones, used by Deel</div>
+          <div class="d">Private zones for payroll and treasury. Design partners only. "Auditable access for Deel."</div>
+          <div class="src">tempo.xyz/blog/privacy-on-tempo · tempo.xyz/blog/deel-stablecoin-wallet-global-contractors-tempo</div>
+        </div>
       </div>
-      <svg class="dots head" data-mode="right"></svg>
-    </div>
-    <div class="proof">
-      <div>
-        <div class="txt">Coinbase built Base Ledgers: "Onchain payroll without publishing what every employee or contractor earns."<br><br><span class="hl">Request a demo. Early access.</span> An operator runs the ledger and <span class="hl">sees everything.</span></div>
-        <div class="src">base.org · Jun 2026<br>base.org/ledgers · docs.base.org/ledger/overview</div>
+      <div class="panel fix">
+        <!-- Crop x700..2520 y330..1189 of 2880x1800 at s=0.326 -->
+        <div class="shot" style="height:280px"><img src="assets/base-ledgers.png" style="width:939px; left:-228px; top:-108px"></div>
+        <div class="body">
+          <div class="t">Base Ledgers, by Coinbase</div>
+          <div class="d">A private ledger that settles on Base. Request a demo, early access. An operator runs it.</div>
+          <div class="src">base.org/ledgers · docs.base.org/ledger/overview</div>
+        </div>
       </div>
-      <!-- Crop x700..2520 y330..1195 of 2880x1800 at s=0.555 -->
-      <div class="shot" style="width:1010px; height:480px"><img src="assets/base-ledgers.png" style="width:1598px; left:-389px; top:-183px"></div>
     </div>
-    <div class="strip">
-      <div class="cell"><img src="assets/si-stripe.svg" style="height:34px"><span>Tempo Zones, design partners only</span></div>
-      <div class="cell"><b>Circle</b><span>Arc privacy, not yet available</span></div>
-      <div class="cell"><b>J.P. Morgan</b><span>JPMD, institutional clients only</span></div>
-      <div class="cell"><img src="assets/logo-aleo.org.png" style="height:36px"><span>Toku on Aleo, enterprise clients only</span></div>
+    <div class="strip flaws">
+      <div class="cell"><span class="n">1</span><div><b>Not for everyone.</b><span>Enterprise clients, design partners, early access by application.</span></div></div>
+      <div class="cell"><span class="n">2</span><div><b>Not fully private.</b><span>An account in their ledger, or their chain. The operator sees everything.</span></div></div>
     </div>
     <div class="closing" style="margin-top:26px">Everyone else still pays in public.</div>
   </div>
@@ -395,14 +418,12 @@
       <svg class="dots head" data-mode="right"></svg>
     </div>
     <div class="uses">
-      <div class="panel use"><div class="top"><span class="ico" title="Iconsax WalletMoney"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.752 16.86v2.03c0 1.72-1.6 3.11-3.57 3.11-1.97 0-3.58-1.39-3.58-3.11v-2.03c0 1.72 1.6 2.94 3.58 2.94 1.97 0 3.57-1.23 3.57-2.94Z"/><path d="M10.75 14.11c0 .5-.14.96-.38 1.36-.59.97-1.8 1.58-3.2 1.58-1.4 0-2.61-.62-3.2-1.58-.24-.4-.38-.86-.38-1.36 0-.86.4-1.63 1.04-2.19.65-.57 1.54-.91 2.53-.91.99 0 1.88.35 2.53.91.66.55 1.06 1.33 1.06 2.19Z"/><path d="M10.752 14.11v2.75c0 1.72-1.6 2.94-3.57 2.94-1.97 0-3.58-1.23-3.58-2.94v-2.75c0-1.72 1.6-3.11 3.58-3.11.99 0 1.88.35 2.53.91.64.56 1.04 1.34 1.04 2.2ZM22 10.97v2.06c0 .55-.44 1-1 1.02h-1.96c-1.08 0-2.07-.79-2.16-1.87-.06-.63.18-1.22.6-1.63.37-.38.88-.6 1.44-.6H21c.56.02 1 .47 1 1.02Z"/><path d="M2 10.5v-2c0-2.72 1.64-4.62 4.19-4.94.26-.04.53-.06.81-.06h9c.26 0 .51.01.75.05C19.33 3.85 21 5.76 21 8.5v1.45h-2.08c-.56 0-1.07.22-1.44.6-.42.41-.66 1-.6 1.63.09 1.08 1.08 1.87 2.16 1.87H21v1.45c0 3-2 5-5 5h-2.5"/></svg></span><span class="idx">01</span></div><div class="t">Salaries and contractor pay</div></div>
-      <div class="panel use"><div class="top"><span class="ico" title="Iconsax People"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 7.16a.605.605 0 0 0-.19 0 2.573 2.573 0 0 1-2.48-2.58c0-1.43 1.15-2.58 2.58-2.58a2.58 2.58 0 0 1 2.58 2.58A2.589 2.589 0 0 1 18 7.16ZM16.97 14.44c1.37.23 2.88-.01 3.94-.72 1.41-.94 1.41-2.48 0-3.42-1.07-.71-2.6-.95-3.97-.71M5.97 7.16c.06-.01.13-.01.19 0a2.573 2.573 0 0 0 2.48-2.58C8.64 3.15 7.49 2 6.06 2a2.58 2.58 0 0 0-2.58 2.58c.01 1.4 1.11 2.53 2.49 2.58ZM7 14.44c-1.37.23-2.88-.01-3.94-.72-1.41-.94-1.41-2.48 0-3.42 1.07-.71 2.6-.95 3.97-.71M12 14.63a.605.605 0 0 0-.19 0 2.573 2.573 0 0 1-2.48-2.58c0-1.43 1.15-2.58 2.58-2.58a2.58 2.58 0 0 1 2.58 2.58c-.01 1.4-1.11 2.54-2.49 2.58ZM9.09 17.78c-1.41.94-1.41 2.48 0 3.42 1.6 1.07 4.22 1.07 5.82 0 1.41-.94 1.41-2.48 0-3.42-1.59-1.06-4.22-1.06-5.82 0Z"/></svg></span><span class="idx">02</span></div><div class="t">DAO contributors and grants</div></div>
-      <div class="panel use"><div class="top"><span class="ico" title="Iconsax PercentageSquare"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2h6c5 0 7 2 7 7v6c0 5-2 7-7 7H9c-5 0-7-2-7-7V9c0-5 2-7 7-7ZM8.57 15.27l6.54-6.54"/><path d="M8.98 10.37a1.23 1.23 0 1 0 0-2.46 1.23 1.23 0 0 0 0 2.46ZM15.52 16.09a1.23 1.23 0 1 0 0-2.46 1.23 1.23 0 0 0 0 2.46Z"/></svg></span><span class="idx">03</span></div><div class="t">Dividends and revenue share</div></div>
-      <div class="panel use"><div class="top"><span class="ico" title="Iconsax Coin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18.5 12.65v3.7c0 3.12-2.91 5.65-6.5 5.65s-6.5-2.53-6.5-5.65v-3.7C5.5 15.77 8.41 18 12 18s6.5-2.23 6.5-5.35Z"/><path d="M18.5 7.65c0 .91-.25 1.75-.69 2.47C16.74 11.88 14.54 13 12 13c-2.54 0-4.74-1.12-5.81-2.88-.44-.72-.69-1.56-.69-2.47 0-1.56.73-2.97 1.9-3.99C8.58 2.63 10.2 2 12 2c1.8 0 3.42.63 4.6 1.65 1.17 1.03 1.9 2.44 1.9 4Z"/><path d="M18.5 7.65v5c0 3.12-2.91 5.35-6.5 5.35s-6.5-2.23-6.5-5.35v-5C5.5 4.53 8.41 2 12 2c1.8 0 3.42.63 4.6 1.65 1.17 1.03 1.9 2.44 1.9 4Z"/></svg></span><span class="idx">04</span></div><div class="t">Token and equity allocations</div></div>
-      <div class="panel use"><div class="top"><span class="ico" title="Iconsax Shop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.01 11.22v4.49C3.01 20.2 4.81 22 9.3 22h5.39c4.49 0 6.29-1.8 6.29-6.29v-4.49"/><path d="M12 12c1.83 0 3.18-1.49 3-3.32L14.34 2H9.67L9 8.68C8.82 10.51 10.17 12 12 12Z"/><path d="M18.31 12c2.02 0 3.5-1.64 3.3-3.65l-.28-2.75C20.97 3 19.97 2 17.35 2H14.3l.7 7.01c.17 1.65 1.66 2.99 3.31 2.99ZM5.64 12c1.65 0 3.14-1.34 3.3-2.99l.22-2.21.48-4.8H6.59C3.97 2 2.97 3 2.61 5.6l-.27 2.75C2.14 10.36 3.62 12 5.64 12ZM12 17c-1.67 0-2.5.83-2.5 2.5V22h5v-2.5c0-1.67-.83-2.5-2.5-2.5Z"/></svg></span><span class="idx">05</span></div><div class="t">Vendor and supplier payments</div></div>
-      <div class="panel use"><div class="top"><span class="ico" title="Iconsax ReceiptItem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 6v2.42C22 10 21 11 19.42 11H16V4.01C16 2.9 16.91 2 18.02 2c1.09.01 2.09.45 2.81 1.17C21.55 3.9 22 4.9 22 6Z"/><path d="M2 7v14c0 .83.94 1.3 1.6.8l1.71-1.28c.4-.3.96-.26 1.32.1l1.66 1.67c.39.39 1.03.39 1.42 0l1.68-1.68c.35-.35.91-.39 1.3-.09l1.71 1.28c.66.49 1.6.02 1.6-.8V4c0-1.1.9-2 2-2H6C3 2 2 3.79 2 6v1Z"/><path d="M9 13.01h3M9 9.01h3"/><path d="M5.996 13h.009M5.996 9h.009"/></svg></span><span class="idx">06</span></div><div class="t">Invoices and freelancers</div></div>
-      <div class="panel use"><div class="top"><span class="ico" title="Iconsax Cup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.15 16.5v2.1"/><path d="M7.15 22h10v-1c0-1.1-.9-2-2-2h-6c-1.1 0-2 .9-2 2v1Z"/><path d="M6.15 22h12M12 16c-3.87 0-7-3.13-7-7V6c0-2.21 1.79-4 4-4h6c2.21 0 4 1.79 4 4v3c0 3.87-3.13 7-7 7Z"/><path d="M5.47 11.65c-.75-.24-1.41-.68-1.93-1.2-.9-1-1.5-2.2-1.5-3.6s1.1-2.5 2.5-2.5h.65c-.2.46-.3.97-.3 1.5v3c0 1 .21 1.94.58 2.8ZM18.53 11.65c.75-.24 1.41-.68 1.93-1.2.9-1 1.5-2.2 1.5-3.6s-1.1-2.5-2.5-2.5h-.65c.2.46.3.97.3 1.5v3c0 1-.21 1.94-.58 2.8Z"/></svg></span><span class="idx">07</span></div><div class="t">Prizes, bounties, airdrops</div></div>
-      <div class="panel use"><div class="top"><span class="ico" title="Iconsax Gift"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19.97 10h-16v8c0 3 1 4 4 4h8c3 0 4-1 4-4v-8ZM21.5 7v1c0 1.1-.53 2-2 2h-15c-1.53 0-2-.9-2-2V7c0-1.1.47-2 2-2h15c1.47 0 2 .9 2 2ZM11.64 5H6.12a.936.936 0 0 1 .03-1.3l1.42-1.42a.96.96 0 0 1 1.35 0L11.64 5ZM17.87 5h-5.52l2.72-2.72a.96.96 0 0 1 1.35 0l1.42 1.42c.36.36.37.93.03 1.3Z"/><path d="M8.94 10v5.14c0 .8.88 1.27 1.55.84l.94-.62a1 1 0 0 1 1.1 0l.89.6a.997.997 0 0 0 1.55-.83V10H8.94Z"/></svg></span><span class="idx">08</span></div><div class="t">Tips, donations, creators</div></div>
+      <div class="panel use"><div class="top"><span class="ico" title="Iconsax PercentageSquare"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2h6c5 0 7 2 7 7v6c0 5-2 7-7 7H9c-5 0-7-2-7-7V9c0-5 2-7 7-7ZM8.57 15.27l6.54-6.54"/><path d="M8.98 10.37a1.23 1.23 0 1 0 0-2.46 1.23 1.23 0 0 0 0 2.46ZM15.52 16.09a1.23 1.23 0 1 0 0-2.46 1.23 1.23 0 0 0 0 2.46Z"/></svg></span><span class="idx">01</span></div><div class="t">Dividends and revenue share</div></div>
+      <div class="panel use"><div class="top"><span class="ico" title="Iconsax Coin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18.5 12.65v3.7c0 3.12-2.91 5.65-6.5 5.65s-6.5-2.53-6.5-5.65v-3.7C5.5 15.77 8.41 18 12 18s6.5-2.23 6.5-5.35Z"/><path d="M18.5 7.65c0 .91-.25 1.75-.69 2.47C16.74 11.88 14.54 13 12 13c-2.54 0-4.74-1.12-5.81-2.88-.44-.72-.69-1.56-.69-2.47 0-1.56.73-2.97 1.9-3.99C8.58 2.63 10.2 2 12 2c1.8 0 3.42.63 4.6 1.65 1.17 1.03 1.9 2.44 1.9 4Z"/><path d="M18.5 7.65v5c0 3.12-2.91 5.35-6.5 5.35s-6.5-2.23-6.5-5.35v-5C5.5 4.53 8.41 2 12 2c1.8 0 3.42.63 4.6 1.65 1.17 1.03 1.9 2.44 1.9 4Z"/></svg></span><span class="idx">02</span></div><div class="t">Token and equity allocations</div></div>
+      <div class="panel use"><div class="top"><span class="ico" title="Iconsax Shop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.01 11.22v4.49C3.01 20.2 4.81 22 9.3 22h5.39c4.49 0 6.29-1.8 6.29-6.29v-4.49"/><path d="M12 12c1.83 0 3.18-1.49 3-3.32L14.34 2H9.67L9 8.68C8.82 10.51 10.17 12 12 12Z"/><path d="M18.31 12c2.02 0 3.5-1.64 3.3-3.65l-.28-2.75C20.97 3 19.97 2 17.35 2H14.3l.7 7.01c.17 1.65 1.66 2.99 3.31 2.99ZM5.64 12c1.65 0 3.14-1.34 3.3-2.99l.22-2.21.48-4.8H6.59C3.97 2 2.97 3 2.61 5.6l-.27 2.75C2.14 10.36 3.62 12 5.64 12ZM12 17c-1.67 0-2.5.83-2.5 2.5V22h5v-2.5c0-1.67-.83-2.5-2.5-2.5Z"/></svg></span><span class="idx">03</span></div><div class="t">Vendor and supplier payments</div></div>
+      <div class="panel use"><div class="top"><span class="ico" title="Iconsax MedalStar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 9c0 1.45-.43 2.78-1.17 3.89a6.985 6.985 0 0 1-4.78 3.02c-.34.06-.69.09-1.05.09-.36 0-.71-.03-1.05-.09a6.985 6.985 0 0 1-4.78-3.02A6.968 6.968 0 0 1 5 9c0-3.87 3.13-7 7-7s7 3.13 7 7Z"/><path d="m21.25 18.47-1.65.39c-.37.09-.66.37-.74.74l-.35 1.47a1 1 0 0 1-1.74.41L12 16l-4.77 5.49a1 1 0 0 1-1.74-.41l-.35-1.47a.996.996 0 0 0-.74-.74l-1.65-.39a1.003 1.003 0 0 1-.48-1.68l3.9-3.9a6.985 6.985 0 0 0 4.78 3.02c.34.06.69.09 1.05.09.36 0 .71-.03 1.05-.09 1.99-.29 3.7-1.42 4.78-3.02l3.9 3.9c.55.54.28 1.49-.48 1.67ZM12.58 5.98l.59 1.18c.08.16.29.32.48.35l1.07.18c.68.11.84.61.35 1.1l-.83.83c-.14.14-.22.41-.17.61l.24 1.03c.19.81-.24 1.13-.96.7l-1-.59a.701.701 0 0 0-.66 0l-1 .59c-.72.42-1.15.11-.96-.7l.24-1.03c.04-.19-.03-.47-.17-.61l-.83-.83c-.49-.49-.33-.98.35-1.1l1.07-.18c.18-.03.39-.19.47-.35l.59-1.18c.29-.64.81-.64 1.13 0Z"/></svg></span><span class="idx">04</span></div><div class="t">Grants and bounties</div></div>
+      <div class="panel use"><div class="top"><span class="ico" title="Iconsax Cup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.15 16.5v2.1"/><path d="M7.15 22h10v-1c0-1.1-.9-2-2-2h-6c-1.1 0-2 .9-2 2v1Z"/><path d="M6.15 22h12M12 16c-3.87 0-7-3.13-7-7V6c0-2.21 1.79-4 4-4h6c2.21 0 4 1.79 4 4v3c0 3.87-3.13 7-7 7Z"/><path d="M5.47 11.65c-.75-.24-1.41-.68-1.93-1.2-.9-1-1.5-2.2-1.5-3.6s1.1-2.5 2.5-2.5h.65c-.2.46-.3.97-.3 1.5v3c0 1 .21 1.94.58 2.8ZM18.53 11.65c.75-.24 1.41-.68 1.93-1.2.9-1 1.5-2.2 1.5-3.6s-1.1-2.5-2.5-2.5h-.65c.2.46.3.97.3 1.5v3c0 1-.21 1.94-.58 2.8Z"/></svg></span><span class="idx">05</span></div><div class="t">Prizes and airdrops</div></div>
+      <div class="panel use"><div class="top"><span class="ico" title="Iconsax Gift"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19.97 10h-16v8c0 3 1 4 4 4h8c3 0 4-1 4-4v-8ZM21.5 7v1c0 1.1-.53 2-2 2h-15c-1.53 0-2-.9-2-2V7c0-1.1.47-2 2-2h15c1.47 0 2 .9 2 2ZM11.64 5H6.12a.936.936 0 0 1 .03-1.3l1.42-1.42a.96.96 0 0 1 1.35 0L11.64 5ZM17.87 5h-5.52l2.72-2.72a.96.96 0 0 1 1.35 0l1.42 1.42c.36.36.37.93.03 1.3Z"/><path d="M8.94 10v5.14c0 .8.88 1.27 1.55.84l.94-.62a1 1 0 0 1 1.1 0l.89.6a.997.997 0 0 0 1.55-.83V10H8.94Z"/></svg></span><span class="idx">06</span></div><div class="t">Tips, donations, creators</div></div>
     </div>
   </div>
 </section>
@@ -464,7 +485,7 @@
     el.innerHTML = out;
   });
 
-  // ?only=N renders a single slide, used to screenshot each page for visual checks. No param prints all thirteen.
+  // ?only=N renders a single slide, used to screenshot each page for visual checks. No param prints all twelve.
   const only = new URLSearchParams(location.search).get("only");
   if (only) all.forEach((s, i) => { if (String(i + 1) !== only) s.style.display = "none"; });
 </script>
