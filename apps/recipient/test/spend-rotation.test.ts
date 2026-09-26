@@ -135,6 +135,18 @@ describe("rotation", () => {
     expect(rotationPathOf({ name, recovery: { ...rec, attachedTo: "other" } })).toBe("manual");
   });
 
+  it("a wait the API has since shortened no longer blocks rotation (D-60)", () => {
+    const name = { label: "alex", name: "alex.soapay.eth", at: 0 };
+    // Linked at t=100 s while the API said 72 h; the API now says 0.
+    const late = { kind: "world-id" as const, at: 100_000, sessionId: "session_ab", attachedTo: "alex", rotationAllowedFrom: 100 + 72 * 3600 };
+    expect(rotationPathOf({ name, recovery: late }, 200_000)).toBe("manual");
+    expect(rotationPathOf({ name, recovery: late }, 200_000, 0)).toBe("attested");
+    expect(sessionCooldownUntil({ name, recovery: late }, 200_000, 0)).toBeNull();
+    // Unknown server setting: the stored date stands. A longer server wait never extends it.
+    expect(rotationPathOf({ name, recovery: late }, 200_000, null)).toBe("manual");
+    expect(sessionCooldownUntil({ name, recovery: late }, 200_000, 999 * 3600)).toBe((100 + 72 * 3600) * 1000);
+  });
+
   it("the mock HumanCheck returns IDKit-shaped session results", () => {
     const created = mockSessionResult({ mode: "create-session", signal: "soapay:session:alex:0x1" });
     expect(created.session_id).toMatch(/^session_[0-9a-f]+$/);

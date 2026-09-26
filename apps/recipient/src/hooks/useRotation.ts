@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { attachSession } from "../features/recovery/attach.js";
 import {
   finishRotation,
@@ -28,19 +28,33 @@ export type RotationState =
   | { step: "done"; path: RotationPath };
 
 /**
+ * When a late-linked session starts backing rotations (unix seconds), or undefined if it already
+ * does. The vault keeps the date the API gave at link time; `cooldownSeconds` is the API's current
+ * setting (`GET /worldid/config`), so a wait the API has since shortened (D-60) no longer blocks.
+ */
+function allowedFromOf(profile: Profile, cooldownSeconds?: number | null): number | undefined {
+  const r = profile.recovery;
+  const stored = r?.rotationAllowedFrom;
+  if (!stored) return undefined;
+  if (cooldownSeconds == null || !r?.at) return stored;
+  return Math.min(stored, Math.floor(r.at / 1000) + cooldownSeconds);
+}
+
+/**
  * Whether rotation can be attested by World ID: a session is attached to this name and, if it was
  * attached late, the API's cooldown has passed.
  */
-export function rotationPathOf(profile: Profile, nowMs = Date.now()): RotationPath {
+export function rotationPathOf(profile: Profile, nowMs = Date.now(), cooldownSeconds?: number | null): RotationPath {
   const r = profile.recovery;
   if (!r?.sessionId || !profile.name || r.attachedTo !== profile.name.label) return "manual";
-  if (r.rotationAllowedFrom && nowMs < r.rotationAllowedFrom * 1000) return "manual";
+  const from = allowedFromOf(profile, cooldownSeconds);
+  if (from && nowMs < from * 1000) return "manual";
   return "attested";
 }
 
 /** When a late-attached session starts backing rotations (ms), or null if it already does / none. */
-export function sessionCooldownUntil(profile: Profile, nowMs = Date.now()): number | null {
-  const from = profile.recovery?.rotationAllowedFrom;
+export function sessionCooldownUntil(profile: Profile, nowMs = Date.now(), cooldownSeconds?: number | null): number | null {
+  const from = allowedFromOf(profile, cooldownSeconds);
   return from && nowMs < from * 1000 ? from * 1000 : null;
 }
 
@@ -56,7 +70,15 @@ export function useRotation() {
   const name = profile.name;
   const [state, setState] = useState<RotationState>({ step: "idle", error: null });
   const [attachError, setAttachError] = useState<string | null>(null);
-  const path = rotationPathOf(profile);
+  const [cooldownSeconds, setCooldownSeconds] = useState<number | null>(null);
+  useEffect(() => {
+    let live = true;
+    svc.api.getAttachCooldownSeconds().then((c) => live && setCooldownSeconds(c)).catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [svc.api]);
+  const path = rotationPathOf(profile, Date.now(), cooldownSeconds);
   const chainId = svc.settings.chainId;
 
   const fail = (e: unknown) => setState({ step: "idle", error: errorMessage(e) });
@@ -256,7 +278,7 @@ export function useRotation() {
     pending: profile.pendingRotation ?? null,
     recovery: profile.recovery ?? null,
     /** A late-attached session is still in the API's cooldown until this time (ms). */
-    cooldownUntil: sessionCooldownUntil(profile),
+    cooldownUntil: sessionCooldownUntil(profile, Date.now(), cooldownSeconds),
     sessionId: path === "attested" ? profile.recovery?.sessionId : undefined,
     ensReady: svc.ens.ready,
     ensUnavailableReason: svc.ens.unavailableReason,
