@@ -192,7 +192,7 @@ In [`demo-screens/`](demo-screens/). Referenced above only where they still matc
 - **s01**: check against the current landing copy before using.
 - New shots wanted: the agent joining in Claude Code (section 4), the agent's scan and spend (section 6), the section 3 terminal output, the attacker summary (section 7).
 
-**No longer used** (outdated beats): r09–r15 (web Send, guard, exit), r16–r18 (Convert), `beat4-pluggable-live.*` (kept as the CLI recording for the pitch).
+**Removed** (outdated beats; the docs site keeps its own copies in `apps/docs/src/assets/screens/`): r09–r15 (web Send, guard, exit), r16–r18 (Convert), `beat4-pluggable-live.*` (kept as the CLI recording for the pitch).
 
 ## Appendix: links and live references
 

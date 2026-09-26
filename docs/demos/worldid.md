@@ -54,6 +54,8 @@ World ID is how you recover your pay if your recovery phrase leaks, and why a th
 
 ## If asked
 
+Full answers: [how-it-works.md](how-it-works.md).
+
 - **Can the thief spend what Alex already received?** Yes, with the phrase. World ID protects future pay. Move funds and rotate as soon as a leak is suspected.
 - **No World ID?** Recovery still works: the employer approves the new keys by hand.
 - **Linking World ID later?** Allowed, with a 72-hour wait before it can back a rotation (0 on this testnet demo).

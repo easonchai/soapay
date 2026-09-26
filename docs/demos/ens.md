@@ -41,5 +41,7 @@ Names instead of wallets: you pay `maya-ml.soapay.eth`, and every payment still 
 
 ## If asked
 
+Full answers: [how-it-works.md](how-it-works.md).
+
 - **Who owns the name?** The employee holds it, but can't transfer it. The company can revoke it when someone leaves.
 - **Why pin?** ENS decides where salaries go, so the payer pins the keys and treats any change as suspicious until the owner's World ID backs it.

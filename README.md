@@ -75,8 +75,8 @@ Fluidkey and Umbra use the same ERC-5564 and ERC-6538 standards, and both hide y
 
 **Documents**
 - [Docs site](https://soapay.up.railway.app/docs/) (source in [`apps/docs`](apps/docs/README.md))
-- [Pitch](pitch/README.md) · [PRD](docs/PRD.md) · [Design brief](docs/design-brief.md) · [Privacy model](docs/privacy-model.md) · [Demo flow with screenshots](docs/demo-flow.md)
-- [Architecture](docs/architecture.md) · [World ID](docs/worldid.md) · [Bounty integrations, how to verify](docs/bounty-integrations.md) · [Desktop demo script](docs/demo-desktop.md)
+- [Pitch](pitch/README.md) · [PRD](docs/PRD.md) · [Design brief](docs/design-brief.md) · [Privacy model](docs/privacy-model.md) · [Stage demos](docs/demos/README.md)
+- [Architecture](docs/architecture.md) · [World ID](docs/worldid.md) · [Bounty integrations, how to verify](docs/bounty-integrations.md) · [How it works, Q&A](docs/demos/how-it-works.md)
 - [StealthDisperse plan](contracts/PLAN.md) · [MVP spec](docs/mvp-spec.md) · [Decision log](docs/decision-log.md) · [Testnet deployment](docs/testnet-deployment.md)
 
 ## What's here
@@ -92,7 +92,7 @@ A pnpm and turbo monorepo. Protocol logic lives in one package, and every app is
 - **`apps/docs`**: the public docs site, Astro Starlight, served at `/docs/` next to the two apps.
 - **`packages/ui`** and **`packages/worldid-react`**: the shared Ledger design system, and `<HumanCheck>`, the World ID step.
 - **`contracts`**: Foundry. `StealthDisperse`, the one production contract, the testnet-only `MockUSDC`, and `tools/derive.ts` for test vectors.
-- **`examples`** and **`scripts`**: a dividend run and a grant round on the same rail, and the live demo scripts (seed a company, the attacker beat, the agent beat, the recovery check).
+- **`examples`** and **`scripts`**: a dividend run and a grant round on the same rail, and the live demo scripts (bootstrap a clean employer wallet, seed a company, the attacker beat, the agent beat, the recovery check).
 - **Shared Claude memory** in [`.claude/memory`](.claude/memory), loaded by [`CLAUDE.md`](CLAUDE.md).
 
 ## Threat model
@@ -146,7 +146,7 @@ The employee app scans the Announcer, finds only its own lines, and shows live b
 
 ![Employee app: 7,951 USDC across 19 addresses, each row a 500 USDC chunk from Acme Robotics](docs/demo-screens/r08-payments.png)
 
-Every screen of both apps, in demo order: [`docs/demo-flow.md`](docs/demo-flow.md) and [`docs/demo-screens`](docs/demo-screens).
+Stage demo scripts: [`docs/demos/`](docs/demos/README.md). Every screen of both apps: the docs site (`apps/docs`) and [`docs/demo-screens`](docs/demo-screens).
 
 ## Compared with Fluidkey
 
@@ -298,7 +298,7 @@ pnpm build && pnpm test      # SDK tests + forge test
 pnpm dev                     # recipient :5173 · sender :5174 · api :8787
 ```
 
-Copy each app's `.env.example` to `.env.local` (Base Sepolia defaults). The api needs `RELAYER_PRIVATE_KEY` for registration and the faucet, and `PIMLICO_API_KEY` for sponsored gas. The live demo helpers are `pnpm demo:seed-company`, `demo:setup-recovery`, `demo:attacker`, `demo:agent` and `demo:recovery-check` ([docs/demo-flow.md](docs/demo-flow.md)).
+Copy each app's `.env.example` to `.env.local` (Base Sepolia defaults). The api needs `RELAYER_PRIVATE_KEY` for registration and the faucet, and `PIMLICO_API_KEY` for sponsored gas. The live demo helpers are `pnpm demo:seed-company`, `demo:setup-recovery`, `demo:attacker`, `demo:agent`, `demo:recovery-check` and `demo:bootstrap` ([docs/demos/](docs/demos/README.md)).
 
 Contracts:
 
@@ -342,7 +342,7 @@ Base Sepolia, chain `84532` (the live demo; [docs/testnet-deployment.md](docs/te
 | Chain and contract constants | [`packages/sdk/src/constants.ts`](packages/sdk/src/constants.ts) |
 | Architecture, flows and both diagrams | [`docs/architecture.md`](docs/architecture.md) |
 | World ID design and debrief | [`docs/worldid.md`](docs/worldid.md) |
-| Demo flow, every screen, desktop script | [`docs/demo-flow.md`](docs/demo-flow.md), [`docs/demo-desktop.md`](docs/demo-desktop.md) |
+| Stage demo scripts and Q&A | [`docs/demos/`](docs/demos/README.md) (the older [`docs/demo-flow.md`](docs/demo-flow.md) is superseded) |
 | Each integration against its prize criteria | [`docs/bounty-integrations.md`](docs/bounty-integrations.md) |
 
 ```text

@@ -8,6 +8,8 @@ Three short scripts. Each beat is **Do / Say / Fallback**. If a live step stalls
 | [worldid.md](worldid.md) | ~2 min | World ID: recovery works for you, and fails for a thief |
 | [ens.md](ens.md) | ~2 min | ENS: names instead of wallets |
 
+Q&A in plain language: [how-it-works.md](how-it-works.md).
+
 Links: company app https://soapay.up.railway.app/ · employee app https://soapay.up.railway.app/app/
 
 ## Setup checklist (all three scripts)

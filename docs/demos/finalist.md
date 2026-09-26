@@ -59,6 +59,8 @@ The product story: a company pays its people and an AI agent in USDC, and no cow
 
 ## If asked
 
+Full answers: [how-it-works.md](how-it-works.md).
+
 - **Batch size?** A MetaMask pay run is one `StealthDisperse` transaction for up to 350 lines. Our run is about 125 lines, so one transaction. Bigger runs are split into several, sorted globally so no transaction is one person's pay.
 - **Who is the adversary?** A coworker in the same batch. The employer is trusted and knows everything.
 - **Mainnet?** Real USDC, and Circle's paymaster takes the gas fee in USDC.
