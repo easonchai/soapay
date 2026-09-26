@@ -40,7 +40,8 @@ export type VaultApi = {
    */
   create(secret: KeySecret, passphrase: string): Promise<void>;
   /** Passkey lock (the default, D-35). Throws `PasskeyUnsupportedError` when the device has no PRF support. */
-  createWithPasskey(secret: KeySecret): Promise<void>;
+  /** `account` names the passkey in the password manager (the pay name when known). */
+  createWithPasskey(secret: KeySecret, account?: string): Promise<void>;
   unlock(passphrase: string): Promise<void>;
   unlockWithPasskey(): Promise<void>;
   /** Re-encrypts the open vault under a new lock (e.g. passkey → passphrase). */
@@ -106,8 +107,8 @@ export function VaultProvider({
 
   /** Registers a passkey and seals `data` under its PRF output. */
   const passkeySealed = useCallback(
-    async (data: VaultData) => {
-      const { credentialId, prf } = await passkey.register(new Uint8Array(PRF_SALT));
+    async (data: VaultData, account?: string) => {
+      const { credentialId, prf } = await passkey.register(new Uint8Array(PRF_SALT), account ?? data.profile.name?.name);
       try {
         const v = await createPasskeyVault(data, credentialId, prf);
         return { envelope: v.envelope, key: v.key, seal: (d: VaultData) => sealWithPasskeyKey(d, v.key, v.params) };
@@ -130,10 +131,10 @@ export function VaultProvider({
   }, []);
 
   const createWithPasskey = useCallback(
-    async (secret: KeySecret) => {
+    async (secret: KeySecret, account?: string) => {
       const data = newVaultData(secret);
       const keys = vaultKeys(data);
-      const v = await passkeySealed(data);
+      const v = await passkeySealed(data, account);
       await saveEnvelope(v.envelope);
       setLive({ data, keys, key: v.key, seal: v.seal });
       setLockKind("passkey");

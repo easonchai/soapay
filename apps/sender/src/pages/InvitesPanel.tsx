@@ -76,14 +76,13 @@ export function InvitesPanel(p: InvitesPanelProps) {
 
       {p.rows.length > 0 && (
         <div className="table flat">
-          <div className="thead" style={{ gridTemplateColumns: "1.3fr 0.8fr 1.3fr" }}>
+          <div className="thead" style={{ gridTemplateColumns: "1fr auto" }}>
             <span>Invited</span>
             <span className="r">Salary</span>
-            <span className="r">Status</span>
           </div>
           {p.rows.map(({ invite: i, statusText, canReinvite }) => (
-            <div key={i.id} className="tr auto" style={{ gridTemplateColumns: "1.3fr 0.8fr 1.3fr" }}>
-              <span className="mono">
+            <div key={i.id} className="tr auto" style={{ gridTemplateColumns: "1fr auto", rowGap: 10 }}>
+              <span className="mono" style={{ minWidth: 0, overflowWrap: "anywhere" }}>
                 {i.label}
                 <span className="ink3">.{p.parentName}</span>
                 <span className="hint" style={{ display: "block" }}>
@@ -92,7 +91,11 @@ export function InvitesPanel(p: InvitesPanelProps) {
                 </span>
               </span>
               <span className="r num">{usdc(i.amount)}</span>
-              <span className="row-actions" style={{ alignItems: "center" }}>
+              {/* Status and actions get their own full-width line so they never spill out of the narrow panel. */}
+              <span
+                className="row-actions"
+                style={{ gridColumn: "1 / -1", alignItems: "center", flexWrap: "wrap", gap: 12, justifyContent: "flex-start" }}
+              >
                 <Pill tone={i.state.kind === "expired" ? "warn" : i.state.kind === "claimed-unverified" ? "danger" : "muted"}>{statusText}</Pill>
                 {canReinvite ? (
                   <button className="btn-inline" disabled={p.busy || !!p.unavailable} onClick={() => void p.reinvite(i.id)}>
@@ -101,7 +104,7 @@ export function InvitesPanel(p: InvitesPanelProps) {
                 ) : (
                   <Copy value={i.link} label="Copy link" />
                 )}
-                <button className="btn-inline btn-text btn-danger" disabled={p.busy} onClick={() => confirm(`Remove the invite for ${i.label}?`) && void p.remove(i.id)}>
+                <button className="btn-inline btn-text btn-danger" style={{ marginLeft: "auto" }} disabled={p.busy} onClick={() => confirm(`Remove the invite for ${i.label}?`) && void p.remove(i.id)}>
                   Remove
                 </button>
               </span>

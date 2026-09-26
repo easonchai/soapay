@@ -481,11 +481,14 @@ function LockStep({ secret, dispatch, headingRef }: { secret: KeySecret } & Omit
     );
   }
 
+  const invite = useInvite().state;
+  // Name the passkey after the pay name when an invite already reserved one, so it's recognisable later.
+  const account = invite.kind === "pending" ? fullName(invite.label) : undefined;
   const usePasskey = async () => {
     setBusy(true);
     setError(null);
     try {
-      await vault.createWithPasskey(secret);
+      await vault.createWithPasskey(secret, account);
       dispatch({ type: "VAULT_CREATED" });
     } catch (err) {
       if (err instanceof PasskeyUnsupportedError) {
@@ -508,6 +511,13 @@ function LockStep({ secret, dispatch, headingRef }: { secret: KeySecret } & Omit
       onBack={() => dispatch({ type: "BACK" })}
     >
       {error && <Alert variant="destructive">{error}</Alert>}
+      <Alert variant="info" title="Your device will ask to save a passkey">
+        <span data-testid="passkey-explainer">
+          Confirm with Touch ID, Face ID or your device PIN (some browsers call it "unlock device"
+          {svc.mock ? "" : ", and a few ask twice"}). It's saved as <span className="font-mono">{account ?? "Soapay account"}</span> in your
+          password manager. From then on, opening Soapay asks for it.
+        </span>
+      </Alert>
       <Button size="lg" className="w-full" loading={busy || mode === "checking"} disabled={busy || mode === "checking"} onClick={() => void usePasskey()} data-testid="use-passkey">
         {busy ? "Waiting for your passkey…" : "Use Face ID / fingerprint (passkey)"}
       </Button>
@@ -697,6 +707,7 @@ function RegisterStep({ dispatch, headingRef }: Omit<StepProps, "state">) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const keys = vault.keys!;
+  const passkeySaved = vault.lockKind === "passkey";
   const run = async () => {
     setBusy(true);
     setError(null);
@@ -719,6 +730,11 @@ function RegisterStep({ dispatch, headingRef }: Omit<StepProps, "state">) {
       title="Publish your payment address"
       lead="We register your stealth meta-address on the public ERC-6538 registry. It lets employers derive a fresh address for every payment. We pay the gas."
     >
+      {passkeySaved && (
+        <Alert variant="success" title="Passkey saved on this device">
+          <span data-testid="passkey-saved">Next time you open Soapay (or after it locks), it asks for this passkey to unlock.</span>
+        </Alert>
+      )}
       <div className="card">
         <dl className="facts">
           <dt>Registered by</dt>

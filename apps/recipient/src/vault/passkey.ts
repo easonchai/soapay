@@ -21,8 +21,11 @@ export interface PasskeyAuthenticator {
   readonly mock: boolean;
   /** Cheap check, no prompt. `false` means skip straight to the passphrase lock. */
   available(): Promise<boolean>;
-  /** Creates a passkey and returns its raw id and the PRF output over `prfSalt`. May prompt twice. */
-  register(prfSalt: Uint8Array<ArrayBuffer>): Promise<{ credentialId: Uint8Array<ArrayBuffer>; prf: Uint8Array<ArrayBuffer> }>;
+  /**
+   * Creates a passkey and returns its raw id and the PRF output over `prfSalt`. May prompt twice.
+   * `account` names it in the user's password manager (e.g. "alice.soapay.eth"); defaults to "Soapay account".
+   */
+  register(prfSalt: Uint8Array<ArrayBuffer>, account?: string): Promise<{ credentialId: Uint8Array<ArrayBuffer>; prf: Uint8Array<ArrayBuffer> }>;
   /** Evaluates PRF over `prfSalt` with an existing passkey (one prompt). */
   evaluate(credentialId: Uint8Array<ArrayBuffer>, prfSalt: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>>;
 }
@@ -86,13 +89,14 @@ export function browserPasskey(): PasskeyAuthenticator {
         return false;
       }
     },
-    async register(prfSalt) {
+    async register(prfSalt, account) {
+      const name = account?.trim() || "Soapay account";
       let cred: PublicKeyCredential | null;
       try {
         cred = (await navigator.credentials.create({
           publicKey: {
             rp: { name: "Soapay", id: rpId() },
-            user: { id: random(16), name: "Soapay keys", displayName: "Soapay" },
+            user: { id: random(16), name, displayName: `Soapay · ${name}` },
             challenge: random(32),
             pubKeyCredParams: [
               { type: "public-key", alg: -7 },
