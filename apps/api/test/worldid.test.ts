@@ -395,6 +395,14 @@ describe("POST /names/:label/session/lookup (D-64: restore after a recovery-phra
 });
 
 describe("POST /names/:label/rotation", () => {
+  it("tops up gas again only to finish a recent rotation", async () => {
+    const t = setup({});
+    await enrollWithSession(t);
+    const res = await t.app.request("/names/alice/rotation/gas", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    expect(res.status).toBe(409);
+    expect((await j(res)).error.code).toBe("no_recent_rotation");
+  });
+
   it("attests, relays the ERC-6538 re-registration and tops up gas", async () => {
     const sent: { to: Address; value: bigint }[] = [];
     const l1Funder: L1Funder = {
@@ -442,9 +450,14 @@ describe("POST /names/:label/rotation", () => {
     const reg = t.db.prepare("SELECT meta_bytes, nullifier FROM registrations").all() as any[];
     expect(reg).toEqual([{ meta_bytes: metaHex(2), nullifier: null }]);
 
-    // Gas top-up: need = 150k gas × 10 wei.
-    expect(out.topup).toMatchObject({ status: "sent", value: "1500000" });
-    expect(sent).toEqual([{ to: registrant.address, value: 1_500_000n }]);
+    // Gas top-up: need = 150k gas × 10 wei × 2 (headroom).
+    expect(out.topup).toMatchObject({ status: "sent", value: "3000000" });
+    expect(sent).toEqual([{ to: registrant.address, value: 3_000_000n }]);
+
+    // Finishing ran short: the app asks for gas again, allowed right after an attested rotation.
+    const again = await t.app.request("/names/alice/rotation/gas", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    expect(again.status).toBe(200);
+    expect((await j(again)).topup).toMatchObject({ status: "sent", value: "3000000" });
 
     // The record and the feed follow.
     expect((await j(await t.app.request("/names/alice"))).metaAddress).toBe(metaUri(2));
@@ -624,7 +637,7 @@ describe("gas top-up", () => {
     const t = makeTestApp({ env: { TOPUP_CAP_WEI: "1000000" } });
     const f = funder(400_000n);
     expect(await topUpRegistrant({ ...t.deps, config: t.config, l1Funder: f } as any, who)).toMatchObject({ status: "sent", value: "1000000" });
-    const g = funder(1_000_000n);
+    const g = funder(2_500_000n); // need 150k × 10 × 2 = 3,000,000
     expect(await topUpRegistrant({ ...t.deps, config: t.config, l1Funder: g } as any, who)).toMatchObject({ status: "sent", value: "500000" });
   });
 

@@ -114,6 +114,10 @@ export function useRotation() {
         name: name.name,
         newMeta: pending.newMeta,
         registrantKey: ring.current.registrantKey,
+        requestGas: async () => {
+          const { topup } = await svc.api.rotationGas(name.label);
+          return topup.status === "sent" && topup.txHash ? topup.txHash : null;
+        },
       });
       await v.update((d) => {
         const { pendingRotation: _p, ...rest } = d.profile;

@@ -178,6 +178,13 @@ export function createApi(apiUrl: string, fetchFn: ApiFetch = (i, init) => fetch
         throw e;
       }
     },
+    /** Tops the registrant's Ethereum Sepolia gas up again to finish a recent rotation. */
+    rotationGas: (label: string) =>
+      call<{ topup: { status: string; txHash?: Hex; reason?: string } }>(
+        fetchFn,
+        `${root}/names/${encodeURIComponent(label)}/rotation/gas`,
+        json({}),
+      ),
     rotate: (label: string, body: RotationBody) =>
       call<RotationResult>(fetchFn, `${root}/names/${encodeURIComponent(label)}/rotation`, json(body)),
     /** The API's current wait (seconds) before a late-linked World ID session can back a rotation; null if unknown. */
