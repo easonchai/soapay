@@ -13,14 +13,14 @@ import { useServices } from "../services/ServicesProvider.js";
 import { errorMessage } from "../ui/kit.js";
 import { useUnlocked } from "../vault/VaultProvider.js";
 import { adoptRecoveryPhrase, hasRecoveryPhrase, phraseOffsetOf, type PendingRotation, type Profile } from "../vault/types.js";
-import type { HumanCheckResult } from "../worldid/types.js";
+import { worldIdLinkOf, type HumanCheckResult } from "../worldid/types.js";
 import { useKeyRing } from "./useChain.js";
 
 export type RotationPath = "attested" | "manual";
 
 export type RotationState =
   | { step: "idle"; error: string | null }
-  /** Review what will happen; `path` depends on whether a World ID session is attached to the name. */
+  /** Review what will happen; `path` depends on whether World ID is linked to the name. */
   | { step: "confirm"; draft: RotationDraft; path: RotationPath }
   /** Attested path: waiting for `<HumanCheck mode="rotate">`. */
   | { step: "human"; draft: RotationDraft }
@@ -28,17 +28,18 @@ export type RotationState =
   | { step: "done"; path: RotationPath };
 
 /**
- * Whether rotation can be attested by World ID: a session is attached to this name and, if it was
+ * Whether rotation can be attested by World ID: World ID is linked to this name and, if it was
  * attached late, the API's cooldown has passed.
  */
 export function rotationPathOf(profile: Profile, nowMs = Date.now()): RotationPath {
   const r = profile.recovery;
-  if (!r?.sessionId || !profile.name || r.attachedTo !== profile.name.label) return "manual";
+  // A link is the proof's nullifier (D-58); a legacy session id can't back a rotation any more.
+  if (!r?.nullifier || !profile.name || r.attachedTo !== profile.name.label) return "manual";
   if (r.rotationAllowedFrom && nowMs < r.rotationAllowedFrom * 1000) return "manual";
   return "attested";
 }
 
-/** When a late-attached session starts backing rotations (ms), or null if it already does / none. */
+/** When a late World ID link starts backing rotations (ms), or null if it already does / none. */
 export function sessionCooldownUntil(profile: Profile, nowMs = Date.now()): number | null {
   const from = profile.recovery?.rotationAllowedFrom;
   return from && nowMs < from * 1000 ? from * 1000 : null;
@@ -217,18 +218,25 @@ export function useRotation() {
     [v],
   );
 
-  /** Attach a freshly created World ID session to the name (POST /names/:label/session). */
+  /** Link World ID (a fresh Proof of Human proof) to the name (POST /names/:label/session). */
   const attach = useCallback(
     async (r: HumanCheckResult) => {
       setAttachError(null);
       if (!name) return setAttachError("Claim a name first.");
       try {
         const res = await attachSession({ api: svc.api, chainId, label: name.label, result: r, registrantKey: ring.current.registrantKey });
+        const nullifier = worldIdLinkOf(r);
         await v.update((d) => ({
           ...d,
           profile: {
             ...d.profile,
-            recovery: { kind: "world-id", at: Date.now(), sessionId: res.sessionId, attachedTo: name.label, rotationAllowedFrom: res.rotationAllowedFrom },
+            recovery: {
+              kind: "world-id",
+              at: Date.now(),
+              ...(nullifier ? { nullifier } : {}),
+              attachedTo: name.label,
+              rotationAllowedFrom: res.rotationAllowedFrom,
+            },
             recoverySkipped: false,
           },
         }));
@@ -255,9 +263,8 @@ export function useRotation() {
     rotations: profile.rotations ?? [],
     pending: profile.pendingRotation ?? null,
     recovery: profile.recovery ?? null,
-    /** A late-attached session is still in the API's cooldown until this time (ms). */
+    /** A late World ID link is still in the API's cooldown until this time (ms). */
     cooldownUntil: sessionCooldownUntil(profile),
-    sessionId: path === "attested" ? profile.recovery?.sessionId : undefined,
     ensReady: svc.ens.ready,
     ensUnavailableReason: svc.ens.unavailableReason,
     attachError,

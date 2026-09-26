@@ -17,7 +17,7 @@ export function HumanCheckFrame({ mode, onCancel, busy, onOpen }: Pick<HumanChec
           <p className="font-medium">{create ? "Proof of Human with World ID" : "Prove it's still you"}</p>
           <p className="text-sm text-muted-foreground">
             {create
-              ? "Links a private World ID session to your name, so you can move it to new keys later without asking your employer."
+              ? "Links your World ID to your name privately, so you can move it to new keys later without asking your employer."
               : "The same person who set up recovery must confirm this change. A stolen key alone can't redirect your pay."}
           </p>
           <p className="text-sm text-muted-foreground">No passport, no Orb. Soapay never learns who you are.</p>
@@ -38,18 +38,16 @@ export function HumanCheckFrame({ mode, onCancel, busy, onOpen }: Pick<HumanChec
   );
 }
 
-/** The real `@soapay/worldid-react` component (IDKit session widget), driven in controlled mode. */
+/** The real `@soapay/worldid-react` component (IDKit request widget, D-58), driven in controlled mode. */
 export function WorldHumanCheck(props: HumanCheckProps) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const sessionId = props.sessionId as `session_${string}` | undefined;
   return (
     <>
       <HumanCheckFrame mode={props.mode} busy={busy || open} onOpen={() => setOpen(true)} {...(props.onCancel ? { onCancel: props.onCancel } : {})} />
       <WorldIdHumanCheck
         mode={props.mode}
         apiUrl={props.apiUrl}
-        sessionId={sessionId}
         signal={props.signal}
         open={open}
         onOpenChange={setOpen}

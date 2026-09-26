@@ -1,19 +1,22 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
-  CredentialRequest,
   IDKitErrorCodes,
-  IDKitSessionWidget,
+  IDKitRequestWidget,
+  proofOfHuman,
   setDebug,
-  type ConstraintNode,
-  type IDKitResultSession,
+  type IDKitResult,
+  type Preset,
   type RpContext,
 } from "@worldcoin/idkit";
 
-export type { IDKitResultSession } from "@worldcoin/idkit";
+export type { IDKitResult } from "@worldcoin/idkit";
 
 /**
- * - `create-session`: create a new World ID session (at enrollment, or to attach one later).
- * - `rotate`: prove the session saved for this name (`sessionId` is required).
+ * Both modes run the same one-time Proof of Human request on the recovery action (D-58); they
+ * differ in what the API does with the proof:
+ * - `create-session`: link World ID to a name (at enrollment, or later). The API stores the
+ *   proof's nullifier. The name is historical: World ID sessions are no longer used.
+ * - `rotate`: prove it's still you. The API accepts it only with the same nullifier.
  */
 export type HumanCheckMode = "create-session" | "rotate";
 
@@ -21,15 +24,15 @@ export type HumanCheckProps = {
   mode: HumanCheckMode;
   /** Soapay API base URL, e.g. `https://api.soapay.xyz`. The RP context is signed there. */
   apiUrl: string;
-  /** The saved `session_<hex>` id. Required for `rotate`, ignored for `create-session`. */
-  sessionId?: `session_${string}` | undefined;
+  /** @deprecated Ignored since D-58 (rotation matches the nullifier server-side). Kept for old callers. */
+  sessionId?: string | undefined;
   /**
-   * The signal the API expects: `sessionSignal(label, registrant)` to create a session,
+   * The signal the API expects: `sessionSignal(label, registrant)` to link World ID,
    * `rotationSignal(label, newMeta, deadline)` to rotate (both from `@soapay/sdk`).
    */
   signal: string;
-  /** The IDKit session result. Send it to the API unchanged (`worldIdSession` / `worldIdResult`). */
-  onResult: (result: IDKitResultSession) => void | Promise<void>;
+  /** The IDKit result. Send it to the API unchanged (`worldIdSession` / `worldIdResult`). */
+  onResult: (result: IDKitResult) => void | Promise<void>;
   /** The user closed the widget or declined in World App. */
   onCancel?: () => void;
   /** Anything else: the API couldn't sign an RP context, or World App returned an error. */
@@ -58,29 +61,28 @@ export type RpContextResponse = {
   rp_context: RpContext;
   app_id: `app_${string}`;
   environment: "production" | "staging" | "sandbox";
+  /** The World ID action the RP context was signed for (the API's WORLD_ACTION). */
+  action?: string;
 };
 
 /** The World ID credential Soapay asks for (Proof of Human, D-54). Keep in sync with `WORLD_ID_CREDENTIAL` in @soapay/sdk. */
 export const HUMAN_CHECK_CREDENTIAL = "proof_of_human" as const;
+/** Default recovery action (D-58). Keep in sync with `WORLD_ID_ACTION` in @soapay/sdk; the API's value wins. */
+export const HUMAN_CHECK_ACTION = "soapay-recovery" as const;
 
-/**
- * The required credential as a session constraint. IDKit 4.3's `IDKitSessionWidget`
- * takes `constraints` (not `preset={selfieCheck()}` as the session-proof docs show).
- */
-export function humanCheckConstraint(_signal?: string): ConstraintNode {
-  // No signal: World App stalls on session requests that carry one (World's own session example
-  // sends none). The API binds the proof to our signal through the RP nonce instead (`bind`).
-  return CredentialRequest(HUMAN_CHECK_CREDENTIAL, {});
+/** The IDKit preset for one Soapay proof: Proof of Human, bound to `signal`. */
+export function humanCheckPreset(signal?: string): Preset {
+  return proofOfHuman(signal ? { signal } : {});
 }
 
-/** POST {apiUrl}/worldid/rp-context: a fresh, single-use RP signature for one session request. */
+/** POST {apiUrl}/worldid/rp-context: a fresh, single-use RP signature for one Proof of Human request. */
 export async function fetchRpContext(apiUrl: string, f: typeof fetch = fetch, bind?: string): Promise<RpContextResponse> {
   let res: Response;
   try {
     res = await f(`${apiUrl.replace(/\/+$/, "")}/worldid/rp-context`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(bind ? { kind: "session", bind } : { kind: "session" }),
+      body: JSON.stringify(bind ? { kind: "uniqueness", bind } : { kind: "uniqueness" }),
     });
   } catch {
     throw new HumanCheckError("api_unreachable", "Soapay API is unreachable");
@@ -97,13 +99,14 @@ const CANCEL_CODES = new Set<string>([IDKitErrorCodes.UserRejected, IDKitErrorCo
 /**
  * World ID check for Soapay's single trust moment: account recovery (docs/worldid.md).
  *
- * Uses IDKit's own `IDKitSessionWidget`, configured exactly like World's session example
- * (constraints without a signal, `environment`, `existing_session_id` to prove a session). The
- * purpose of each proof is bound on our server through the RP nonce (`bind`, D-57). On failure
- * the widget's debug report (the request and World App's raw response) is kept for "Copy details".
+ * Uses IDKit's own `IDKitRequestWidget`, configured like World's integration docs: a one-time
+ * request on the recovery action, `allow_legacy_proofs={false}`, the API's `environment`, and
+ * `preset={proofOfHuman({ signal })}`. The server also binds the proof to the signal through
+ * the RP nonce (`bind`, D-57). On failure the widget's debug report (the request and World
+ * App's raw response) is kept for "Copy details".
  */
 export function HumanCheck(props: HumanCheckProps) {
-  const { mode, apiUrl, sessionId, signal, onResult, actionDescription } = props;
+  const { mode, apiUrl, signal, onResult, actionDescription } = props;
   const controlled = props.open !== undefined;
   const [innerOpen, setInnerOpen] = useState(false);
   const open = controlled ? !!props.open : innerOpen;
@@ -125,11 +128,6 @@ export function HumanCheck(props: HumanCheckProps) {
   // A fresh RP context, bound to this signal, each time the check opens.
   useEffect(() => {
     if (!open || ctx) return;
-    if (mode === "rotate" && !sessionId) {
-      cbs.current.onError?.(new HumanCheckError("no_session", "this name has no World ID session to prove"));
-      setOpen(false);
-      return;
-    }
     setDebug(true); // keeps IDKit's debug report; nothing secret is in it
     setDebugText(null);
     pendingError.current = null;
@@ -144,7 +142,7 @@ export function HumanCheck(props: HumanCheckProps) {
     return () => {
       live = false;
     };
-  }, [open, ctx, mode, sessionId, apiUrl, signal, props.fetch, setOpen]);
+  }, [open, ctx, apiUrl, signal, props.fetch, setOpen]);
 
   const close = () => {
     const err = pendingError.current;
@@ -163,16 +161,17 @@ export function HumanCheck(props: HumanCheckProps) {
         </button>
       )}
       {ctx && !debug && (
-        <IDKitSessionWidget
+        <IDKitRequestWidget
           open={open}
           onOpenChange={(v) => {
             if (!v && !pendingError.current) close();
           }}
           app_id={ctx.app_id}
+          action={ctx.action ?? HUMAN_CHECK_ACTION}
           rp_context={ctx.rp_context}
+          allow_legacy_proofs={false}
           environment={ctx.environment}
-          constraints={humanCheckConstraint()}
-          {...(mode === "rotate" && sessionId ? { existing_session_id: sessionId } : {})}
+          preset={humanCheckPreset(signal)}
           {...(actionDescription ? { action_description: actionDescription } : {})}
           onSuccess={async (result) => {
             try {
@@ -224,6 +223,3 @@ const panel = {
   borderRadius: 2,
   textAlign: "center",
 } as const;
-
-/** @deprecated Renamed to `humanCheckConstraint` (the credential is now Proof of Human, D-54). */
-export const selfieCheckConstraint = humanCheckConstraint;

@@ -78,13 +78,20 @@ export type Profile = {
   registration?: { txHash: Hex; status: string; chainId: number; at: number };
   name?: { label: string; name: string; at: number };
   /**
-   * Optional self-service recovery (§5): a World ID Proof of Human session. With it, a key rotation is
-   * attested by the API and auto-accepted by the employer; without it, the employer approves by hand.
-   * `attachedTo` is the label the API has the session on (set with the name claim or attached later).
+   * Optional self-service recovery (§5): World ID (Proof of Human) linked to the name. With it, a key
+   * rotation is attested by the API and auto-accepted by the employer; without it, the employer
+   * approves by hand. `attachedTo` is the label the API has the link on (set with the name claim or
+   * linked later).
    */
   recovery?: {
     kind: "world-id" | "placeholder";
     at: number;
+    /** The linked proof's nullifier (0x hex), D-58. Stable per human on Soapay's recovery action. */
+    nullifier?: string;
+    /**
+     * @deprecated A D-16/D-57 World ID session id. Such links can't back a rotation any more; link
+     * World ID again from Name settings.
+     */
     sessionId?: string;
     attachedTo?: string;
     /** Unix seconds. Set for a session attached after the claim: the API's cooldown (72 h by default). */

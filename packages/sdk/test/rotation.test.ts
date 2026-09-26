@@ -3,6 +3,9 @@ import { keccak256, stringToBytes, verifyTypedData } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import {
   attachSessionTypedData,
+  attachWorldIdTypedData,
+  WORLD_ID_ACTION,
+  worldIdNullifierOf,
   metaRotationTypedData,
   rotationClaimTypedData,
   rotationSignal,
@@ -29,7 +32,38 @@ describe("rotation typed data (docs/mvp-spec.md §2.1)", () => {
     expect(await verifyTypedData({ address: key.address, ...att, signature: sig })).toBe(true);
   });
 
-  it("AttachSession signs label, session id and deadline under the Soapay Names domain", async () => {
+  it("AttachWorldId signs label, nullifier (uint256) and deadline under the Soapay Names domain (D-58)", async () => {
+    const nullifier = `0x${"0a".repeat(32)}`;
+    const td = attachWorldIdTypedData({ label: "alice", nullifier, deadline: 7n, chainId: 84532 });
+    expect(td.primaryType).toBe("AttachWorldId");
+    expect(td.domain).toEqual({ name: "Soapay Names", version: "1", chainId: 84532 });
+    expect(td.message.nullifier).toBe(BigInt(nullifier));
+    // Hex, decimal and bigint forms of the same nullifier sign the same message.
+    const sig = await key.signTypedData(td);
+    for (const n of [BigInt(nullifier), BigInt(nullifier).toString(10)]) {
+      expect(await verifyTypedData({ address: key.address, ...attachWorldIdTypedData({ label: "alice", nullifier: n, deadline: 7n, chainId: 84532 }), signature: sig })).toBe(true);
+    }
+    expect(() => attachWorldIdTypedData({ label: "alice", nullifier: "nope", deadline: 1n, chainId: 1 })).toThrow(/nullifier/);
+    expect(() => attachWorldIdTypedData({ label: "A!", nullifier: 1n, deadline: 1n, chainId: 1 })).toThrow(/label/);
+  });
+
+  it("worldIdNullifierOf reads the Proof of Human nullifier from an IDKit v4 result", () => {
+    const result = {
+      protocol_version: "4.0",
+      action: WORLD_ID_ACTION,
+      responses: [
+        { identifier: "selfie", issuer_schema_id: 11, nullifier: "0x01" },
+        { identifier: "proof_of_human", issuer_schema_id: 1, nullifier: "0x0a" },
+      ],
+    };
+    expect(WORLD_ID_ACTION).toBe("soapay-recovery");
+    expect(worldIdNullifierOf(result)).toBe(10n);
+    expect(worldIdNullifierOf({ session_id: "session_ab", responses: [] })).toBeUndefined();
+    expect(worldIdNullifierOf(undefined)).toBeUndefined();
+    expect(worldIdNullifierOf({ responses: [{ identifier: "proof_of_human", issuer_schema_id: 1, nullifier: "zz" }] })).toBeUndefined();
+  });
+
+  it("AttachSession (deprecated) signs label, session id and deadline under the Soapay Names domain", async () => {
     const td = attachSessionTypedData({ label: "alice", sessionId: `session_${"ab".repeat(64)}`, deadline: 7n, chainId: 84532 });
     expect(td.primaryType).toBe("AttachSession");
     expect(td.domain.name).toBe("Soapay Names");
