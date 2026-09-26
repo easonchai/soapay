@@ -219,8 +219,8 @@ export function resolveConfig(settings: Settings = loadSettings(), env: ImportMe
   // getChainConfig applies the pay-token override (the mock USDC on Base Sepolia by default).
   const sdk: SoapayChainConfig = getChainConfig(settings.chainId);
   const demo = readDemoFlag(env);
-  // Demo pays through a fake StealthDisperse so plain accounts have a pay path without a deployment.
-  const disperse = settings.stealthDisperse[settings.chainId] ?? sdk.stealthDisperse ?? (demo ? DEMO_STEALTH_DISPERSE : null);
+  // Demo pays through a fake StealthDisperse (off-chain sample data), even where a real one is deployed.
+  const disperse = demo ? DEMO_STEALTH_DISPERSE : (settings.stealthDisperse[settings.chainId] ?? sdk.stealthDisperse ?? null);
   return {
     chainId: settings.chainId,
     chain: sdk.chain,

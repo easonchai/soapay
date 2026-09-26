@@ -151,9 +151,10 @@ describe("Faucet", () => {
     expect(pressed).toBe(1);
   });
 
-  it("links to Circle's faucet on Base Sepolia", () => {
+  it("explains the welcome drop on Base Sepolia and links an ETH faucet", () => {
     render(<Faucet chainId={84532} demo={false} usdcBalance={12_000_000n} />);
-    expect(screen.getByRole("link", { name: /circle/i })).toHaveAttribute("href", "https://faucet.circle.com/");
+    expect(screen.getByText(/1,000,000 test USDC from Soapay/)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /circle/i })).toBeNull();
     expect(screen.getByRole("link", { name: /base sepolia eth/i })).toHaveAttribute("href", "https://www.alchemy.com/faucets/base-sepolia");
     expect(screen.getByText(/12\.00 USDC/)).toBeInTheDocument();
     expect(screen.queryByRole("button")).toBeNull();

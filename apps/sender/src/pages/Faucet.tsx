@@ -1,10 +1,10 @@
 // Test USDC for the connected wallet. Demo mode: a button that credits the in-memory ledger. A real
-// testnet: links to Circle's faucet (20 USDC per address per 2 hours, lib/testnet.ts) and a Base
-// Sepolia ETH faucet. Mainnet: nothing. Props-only.
+// testnet: Soapay's welcome drop (D-52) sends test USDC on first login, so this only explains it and
+// links a Base Sepolia ETH faucet for the wallet's own gas. Mainnet: nothing. Props-only.
 import { toast } from "@soapay/ui";
 import { isTestnetChain } from "@soapay/sdk";
 import { DEMO_FAUCET_USDC } from "../lib/demoChain.js";
-import { FAUCET_USDC_PER_DRIP } from "../lib/testnet.js";
+import { WELCOME_DROP_USDC } from "../lib/testnet.js";
 import { usdc } from "../ui/kit.js";
 
 export const CIRCLE_FAUCET_URL = "https://faucet.circle.com/";
@@ -52,10 +52,8 @@ export function Faucet({ chainId, demo, usdcBalance = null, onFaucet }: FaucetPr
         </span>
       )}
       <span className="ink2" style={{ fontSize: 12 }}>
-        <a href={CIRCLE_FAUCET_URL} target="_blank" rel="noreferrer">
-          Circle&apos;s USDC faucet ↗
-        </a>{" "}
-        ({FAUCET_USDC_PER_DRIP} USDC per address every 2 hours) ·{" "}
+        Every wallet gets {WELCOME_DROP_USDC.toLocaleString("en-US")} test USDC from Soapay on its first login. Smart wallets pay
+        no gas here; a regular wallet needs a little{" "}
         <a href={BASE_SEPOLIA_ETH_FAUCET_URL} target="_blank" rel="noreferrer">
           Base Sepolia ETH for gas ↗
         </a>
