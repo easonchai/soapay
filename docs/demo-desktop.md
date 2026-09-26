@@ -1,3 +1,5 @@
+> **Superseded:** use the short scripts in [docs/demos/](demos/README.md) (finalist, World ID, ENS). This file, including its cue card, is kept for reference.
+
 # Demo script: desktop only (2:45)
 
 One laptop, three browser profiles (Employer, Alex, and Maya the coworker), plus a terminal for the agent and a second terminal for the thief. The phone is used only as the **World ID app** (to scan the QR); it is never mirrored. Full background, pre-staging and fallbacks: [demo-flow.md](demo-flow.md).

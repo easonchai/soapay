@@ -1,3 +1,5 @@
+> **Superseded:** use the short scripts in [docs/demos/](demos/README.md) (finalist, World ID, ENS). This file, including its cue card, is kept for reference.
+
 # Demo script: the 3-minute live demo
 
 The demo slot is 4 minutes. A teammate pitches for the first minute (see [What the pitch minute covers](#what-the-pitch-minute-covers)); this is the **3-minute live demo** that follows. It tells one story, a company paying a person and an agent, and each bounty appears as a real product moment, not as a feature tour:

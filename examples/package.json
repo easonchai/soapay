@@ -12,6 +12,7 @@
     "demo:seed-company": "tsx demo/seed-company.ts",
     "demo:attacker": "tsx demo/attacker.ts",
     "demo:recovery-check": "tsx demo/recovery-check.ts",
+    "demo:bootstrap": "tsx demo/bootstrap.ts",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf .turbo"
   },
