@@ -30,11 +30,11 @@ Requirement text is quoted from the ETHGlobal Tokyo 2026 prize page (fetched 202
 | Requirement | How Soapay meets it | Status |
 | --- | --- | --- |
 | "Integrate IDKit in a functioning application … or onchain flow" | IDKit 4.3 in the employee app (`packages/worldid-react`), used on the Name screen and at the name step of onboarding | ✅ |
-| "Use at least one supported World ID credential" | **Proof of Human**, through a World ID **session** (D-54) | ✅ |
-| "Verify the result on the server or onchain as appropriate" | `apps/api` checks nonce, session id, signal hash, credential, environment and replay, then verifies with the Developer Portal v4 endpoint; only then signs the EIP-712 `MetaRotation` attestation | ✅ |
-| "Clearly explain the specific product event requiring trust and why the chosen credential is the minimum sufficient assurance" | The event is **account recovery**: replacing a leaked key, which changes where all future salary goes. A thief with the old key can rewrite the ENS record, but the payer's app only follows with a session proof from the same human. Proof of Human is proportionate: World calls Selfie Check medium-assurance, which is too weak for moving pay, and passport-level identity would collect data we don't need ([docs/worldid.md](worldid.md)) | ✅ |
+| "Use at least one supported World ID credential" | **Proof of Human**, one-time requests on the action `soapay-recovery`, matched by nullifier (D-54, D-58) | ✅ |
+| "Verify the result on the server or onchain as appropriate" | `apps/api` checks the nonce (single use), action, credential, signal (or the nonce's bound signal), environment and, for rotation, that the nullifier matches the linked one, then verifies with the Developer Portal v4 endpoint; only then signs the EIP-712 `MetaRotation` attestation | ✅ |
+| "Clearly explain the specific product event requiring trust and why the chosen credential is the minimum sufficient assurance" | The event is **account recovery**: replacing a leaked key, which changes where all future salary goes. A thief with the old key can rewrite the ENS record, but the payer's app only follows with a proof from the same human (the same World ID nullifier). Proof of Human is proportionate: World calls Selfie Check medium-assurance, which is too weak for moving pay, and passport-level identity would collect data we don't need ([docs/worldid.md](worldid.md)) | ✅ |
 | "Demonstrate a successful verification" | Production mode is live (D-51). The run with a real World App is the last step | ⏳ owner runs it with the World App |
-| "…and one meaningful alternative path (cancellation, unavailable credential, rejection, ineligible user)" | No session, cancelled proof, a different person, expired or replayed proof: no attestation, so the company app **blocks** the line with "meta change unverified" until the employer approves by hand. A session added after onboarding also has a 72-hour wait | ✅ in code; ⏳ show it in the demo video |
+| "…and one meaningful alternative path (cancellation, unavailable credential, rejection, ineligible user)" | No World ID link, cancelled proof, a different person (another nullifier), expired or replayed proof: no attestation, so the company app **blocks** the line with "meta change unverified" until the employer approves by hand. A World ID linked after onboarding also has a 72-hour wait | ✅ in code; ⏳ show it in the demo video |
 | "Integration debrief/feedback: time to first success, friction, missing capability or documentation, the one improvement with the greatest impact" | [docs/worldid.md → Integration debrief](worldid.md#integration-debrief) | ⏳ fill in "time to first success" after the live run |
 
 ### Uniswap: Best Uniswap Stack Contribution ($6,000)
@@ -87,31 +87,31 @@ node -e 'import("viem").then(async({createPublicClient,http})=>{const{sepolia}=a
 ## World ID (IDKit 4.x): partly live
 
 **What:** one trust moment, **key rotation**. Changing the meta-address behind a name redirects future salary.
-- At enrollment the employee may create a World ID **session** (Proof of Human).
-- A later rotation must prove the *same* session (`proveSession`).
+- At enrollment the employee may link World ID: a one-time **Proof of Human** proof on the action `soapay-recovery`, whose nullifier the API stores (D-58).
+- A later rotation needs a proof with the *same* nullifier, i.e. the same human.
 - The API verifies it server-side and signs an EIP-712 `MetaRotation` attestation.
 - The sender app **auto-accepts a changed pin only with that attestation** (checked against a pinned attester address). Otherwise the line is blocked ("possible salary redirect") until the employer approves it by hand.
 
 **Why this credential:** see [docs/worldid.md](worldid.md#why-proof-of-human-is-the-proportionate-credential) (D-54): recovery moves future salary, so the strongest same-human proof (Proof of Human) is proportionate; Selfie Check is medium-assurance.
 
 **Where:**
-- `apps/api/src/humanVerifier/worldid.ts`, `routes/names.ts` (rotation, session attach, attestations), `routes/worldid.ts` (rp-context, config);
+- `apps/api/src/humanVerifier/worldid.ts`, `routes/names.ts` + `routes/rotation.ts` (link, rotation, attestations), `routes/worldid.ts` (rp-context, config);
 - `packages/worldid-react` (`<HumanCheck mode="create-session"|"rotate">`);
 - `packages/sdk/src/rotation.ts` (typed data);
 - `apps/sender/src/lib/attestation.ts` (enforcement).
 
 **Alternative paths (the prize requires them)**, all refused and covered by tests:
-- no session on the name, or a different person (session mismatch);
-- a replayed session nullifier, or an expired or cancelled proof;
-- an environment mismatch;
-- a late-attached session inside its 72 h cooldown.
+- no World ID link on the name (`no_worldid_link`), or a different person (`human_mismatch`);
+- a replayed proof (spent nonce), or an expired or cancelled proof;
+- an environment or action mismatch;
+- a late link inside its 72 h cooldown.
 
 **Live proof:**
-- RP `rp_3ede5fe1cab9af48` for app `app_0cc7167efe114ac2e0ef7d9827098353` is registered on-chain (production and staging), and action `soapay-enroll` exists in both.
-- `GET /api/worldid/config` on the running API returns enabled, with credential `selfie`.
+- RP `rp_3ede5fe1cab9af48` for app `app_0cc7167efe114ac2e0ef7d9827098353` is registered on-chain (production and staging), and action `soapay-recovery` exists in both. Two live proofs by the same identity on it verified (HTTP 200) with the same nullifier (09-26).
+- `GET /api/worldid/config` on the running API returns enabled, with credential `proof_of_human` and action `soapay-recovery`.
 - The sender's attestation gating was shown in mock mode (screenshots): attested → "Re-verified by World ID"; unattested → blocked.
 
-**Not yet live:** a real Proof of Human session created and proved by a human (simulator or World App) against the running API. This is the #1 item to run before judging.
+**Not yet live:** a full link → rotate by a human (simulator or World App) against the running API with D-58 deployed. This is the #1 item to run before judging.
 
 **Verify yourself:** `pnpm --filter @soapay/api test` (the World ID refusal paths) and `pnpm --filter @soapay/sender test` (attestation gating). The debrief is in `docs/worldid.md`.
 
@@ -155,6 +155,6 @@ node -e 'import("viem").then(async({createPublicClient,http})=>{const{sepolia}=a
 
 ## Before judging: run these live
 
-1. A World ID Proof of Human session create → rotate, with a human (simulator or World App).
+1. A World ID Proof of Human link → rotate (same nullifier), with a human (simulator or World App).
 2. A Uniswap swap-in-place on Base Sepolia (done, on-chain quote); the Trading API path is proven with a live mainnet quote on a fork.
 3. One compliant exit leg (needs a faucet top-up).
