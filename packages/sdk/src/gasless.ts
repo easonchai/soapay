@@ -4,10 +4,11 @@
 // what those reads imply. Deliberately NOT claimed: "this address never received ETH". Proving that
 // needs every internal transfer ever made to it (a trace or explorer index), which this does not read.
 // What it does show: the ETH balance now, the account nonce and code (7702 delegation), and that the
-// spend's gas was paid by a paymaster in USDC, with the fee taken from the receipt's Transfer logs.
+// spend's gas was paid by a paymaster in USDC, with the fee taken from the receipt's Transfer logs, or
+// (Base Sepolia, D-52) sponsored outright, with no token taken from the address.
 import { decodeEventLog, getAddress, isAddressEqual, parseAbi, type Address, type Hex, type PublicClient } from "viem";
 import { erc20Abi } from "./abis.js";
-import { ENTRYPOINT_V08, SIMPLE_7702_ACCOUNT, getChainConfig } from "./constants.js";
+import { CIRCLE_USDC, ENTRYPOINT_V08, SIMPLE_7702_ACCOUNT, getChainConfig } from "./constants.js";
 import { CIRCLE_PAYMASTER_V08 } from "./paymasters/circle.js";
 import { parseDelegationDesignator } from "./spend.js";
 import type { BatchReceipt } from "./batch.js";
@@ -27,8 +28,11 @@ export type GaslessSpendFacts = {
   userOpHash: Hex;
   /** null when the userOp named no paymaster (the account paid its own gas). */
   paymaster: Address | null;
-  /** "circle" when the paymaster is the chain's Circle Paymaster v0.8. */
-  paymasterKind: "circle" | "other" | null;
+  /**
+   * "circle" when the paymaster is the chain's Circle Paymaster v0.8; "sponsored" when another
+   * paymaster took no pay token from the address (testnet sponsorship, D-52); else "other".
+   */
+  paymasterKind: "circle" | "sponsored" | "other" | null;
   success: boolean;
   /** Gas cost in wei, charged to the paymaster's EntryPoint deposit (UserOperationEvent.actualGasCost). */
   actualGasCost: bigint;
@@ -80,11 +84,11 @@ export function gaslessProofFromReads(reads: GaslessProofReads, opts: { chainId:
 
 function spendFacts(address: Address, receipt: BatchReceipt, opts: { chainId: number; entryPoint?: Address }): GaslessSpendFacts | null {
   const entryPoint = opts.entryPoint ?? ENTRYPOINT_V08;
-  let usdc: Address | null = null;
+  let payToken: Address | null = null;
   try {
-    usdc = getChainConfig(opts.chainId).usdc;
+    payToken = getChainConfig(opts.chainId).usdc;
   } catch {
-    usdc = null;
+    payToken = null;
   }
   let op: { userOpHash: Hex; paymaster: Address; success: boolean; actualGasCost: bigint } | null = null;
   for (const log of receipt.logs) {
@@ -101,6 +105,9 @@ function spendFacts(address: Address, receipt: BatchReceipt, opts: { chainId: nu
 
   const paymaster = isAddressEqual(op.paymaster, ZERO) ? null : op.paymaster;
   const circle = (CIRCLE_PAYMASTER_V08 as Record<number, Address>)[opts.chainId];
+  const isCircle = !!paymaster && !!circle && isAddressEqual(paymaster, circle);
+  // The Circle paymaster charges Circle USDC even where the pay token is a mock (Base Sepolia, D-52).
+  const usdc = isCircle ? ((CIRCLE_USDC as Record<number, Address>)[opts.chainId] ?? payToken) : payToken;
   let usdcFee: bigint | null = null;
   if (paymaster && usdc) {
     let fee = 0n;
@@ -123,7 +130,7 @@ function spendFacts(address: Address, receipt: BatchReceipt, opts: { chainId: nu
     entryPoint: getAddress(entryPoint),
     userOpHash: op.userOpHash,
     paymaster,
-    paymasterKind: paymaster ? (circle && isAddressEqual(paymaster, circle) ? "circle" : "other") : null,
+    paymasterKind: paymaster ? (isCircle ? "circle" : usdcFee === 0n ? "sponsored" : "other") : null,
     success: op.success,
     actualGasCost: op.actualGasCost,
     usdcFee,

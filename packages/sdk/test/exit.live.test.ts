@@ -144,7 +144,8 @@ describe.skipIf(!live)("LIVE exit (EXIT_LIVE=1)", () => {
       // Live demo: withdraw as soon as the ASP approves, in one part.
       config: { ...cfg, withdrawDelayMs: { min: 0, max: 0 } },
       spendClients: {
-        [baseSepolia.id]: createSpendClient({ chainId: baseSepolia.id, publicClient: baseClient, bundlerUrl: bundler(baseSepolia.id), estimateFeesPerGas: pimlicoFeesPerGas }),
+        // The exit burns Circle USDC and pays gas in it: the Circle paymaster, not the testnet sponsorship (D-52).
+        [baseSepolia.id]: createSpendClient({ chainId: baseSepolia.id, publicClient: baseClient, bundlerUrl: bundler(baseSepolia.id), paymaster: "circle-usdc", estimateFeesPerGas: pimlicoFeesPerGas }),
         [sepolia.id]: createSpendClient({ chainId: sepolia.id, publicClient: sepClient, bundlerUrl: bundler(sepolia.id), estimateFeesPerGas: pimlicoFeesPerGas }),
       },
       stealthKey,

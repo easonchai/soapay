@@ -8,6 +8,8 @@ import { pay } from "./tools/pay.js";
 import { balance, scan } from "./tools/receive.js";
 import { spend } from "./tools/spend.js";
 import { swapInPlace } from "./tools/swap.js";
+import { getTestFunds, TEST_FUNDS_CHAIN_ID } from "./tools/funds.js";
+import { defaultPaymasterMode } from "@soapay/sdk";
 import { errorMessage, plain, toJson, ToolError } from "./util.js";
 
 export const SERVER_NAME = "soapay";
@@ -137,7 +139,11 @@ export function createServer(ctx: Ctx): McpServer {
     {
       title: "Spend received USDC",
       description:
-        "Send received USDC to an address or a name. Gas is paid in USDC (7702 + paymaster), one userOp per source address. " +
+        `Send received USDC to an address or a name. ${
+          defaultPaymasterMode(ctx.config.chainId) === "sponsored"
+            ? "Gas is sponsored on this testnet (7702 + a sponsoring paymaster)"
+            : "Gas is paid in USDC (7702 + paymaster)"
+        }, one userOp per source address. ` +
         "The dry run returns the consolidation guard's decision: `block` cannot be overridden; `warn` needs your judgement before confirming.",
       inputSchema: {
         to: z.string().min(3).max(255).optional().describe("0x address or ENS name"),
@@ -168,6 +174,22 @@ export function createServer(ctx: Ctx): McpServer {
     },
     (input) => run(ctx, "swap_in_place", () => swapInPlace(ctx, input)),
   );
+
+  // Base Sepolia only: the payer wallet's one-time test USDC (D-52). Not listed elsewhere.
+  if (ctx.config.chainId === TEST_FUNDS_CHAIN_ID) {
+    server.registerTool(
+      "get_test_funds",
+      {
+        title: "Get test funds",
+        description:
+          "Base Sepolia only: ask the Soapay API's welcome drop for test USDC (Soapay's mock token) for this agent's payer wallet. " +
+          "Once per address; a second call reports already_claimed.",
+        inputSchema: {},
+        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      },
+      () => run(ctx, "get_test_funds", () => getTestFunds(ctx)),
+    );
+  }
 
   return server;
 }

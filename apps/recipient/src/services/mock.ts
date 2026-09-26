@@ -9,6 +9,8 @@
  */
 import {
   CIRCLE_PAYMASTER_V08,
+  circleUsdcFor,
+  defaultPaymasterMode,
   ENTRYPOINT_V08,
   SIMPLE_7702_ACCOUNT,
   SpendManyError,
@@ -28,9 +30,8 @@ import { keccak_256 } from "@noble/hashes/sha3.js";
 import { bytesToHex, encodeAbiParameters, encodeEventTopics, getAddress, keccak256, toHex, type Address, type Hex } from "viem";
 import type { ApiFetch } from "../api/client.js";
 import type { SendProgress, SpendQuote, SpendService } from "./spend.js";
-import type { SpendParams, SpendResult, SwapQuote } from "@soapay/sdk";
+import type { SpendParams, SpendResult } from "@soapay/sdk";
 import type { EnsWriter } from "../features/rotation/ens.js";
-import { NATIVE_ETH, type SwapService } from "../features/convert/swap.js";
 import { privateKeyToAccount } from "viem/accounts";
 
 export const MOCK_EMPLOYER: Address = "0x5ca1ab1e00000000000000000000000000000e3e";
@@ -392,12 +393,22 @@ function transferLog(token: Address, from: Address, to: Address, amount: bigint,
   };
 }
 
-/** Same shape as a real Circle-paymaster userOp receipt: fee to the paymaster, the transfer, the UserOperationEvent. */
+/** A stand-in sponsorship paymaster (Base Sepolia, D-52): pays the gas, takes nothing. */
+const MOCK_SPONSOR: Address = "0x888888888888Ec68A58AB8094Cc1AD20Ba3D2402";
+const sponsoredOn = (chainId: number) => defaultPaymasterMode(chainId) === "sponsored";
+
+/**
+ * Same shape as a real userOp receipt: on a Circle-paymaster chain the fee to the paymaster, the
+ * transfer and the UserOperationEvent; on a sponsored testnet no fee transfer and a sponsor paymaster.
+ */
 function spendReceipt(chainId: number, s: MockSpendTx) {
   const cfg = getChainConfig(chainId);
-  const paymaster = getAddress((CIRCLE_PAYMASTER_V08 as Record<number, Address>)[chainId] ?? "0x3BA9A96eE3eFf3A69E2B18886AcF52027EFF8966");
+  const sponsored = sponsoredOn(chainId);
+  const paymaster = sponsored
+    ? MOCK_SPONSOR
+    : getAddress((CIRCLE_PAYMASTER_V08 as Record<number, Address>)[chainId] ?? "0x3BA9A96eE3eFf3A69E2B18886AcF52027EFF8966");
   const logs = [
-    transferLog(cfg.usdc, s.from, paymaster, s.fee, 0),
+    ...(sponsored ? [] : [transferLog(circleUsdcFor(chainId), s.from, paymaster, s.fee, 0)]),
     transferLog(cfg.usdc, s.from, s.to, s.amount, 1),
     {
       address: getAddress(ENTRYPOINT_V08),
@@ -499,26 +510,28 @@ export function createMockPublicClient(chainId: number) {
 const MOCK_FEE = 21_450n; // ~0.02 USDC, typical for a first 7702 spend on Base
 
 /** Records a mock userOp so `getTransactionReceipt` and the proof panel's reads see it. */
-function recordSpend(from: Address, to: Address, amount: bigint, tag: string): { userOpHash: Hex; txHash: Hex } {
+function recordSpend(from: Address, to: Address, amount: bigint, tag: string, fee = MOCK_FEE): { userOpHash: Hex; txHash: Hex } {
   const now = Date.now();
   const userOpHash = fakeTxHash(`${tag}op:${from}:${now}`);
   const txHash = fakeTxHash(`${tag}tx:${from}:${now}`);
   const block = state.world ? head(state.world.chainId) : 0n;
   state.delegated.add(from.toLowerCase());
-  state.spendTxs.set(txHash.toLowerCase(), { txHash, userOpHash, from, to, amount, fee: MOCK_FEE, block });
+  state.spendTxs.set(txHash.toLowerCase(), { txHash, userOpHash, from, to, amount, fee, block });
   return { userOpHash, txHash };
 }
 
-export function createMockSpendService(): SpendService {
+export function createMockSpendService(chainId?: number): SpendService {
   const delegated = state.delegated;
   const balanceOf = (a: string) => state.world?.balances.get(a.toLowerCase()) ?? 0n;
+  // Sponsored testnet (D-52): no fee. Otherwise the Circle paymaster's USDC fee.
+  const feeFor = () => (sponsoredOn(chainId ?? state.world?.chainId ?? 84532) ? 0n : MOCK_FEE);
   return {
     ready: true,
     async quote(stealthKey, _to): Promise<SpendQuote> {
       await latency();
       const from = privateKeyToAccount(stealthKey).address;
       const balance = balanceOf(from);
-      const fee = delegated.has(from.toLowerCase()) ? MOCK_FEE - 6_000n : MOCK_FEE;
+      const fee = feeFor() === 0n ? 0n : delegated.has(from.toLowerCase()) ? MOCK_FEE - 6_000n : MOCK_FEE;
       return { from, fee, balance, maxSendable: balance > fee ? balance - fee : 0n, delegated: delegated.has(from.toLowerCase()) };
     },
     async sendAll(spends: readonly SpendParams[], onProgress?: SendProgress): Promise<SpendResult[]> {
@@ -528,20 +541,21 @@ export function createMockSpendService(): SpendService {
         if (i > 0) await sleep(600 + Math.random() * 900); // real sends wait 4-24 s
         const from = privateKeyToAccount(s.stealthKey).address;
         const bal = balanceOf(from);
-        const amount = s.amount === "max" ? bal - MOCK_FEE : s.amount;
+        const fee = feeFor();
+        const amount = s.amount === "max" ? bal - fee : s.amount;
         // Same contract as the SDK's spendMany: stop at the first failure, report what already landed.
         if (i === 1 && s.to.toLowerCase().startsWith(MOCK_FAIL_PREFIX)) {
           throw new SpendManyError(out, i, new Error("mock: bundler rejected the userOp (AA21 didn't pay prefund)"));
         }
-        if (amount + MOCK_FEE > bal) throw new SpendManyError(out, i, new Error(`mock: insufficient balance in ${from}`));
-        state.world?.balances.set(from.toLowerCase(), bal - amount - MOCK_FEE);
-        const hashes = recordSpend(from, s.to, amount, "");
+        if (amount + fee > bal) throw new SpendManyError(out, i, new Error(`mock: insufficient balance in ${from}`));
+        state.world?.balances.set(from.toLowerCase(), bal - amount - fee);
+        const hashes = recordSpend(from, s.to, amount, "", fee);
         out.push({
           from,
           ...hashes,
           delegated: true,
           amount,
-          feeEstimate: MOCK_FEE,
+          feeEstimate: fee,
         });
         onProgress?.(i + 1, spends.length);
       }
@@ -561,51 +575,3 @@ export function createMockEnsWriter(): EnsWriter {
   };
 }
 
-/** Rough mock price, USDC base units per whole ETH. */
-const MOCK_USDC_PER_ETH = 3_000n * USDC_UNIT;
-const MOCK_ROUTER: Address = "0x000000000000000000000000000000000000c0de";
-
-/** Quotes and "executes" swaps in place against the mock balances (USDC in, fee in USDC). */
-export function createMockSwapService(chainId: number): SwapService {
-  const usdc = getChainConfig(chainId).usdc;
-  const quote = async (r: { stealthKey: Hex; tokenOut: Address; amountIn: bigint; slippageBps: number }): Promise<SwapQuote> => {
-    await latency();
-    const stealthAddress = privateKeyToAccount(r.stealthKey).address;
-    const amountOut = (r.amountIn * 10n ** 18n) / MOCK_USDC_PER_ETH;
-    return {
-      source: "universal-router",
-      chainId,
-      stealthAddress,
-      tokenIn: usdc,
-      tokenOut: r.tokenOut,
-      amountIn: r.amountIn,
-      amountOut,
-      minOut: (amountOut * BigInt(10_000 - r.slippageBps)) / 10_000n,
-      slippageBps: r.slippageBps,
-      route: `USDC -[v3 0.05%]-> ${r.tokenOut === NATIVE_ETH ? "ETH" : "WETH"}`,
-      router: MOCK_ROUTER,
-      deadline: BigInt(Math.floor(Date.now() / 1000) + 1800),
-      calls: [],
-    };
-  };
-  return {
-    ready: true,
-    route: "Mock Uniswap (1 ETH = 3,000 USDC)",
-    quote,
-    async swap(r) {
-      const q = await quote(r);
-      await sleep(1_200);
-      const from = q.stealthAddress;
-      const bal = state.world?.balances.get(from.toLowerCase()) ?? 0n;
-      if (r.amountIn + MOCK_FEE > bal) throw new Error("mock: amount plus fee exceeds the USDC balance");
-      state.world?.balances.set(from.toLowerCase(), bal - r.amountIn - MOCK_FEE);
-      return {
-        from,
-        ...recordSpend(from, MOCK_ROUTER, r.amountIn, "swap"),
-        delegated: true,
-        feeEstimate: MOCK_FEE,
-        quote: q,
-      };
-    },
-  };
-}

@@ -35,6 +35,8 @@ export function liveChain(config: McpConfig, secrets: Secrets): Chain {
       chainId: config.chainId,
       bundlerUrl: config.bundlerUrl,
       publicClient: base,
+      // Used only where gas is sponsored (Base Sepolia); Base mainnet keeps the Circle USDC paymaster.
+      paymasterUrl: config.paymasterUrl,
       ...(/pimlico/i.test(config.bundlerUrl) ? { estimateFeesPerGas: pimlicoFeesPerGas } : {}),
     }));
 
@@ -109,5 +111,6 @@ export function liveApi(config: McpConfig): Api {
     async announcements() {
       return (await fetchAnnouncements({ apiUrl: root, limit: 1000 })).announcements;
     },
+    faucet: (address) => call(`${root}/faucet`, post({ address })),
   };
 }

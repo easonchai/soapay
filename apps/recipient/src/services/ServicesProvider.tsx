@@ -6,16 +6,14 @@ import { ENV } from "../config.js";
 import { ScanPool, browserWorkerFactory } from "../scan/pool.js";
 import type { ScanClient } from "../scan/scanner.js";
 import { useVault } from "../vault/VaultProvider.js";
-import { settingsOf, swapProxyUrl, type Settings } from "../vault/types.js";
+import { paymasterUrl, settingsOf, type Settings } from "../vault/types.js";
 import { createEnsWriter, type EnsWriter } from "../features/rotation/ens.js";
-import { createSdkSwapService, type SwapService } from "../features/convert/swap.js";
 import {
   MOCK_DISPERSE,
   createMockEnsWriter,
   createMockFetch,
   createMockPublicClient,
   createMockSpendService,
-  createMockSwapService,
   setMockIdentity,
 } from "./mock.js";
 import { createSdkSpendService, type SpendService } from "./spend.js";
@@ -31,8 +29,6 @@ export type Services = {
   /** Reads: block number, logs, balances, registry nonce; receipts, ETH balance, nonce and code (D-41 views). */
   client: ScanClient & GaslessProofClient & { readContract: PublicClient["readContract"] };
   spend: SpendService;
-  /** Convert in place (Uniswap via the SDK). */
-  swap: SwapService;
   /** Compliant exit through Privacy Pools (features/exit/sdk.ts is the SDK seam). */
   exit: ExitService;
   /** ENSv2 `stealth` record writer for rotation (Sepolia). */
@@ -60,8 +56,7 @@ export function buildServices(settings: Settings, mock: boolean): Services {
       api: createApi(settings.apiUrl, fetchFn),
       fetch: fetchFn,
       client: createMockPublicClient(chainId) as unknown as Services["client"],
-      spend: createMockSpendService(),
-      swap: createMockSwapService(chainId),
+      spend: createMockSpendService(chainId),
       exit: createMockExitService(),
       ens: createMockEnsWriter(),
       pool: pool(),
@@ -80,8 +75,7 @@ export function buildServices(settings: Settings, mock: boolean): Services {
     api: createApi(settings.apiUrl, fetchFn),
     fetch: fetchFn,
     client: publicClient as unknown as Services["client"],
-    spend: createSdkSpendService({ chainId, bundlerUrl: settings.bundlerUrl, publicClient }),
-    swap: createSdkSwapService({ chainId, bundlerUrl: settings.bundlerUrl, publicClient, proxyUrl: swapProxyUrl(settings) }),
+    spend: createSdkSpendService({ chainId, bundlerUrl: settings.bundlerUrl, publicClient, paymasterUrl: paymasterUrl(settings) }),
     exit: createSdkExitService({
       config: exitConfigFor(chainId),
       bundlerUrl: settings.bundlerUrl,

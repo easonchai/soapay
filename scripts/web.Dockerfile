@@ -10,8 +10,11 @@ ARG VITE_ATTESTER
 ARG VITE_RPC_URL=https://sepolia.base.org
 ARG VITE_ENS_RPC_URL=https://ethereum-sepolia-rpc.publicnode.com
 ARG VITE_BUNDLER_URL=https://public.pimlico.io/v2/84532/rpc
+# Base Sepolia pay token (D-52). Empty = the SDK default, Soapay's mock USDC.
+ARG VITE_PAY_TOKEN=
 ENV VITE_CHAIN_ID=$VITE_CHAIN_ID VITE_STEALTH_DISPERSE=$VITE_STEALTH_DISPERSE VITE_ATTESTER=$VITE_ATTESTER \
-    VITE_RPC_URL=$VITE_RPC_URL VITE_ENS_RPC_URL=$VITE_ENS_RPC_URL VITE_BUNDLER_URL=$VITE_BUNDLER_URL
+    VITE_RPC_URL=$VITE_RPC_URL VITE_ENS_RPC_URL=$VITE_ENS_RPC_URL VITE_BUNDLER_URL=$VITE_BUNDLER_URL \
+    VITE_PAY_TOKEN=$VITE_PAY_TOKEN
 COPY . .
 RUN pnpm install --frozen-lockfile --filter "@soapay/recipient..." --filter "@soapay/sender..."
 RUN bash scripts/build-demo.sh "$PUBLIC_ORIGIN"

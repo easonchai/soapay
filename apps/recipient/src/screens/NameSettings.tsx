@@ -2,6 +2,7 @@ import { useState } from "react";
 import { KeyRound, ShieldCheck } from "lucide-react";
 import { useRotation } from "../hooks/useRotation.js";
 import { useServices } from "../services/ServicesProvider.js";
+import { exitOffered } from "../config.js";
 import { Link } from "react-router";
 import { generateMnemonic } from "@soapay/sdk";
 import { ClaimNameLater } from "../onboarding/Onboarding.js";
@@ -24,7 +25,16 @@ const STAGE_TEXT: Record<string, string> = {
  * stay scanned and spendable here either way), 3. point the name at the new keys with the normal
  * rotation below (World ID session if linked, otherwise the employer re-approves).
  */
-export function MoveToPhrase({ canRotate, onAdopt }: { canRotate: boolean; onAdopt: (mnemonic: string) => Promise<void> }) {
+export function MoveToPhrase({
+  canRotate,
+  onAdopt,
+  showExit = true,
+}: {
+  canRotate: boolean;
+  onAdopt: (mnemonic: string) => Promise<void>;
+  /** Offer the exit link (false on the Base Sepolia demo, D-52). */
+  showExit?: boolean;
+}) {
   const [phrase, setPhrase] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -72,8 +82,17 @@ export function MoveToPhrase({ canRotate, onAdopt }: { canRotate: boolean; onAdo
           )}
         </li>
         <li>
-          <strong>2. Move funds from the old addresses (optional).</strong> Cash out privately with <Link to="/exit">Exit</Link>, or use{" "}
-          <Link to="/spend">Send</Link>. You can also do this later: the old addresses stay in your ledger.
+          <strong>2. Move funds from the old addresses (optional).</strong>{" "}
+          {showExit ? (
+            <>
+              Cash out privately with <Link to="/exit">Exit</Link>, or use <Link to="/spend">Send</Link>.
+            </>
+          ) : (
+            <>
+              Use <Link to="/spend">Send</Link>.
+            </>
+          )}{" "}
+          You can also do this later: the old addresses stay in your ledger.
         </li>
         <li>
           <strong>3. Point your name at the new keys</strong> with "Rotate to new keys" below. With a World ID session your employer's app accepts it
@@ -175,7 +194,7 @@ export function NameSettings() {
             {s.step === "idle" && (
               <>
                 {s.error && <Alert variant="destructive">{s.error}</Alert>}
-                {r.walletKeys && <MoveToPhrase canRotate={r.canRotate} onAdopt={r.adoptPhrase} />}
+                {r.walletKeys && <MoveToPhrase canRotate={r.canRotate} onAdopt={r.adoptPhrase} showExit={exitOffered(svc.settings.chainId)} />}
                 <Button onClick={r.start} disabled={!!r.pending || !r.canRotate}>
                   <KeyRound className="size-4" aria-hidden /> Rotate to new keys
                 </Button>

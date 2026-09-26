@@ -72,6 +72,8 @@ async function forkClient(upstream: string, chain: Chain) {
     chainId: chain.id,
     publicClient,
     bundlerTransport: bundler.transport,
+    // The exit burns Circle USDC and pays gas in it (the Circle paymaster), on every chain.
+    paymaster: "circle-usdc",
     estimateFeesPerGas: async () => {
       const { baseFeePerGas } = await publicClient.getBlock();
       const maxPriorityFeePerGas = 1_000_000n;

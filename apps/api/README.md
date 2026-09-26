@@ -51,7 +51,18 @@ docker run -p 8787:8787 -v soapay-data:/data --env-file apps/api/.env soapay-api
 | `UNISWAP_API_URL` | `https://trade-api.gateway.uniswap.org/v1` | |
 | `RATE_LIMIT_UNISWAP_PER_IP_PER_MINUTE` | `30` | |
 | `UNISWAP_BODY_LIMIT_BYTES` | `8192` | |
-| `CORS_ORIGINS` | `http://localhost:5173,http://localhost:5174` | The SPAs |
+| `PAY_TOKEN` | unset | Base Sepolia only: the pay token (default Soapay mock USDC `0x028D…14Bb`, D-52) |
+| `PIMLICO_API_KEY` | unset | Pimlico key for the `/paymaster` sponsorship proxy (Base Sepolia). Server-only. Unset → 503 `sponsorship_disabled` |
+| `PIMLICO_PAYMASTER_URL` | `https://api.pimlico.io/v2/84532/rpc` | Upstream (the key is appended as `?apikey=`) |
+| `PIMLICO_SPONSORSHIP_POLICY_ID` | unset | Optional policy; the server sets the ERC-7677 context, clients can't |
+| `PAYMASTER_EXTRA_TARGETS` | unset | Extra sponsored call targets beyond the pay token, Permit2, Universal Router, StealthDisperse and Announcer |
+| `RATE_LIMIT_PAYMASTER_PER_IP_PER_MINUTE` / `PAYMASTER_PER_DAY` | `60` / `5000` | Sponsorship requests (a spend makes two) |
+| `FAUCET_ENABLED` | `true` (84532 only) | The welcome drop (`POST /faucet`); needs `RELAYER_PRIVATE_KEY`, which holds MockUSDC's `MINTER_ROLE` |
+| `FAUCET_USDC_AMOUNT` | `1000000000000` | 1,000,000 mock USDC, once per address |
+| `FAUCET_ETH_WEI` | `0` | ETH top-up target (0 = off, owner decision pending; e.g. `500000000000000` = 0.0005 ETH) |
+| `FAUCET_MIN_RELAYER_ETH_WEI` | `20000000000000000` | No ETH drip while the relayer holds less (0.02 ETH) |
+| `FAUCET_PER_DAY` / `FAUCET_PER_IP_PER_DAY` | `100` / `5` | New claims per UTC day, all IPs / per IP |
+| `CORS_ORIGINS` | `http://localhost:5173,http://localhost:5174` | The SPAs (`/paymaster` answers any origin: wallets call it) |
 | `TRUST_PROXY` | `false` | Use `X-Forwarded-For` for rate-limit IPs |
 | `BODY_LIMIT_BYTES` | `16384` | |
 | `RATE_LIMIT_WINDOW_SECONDS` | `3600` | Fixed window |
@@ -167,6 +178,14 @@ Refusals, all without an attestation (the sender app then blocks the line until 
 ### `POST /uniswap/:endpoint`
 
 Trading API proxy for `quote`, `swap` and `check_approval` only (anything else is 404). It forwards the JSON body to `UNISWAP_API_URL/<endpoint>` with the server's `x-api-key` and only the `x-universal-router-version`, `x-agent-info` and `x-permit2-disabled` request headers, and passes the upstream status and body through. Bodies are capped (`UNISWAP_BODY_LIMIT_BYTES`), requests are rate-limited per IP per minute, and bodies are never logged (they contain the stealth address). Without a key: 503 `{code: "uniswap_disabled", error: {…}}`, on which the SDK's `quoteSwapInPlace` falls back to the Universal Router. Point the SDK at it with `apiUrl: "<api>/uniswap"`.
+
+### `POST /paymaster` (Base Sepolia, D-52)
+
+ERC-7677 gas sponsorship, proxied to Pimlico with `PIMLICO_API_KEY` (never returned or logged). One JSON-RPC request per call; only `pm_getPaymasterStubData`, `pm_getPaymasterData` and `pm_sponsorUserOperation`; only chain 84532; EntryPoint v0.8 (stealth spends) or v0.6 / v0.7 (smart-wallet EIP-5792 batches); the userOp's `execute` / `executeBatch` calls must all target the pay token, Permit2, the Universal Router, StealthDisperse or the Announcer (+ `PAYMASTER_EXTRA_TARGETS`) with zero ETH; a 7702 authorization must delegate to Simple7702Account and a factory must be the 0x7702 marker or the Coinbase Smart Wallet factory. Refusals are JSON-RPC errors with HTTP 400; per-IP-per-minute and daily limits give 429. Without a key: 503 `{code: "sponsorship_disabled"}` (the SDK's `SponsorshipUnavailableError`). 404 on other chains.
+
+### `POST /faucet` (Base Sepolia, D-52)
+
+`{address}` → `{status: "sent", address, usdc: {amount, txHash}, eth: {amount, txHash} | null, ethSkipped?}` the first time (mints `FAUCET_USDC_AMOUNT` mock USDC from the relayer; the ETH drip only when `FAUCET_ETH_WEI` > 0, the wallet is below it and the relayer holds more than the floor), then `{status: "already_claimed"}` forever. 429 `faucet_daily_cap` / `rate_limited`; 502 `faucet_failed` (the claim is forgotten so the wallet can retry); 503 `faucet_disabled`.
 
 ### `GET /names/:label`
 

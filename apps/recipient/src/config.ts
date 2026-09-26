@@ -1,4 +1,4 @@
-import { CHAINS, DEFAULT_CHAIN_ID, getChainConfig } from "@soapay/sdk";
+import { CHAINS, DEFAULT_CHAIN_ID, configurePayToken, exitAvailability, getChainConfig } from "@soapay/sdk";
 import { getAddress, isAddress, type Address } from "viem";
 
 /** Build-time defaults from `import.meta.env`. Every value can be overridden in Settings. */
@@ -11,12 +11,8 @@ export type EnvConfig = {
   mockApi: boolean;
   /** Ethereum Sepolia RPC, for the ENSv2 record write on rotation. */
   l1RpcUrl: string;
-  /**
-   * Ask the Uniswap Trading API for Convert quotes through the Soapay API's proxy (`${apiUrl}/uniswap`),
-   * which adds UNISWAP_API_KEY server-side, with a placeholder swapper (never the stealth address; D-27).
-   * Only where the API routes (Base mainnet). Off = the SDK's on-chain path. The key is never in the bundle.
-   */
-  swapViaApi: boolean;
+  /** Testnet pay-token override (VITE_PAY_TOKEN; D-52). Empty = the SDK default (mock USDC on Base Sepolia). */
+  payToken: string;
   /** The company (sender) app, for the top bar's "Pay" link (VITE_OTHER_APP_URL). */
   otherAppUrl: string;
 };
@@ -47,7 +43,7 @@ export function readEnv(env: Record<string, string | boolean | undefined> = impo
     stealthDisperse: parseAddressList(str("VITE_STEALTH_DISPERSE") || str("VITE_STEALTH_DISPERSE_ADDRESS")),
     mockApi: str("VITE_MOCK_API") === "1" || str("VITE_MOCK_API") === "true",
     l1RpcUrl: str("VITE_L1_RPC_URL"),
-    swapViaApi: str("VITE_SWAP_VIA_API") !== "0" && str("VITE_SWAP_VIA_API") !== "false",
+    payToken: str("VITE_PAY_TOKEN"),
     // Dev: the sender's dev server. Build: scripts/build-demo.sh serves the company app (and landing) at /.
     otherAppUrl: str("VITE_OTHER_APP_URL") || (dev ? "http://localhost:5174" : "/"),
   };
@@ -66,6 +62,25 @@ export function apiFromRelayUrl(relayUrl: string): string {
 }
 
 export const ENV: EnvConfig = readEnv();
+
+/** Applies VITE_PAY_TOKEN to the SDK (Base Sepolia only; mainnet's token is fixed). Returns the error, if any. */
+export function applyPayToken(env: Pick<EnvConfig, "payToken"> = ENV): string | null {
+  try {
+    configurePayToken(84532, env.payToken || undefined);
+    return null;
+  } catch (e) {
+    return (e as Error).message;
+  }
+}
+applyPayToken();
+
+/**
+ * Whether the compliant exit is offered on `chainId`: it needs a route and Circle USDC as the pay
+ * token (CCTP). On the Base Sepolia demo the pay token is the mock, so Exit is hidden (D-52).
+ */
+export function exitOffered(chainId: number): boolean {
+  return exitAvailability(chainId).available;
+}
 
 export function chainName(chainId: number): string {
   try {

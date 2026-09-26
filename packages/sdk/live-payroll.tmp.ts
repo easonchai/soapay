@@ -5,10 +5,10 @@ import { readFileSync } from "node:fs";
 import {
   generateMnemonic, keysFromMnemonic, getRegistryNonce, signRegisterKeysOnBehalf, signNameClaim, resolveStealthMeta,
   derivePayRun, encodeStealthDisperseCalls, fetchAnnouncements, scanAnnouncements, verifyBalances, buildLedger,
-  deriveStealthKey, createSpendClient, spendFromStealth, pimlicoFeesPerGas, ClusterGraph, planSpend,
+  deriveStealthKey, createSpendClient, spendFromStealth, pimlicoFeesPerGas, ClusterGraph, planSpend, getChainConfig,
 } from "./src/index.js";
 const API = "http://localhost:8787", RPC = "https://sepolia.base.org";
-const USDC = "0x036CbD53842c5426634e7929541eC2318f3dCF7e" as const, SD = "0x6B7a1cC570Af2DDd427DA694351438F0FE8039CA" as const;
+const USDC = getChainConfig(84532).usdc, SD = "0x6B7a1cC570Af2DDd427DA694351438F0FE8039CA" as const;
 const env = Object.fromEntries(readFileSync("../../contracts/.env", "utf8").split("\n").filter(Boolean).map((l) => l.split("=") as [string, string]));
 const employer = privateKeyToAccount(env.DEPLOYER_PRIVATE_KEY as Hex);
 const base = createPublicClient({ chain: baseSepolia, transport: http(RPC) });
@@ -47,11 +47,11 @@ for (const s of staff) {
   console.log("4 scan", s.label, "found", m.length, "total", fmt(ledger.reduce((a, x) => a + (x.balance ?? 0n), 0n)), "payerKnown", ledger.every((x) => x.payerKnown));
   (s as any).match = m[0];
 }
-// 5. First employee spends 1 USDC to a fresh address: 7702 + Pimlico public bundler + Circle paymaster.
+// 5. First employee spends 1 USDC to a fresh address: 7702 + Pimlico public bundler + gas sponsored through the API (D-52).
 const s0 = staff[0]! as any, to = privateKeyToAccount(generatePrivateKey()).address;
 const from = s0.match.announcement.stealthAddress;
 console.log("5 guard", planSpend(new ClusterGraph().addStealth(from), { from: [from], to }).decision);
-const client = createSpendClient({ chainId: 84532, publicClient: base as never, bundlerUrl: "https://public.pimlico.io/v2/84532/rpc", estimateFeesPerGas: pimlicoFeesPerGas });
+const client = createSpendClient({ chainId: 84532, publicClient: base as never, bundlerUrl: "https://public.pimlico.io/v2/84532/rpc", paymasterUrl: API + "/paymaster", estimateFeesPerGas: pimlicoFeesPerGas });
 const res = await spendFromStealth(client, { stealthKey: deriveStealthKey(s0.match, { spendingPrivateKey: s0.keys.spendingKey, viewingPrivateKey: s0.keys.viewingKey }), to, amount: 1_000_000n });
 console.log("5 spend delegated", res.delegated, "fee", fmt(res.feeEstimate), `https://sepolia.basescan.org/tx/${res.txHash}`);
 console.log("5 dest", fmt(await bal(to)), "stealth left", fmt(await bal(from)), "stealth ETH", await base.getBalance({ address: from }));

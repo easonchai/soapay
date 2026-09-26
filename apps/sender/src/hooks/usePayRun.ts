@@ -12,6 +12,7 @@ import { buildSafeExport, downloadJson, type SafeExportChunk } from "../lib/safe
 import type { Funding } from "../lib/wallet.js";
 import type { Services } from "../lib/services.js";
 import { usePayPath } from "./usePayPath.js";
+import { paymasterServiceUrl, walletSupportsPaymaster } from "../lib/sponsorship.js";
 import { useStore } from "./store.js";
 
 export type VerifiedRow = { employee: Employee; check: PinCheck | undefined; payability: Payability };
@@ -42,14 +43,15 @@ export type FundingCheck = {
   feeWei: bigint | null;
 };
 
-export function checkFunding(plan: RunPlan, funding: Funding | null): FundingCheck {
+/** `gasSponsored`: the run goes out as EIP-5792 batches whose gas the testnet paymaster pays (D-52). */
+export function checkFunding(plan: RunPlan, funding: Funding | null, opts: { gasSponsored?: boolean } = {}): FundingCheck {
   const problems: string[] = [];
   if (!funding) return { problems, feeWei: null };
   if (funding.usdcBalance !== null && funding.usdcBalance < plan.total) {
     problems.push(`USDC balance ${formatUsdc(funding.usdcBalance)} is below the run total ${formatUsdc(plan.total)}`);
   }
   const feeWei = funding.gasPrice !== null ? plan.estimate.totalGas * funding.gasPrice : null;
-  if (feeWei !== null && funding.ethBalance !== null && funding.ethBalance < feeWei) {
+  if (!opts.gasSponsored && feeWei !== null && funding.ethBalance !== null && funding.ethBalance < feeWei) {
     problems.push("ETH balance may not cover gas for every transaction");
   }
   return { problems, feeWei };
@@ -229,7 +231,12 @@ export function usePayRun(): PayRunState {
     rows,
     progress,
     plan,
-    funding: plan ? checkFunding(plan, payPath.funding) : null,
+    funding: plan
+      ? checkFunding(plan, payPath.funding, {
+          gasSponsored:
+            payPath.probe?.path.kind === "batch" && !!paymasterServiceUrl(app) && walletSupportsPaymaster(payPath.probe.capabilities, app.chainId),
+        })
+      : null,
     error,
     runId,
     safeChunks,

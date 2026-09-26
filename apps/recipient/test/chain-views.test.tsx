@@ -126,7 +126,7 @@ describe("gas proof mapping", () => {
     expect(document.body.textContent).toMatch(/Not claimed: that this address never received ETH/);
   });
 
-  it("a mock spend reads back as paid in USDC by the Circle paymaster", async () => {
+  it("a mock spend on the Base Sepolia demo reads back as sponsored: 0 ETH, no fee (D-52)", async () => {
     const keys = keysFromMnemonic(generateMnemonic());
     setMockIdentity(keys.metaAddressURI);
     const client = createMockPublicClient(CHAIN);
@@ -147,9 +147,11 @@ describe("gas proof mapping", () => {
     expect(proof.ethBalance).toBe(0n);
     expect(proof.account.simple7702).toBe(true);
     expect(proof.neverSentTx).toBe(true);
-    expect(proof.spend).toMatchObject({ paymasterKind: "circle", entryPoint: getAddress(ENTRYPOINT_V08), success: true });
-    expect(proof.spend!.usdcFee! > 0n).toBe(true);
-    expect(proofHeadline(proof)).toBe("0 ETH here. Gas was paid in USDC by the paymaster.");
+    expect(proof.spend).toMatchObject({ paymasterKind: "sponsored", entryPoint: getAddress(ENTRYPOINT_V08), success: true, usdcFee: 0n });
+    expect(proofHeadline(proof)).toBe("0 ETH here. Gas was sponsored (testnet); on mainnet the Circle paymaster takes it in USDC.");
+    const rows = proofRows(proof, { tx: () => undefined, address: () => undefined });
+    expect(rows.find((r) => r.key === "paymaster")!.value).toMatch(/^Sponsoring paymaster \(testnet\)/);
+    expect(rows.find((r) => r.key === "fee")!.value).toMatch(/sponsored on this testnet/);
   });
 });
 

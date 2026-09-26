@@ -41,7 +41,6 @@ export function Settings() {
       bundlerUrl: draft.bundlerUrl.trim(),
       l1RpcUrl: draft.l1RpcUrl.trim(),
       useRpcAnnouncements: draft.useRpcAnnouncements,
-      swapViaApi: draft.swapViaApi,
       queueWindowHours: [Math.max(0, draft.queueWindowHours[0]), Math.max(draft.queueWindowHours[0], draft.queueWindowHours[1])],
     });
     setSaved(true);
@@ -74,7 +73,7 @@ export function Settings() {
             <dt>Soapay API</dt>
             <dd>
               <code>{st.settings.apiUrl}</code>
-              <span className="note">Registration relayer, names, invites, announcement index, Uniswap proxy.</span>
+              <span className="note">Registration relayer, names, invites, announcement index, gas sponsorship (testnet).</span>
             </dd>
             <dt>Announcer</dt>
             <dd>
@@ -101,26 +100,20 @@ export function Settings() {
               )}
             </dd>
             <dt>Bundler</dt>
-            <dd>{st.settings.bundlerUrl ? <code>{st.settings.bundlerUrl}</code> : <span className="muted">Not set: Send and Convert are off.</span>}</dd>
+            <dd>{st.settings.bundlerUrl ? <code>{st.settings.bundlerUrl}</code> : <span className="muted">Not set: Send is off.</span>}</dd>
           </dl>
         </div>
         {svc.mock && <Alert variant="info">Mock mode: the values below are ignored until you run without VITE_MOCK_API.</Alert>}
         <form onSubmit={saveNetwork} className="card stack">
           {text("apiUrl", "Soapay API URL")}
           {text("rpcUrl", "Base RPC URL", "Empty = the chain's public RPC.")}
-          {text("bundlerUrl", "Bundler URL", "Needed to send and convert (e.g. a Pimlico URL).")}
+          {text("bundlerUrl", "Bundler URL", "Needed to send (e.g. a Pimlico URL).")}
           {text("l1RpcUrl", "Ethereum Sepolia RPC URL", "For the ENS record update when rotating keys.")}
           <Checkbox
             checked={draft.useRpcAnnouncements}
             onChange={(v) => setDraft({ ...draft, useRpcAnnouncements: v })}
             label="Read announcements over RPC instead of the Soapay API"
             description="Slower, but doesn't depend on our indexer."
-          />
-          <Checkbox
-            checked={draft.swapViaApi}
-            onChange={(v) => setDraft({ ...draft, swapViaApi: v })}
-            label="Use Uniswap Trading API quotes (Base mainnet)"
-            description="Better routes. The quote uses a random stand-in address, never yours, and the swap is built on this device. Off, or on testnet = quote on-chain."
           />
           <Field label="Spend window (hours)" hint="Queued sends and exit deposits go out one address per random window between these bounds.">
             {({ id }) => (
@@ -239,7 +232,7 @@ export function Settings() {
       <section className="stack-sm">
         <h2>Advanced recovery</h2>
         <Alert variant="warning" title="Exports your private keys in plain text">
-          Anyone with this file can spend every payment sent to you, now and later. You don't need it to use Soapay: Send, Convert and Exit spend
+          Anyone with this file can spend every payment sent to you, now and later. You don't need it to use Soapay: Send and Exit spend
           in-app without exposing a key. Use it only to move to other software, then delete the file.
         </Alert>
         <Checkbox checked={keysAck} onChange={setKeysAck} tone="destructive" label="I understand this file can spend all my payments" />

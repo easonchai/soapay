@@ -34,7 +34,7 @@ function record(plan: ReturnType<typeof planRun>): RunRecord {
     createdAt: 0,
     chainId: 84532,
     path: "disperse",
-    token: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+    token: "0x028D969c20b740582428f5043954c380686214Bb",
     stealthDisperse: "0x000000000000000000000000000000000000dEaD",
     denomination: null,
     carryOut: {},

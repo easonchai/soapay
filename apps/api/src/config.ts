@@ -1,5 +1,15 @@
 import { getAddress, isAddress, isHex, type Address, type Hex } from "viem";
-import { CHAINS, DEFAULT_CHAIN_ID, PARENT_NAME } from "@soapay/sdk";
+import {
+  ANNOUNCER_ADDRESS,
+  CHAINS,
+  DEFAULT_CHAIN_ID,
+  PARENT_NAME,
+  PERMIT2_ADDRESS,
+  STEALTH_DISPERSE_BASE_SEPOLIA,
+  UNIVERSAL_ROUTER,
+  configurePayToken,
+  getChainConfig,
+} from "@soapay/sdk";
 
 export type Config = {
   port: number;
@@ -55,7 +65,43 @@ export type Config = {
     perRegistrant: number;
     perDay: number;
   };
+  /**
+   * Testnet pay token override (PAY_TOKEN; D-52). Unset: the SDK default (mock USDC on Base Sepolia).
+   * Ignored on mainnet, whose token is fixed.
+   */
+  payToken: Address | undefined;
+  /** POST /paymaster: ERC-7677 sponsorship proxy to Pimlico (testnet only, D-52). */
+  paymaster: {
+    /** Pimlico API key. Server-only: never logged, never returned. Unset: /paymaster returns 503. */
+    pimlicoApiKey: string | undefined;
+    /** Upstream base; the key is appended as `?apikey=`. */
+    upstreamUrl: string;
+    /** Optional Pimlico sponsorship policy; the server sets the context, clients can't. */
+    sponsorshipPolicyId: string | undefined;
+    /** Call targets a sponsored userOp may touch: pay token, Permit2, Universal Router, StealthDisperse, Announcer (+ PAYMASTER_EXTRA_TARGETS). */
+    allowedTargets: Address[];
+    perIpPerMinute: number;
+    /** Sponsorship requests per UTC day, all IPs together. */
+    perDay: number;
+  };
+  /** POST /faucet: the welcome drop for wallets that open the company app (testnet only, D-52). */
+  faucet: {
+    enabled: boolean;
+    /** Mock USDC minted once per address, base units (default 1,000,000 USDC). */
+    usdcAmount: bigint;
+    /** Top the wallet up to this much ETH when it holds less, wei. 0 = no ETH drip (the default; owner decision pending). */
+    ethDripWei: bigint;
+    /** No ETH drip while the relayer holds less than this, wei (default 0.02 ETH). */
+    minRelayerEthWei: bigint;
+    /** Wallets served per UTC day, all IPs together. */
+    perDay: number;
+    /** New claims per IP per UTC day. */
+    perIpPerDay: number;
+  };
 };
+
+/** The only chain the faucet and the sponsorship proxy serve (the mock token lives here). */
+export const TESTNET_SPONSOR_CHAIN_ID = 84532;
 
 export const WORLD_ENVIRONMENTS = ["production", "staging", "sandbox"] as const;
 export type WorldEnvironment = (typeof WORLD_ENVIRONMENTS)[number];
@@ -177,6 +223,32 @@ export function loadConfig(env: Env = process.env): Config {
   if (!(WORLD_ENVIRONMENTS as readonly string[]).includes(worldEnv)) {
     throw new ConfigError(`WORLD_ENV must be production, staging or sandbox, got "${worldEnv}"`);
   }
+  // The pay token (PAY_TOKEN, testnets only) must be applied before reading defaults that depend on it.
+  const payToken = chainId === TESTNET_SPONSOR_CHAIN_ID ? address(env, "PAY_TOKEN") : undefined;
+  configurePayToken(TESTNET_SPONSOR_CHAIN_ID, payToken);
+  const extraTargets = (str(env, "PAYMASTER_EXTRA_TARGETS") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((a) => {
+      if (!isAddress(a, { strict: false })) throw new ConfigError(`PAYMASTER_EXTRA_TARGETS must be addresses, got "${a}"`);
+      return getAddress(a);
+    });
+  const router = (UNIVERSAL_ROUTER as Record<number, Address>)[chainId];
+  // Stealth spends touch the pay token (and Permit2 / the Universal Router for swaps in place); the
+  // employer's EIP-5792 batch touches the pay token and the Announcer, or StealthDisperse.
+  const stealthDisperse = address(env, "STEALTH_DISPERSE") ?? (chainId === TESTNET_SPONSOR_CHAIN_ID ? STEALTH_DISPERSE_BASE_SEPOLIA : undefined);
+  const allowedTargets = [
+    getChainConfig(chainId).usdc,
+    PERMIT2_ADDRESS,
+    ...(router ? [router] : []),
+    ...(stealthDisperse ? [stealthDisperse] : []),
+    ANNOUNCER_ADDRESS,
+    ...extraTargets,
+  ].map((a) => getAddress(a));
+  const faucetUsdc = str(env, "FAUCET_USDC_AMOUNT") ?? "1000000000000";
+  if (!/^\d{1,30}$/.test(faucetUsdc)) throw new ConfigError(`FAUCET_USDC_AMOUNT must be base units, got "${faucetUsdc}"`);
+
   // WORLD_RP_ID / WORLD_RP_SIGNING_KEY are required by the server entrypoint (src/index.ts)
   // unless WORLD_ID_DISABLED=true; loadConfig stays lenient so tests can build partial configs.
 
@@ -237,6 +309,23 @@ export function loadConfig(env: Env = process.env): Config {
       capWei: wei(env, "TOPUP_CAP_WEI", 2_000_000_000_000_000n),
       perRegistrant: int(env, "TOPUP_PER_REGISTRANT_PER_DAY", 3, 0),
       perDay: int(env, "TOPUP_PER_DAY", 100, 0),
+    },
+    payToken,
+    paymaster: {
+      pimlicoApiKey: str(env, "PIMLICO_API_KEY"),
+      upstreamUrl: (url(env, "PIMLICO_PAYMASTER_URL", false) ?? `https://api.pimlico.io/v2/${TESTNET_SPONSOR_CHAIN_ID}/rpc`).replace(/\/+$/, ""),
+      sponsorshipPolicyId: str(env, "PIMLICO_SPONSORSHIP_POLICY_ID"),
+      allowedTargets: [...new Set(allowedTargets)],
+      perIpPerMinute: int(env, "RATE_LIMIT_PAYMASTER_PER_IP_PER_MINUTE", 60, 1),
+      perDay: int(env, "PAYMASTER_PER_DAY", 5_000, 1),
+    },
+    faucet: {
+      enabled: chainId === TESTNET_SPONSOR_CHAIN_ID && bool(env, "FAUCET_ENABLED", true),
+      usdcAmount: BigInt(faucetUsdc),
+      ethDripWei: wei(env, "FAUCET_ETH_WEI", 0n),
+      minRelayerEthWei: wei(env, "FAUCET_MIN_RELAYER_ETH_WEI", 20_000_000_000_000_000n),
+      perDay: int(env, "FAUCET_PER_DAY", 100, 0),
+      perIpPerDay: int(env, "FAUCET_PER_IP_PER_DAY", 5, 0),
     },
   };
 }

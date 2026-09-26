@@ -29,6 +29,8 @@ distribute
   balances, txs), then sends it via StealthDisperse from PAYER_PRIVATE_KEY (read from the environment,
   never from flags): one exact-total approval, then the pay txs, each with an explorer link.
   --execute refuses non-testnet chains unless --allow-mainnet is also given.
+  On Base Sepolia, --asset usdc is Soapay's mock USDC (PAY_TOKEN overrides it); fund a payer with
+  scripts/fund-usdc.sh. On Base it is Circle USDC.
   Pins: the first time a name (or 0x registrant) resolves, its ERC-6538 meta-address is pinned in
   --pins (default: .soapay/pins.json next to the CSV). If it resolves to anything else later, the
   run stops with an alert (exit 3) and nothing is sent, unless the Soapay API (--api) holds a

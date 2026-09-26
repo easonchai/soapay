@@ -108,7 +108,7 @@ export function parseRosterCsv(text: string): CsvImport {
 
 /** Template the Roster screen offers for download. */
 export const CSV_TEMPLATE = "name,amount,label\nalice.soapay.eth,5000,Alice (Design)\nbob.soapay.eth,4250.50,Bob\n";
-/** The testnet template: small amounts, since faucet USDC is scarce (D-47). */
+/** The testnet template: small amounts, so demo runs stay readable (D-47). */
 export const CSV_TEMPLATE_TESTNET = "name,amount,label\nalice.soapay.eth,12,Alice (Design)\nbob.soapay.eth,8.50,Bob\n";
 
 export function csvTemplate(testnet: boolean): string {

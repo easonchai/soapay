@@ -15,6 +15,9 @@ import { worldIdRoutes } from "./routes/worldid.js";
 import { rotationRoutes } from "./routes/rotation.js";
 import { uniswapRoutes } from "./routes/uniswap.js";
 import { inviteRoutes } from "./routes/invites.js";
+import { paymasterRoutes } from "./routes/paymaster.js";
+import { faucetRoutes } from "./routes/faucet.js";
+import type { FaucetWallet } from "./faucet.js";
 import { RegistrationRelay } from "./relay.js";
 import type { WorldId } from "./worldid/verifier.js";
 import type { L1Funder } from "./topup.js";
@@ -45,9 +48,13 @@ export type AppDeps = {
   l1Funder: L1Funder | undefined;
   /** Upstream fetch for the Uniswap Trading API proxy. Default: global fetch. */
   uniswapFetch: typeof fetch;
+  /** Upstream fetch for the Pimlico sponsorship proxy (POST /paymaster). Default: global fetch. */
+  paymasterFetch: typeof fetch;
+  /** Relayer wallet for the testnet welcome drop (POST /faucet). Undefined → 503. */
+  faucetWallet: FaucetWallet | undefined;
 };
 
-type Optional = "nameIssuer" | "humanVerifier" | "worldId" | "attester" | "l1Funder" | "uniswapFetch";
+type Optional = "nameIssuer" | "humanVerifier" | "worldId" | "attester" | "l1Funder" | "uniswapFetch" | "paymasterFetch" | "faucetWallet";
 export type BuildAppDeps = Omit<AppDeps, Optional> & { [K in Optional]?: AppDeps[K] | undefined };
 
 export function buildApp(input: BuildAppDeps): Hono {
@@ -60,11 +67,22 @@ export function buildApp(input: BuildAppDeps): Hono {
     attester: input.attester,
     l1Funder: input.l1Funder,
     uniswapFetch: input.uniswapFetch ?? ((u, i) => fetch(u, i)),
+    paymasterFetch: input.paymasterFetch ?? ((u, i) => fetch(u, i)),
+    faucetWallet: input.faucetWallet,
   };
   const { config, logger } = deps;
   const app = new Hono();
 
-  app.use("*", cors({ origin: config.corsOrigins, allowMethods: ["GET", "POST", "OPTIONS"], maxAge: 600 }));
+  app.use(
+    "*",
+    cors({
+      // /paymaster is also called by wallets from their own origin (EIP-5792 paymasterService), so any
+      // origin may call it; its allow-list and rate limits are the guard. Everything else: our SPAs only.
+      origin: (origin, c) => (c.req.path === "/paymaster" ? origin || "*" : config.corsOrigins.includes(origin) ? origin : null),
+      allowMethods: ["GET", "POST", "OPTIONS"],
+      maxAge: 600,
+    }),
+  );
   app.use(
     "*",
     bodyLimit({
@@ -80,6 +98,8 @@ export function buildApp(input: BuildAppDeps): Hono {
   app.route("/", nameRoutes(deps));
   app.route("/", rotationRoutes(deps, relay));
   app.route("/", uniswapRoutes(deps));
+  app.route("/", paymasterRoutes(deps));
+  app.route("/", faucetRoutes(deps));
   app.route("/", worldIdRoutes(deps));
   app.route("/", announcementRoutes(deps));
 

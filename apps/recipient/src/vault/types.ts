@@ -18,8 +18,6 @@ export type Settings = {
   knownPayers: { address: Address; name: string }[];
   /** Ethereum Sepolia JSON-RPC for the ENSv2 `stealth` record write during rotation. Empty = public RPC. */
   l1RpcUrl: string;
-  /** Trading API quotes via the Soapay API's Uniswap proxy (`${apiUrl}/uniswap`, placeholder swapper); off = on-chain path. */
-  swapViaApi: boolean;
   /** Timing queue (D-28): at most one stealth address spent per random window of [min, max] hours. */
   queueWindowHours: [number, number];
 };
@@ -38,7 +36,10 @@ export type ChainState = {
   graph: ClusterGraphJSON | null;
   /** Local spend history (never leaves the device). Optional for vaults created before it existed. */
   spends?: SpendRecord[];
-  /** Local convert-in-place history (never leaves the device; a public preference could fingerprint). */
+  /**
+   * Legacy convert-in-place history from builds that had Convert (removed from the app, D-52). Read
+   * only, for the Payments history and "last spend" links.
+   */
   conversions?: ConvertRecord[];
   /** Privacy Pools exits started from this chain (docs/mvp-spec.md §9). Resumed on unlock. */
   exits?: ExitRecord[];
@@ -162,14 +163,13 @@ export function defaultSettings(): Settings {
     stealthDisperse: [],
     knownPayers: [],
     l1RpcUrl: ENV.l1RpcUrl,
-    swapViaApi: ENV.swapViaApi,
     queueWindowHours: [2, 12],
   };
 }
 
 /** Settings with defaults filled in, so vaults written by older builds keep working. */
 export function settingsOf(data: Pick<VaultData, "settings"> | null | undefined): Settings {
-  const { uniswapApiKey: _legacy, ...rest } = (data?.settings ?? {}) as Settings & { uniswapApiKey?: string };
+  const { uniswapApiKey: _legacy, swapViaApi: _convert, ...rest } = (data?.settings ?? {}) as Settings & { uniswapApiKey?: string; swapViaApi?: boolean };
   return { ...defaultSettings(), ...rest };
 }
 
@@ -233,9 +233,9 @@ export function annKey(a: Pick<AnnouncementRecord, "txHash" | "logIndex">): stri
   return `${a.txHash.toLowerCase()}:${a.logIndex}`;
 }
 
-/** The Trading API proxy base for the SDK's `apiUrl`, or "" for the Universal Router fallback. */
-export function swapProxyUrl(s: Pick<Settings, "apiUrl" | "swapViaApi">): string {
-  return s.swapViaApi && s.apiUrl ? `${s.apiUrl.replace(/\/+$/, "")}/uniswap` : "";
+/** The Soapay API's ERC-7677 sponsorship endpoint (testnet spends, D-52), or "" without an API URL. */
+export function paymasterUrl(s: Pick<Settings, "apiUrl">): string {
+  return s.apiUrl ? `${s.apiUrl.replace(/\/+$/, "")}/paymaster` : "";
 }
 
 export function toScanMatch(a: StoredAnnouncement, parse: (m: Hex) => MetadataHints | null): ScanMatch {

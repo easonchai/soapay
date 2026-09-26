@@ -19,6 +19,7 @@ import { erc20Abi, parseAbi, type Address, type Hash } from "viem";
 import type { BatchOutcome, ExecDeps, RecheckDeps } from "./execute.js";
 import { classifyAccountCode, selectPayPath, type AccountKind, type PayPath } from "@soapay/sdk";
 import type { AppConfig } from "../config.js";
+import { sendCallsCapabilities } from "./sponsorship.js";
 import type { InviteSigner } from "@soapay/sdk";
 
 const safeProbeAbi = parseAbi(["function getThreshold() view returns (uint256)"]);
@@ -29,8 +30,10 @@ function batchOutcome(status: string | undefined, receipts: readonly { status: s
   return { status: s, ...(txHash ? { txHash } : {}) };
 }
 
-export function wagmiExecDeps(config: Config, app: Pick<AppConfig, "chainId" | "usdc">): ExecDeps {
+export function wagmiExecDeps(config: Config, app: Pick<AppConfig, "chainId" | "usdc" | "apiUrl">): ExecDeps {
   const { chainId, usdc } = app;
+  // Base Sepolia: smart wallets get their gas sponsored through the API's /paymaster (ERC-7677).
+  const capabilities = sendCallsCapabilities(app);
   return {
     sendTransaction: (call) => sendTransaction(config, { chainId, to: call.to, data: call.data }),
     waitForReceipt: async (hash) => {
@@ -38,7 +41,7 @@ export function wagmiExecDeps(config: Config, app: Pick<AppConfig, "chainId" | "
       return r.status === "success" ? "success" : "reverted";
     },
     // Atomic is REQUIRED: a partially executed chunk would pay some lines without announcements.
-    sendCalls: async (calls) => (await sendCalls(config, { chainId, calls, forceAtomic: true })).id,
+    sendCalls: async (calls) => (await sendCalls(config, { chainId, calls, forceAtomic: true, ...(capabilities ? { capabilities } : {}) })).id,
     waitForCalls: async (id) => {
       const r = await waitForCallsStatus(config, { id, timeout: 180_000 });
       return batchOutcome(r.status, r.receipts);

@@ -6,7 +6,7 @@ import { landedTxs, onChainRows, plannedRows } from "../src/lib/onchain.js";
 import type { RunRecord } from "../src/lib/run.js";
 import { CoworkerViewPanel } from "../src/pages/CoworkerViewPanel.js";
 
-const USDC = getAddress("0x036CbD53842c5426634e7929541eC2318f3dCF7e");
+const USDC = getAddress("0x028D969c20b740582428f5043954c380686214Bb"); // Base Sepolia mock USDC (D-52)
 const EMPLOYER = getAddress("0x7757a7c9f4ed02a02353a7929cfb399e9286f52c");
 const DISPERSE = getAddress("0x6B7a1cC570Af2DDd427DA694351438F0FE8039CA");
 const TX: Hash = `0x${"24".repeat(32)}`;
