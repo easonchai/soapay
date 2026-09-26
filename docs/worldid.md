@@ -132,7 +132,7 @@ Per name: its `session_id`, when it was attached, and how (`enroll` or `attach`)
 
 **Time to first success:** *(fill in after the first live World App run)*.
 
-**The one improvement with the greatest impact:** make the session docs match IDKit 4.3's types (sessions take `constraints`, not `preset`), with one end-to-end Selfie Check session example that includes the server check. That single fix would have saved us the most time.
+**The one improvement with the greatest impact:** let `IDKitSessionWidget` accept `preset={selfieCheck()}` (today it only takes `constraints`, and a hand-built Selfie Check constraint fails in the production World App with `generic_error`), and return a specific error code instead of `generic_error` so the cause is visible. That single fix would have saved us the most time.
 
 What went well:
 
@@ -142,7 +142,7 @@ What went well:
 
 Friction, honestly:
 
-- **Sessions take `constraints`, not `preset`.** The session-proofs page shows `IDKitSessionWidget` with `preset={selfieCheck()}`, but in IDKit 4.3 `IDKitSessionWidgetProps` only accepts `constraints` (the request widget accepts either). We use `CredentialRequest("selfie", { signal })`. This cost a round of type errors, and the docs should say so.
+- **Sessions take `constraints`, not `preset`.** The session-proofs page shows `IDKitSessionWidget` with `preset={selfieCheck()}`, but in IDKit 4.3 `IDKitSessionWidgetProps` only accepts `constraints` (the request widget accepts either). We use `CredentialRequest("selfie", { signal })`. This cost a round of type errors, and the docs should say so. **Update 2026-09-26:** on the first run with a real World App (production), the widget's hand-built `CredentialRequest("selfie")` constraint made World App answer `generic_error`. We switched to IDKit core's `createSession` / `proveSession(...).preset(selfieCheck({ signal }))`, as the session docs show, and render the QR code and poll ourselves (`packages/worldid-react`).
 - **The design changed under us.** We first built a two-moment design with Proof of Human (uniqueness at enrollment plus rotation). Re-reading the session docs made it clear that rotation is a continuity question, so the enrollment gate and the uniqueness action went, and Selfie Check sessions replaced Proof of Human. The code got simpler.
 - **Environments.** Proof results, the Portal response and the IDKit config each carry an environment, and the Portal defaults it to production. We refuse a mismatch at both checkpoints. It's easy to get this wrong silently.
 - **What we did not do:** our tests mock the Developer Portal (`apps/api/test/worldid.test.ts`). We haven't yet run a Selfie Check session end to end against the simulator or a real World App, so the exact shape of a live Selfie Check session result (for example whether `signal_hash` is always present) is checked only against the IDKit 4.3 type definitions. That's the first thing to do before a demo.

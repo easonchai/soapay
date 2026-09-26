@@ -1,12 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import {
-  CredentialRequest,
-  IDKitErrorCodes,
-  IDKitSessionWidget,
-  type ConstraintNode,
-  type IDKitResultSession,
-  type RpContext,
-} from "@worldcoin/idkit";
+import { CredentialRequest, IDKitErrorCodes, type ConstraintNode, type IDKitResultSession, type RpContext } from "@worldcoin/idkit";
+import { IDKit, selfieCheck, type IDKitRequest } from "@worldcoin/idkit-core";
+import QRCode from "qrcode";
 
 export type { IDKitResultSession } from "@worldcoin/idkit";
 
@@ -90,80 +85,131 @@ const CANCEL_CODES = new Set<string>([IDKitErrorCodes.UserRejected, IDKitErrorCo
 
 /**
  * World ID check for Soapay's single trust moment: key rotation (docs/worldid.md).
- * Wraps IDKit 4.3's `IDKitSessionWidget` with the Selfie Check credential.
+ *
+ * Builds the session request with IDKit core's `createSession` / `proveSession(...).preset(selfieCheck())`,
+ * exactly as World's session-proof docs show. IDKit 4.3's `IDKitSessionWidget` only takes hand-built
+ * `constraints`, and a `CredentialRequest("selfie")` constraint made the production World App answer
+ * `generic_error` (2026-09-26), so we render the QR code and poll ourselves.
  */
 export function HumanCheck(props: HumanCheckProps) {
-  const { mode, apiUrl, sessionId, signal, onResult, onCancel, onError, actionDescription } = props;
+  const { mode, apiUrl, sessionId, signal, onResult, actionDescription } = props;
   const controlled = props.open !== undefined;
   const [innerOpen, setInnerOpen] = useState(false);
   const open = controlled ? !!props.open : innerOpen;
-  const [ctx, setCtx] = useState<RpContextResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const cbs = useRef({ onCancel, onError, onOpenChange: props.onOpenChange });
-  cbs.current = { onCancel, onError, onOpenChange: props.onOpenChange };
+  const [uri, setUri] = useState<string | null>(null);
+  const [qr, setQr] = useState<string | null>(null);
+  const [status, setStatus] = useState<"starting" | "waiting" | "confirming">("starting");
+  const cbs = useRef({ onCancel: props.onCancel, onError: props.onError, onOpenChange: props.onOpenChange, onResult });
+  cbs.current = { onCancel: props.onCancel, onError: props.onError, onOpenChange: props.onOpenChange, onResult };
+  const abort = useRef<AbortController | null>(null);
 
   const setOpen = useCallback(
     (v: boolean) => {
       if (!controlled) setInnerOpen(v);
       cbs.current.onOpenChange?.(v);
-      if (!v) setCtx(null); // every request gets a fresh RP context
     },
     [controlled],
   );
 
-  // A fresh RP context each time the widget opens.
   useEffect(() => {
-    if (!open || ctx) return;
+    if (!open) return;
     if (mode === "rotate" && !sessionId) {
       cbs.current.onError?.(new HumanCheckError("no_session", "this name has no World ID session to prove"));
       setOpen(false);
       return;
     }
-    let live = true;
-    setLoading(true);
-    fetchRpContext(apiUrl, props.fetch)
-      .then((c) => live && setCtx(c))
-      .catch((e: unknown) => {
-        if (!live) return;
-        cbs.current.onError?.(e instanceof HumanCheckError ? e : new HumanCheckError("unknown", String(e)));
+    const ac = new AbortController();
+    abort.current = ac;
+    setUri(null);
+    setQr(null);
+    setStatus("starting");
+    void (async () => {
+      let request: IDKitRequest;
+      try {
+        const ctx = await fetchRpContext(apiUrl, props.fetch); // a fresh RP context per request
+        const config = {
+          app_id: ctx.app_id,
+          rp_context: ctx.rp_context,
+          environment: ctx.environment,
+          ...(actionDescription ? { action_description: actionDescription } : {}),
+        };
+        const builder = mode === "rotate" && sessionId ? IDKit.proveSession(sessionId, config) : IDKit.createSession(config);
+        request = await builder.preset(selfieCheck({ signal }));
+      } catch (e) {
+        if (ac.signal.aborted) return;
+        cbs.current.onError?.(e instanceof HumanCheckError ? e : new HumanCheckError("start_failed", `World ID failed to start: ${String(e)}`));
         setOpen(false);
-      })
-      .finally(() => live && setLoading(false));
-    return () => {
-      live = false;
-    };
-  }, [open, ctx, mode, sessionId, apiUrl, props.fetch, setOpen]);
+        return;
+      }
+      if (ac.signal.aborted) return;
+      setUri(request.connectorURI);
+      setStatus("waiting");
+      QRCode.toDataURL(request.connectorURI, { width: 220, margin: 1, errorCorrectionLevel: "M" })
+        .then((u) => !ac.signal.aborted && setQr(u))
+        .catch(() => undefined);
+      const done = await request.pollUntilCompletion({ signal: ac.signal, timeout: 300_000 }).catch((e: unknown) => ({
+        success: false as const,
+        error: (ac.signal.aborted ? IDKitErrorCodes.Cancelled : String(e)) as IDKitErrorCodes,
+      }));
+      if (ac.signal.aborted) return;
+      if (done.success) {
+        setStatus("confirming");
+        try {
+          await cbs.current.onResult(done.result as IDKitResultSession);
+        } finally {
+          setOpen(false);
+        }
+        return;
+      }
+      if (CANCEL_CODES.has(done.error)) cbs.current.onCancel?.();
+      else cbs.current.onError?.(new HumanCheckError(done.error, `World ID failed: ${done.error}`));
+      setOpen(false);
+    })();
+    return () => ac.abort();
+  }, [open, mode, sessionId, apiUrl, signal, actionDescription, props.fetch, setOpen]);
+
+  const cancel = () => {
+    abort.current?.abort();
+    cbs.current.onCancel?.();
+    setOpen(false);
+  };
 
   return (
     <>
       {!controlled && (
-        <button type="button" onClick={() => setOpen(true)} disabled={open || loading}>
+        <button type="button" onClick={() => setOpen(true)} disabled={open}>
           {props.children ?? (mode === "rotate" ? "Confirm it's you with World ID" : "Protect with World ID")}
         </button>
       )}
-      {ctx && (
-        <IDKitSessionWidget
-          open={open}
-          onOpenChange={(v) => {
-            if (!v) {
-              setOpen(false);
-            }
-          }}
-          app_id={ctx.app_id}
-          rp_context={ctx.rp_context}
-          environment={ctx.environment}
-          constraints={selfieCheckConstraint(signal)}
-          {...(mode === "rotate" && sessionId ? { existing_session_id: sessionId } : {})}
-          {...(actionDescription ? { action_description: actionDescription } : {})}
-          onSuccess={async (result) => {
-            await onResult(result);
-          }}
-          onError={(code) => {
-            if (CANCEL_CODES.has(code)) cbs.current.onCancel?.();
-            else cbs.current.onError?.(new HumanCheckError(code, `World ID failed: ${code}`));
-          }}
-        />
+      {open && (
+        <div role="dialog" aria-label="Verify with World ID" data-testid="worldid-panel" style={panel}>
+          <strong>{mode === "rotate" ? "Confirm it's you with World ID" : "Link World ID (Selfie Check)"}</strong>
+          {status === "starting" && <span>Preparing the request…</span>}
+          {status !== "starting" && uri && (
+            <>
+              <span>Scan with World App, or open it on this phone.</span>
+              {qr ? <img src={qr} width={220} height={220} alt="World ID QR code" /> : <div style={{ width: 220, height: 220 }} />}
+              <a href={uri} data-testid="worldid-open-app" style={{ fontWeight: 600 }}>
+                Open World App
+              </a>
+              <span>{status === "confirming" ? "Verifying…" : "Waiting for World App…"}</span>
+            </>
+          )}
+          <button type="button" onClick={cancel} data-testid="worldid-cancel">
+            Cancel
+          </button>
+        </div>
       )}
     </>
   );
 }
+
+const panel = {
+  display: "grid",
+  justifyItems: "center",
+  gap: 12,
+  padding: 16,
+  border: "1px solid rgba(30, 58, 95, 0.25)",
+  borderRadius: 2,
+  textAlign: "center",
+} as const;
