@@ -134,7 +134,9 @@ const { title = data.title, tagline, actions = [] } = data.hero || {};
       const cx = W / 2;
       const cy = H / 2;
       const breath = live ? 1 + 0.06 * Math.sin(t / 2200) : 1;
-      const R = Math.min(W, H) * 0.46 * breath;
+      // 0.33 (the diamond uses 0.46): the ring's falloff reaches 1.4 R, so with the +6% breath the
+      // whole circle stays inside the canvas instead of being squared off at its edges.
+      const R = Math.min(W, H) * 0.33 * breath;
       for (let i = 0; i < W; i += cell) {
         for (let j = 0; j < H; j += cell) {
           const d = Math.abs(Math.hypot(i - cx, j - cy) - R);

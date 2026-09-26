@@ -163,7 +163,7 @@ header.header {
   overflow-x: clip;
   /* ring diameter: the viewport gutter beside the 46rem copy, minus breathing room (percentages here
      resolve against the width, so this var is only ever used in width and inset calculations) */
-  --ring: clamp(180px, calc((100% - 46rem) / 2 - 3rem), 340px);
+  --ring: clamp(200px, calc((100% - 46rem) / 2 - 2.5rem), 400px);
 }
 .hero .sl-flex.stack {
   position: relative;
