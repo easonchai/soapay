@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo, type ReactNode } from "react";
-import { getChainConfig } from "@soapay/sdk";
+import { getChainConfig, type GaslessProofClient } from "@soapay/sdk";
 import { createPublicClient, getAddress, http, type Address, type Chain, type PublicClient, type Transport } from "viem";
 import { createApi, type Api, type ApiFetch } from "../api/client.js";
 import { ENV } from "../config.js";
@@ -28,8 +28,8 @@ export type Services = {
   settings: Settings;
   api: Api;
   fetch: ApiFetch;
-  /** Reads: block number, logs, balances, registry nonce. */
-  client: ScanClient & { readContract: PublicClient["readContract"] };
+  /** Reads: block number, logs, balances, registry nonce; receipts, ETH balance, nonce and code (D-41 views). */
+  client: ScanClient & GaslessProofClient & { readContract: PublicClient["readContract"] };
   spend: SpendService;
   /** Convert in place (Uniswap via the SDK). */
   swap: SwapService;

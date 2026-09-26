@@ -11,6 +11,7 @@ import { useServices } from "../services/ServicesProvider.js";
 import { Addr, Alert, Button, Card, CardHeader, Field, Input, PageHeader } from "../ui/kit.js";
 import { formatUsdc, windowTime } from "../ui/format.js";
 import { ExitOffer } from "./ExitOffer.js";
+import { GaslessProofPanel } from "./GaslessProof.js";
 import { GuardDecision, canSend } from "./GuardDecision.js";
 
 const hours = (w: QueueWindow) => `${Math.round(w.minMs / 3_600_000)}–${Math.round(w.maxMs / 3_600_000)} h`;
@@ -167,7 +168,14 @@ export function Spend() {
               }}
             />
           )}
-          {s.draft.plan && <GuardDecision plan={s.draft.plan} override={s.override} onOverride={flow.setOverride} />}
+          {s.draft.plan && (
+            <GuardDecision
+              plan={s.draft.plan}
+              override={s.override}
+              onOverride={flow.setOverride}
+              txUrl={svc.mock ? undefined : (h) => explorerTxUrl(svc.settings.chainId, h)}
+            />
+          )}
           {s.error && <Alert variant="destructive">{s.error}</Alert>}
           <div className="flex gap-2">
             <Button className="flex-1" onClick={() => void flow.send()} disabled={!canSend(s.draft.plan)}>
@@ -242,6 +250,9 @@ export function Spend() {
               );
             })}
           </ul>
+          {s.outcome.results.map((r) => (
+            <GaslessProofPanel key={`proof:${r.userOpHash}`} address={r.from} txHash={r.txHash} />
+          ))}
           <Button variant="outline" onClick={flow.reset}>
             New send
           </Button>
