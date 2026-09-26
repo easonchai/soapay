@@ -168,3 +168,8 @@ metadata:
 - Checkpoint 16b: recipient exit UI MERGED (branch `exit-ui`; 74 recipient tests).
   - Blocked send → "Exit through Privacy Pools", a planner with fees and minimums, and a resumable per-leg timeline; mock mode works.
   - Seam: apps/recipient/src/features/exit/sdk.ts switches automatically once the SDK exports planExit/advanceExitLeg/derivePoolSecrets. `buildCtx` must be rewritten to the SDK's real per-chain context.
+- Checkpoint 17 (2026-09-26): exit SDK MERGED (`packages/sdk/src/exit.ts`: planExit/advanceExitLeg/derivePoolSecrets/withdrawToDestination/checkAspStatus), with the recipient exit UI wired to it.
+  - Sepolia fork: a 7702 stealth address deposited into the real 0xbow pool with the Circle paymaster (permit via 1271 OK, about 2.12 USDC gas), and ragequit works; the Base Sepolia CCTP burn encoding was verified.
+  - A live run needs about 18 USDC per leg (the deployer has 14.2): `EXIT_LIVE=1 EMPLOYER_KEY=… vitest run test/exit.live.test.ts`.
+  - Known gaps: recipient runner.ts doesn't pass `persist` (crash mid-send could double-send); the planner's destination gas estimate is too low (the real minimum leg is about 16.5 USDC).
+  - Totals: SDK 216 · API 122 · sender 118 · recipient 76 · mcp 54 · contracts 31.
