@@ -16,3 +16,6 @@ export * from "./invites.js";
 export * from "./exit.js";
 export * from "./format.js";
 export * from "./paypath.js";
+export * from "./registry.js";
+export * from "./distribute.js";
+export * from "./adapters.js";
