@@ -86,7 +86,7 @@ describe("welcome drop", () => {
 
     const claimed = vi.fn(async () => Response.json({ status: "already_claimed", address: WALLET }));
     expect(await requestWelcomeDrop("https://api.example", WALLET, claimed as unknown as typeof fetch)).toEqual({ status: "already_claimed", address: WALLET });
-    const capped = vi.fn(async () => Response.json({ error: { code: "faucet_daily_cap" } }, { status: 429 }));
+    const capped = vi.fn(async () => Response.json({ error: { code: "faucet_failed" } }, { status: 502 }));
     expect(await requestWelcomeDrop("https://api.example", WALLET, capped as unknown as typeof fetch)).toBeNull();
     const down = vi.fn(async () => {
       throw new TypeError("fetch failed");

@@ -147,7 +147,7 @@ function main() {
     worldId: worldId ? { environment: w.environment, rpId: w.rpId, credential: "selfie" } : "DISABLED",
     uniswapProxy: config.uniswap.apiKey ? "enabled" : "disabled (UNISWAP_API_KEY unset)",
     paymaster: config.paymaster.pimlicoApiKey ? "enabled" : "disabled (PIMLICO_API_KEY unset)",
-    faucet: faucetWallet ? { usdc: config.faucet.usdcAmount.toString(), ethWei: config.faucet.ethDripWei.toString(), perDay: config.faucet.perDay } : "disabled",
+    faucet: faucetWallet ? { usdc: config.faucet.usdcAmount.toString(), ethWei: config.faucet.ethDripWei.toString() } : "disabled",
     payToken: getChainConfig(config.chainId).usdc,
     attester: attester?.address ?? null,
   });
