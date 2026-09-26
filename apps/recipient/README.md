@@ -11,7 +11,40 @@ pnpm --filter @soapay/recipient test       # vitest (jsdom)
 pnpm --filter @soapay/recipient build
 ```
 
-Config lives in `.env` (see `.env.example`) and can be overridden per user in Settings.
+Config lives in `.env` (see `.env.example`) and can be overridden per user in Settings. CK's variable
+names are accepted as aliases: `VITE_STEALTH_DISPERSE_ADDRESS` (ours, `VITE_STEALTH_DISPERSE`, wins) and
+`VITE_RELAY_URL` (its origin becomes the API URL when `VITE_API_URL` is unset). `VITE_OTHER_APP_URL` is the
+top bar's "Pay" link to the company app (default: `http://localhost:5174` in dev, `/sender/` in a build).
+
+## Look: CK's Direction A · Ledger
+
+The presentation is CK's design from `@soapay/ui` (imported in `main.tsx`): the `Shell`/`TopBar` frame with
+the Payments · Send · Exit · Convert · Labels · Name · Settings · Pay tabs, his wizard `Steps` for onboarding,
+his dashboard layout (headline figure from live balances, ledger table with expandable rows, Rescan / Rescan
+from start), and his Settings facts list. `src/ui/kit.tsx` renders the same components as before with Ledger
+classes (`btn`, `notice-*`, `pill-*`, `panel`, `facts`, `share`), and `index.css` points Tailwind's colour
+names at the Ledger tokens, so Tailwind remains for layout only. IBM Plex is self-hosted by `@soapay/ui`, so
+the strict CSP holds; sonner's `Toaster` is not used here because it injects an inline `<style>`.
+
+CK's per-row "reveal private key" is gone. Each ledger row has **Send** (our gasless, guarded spend, which
+offers Exit when the guard blocks). Plaintext key export exists only under **Settings → Advanced recovery**,
+behind a warning and a confirmation checkbox.
+
+## Keys: recovery phrase (default) or a wallet signature (plain EOAs only)
+
+Onboarding defaults to a BIP-39 recovery phrase. The welcome screen also offers **Use a wallet signature
+(plain EOA wallets only)**, CK's M1 derivation via SDK `keysFromWalletSignature`
+(`src/onboarding/walletKeys.ts`): connect an injected EIP-1193 wallet (no wagmi), read `eth_getCode` on the
+wallet's chain and on the payroll chain, and refuse any address with code (smart accounts, passkey wallets,
+7702 delegates) **before** asking for a signature. The wallet then signs SDK `SIGN_MESSAGE` twice; the two
+signatures must be identical, and must be 65-byte ECDSA by that address, or the SDK refuses.
+
+The vault stores that signature (it is the key material) encrypted with the passphrase, in place of the
+phrase: `VaultData.walletKeys = { kind: "wallet-signature", signature, wallet }`, `mnemonic: ""`.
+`vaultKeys(data)` derives the keys on unlock. Recovery on another device = choose the same option and sign
+with the same wallet (the registry entry is already there, so registration is a no-op). Key rotation is not
+available for these keys (see TODO(clash) in `hooks/useRotation.ts`). Mock mode offers a demo EOA and a demo
+smart wallet (refused) instead of a browser wallet.
 
 ## What happens where
 
@@ -43,15 +76,21 @@ prices directly against the Universal Router V3 with QuoterV2 instead.
 
 A half-finished rotation is saved as `profile.pendingRotation` and resumable from Name settings.
 
+**Wallet-signature accounts** rotate by moving to a recovery-phrase account (owner decision 2026-09-26).
+Name settings guides them: (1) create a phrase (`useRotation().adoptPhrase` → `adoptRecoveryPhrase`),
+(2) optionally Exit or Send funds from the old addresses, (3) the normal rotation above. The wallet keys stay
+as generation 0 (still scanned, still spendable, and their registrant still controls the name); generation
+g ≥ 1 is the phrase's generation g − 1 (`phraseOffsetOf`, `keysForAccountGeneration`).
+
 ## How to plug in another UI
 
 Every screen in `src/screens/` is thin: it renders a hook's state and calls its actions. To build a
-different UI (for example CK's design), keep `src/` except `screens/` and `onboarding/Onboarding.tsx`,
+different UI (CK's Ledger design now sits on exactly this seam), keep `src/` except `screens/`, `ui/kit.tsx` and `onboarding/Onboarding.tsx`,
 and write new components against these:
 
 | Import | Gives you |
 | --- | --- |
-| `VaultProvider`, `useVault()` (`src/vault/VaultProvider.tsx`) | `status` (`loading`/`empty`/`locked`/`unlocked`), `create`, `unlock`, `lock`, `update`, `wipe` |
+| `VaultProvider`, `useVault()` (`src/vault/VaultProvider.tsx`) | `status` (`loading`/`empty`/`locked`/`unlocked`), `create(phrase \| walletKeySecret, passphrase)`, `unlock`, `lock`, `update`, `wipe` |
 | `ServicesProvider`, `useServices()` | API client, chain reads, spend / swap / ENS services; mock or real by env |
 | `ScannerProvider`, `useScanner()` (`src/hooks/scanner.tsx`) | `scan({full?})`, `cancel`, `running`, `phase`, `last`, `error`; `describePhase(phase)` |
 | `useWallet()` | `ledger`, `view` (clusters), `balances`, `total`, `spends`, `conversions`, `payerName` |
@@ -60,15 +99,15 @@ and write new components against these:
 | `useRotation()` | `state` (`idle` → `confirm` → `human`? → `working` → `done`), `path`, `start`, `confirm`, `onHuman`, `resume`, `attach` |
 | `ExitProvider`, `useExit()` | `exits` (per-leg state), `sources`, `estimate(selected, privacy)`, `start`, `withdrawNow`, `retry`; polls and resumes on its own while unlocked |
 | `useLabels()` | `rows`, `setLabel(address, label)`, `remove` |
-| `useSettings()` | `settings`, `save`, `addPayer`, `removePayer`, `exportBackup`, `lock`, `wipe` |
-| `onboarding/machine.ts` | `reduce`, `resumeState`, `pickChallenge`: drive your own onboarding screens |
+| `useSettings()` | `settings`, `save`, `addPayer`, `removePayer`, `exportBackup`, `exportRawKeys` (advanced recovery), `keySource`, `lock`, `wipe` |
+| `onboarding/machine.ts`, `onboarding/walletKeys.ts` | `reduce`, `resumeState`, `pickChallenge`; `deriveWalletKeys` for the EOA-only signature option: drive your own onboarding screens |
 | `worldid/index.ts` | `HumanCheck` (one-line swap to `@soapay/worldid-react`), `sessionSignal`, `rotateSignal` |
 
 Mount order: `VaultProvider` → `ServicesProvider` → (once unlocked and `profile.onboardedAt` is set)
 `ScannerProvider` → your router. See `src/App.tsx` for the whole gate in ~60 lines. Reusable props-only
 pieces: `screens/GuardDecision.tsx` (`GuardDecision`, `canSend`) and `ui/format.ts`.
 
-Rules any UI must keep: never display or log keys except the one-time seed backup; show amounts from
+Rules any UI must keep: never display or log keys except the one-time seed backup and the warned Settings → Advanced recovery export; show amounts from
 `ledger[].balance` only (never `claimedAmount`); disable Send when `canSend(plan)` is false unless the user
 ticks the override; keep conversion history local.
 

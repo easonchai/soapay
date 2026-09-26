@@ -1,136 +1,396 @@
-import { useState } from "react";
-import { formatEther } from "viem";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { motion } from "framer-motion";
+import { Collapse, CountUp, Dots, ErrorLine, NavyPanel, PageHead, Presence, Stagger, StaggerItem, Toggle, toast } from "@soapay/ui";
+import { smallTeamWarning } from "@soapay/sdk";
 import type { PayRunState } from "../hooks/usePayRun.js";
 import type { PayPathState, WalletState } from "../hooks/usePayPath.js";
-import { formatUsdc, tryParseUsdc } from "../lib/amount.js";
-import { Badge, Banner, Button, Card, Input } from "../ui/kit.js";
-import { SafeExportPage } from "./SafeExportPage.js";
+import type { ImportResult, RosterState } from "../hooks/useRoster.js";
+import { toInputUsdc, tryParseUsdc, USDC_DECIMALS } from "../lib/amount.js";
+import { CSV_TEMPLATE } from "../lib/csv.js";
+import { draftPreview } from "../lib/preview.js";
+import { displayName } from "../lib/roster.js";
+import { MAX_RUN_LABEL, type Denomination } from "../lib/run.js";
+import { Notice, plural, short, usdc } from "../ui/kit.js";
+import { AttestedBadge, RecordStatus } from "../ui/status.js";
 
 export type PayRunPageProps = {
   run: PayRunState;
+  roster: RosterState;
   wallet: WalletState;
   payPath: PayPathState;
-  onOpenRun(id: string): void;
+  chainName: string;
+  /** Build the plan (fresh addresses) and open Review. */
+  onReview(denomination: Denomination | null): void;
+  onOpenRecipients(): void;
 };
 
-/** Props-only: verify → preview → pay (or export for a Safe). */
-export function PayRunPage({ run, wallet, payPath, onOpenRun }: PayRunPageProps) {
-  const [denom, setDenom] = useState<"none" | "exact" | "carry">("none");
-  const [chunk, setChunk] = useState("1000");
-  const [safe, setSafe] = useState("");
-  const payable = run.rows.filter((r) => r.payability.payable);
-  const blocked = run.rows.filter((r) => !r.payability.payable);
-  const path = payPath.probe?.path;
+type Draft = { denom: boolean; mode: "exact" | "carry"; chunk: string };
+const DRAFT_KEY = "soapay:payrun";
 
-  if (run.safeChunks && run.runId) {
-    const id = run.runId;
-    return <SafeExportPage chunks={run.safeChunks} onDownload={run.downloadSafeChunk} onOpenRun={() => onOpenRun(id)} />;
+function loadDraft(): Draft {
+  const d: Draft = { denom: true, mode: "exact", chunk: "500" };
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (raw) return { ...d, ...(JSON.parse(raw) as Partial<Draft>) };
+  } catch {
+    /* ignore */
+  }
+  return d;
+}
+
+/** Denomination from the draft; null = one line per employee. Throws on a bad chunk size. */
+export function draftDenomination(d: Draft): Denomination | null {
+  if (!d.denom) return null;
+  const c = tryParseUsdc(d.chunk);
+  if (!c.ok || c.value <= 0n) throw new Error("Chunk size must be a positive USDC amount");
+  return { chunkSize: c.value, mode: d.mode };
+}
+
+const COLS = "32px 1.5fr 1fr 70px 1.6fr";
+
+/**
+ * CK's Pay run screen over our roster: the rows are the enrolled (pinned) employees and their
+ * salaries; "Resolve names" re-verifies every pin (usePayRun.verify); "Paste rows" imports
+ * `name, amount[, label]` into the roster (useRoster.importCsv).
+ */
+export function PayRunPage({ run, roster, wallet, payPath, chainName, onReview, onOpenRecipients }: PayRunPageProps) {
+  const [draft, setDraft] = useState<Draft>(loadDraft);
+  const [showPaste, setShowPaste] = useState(false);
+  const [paste, setPaste] = useState("");
+  const [imported, setImported] = useState<ImportResult | null>(null);
+  const [editing, setEditing] = useState<{ id: string; value: string } | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const textRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+    } catch {
+      /* ignore */
+    }
+  }, [draft]);
+
+  // Before verification the table shows the roster; after it, the verified rows (fresh pins).
+  const verified = new Map(run.rows.map((r) => [r.employee.id, r]));
+  // Employee data always from the roster (latest salary and pin); the gate from this run's verification.
+  const rows = roster.rows.map((r) => ({ employee: r.employee, payability: verified.get(r.employee.id)?.payability }));
+  const verifying = run.stage === "verifying";
+  const checked = run.stage !== "idle" && run.stage !== "verifying" && run.rows.length > 0;
+  const payable = checked ? rows.filter((r) => r.payability?.payable) : rows.filter((r) => r.employee.active);
+  const blocked = checked ? rows.filter((r) => r.payability && !r.payability.payable && r.employee.active) : [];
+  const changed = rows.filter((r) => r.employee.pendingChange || (r.payability && !r.payability.payable && r.payability.reason === "changed"));
+
+  let denomination: Denomination | null = null;
+  let denomError: string | null = null;
+  try {
+    denomination = draftDenomination(draft);
+  } catch (e) {
+    denomError = (e as Error).message;
+  }
+  const preview = useMemo(
+    () => draftPreview(payable.map((r) => r.employee.amount), denomination),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [payable.map((r) => `${r.employee.id}:${r.employee.amount}`).join(","), denomination?.chunkSize, denomination?.mode],
+  );
+  const linesFor = new Map(payable.map((r, i) => [r.employee.id, preview.perAmount[i] ?? 1]));
+  const balance = payPath.funding?.usdcBalance ?? null;
+  const enough = balance === null || balance >= preview.total;
+  const smallTeam = payable.length > 0 ? smallTeamWarning(payable.length) : null;
+
+  async function importPaste() {
+    setErr(null);
+    const res = await roster.importCsv(paste);
+    setImported(res);
+    if (res.added) {
+      toast.success(`${plural(res.added, "name")} added and pinned`, { description: "Resolve names before you review." });
+      setPaste("");
+      if (!res.issues.length) setShowPaste(false);
+    }
   }
 
-  const onPreview = () => {
-    if (denom === "none") return run.preview(null);
-    const c = tryParseUsdc(chunk);
-    run.preview(c.ok && c.value > 0n ? { chunkSize: c.value, mode: denom } : { chunkSize: 0n, mode: denom });
+  async function reapprove(id: string) {
+    await roster.reapprove(id);
+    // The run's rows compared against the old pin: re-verify.
+    if (run.stage !== "idle") await run.verify();
+  }
+
+  function review() {
+    setErr(null);
+    if (denomError) return setErr(denomError);
+    onReview(denomination);
+  }
+
+  let reviewLabel = "Review";
+  if (rows.length === 0) reviewLabel = "Review — add recipients first";
+  else if (!checked) reviewLabel = "Review — resolve names first";
+  else if (payable.length === 0) reviewLabel = "Review — nobody is payable";
+  else if (denomError) reviewLabel = "Review — fix the chunk size";
+  const canReview = checked && payable.length > 0 && !denomError && !verifying;
+
+  const summary = (() => {
+    if (rows.length === 0) return "Add people on Recipients, or paste rows.";
+    const parts = [`${plural(payable.length, "recipient")}${checked ? " payable" : ""}.`];
+    if (changed.length) {
+      parts.push(`${plural(changed.length, "record")} changed without a World ID re-verification: blocked until you re-approve (confirm with the person first).`);
+    }
+    const other = blocked.filter((r) => r.payability && !r.payability.payable && r.payability.reason === "error");
+    if (other.length) parts.push(`${plural(other.length, "name")} failed to resolve and will be left out.`);
+    if (!checked && !verifying) parts.push("Press Resolve to re-check every name against its pinned record.");
+    return parts.join(" ");
+  })();
+
+  const templateHref = `data:text/csv;charset=utf-8,${encodeURIComponent(CSV_TEMPLATE)}`;
+  const openPaste = () => {
+    setShowPaste(true);
+    setTimeout(() => textRef.current?.focus(), 50);
   };
 
   return (
-    <div className="flex flex-col gap-4">
-      {run.error && <Banner tone="error">{run.error}</Banner>}
-
-      <Card
-        title="1. Re-verify every name"
+    <div className="stack-lg">
+      <PageHead
+        eyebrow={`Pay run · draft · ${plural(rows.filter((r) => r.employee.active).length, "recipient")}`}
+        title="Pay run"
+        line="Every name is re-checked against the record you pinned. Nothing is sent until you sign."
         actions={
-          <Button onClick={() => void run.verify()} disabled={run.stage === "verifying" || run.stage === "executing"}>
-            {run.progress ? `Verifying ${run.progress.done}/${run.progress.total}…` : run.stage === "idle" ? "Verify" : "Verify again"}
-          </Button>
+          <>
+            <button onClick={onOpenRecipients}>Recipients</button>
+            <button onClick={openPaste}>Paste rows</button>
+          </>
         }
-      >
-        <p className="text-sm text-slate-600">
-          Every name is resolved again. A changed meta-address is only accepted with a valid World ID attestation; otherwise that line is
-          blocked until you re-approve it on the Roster.
-        </p>
-        {run.rows.length > 0 && (
-          <div className="mt-2 text-sm">
-            <Badge tone="ok">{payable.length} payable</Badge> {blocked.length > 0 && <Badge tone="warn">{blocked.length} left out</Badge>}
-            <ul className="mt-2">
-              {blocked.map((r) => (
-                <li key={r.employee.id}>
-                  {r.employee.ensName}: <span className="text-slate-600">{r.payability.payable ? "" : r.payability.message}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </Card>
+      />
 
-      {(run.stage === "verified" || run.stage === "planned") && (
-        <Card title="2. Preview" actions={<Button onClick={onPreview} disabled={payable.length === 0}>Build preview</Button>}>
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <span>Denominations:</span>
-            <select className="rounded border border-slate-300 px-2 py-1" value={denom} onChange={(e) => setDenom(e.target.value as typeof denom)}>
-              <option value="none">Off (one line per employee)</option>
-              <option value="exact">Fixed chunks, exact remainder</option>
-              <option value="carry">Fixed chunks, carry remainder</option>
-            </select>
-            {denom !== "none" && <Input className="w-28" value={chunk} onChange={(e) => setChunk(e.target.value)} placeholder="Chunk USDC" />}
-          </div>
-          {run.plan && (
-            <div className="mt-3 flex flex-col gap-2 text-sm">
-              <div>
-                <b>{formatUsdc(run.plan.total)} USDC</b> to {run.plan.estimate.recipientCount} employees in {run.plan.lines.length} lines,{" "}
-                {run.plan.estimate.txCount} transaction{run.plan.estimate.txCount === 1 ? "" : "s"} (sorted globally, ≤350 lines each).
-              </div>
-              <div className="text-slate-600">
-                Gas ≈ {run.plan.estimate.totalGas.toString()}
-                {run.funding?.feeWei != null && ` · fee ≈ ${formatEther(run.funding.feeWei)} ETH`}
-              </div>
-              {run.plan.smallTeam && <Banner tone="warn">{run.plan.smallTeam}</Banner>}
-              {run.plan.denomStats && run.plan.denomStats.uniqueAmountCount > 0 && (
-                <Banner tone="warn">{run.plan.denomStats.uniqueAmountCount} line amount(s) occur only once and can single someone out.</Banner>
-              )}
-              {run.funding?.problems.map((m) => <Banner key={m} tone="warn">{m}</Banner>)}
-            </div>
-          )}
-        </Card>
-      )}
+      {wallet.wrongChain && <Notice tone="danger">Your wallet is on another chain. Every payment targets {chainName}; your wallet will ask to switch.</Notice>}
+      <ErrorLine error={err ?? run.error ?? roster.error} />
 
-      {run.stage === "planned" && run.plan && (
-        <Card title="3. Pay">
-          {!wallet.isConnected ? (
-            <p className="text-sm">Connect a wallet (top right) to pay.</p>
-          ) : payPath.loading ? (
-            <p className="text-sm text-slate-500">Checking your wallet…</p>
-          ) : path ? (
-            <div className="flex flex-col gap-2 text-sm">
-              <div>
-                <b>{path.title}</b>
-              </div>
-              <p className="text-slate-600">{path.reason}</p>
-              {(path.kind === "batch" || path.kind === "disperse") && (
-                <div>
-                  <Button onClick={() => void run.execute()}>Pay {formatUsdc(run.plan.total)} USDC</Button>
+      <div className="grid-2">
+        <div className="stack">
+          <Collapse open={showPaste || rows.length === 0}>
+            {rows.length === 0 && !showPaste ? (
+              <div className="empty" style={{ marginBottom: 16 }}>
+                <Dots mode="diamond" />
+                <span className="eyebrow">Nothing to send yet</span>
+                <h2>Add your team, then pay them in one run.</h2>
+                <p className="ink2 pretty" style={{ maxWidth: 440 }}>
+                  One person per line: their Soapay or ENS name, a comma, and the salary in USDC. Each name is resolved once and its
+                  record pinned; every run re-checks it.
+                </p>
+                <div className="actions" style={{ marginTop: 8 }}>
+                  <button className="btn-primary" onClick={openPaste}>
+                    Paste rows
+                  </button>
+                  <button onClick={onOpenRecipients}>Invite employee</button>
                 </div>
-              )}
-            </div>
-          ) : (
-            payPath.error && <Banner tone="error">{payPath.error}</Banner>
+              </div>
+            ) : (
+              <div className="stack-sm" style={{ paddingBottom: 16 }}>
+                <textarea
+                  ref={textRef}
+                  value={paste}
+                  onChange={(e) => setPaste(e.target.value)}
+                  placeholder={"alice.soapay.eth, 4200\nbram.soapay.eth, 3850, Bram (design)\n\nOne person per line: name, amount in USDC, optional label."}
+                  aria-label="Recipients and amounts"
+                  style={{ minHeight: 96 }}
+                />
+                <div className="actions">
+                  <button className="btn-primary" onClick={() => void importPaste()} disabled={roster.busy || !paste.trim()}>
+                    {roster.busy ? "Resolving…" : "Resolve and add"}
+                  </button>
+                  <label className="btn" style={{ cursor: "pointer" }}>
+                    Import CSV
+                    <input
+                      type="file"
+                      accept=".csv,text/csv"
+                      hidden
+                      onChange={async (e) => {
+                        const f = e.target.files?.[0];
+                        if (f) setImported(await roster.importCsv(await f.text()));
+                      }}
+                    />
+                  </label>
+                  <a className="btn-text" href={templateHref} download="soapay-roster.csv">
+                    Template
+                  </a>
+                  {rows.length > 0 && (
+                    <button className="btn-text" onClick={() => setShowPaste(false)}>
+                      Close
+                    </button>
+                  )}
+                </div>
+                {/* Roster only (owner decision 2026-09-26): this box bulk-imports `name, salary` into the pinned
+                    roster; raw st:eth meta-addresses and plain addresses are rejected (lib/csv.ts payeeRejection). */}
+                <span className="hint">
+                  Every payee is a pinned, verified ENS name. Pasted names join the roster and the amount becomes their salary for every run;
+                  meta-addresses and plain addresses are rejected.
+                </span>
+              </div>
+            )}
+          </Collapse>
+          {imported && (imported.added > 0 || imported.issues.length > 0) && (
+            <Notice tone={imported.issues.length ? "warn" : "ok"}>
+              Added {imported.added}.
+              {imported.issues.map((i) => (
+                <div key={`${i.line}-${i.message}`}>
+                  Line {i.line}: {i.message}
+                </div>
+              ))}
+            </Notice>
           )}
-          <div className="mt-4 border-t border-slate-100 pt-3 text-sm">
-            <div className="mb-2">Or export this run for a Safe:</div>
-            <div className="flex gap-2">
-              <Input className="w-96 font-mono" placeholder="Safe address 0x…" value={safe} onChange={(e) => setSafe(e.target.value)} />
-              <Button variant="ghost" onClick={() => void run.exportSafe(safe)} disabled={!safe}>Export for Safe</Button>
+
+          <div className="table">
+            <div className="thead" style={{ gridTemplateColumns: COLS }}>
+              <span>#</span>
+              <span>Name</span>
+              <span className="r">Amount</span>
+              <span className="r">Token</span>
+              <span className="r">Resolution</span>
+            </div>
+            <Stagger keyed={rows.length}>
+              {rows.map((r, i) => {
+                const e = r.employee;
+                const isChanged = !!e.pendingChange || (r.payability && !r.payability.payable && r.payability.reason === "changed");
+                return (
+                  <StaggerItem key={e.id} index={i} className="tr hover auto" style={{ gridTemplateColumns: COLS, display: "grid", opacity: e.active ? 1 : 0.55 }}>
+                    <span className="idx">{i + 1}</span>
+                    <span className="mono" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                      <span>{displayName(e)}</span>
+                      {e.label && <span className="ink3" style={{ fontSize: 11 }}>{e.ensName}</span>}
+                    </span>
+                    <span className="r num">
+                      {editing?.id === e.id ? (
+                        <form
+                          className="actions"
+                          style={{ justifyContent: "flex-end" }}
+                          onSubmit={async (ev) => {
+                            ev.preventDefault();
+                            if (await roster.setAmount(e.id, editing.value)) {
+                              setEditing(null);
+                              // The verified rows carry the old salary: verify again so Review plans the new one.
+                              if (checked) await run.verify();
+                            }
+                          }}
+                        >
+                          <input className="mono-in" style={{ width: 96, height: 28 }} value={editing.value} onChange={(ev) => setEditing({ id: e.id, value: ev.target.value })} autoFocus />
+                        </form>
+                      ) : (
+                        <button className="btn-text" title="Edit salary" onClick={() => setEditing({ id: e.id, value: toInputUsdc(e.amount) })}>
+                          {usdc(e.amount)}
+                        </button>
+                      )}
+                    </span>
+                    <span className="r ink2">USDC</span>
+                    <span style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                      <AttestedBadge e={e} />
+                      <RecordStatus e={e} payability={r.payability} pending={verifying && e.active} lines={linesFor.get(e.id)} />
+                      {isChanged && (
+                        <button className="btn-inline" disabled={roster.busy} onClick={() => void reapprove(e.id)} title="Only after confirming the new record with the person">
+                          Re-approve
+                        </button>
+                      )}
+                    </span>
+                  </StaggerItem>
+                );
+              })}
+            </Stagger>
+            <div className="tr empty-row" style={{ gridTemplateColumns: "32px 1fr" }}>
+              <span className="idx">{rows.length + 1}</span>
+              <button className="btn-text" style={{ justifyContent: "flex-start", paddingLeft: 0, color: "var(--ink-disabled)" }} onClick={openPaste}>
+                Paste more rows…
+              </button>
             </div>
           </div>
-        </Card>
-      )}
+          <div className="between">
+            <span className="ink2 pretty">{summary}</span>
+            <button className="btn" onClick={() => void run.verify()} disabled={verifying || rows.length === 0 || run.stage === "executing"}>
+              {run.progress ? `Resolving ${run.progress.done}/${run.progress.total}…` : checked ? "Resolve again" : "Resolve names"}
+            </button>
+          </div>
+        </div>
 
-      {(run.stage === "executing" || run.stage === "done") && run.runId && (
-        <Card title={run.stage === "executing" ? "Paying… confirm each step in your wallet" : "Run recorded"}>
-          <Button variant="ghost" onClick={() => onOpenRun(run.runId!)}>Open run</Button>{" "}
-          <Button variant="ghost" onClick={run.reset}>New run</Button>
-        </Card>
-      )}
+        <div className="stack">
+          <label className="field">
+            <span>Run label (optional)</span>
+            <input
+              value={run.label}
+              maxLength={MAX_RUN_LABEL}
+              placeholder="September payroll"
+              aria-label="Run label"
+              onChange={(e) => run.setLabel(e.target.value)}
+            />
+          </label>
+          <div className="panel panel-pad stack">
+            <div className="between">
+              <span style={{ fontWeight: 500 }}>Denominated payouts</span>
+              <Toggle on={draft.denom} onChange={(v) => setDraft({ ...draft, denom: v })} label="Denominated payouts" />
+            </div>
+            <p className="ink2 pretty">Splits each salary into equal chunks so amounts on chain don&apos;t identify people. Costs more gas.</p>
+            <label className="field">
+              <span>Chunk size</span>
+              <div className="addon">
+                <input className="mono-in" value={draft.chunk} onChange={(e) => setDraft({ ...draft, chunk: e.target.value.replace(/[^\d.]/g, "") })} disabled={!draft.denom} inputMode="decimal" />
+                <span className="suffix">USDC</span>
+              </div>
+            </label>
+            <label className="field">
+              <span>Remainder</span>
+              <select value={draft.mode} disabled={!draft.denom} onChange={(e) => setDraft({ ...draft, mode: e.target.value as Draft["mode"] })}>
+                <option value="exact">Exact: one smaller final line</option>
+                <option value="carry">Carry: round to chunks, settle next run</option>
+              </select>
+            </label>
+            {draft.denom && draft.mode === "carry" && (
+              <span className="hint">Carry mode pays up to half a chunk more or less each run. Check with payroll/legal before using it.</span>
+            )}
+            <div style={{ borderTop: "1px solid var(--hairline)", paddingTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
+              <div className="between num" style={{ fontSize: 12 }}>
+                <span style={{ fontFamily: "var(--sans)" }} className="ink2">
+                  Recipients
+                </span>
+                <span>{payable.length}</span>
+              </div>
+              <div className="between num" style={{ fontSize: 12 }}>
+                <span style={{ fontFamily: "var(--sans)" }} className="ink2">
+                  Becomes lines
+                </span>
+                <span>
+                  <CountUp value={preview.lines} format={(n) => String(Math.round(n))} duration={0.35} />
+                </span>
+              </div>
+              <div className="between num" style={{ fontSize: 12 }}>
+                <span style={{ fontFamily: "var(--sans)" }} className="ink2">
+                  Transactions (≤350 lines each)
+                </span>
+                <span>{preview.txCount}</span>
+              </div>
+            </div>
+            {denomError && <span className="st-warn">{denomError}</span>}
+          </div>
+
+          <NavyPanel>
+            <span className="label">Total · {plural(payable.length, "recipient")}</span>
+            <span className="amount">
+              <CountUp value={Number(preview.total) / 10 ** USDC_DECIMALS} format={(n) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} />
+              <span className="unit">USDC</span>
+            </span>
+            <div className="rows rule">
+              <div>
+                <span className="k">Wallet balance after</span>
+                <span>{balance === null ? "…" : `${usdc(balance - preview.total < 0n ? 0n : balance - preview.total)} USDC`}</span>
+              </div>
+            </div>
+          </NavyPanel>
+          {!enough && <Notice tone="warn">Wallet USDC is below the total. A Safe export pays from the Safe instead.</Notice>}
+          {smallTeam && <Notice tone="warn">{smallTeam}</Notice>}
+
+          <button className="btn-primary btn-lg" onClick={review} disabled={!canReview} style={{ position: "relative", overflow: "hidden" }}>
+            <Presence mode="wait" initial={false}>
+              <motion.span key={reviewLabel} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.16 }}>
+                {reviewLabel}
+              </motion.span>
+            </Presence>
+          </button>
+          <p className="hint">Every Resolve reads the chain; a changed record is paid only with a World ID re-verification or your re-approval. Sending from {wallet.address ? short(wallet.address) : "your wallet"}.</p>
+        </div>
+      </div>
     </div>
   );
 }

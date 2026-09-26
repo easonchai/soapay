@@ -18,7 +18,7 @@ import { registerMetaAddress } from "../../onboarding/actions.js";
 import { rotationSignal, type HumanCheckResult } from "../../worldid/types.js";
 import { canonicalMeta, signRotationClaim } from "./claim.js";
 import type { EnsWriter } from "./ens.js";
-import { keysForGeneration } from "./keys.js";
+import { keysForAccountGeneration } from "./keys.js";
 
 export const ROTATION_TTL_SECONDS = 1_800n;
 
@@ -41,9 +41,11 @@ export function prepareRotation(p: {
   currentGeneration: number;
   oldMeta: string;
   now?: number;
+  /** 1 for an account that moved from wallet-signature keys to a phrase (see keys.ts). */
+  phraseOffset?: number;
 }): RotationDraft {
   const generation = p.currentGeneration + 1;
-  const newMeta = canonicalMeta(keysForGeneration(p.mnemonic, generation).metaAddressURI);
+  const newMeta = canonicalMeta(keysForAccountGeneration(p.mnemonic, generation, p.phraseOffset ?? 0).metaAddressURI);
   const deadline = BigInt(Math.floor((p.now ?? Date.now()) / 1000)) + ROTATION_TTL_SECONDS;
   return {
     label: p.label,

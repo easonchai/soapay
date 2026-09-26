@@ -24,6 +24,7 @@ export function Convert() {
   return (
     <>
       <PageHeader
+        eyebrow="Convert · Uniswap"
         title="Convert"
         description="Swap part of one address's USDC into ETH that stays in that same address. Nothing moves between your addresses, so nothing gets linked."
       />

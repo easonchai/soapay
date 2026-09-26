@@ -30,7 +30,7 @@ docker run -p 8787:8787 -v soapay-data:/data --env-file apps/api/.env soapay-api
 | `CHAIN_ID` | `84532` | Must be in `@soapay/sdk` `CHAINS` |
 | `PORT` | `8787` | |
 | `DB_PATH` | `./data/soapay.db` | `/data/soapay.db` in Docker |
-| `RELAYER_PRIVATE_KEY` | unset | Unset → `POST /register` returns 503 |
+| `RELAYER_PRIVATE_KEY` | unset | Unset → `POST /register` and `POST /relay` return 503 |
 | `L1_RPC_URL` | unset | Ethereum Sepolia RPC: ENSv2 issuer and rotation gas top-up |
 | `PARENT_NAME` | `soapay.eth` | Subnames are issued under it |
 | `ISSUER_PRIVATE_KEY` | unset | With `L1_RPC_URL`, `POST /names` issues `<label>.soapay.eth` on ENSv2 Sepolia through `@soapay/sdk/ensv2`. Unset → names are stored only, with a startup warning. Needs only `ROLE_REGISTRAR` on the subname registry, and never writes `stealth` |
@@ -97,6 +97,14 @@ The flow runs in this order:
 curl -X POST localhost:8787/register -H 'content-type: application/json' \
   -d '{"registrant":"0x…","metaAddress":"st:eth:0x02…","signature":"0x…"}'
 ```
+
+### `POST /relay`
+
+CK's M1 request shape, kept for compatibility (it replaces the removed `apps/gateway`). Body:
+`{registrant, schemeId: 1, stealthMetaAddress, signature}` with `stealthMetaAddress` as 66 bytes of raw hex.
+It runs exactly the `/register` path above (same relayer key and nonce sequence, rate-limit buckets,
+idempotency and stored receipts), but answers `{txHash}` on success and a flat `{error: "<message>"}` with
+the same HTTP status on failure.
 
 ### `POST /names`
 

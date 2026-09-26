@@ -14,7 +14,8 @@ pnpm --filter @soapay/sender test && pnpm --filter @soapay/sender typecheck && p
 
 ## Pay paths
 
-Chosen per connected wallet by `src/lib/paypath.ts`:
+Chosen per connected wallet by the SDK's `selectPayPath` (`packages/sdk/src/paypath.ts`). CK's non-atomic
+"sequential" fallback (announce, then transfer, one tx each) is dropped (PRD invariant 3):
 
 | Wallet | Path |
 | --- | --- |
@@ -33,7 +34,7 @@ the employer re-approves. Retries re-verify and re-derive; stored stealth addres
 
 ## Invite links
 
-docs/mvp-spec.md §7. On the Roster page, **Invite employee** takes a label, an amount and an optional
+docs/mvp-spec.md §7. On the Recipients page, **Invite employee** takes a label, an amount and an optional
 organisation name. The app generates a 32-byte code, has the connected wallet sign the `Invite` typed data
 (`signInvite` from `@soapay/sdk`; smart wallets sign through ERC-1271), POSTs `/invites` (which reserves the
 label) and shows `${VITE_RECIPIENT_URL}/#/join?code=…&label=…&org=…` with a copy button and a QR code.
@@ -52,12 +53,33 @@ Logic: `src/lib/invites.ts` (create, poll, apply outcomes, HTTP and mock APIs); 
 actions, rows, the link just created) and `useInvitePolling()`; view: `src/pages/InvitesPanel.tsx`,
 `src/ui/QrCode.tsx`.
 
+## Screens (CK's Direction A · Ledger design)
+
+The presentation is CK's company app on `@soapay/ui` (TopBar, PageHead, NavyPanel, Toggle, FreshMark, Pill,
+Copy, Toaster, motion); the engine is ours. Flow: **Landing** (wallet Login; pick a connector, incl. the demo
+wallet in mock mode) → **vault gate** (create/unlock the encrypted roster + history) → tabs:
+
+| Tab | Page | Hooks |
+| --- | --- | --- |
+| Pay run (`#/pay`) | `PayRunPage`: the roster as the run table; **Resolve names** re-verifies every pin; blocked lines (record changed without a World ID attestation) show **Re-approve**; attested pins show **Re-verified by World ID**; denominated payouts (chunk size, exact/carry); **Paste rows** / CSV import only bulk-enrolls `name, salary` into the roster (roster only, owner decision 2026-09-26: raw `st:eth:` meta-addresses and plain addresses are rejected); optional **Run label** stored on the run record. **Review** → `ReviewPage` (plan, pay path, gas, warnings, Sign and send, or Safe export → `SafeExportPage`) | `usePayRun`, `useRoster`, `useWallet`, `usePayPath` |
+| History (`#/history`, `#/runs/<id>`) | `HistoryPage` (stats, runs, names → amounts, Export CSV) and `RunDetailPage` (steps, recheck, never-sent, retry) | `useHistory`, `useRunActions` |
+| Recipients (`#/roster`) | `RecipientsPage`: add by name, **Invite employee** (`InvitesPanel`: link + QR, pending rows, re-invite), list with record status, detail with pinned record, re-approval, pause/remove, and every paid wallet with its **live USDC balance** and spend status (unspent / partly spent / withdrawn) | `useRoster`, `useInvites`, `useWalletBalances` |
+| Settings (`#/settings`) | `SettingsPage`: company name (top bar, invite org), chain / StealthDisperse / RPCs, attester, vault lock/delete | `useSettings`, `useStore` |
+
+CK's company view (employee → stealth wallets → live balances) is derived from our encrypted run records
+(`src/lib/wallets.ts`); his plaintext localStorage stores are not used. The company name is plain
+localStorage (`soapay:org`), as are the pay-run draft toggles (`soapay:payrun`).
+
+Env: CK's `VITE_STEALTH_DISPERSE_ADDRESS` is accepted as an alias (`VITE_STEALTH_DISPERSE` wins);
+`VITE_OTHER_APP_URL` sets the top bar's **Receive** link (default `VITE_RECIPIENT_URL`). `?motion=off` disables
+animations (screenshots, QA).
+
 ## How to plug in another UI
 
-The app is three layers. Only the last one is visual, and it is deliberately plain.
+The app is three layers. Only the last one is visual.
 
 1. **`src/lib/*`**: framework-free logic (roster pins, run planning and records, execution state machine,
-   Safe export, vault, CSV, amounts, wallet adapters over `wagmi/actions`). Unit-tested in `test/`.
+   Safe export, vault, CSV, amounts, wallet adapters over `wagmi/actions`, the per-employee wallet view). Unit-tested in `test/`.
 2. **`src/hooks/*`**: React hooks that own all state and side effects. They render nothing.
    - `StoreProvider` / `useStore()` (`store.tsx`): vault phase, roster, run history, `executeRun`.
    - `useRoster()`: enroll, CSV import, re-verify, re-approve, pause, amount edit, mock rotation.
@@ -65,15 +87,13 @@ The app is three layers. Only the last one is visual, and it is deliberately pla
    - `usePayRun()`: `verify()` → `preview(denomination)` → `execute()` or `exportSafe(safe)`.
    - `useRunActions(id)` / `useHistory()`: status, names → amounts report, `recheck`, `retry`, `confirmNotSent`.
    - `useWallet()` / `usePayPath()`: connectors, account probe, chosen path, funding.
+   - `useWalletBalances(addresses)`: live USDC balances of paid wallets (read-only).
    - `useSettings()`, `useRoute()` (hash routes `#/roster`, `#/pay`, `#/history`, `#/runs/<id>`, `#/settings`).
-3. **`src/pages/*` + `src/ui/kit.tsx`**: props-only components. `src/App.tsx` is the only file that calls
-   hooks and passes their results to pages.
+3. **`src/pages/*` + `src/ui/*`**: props-only components. `src/App.tsx` is the only file that calls hooks and
+   passes their results to pages.
 
-To use a different design: keep `main.tsx` (providers) and replace `App.tsx`, `pages/` and `ui/` with your own
-components that call the same hooks. Each page's props type is exactly its hook's return type (plus a few
-callbacks), so an alternative page can be dropped in one at a time. Don't reimplement logic in components:
-anything a page would need to compute belongs in a hook or in `src/lib`, and protocol logic belongs in
-`@soapay/sdk`.
+Don't reimplement logic in components: anything a page would need to compute belongs in a hook or in
+`src/lib`, and protocol logic belongs in `@soapay/sdk`.
 
 ## WalletConnect
 

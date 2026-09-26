@@ -18,7 +18,17 @@ import {
 import { wordlist as english } from "@scure/bip39/wordlists/english.js";
 import { HDKey } from "@scure/bip32";
 import { secp256k1 } from "@noble/curves/secp256k1.js";
-import { bytesToHex, hexToBytes, isHex, type Address, type Hex } from "viem";
+import {
+  bytesToHex,
+  concat,
+  hexToBytes,
+  isHex,
+  keccak256,
+  recoverMessageAddress,
+  stringToHex,
+  type Address,
+  type Hex,
+} from "viem";
 import { privateKeyToAddress } from "viem/accounts";
 
 /** BIP-32 derivation paths (ERC-5564 purpose 5564', scheme 1'). All hardened. */
@@ -141,4 +151,127 @@ export function parseMetaAddress(input: string): Hex {
 /** `st:eth:0x…` URI for a meta-address (URI or raw bytes), canonical lowercase. */
 export function formatMetaAddressURI(metaAddress: string): string {
   return `${META_ADDRESS_URI_PREFIX}${parseMetaAddress(metaAddress)}`;
+}
+
+// ---------------------------------------------------------------------------
+// Wallet-signature keys (CK's M1 derivation), an OPTION for plain EOAs only.
+//
+// The recovery phrase above stays the default. This path derives the same key set from one
+// personal_sign signature over SIGN_MESSAGE: spending = keccak256(r), viewing = keccak256(s)
+// (identical to ScopeLift `generateKeysFromSignature`), registrant = keccak256(sig ‖
+// "soapay/registrant/v1"). Recovery = sign the same message again with the same wallet.
+//
+// That only works when the wallet's signature is a deterministic 65-byte ECDSA signature by the
+// address's own key (RFC 6979). Smart accounts and passkey wallets return ERC-1271 / ERC-6492
+// signatures that can change per request or per deployment, which would silently lose funds, so
+// they are refused: the address must have no code and the signature must recover to it.
+
+/** Fixed text. Changing it changes every signature-derived user's keys. */
+export const SIGN_MESSAGE =
+  "Soapay stealth keys v1\n\nSign to derive your private stealth keys. Only sign this inside Soapay. This signature never goes on-chain.";
+
+/** Domain separator for the registrant key derived from the signature. */
+export const SIGNATURE_REGISTRANT_DOMAIN = "soapay/registrant/v1";
+
+/** ERC-6492 wrapped-signature magic suffix (counterfactual smart accounts). */
+const ERC6492_MAGIC = "6492649264926492649264926492649264926492649264926492649264926492";
+
+export type SignatureKeysRefusal = "has-code" | "erc6492" | "not-ecdsa" | "wrong-signer" | "not-deterministic";
+
+export class SignatureKeysUnsupported extends Error {
+  readonly reason: SignatureKeysRefusal;
+  constructor(reason: SignatureKeysRefusal, message: string) {
+    super(message);
+    this.name = "SignatureKeysUnsupported";
+    this.reason = reason;
+  }
+}
+
+const SMART_WALLET_HELP =
+  "Wallet-signature keys work only with a plain EOA wallet (MetaMask, Rabby, a hardware wallet). " +
+  "Smart and passkey wallets can't derive stable keys from a signature. Use a recovery phrase instead.";
+
+/**
+ * Throws `SignatureKeysUnsupported` unless `code` (eth_getCode of `address`) is empty. Run it
+ * BEFORE asking for a signature, so a smart wallet is refused up front. An EIP-7702 delegated
+ * EOA counts as having code: its wallet may answer through ERC-1271.
+ */
+export function assertPlainEoa(address: Address, code: Hex | undefined): void {
+  if (code && code !== "0x") {
+    throw new SignatureKeysUnsupported("has-code", `${address} is a smart account (it has code). ${SMART_WALLET_HELP}`);
+  }
+}
+
+/**
+ * Throws `SignatureKeysUnsupported` unless `signature` is a plain 65-byte ECDSA signature over
+ * SIGN_MESSAGE by `address` itself and `address` has no code.
+ */
+export async function assertPlainEoaSignature(params: { address: Address; code: Hex | undefined; signature: Hex }): Promise<void> {
+  const { address, code, signature } = params;
+  assertPlainEoa(address, code);
+  const sig = signature.toLowerCase();
+  if (sig.endsWith(ERC6492_MAGIC)) {
+    throw new SignatureKeysUnsupported("erc6492", `The wallet returned an ERC-6492 smart-account signature. ${SMART_WALLET_HELP}`);
+  }
+  if (!isHex(sig, { strict: true }) || sig.length !== 2 + 65 * 2) {
+    throw new SignatureKeysUnsupported(
+      "not-ecdsa",
+      `The wallet returned a ${Math.max(0, (sig.length - 2) / 2)}-byte signature, not a 65-byte ECDSA one (ERC-1271 wallet?). ${SMART_WALLET_HELP}`,
+    );
+  }
+  let signer: Address;
+  try {
+    signer = await recoverMessageAddress({ message: SIGN_MESSAGE, signature });
+  } catch {
+    throw new SignatureKeysUnsupported("not-ecdsa", `The signature doesn't recover to an address. ${SMART_WALLET_HELP}`);
+  }
+  if (signer.toLowerCase() !== address.toLowerCase()) {
+    throw new SignatureKeysUnsupported("wrong-signer", `The signature was not made by ${address}'s own key. ${SMART_WALLET_HELP}`);
+  }
+}
+
+/**
+ * Pure: derive every Soapay key from one 65-byte signature over SIGN_MESSAGE. Callers must have
+ * run `assertPlainEoaSignature` (`keysFromWalletSignature` does both).
+ */
+export function keysFromSignature(signature: Hex): SoapayKeys {
+  if (!isHex(signature, { strict: true }) || signature.length !== 2 + 65 * 2) {
+    throw new Error("Soapay: key signature must be 65 bytes");
+  }
+  const sig = signature.toLowerCase() as Hex;
+  const spendingKey = keccak256(`0x${sig.slice(2, 66)}`);
+  const viewingKey = keccak256(`0x${sig.slice(66, 130)}`);
+  const registrantKey = keccak256(concat([sig, stringToHex(SIGNATURE_REGISTRANT_DOMAIN)]));
+  const spendingPublicKey = bytesToHex(secp256k1.getPublicKey(hexToBytes(spendingKey), true));
+  const viewingPublicKey = bytesToHex(secp256k1.getPublicKey(hexToBytes(viewingKey), true));
+  return {
+    spendingKey,
+    viewingKey,
+    registrantKey,
+    spendingPublicKey,
+    viewingPublicKey,
+    registrantAddress: privateKeyToAddress(registrantKey),
+    metaAddressURI: formatMetaAddressURI(`0x${spendingPublicKey.slice(2)}${viewingPublicKey.slice(2)}`),
+  };
+}
+
+/**
+ * Wallet-signature keys with every guard: plain EOA only, and, when a second signature is given,
+ * the wallet must sign deterministically (both identical), else signing again later would not
+ * recover the keys.
+ */
+export async function keysFromWalletSignature(params: {
+  address: Address;
+  code: Hex | undefined;
+  signature: Hex;
+  confirmSignature?: Hex | undefined;
+}): Promise<SoapayKeys> {
+  await assertPlainEoaSignature(params);
+  if (params.confirmSignature !== undefined && params.confirmSignature.toLowerCase() !== params.signature.toLowerCase()) {
+    throw new SignatureKeysUnsupported(
+      "not-deterministic",
+      "This wallet signed the same message two different ways, so signing again would not recover your keys. Use a recovery phrase instead.",
+    );
+  }
+  return keysFromSignature(params.signature);
 }

@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import { compareAddresses, generateMnemonic, keysFromMnemonic, MAX_LINES_PER_TX } from "@soapay/sdk";
 import {
   attemptFromPlan,
+  MAX_RUN_LABEL,
+  normalizeRunLabel,
+  runTitle,
   canRetry,
   planRetry,
   planRun,
@@ -150,5 +153,16 @@ describe("partial failure and retry", () => {
     const run = record(planRun(recipients(2), null));
     const json = JSON.stringify(run, (_k, v) => (typeof v === "bigint" ? v.toString() : v));
     expect(json).not.toMatch(/ephemeral|keyX|viewTag/i);
+  });
+});
+
+describe("run label", () => {
+  it("is optional, trimmed and capped; the title falls back when unset", () => {
+    expect(normalizeRunLabel(undefined)).toBeUndefined();
+    expect(normalizeRunLabel("   ")).toBeUndefined();
+    expect(normalizeRunLabel("  September   payroll ")).toBe("September payroll");
+    expect(normalizeRunLabel("x".repeat(200))).toHaveLength(MAX_RUN_LABEL);
+    expect(runTitle({ label: "Sep" }, "Batch · 1 Sep")).toBe("Sep");
+    expect(runTitle({}, "Batch · 1 Sep")).toBe("Batch · 1 Sep");
   });
 });

@@ -122,3 +122,69 @@ describe("POST /register", () => {
     expect(res.status).toBe(413);
   });
 });
+
+// CK's M1 request shape (was apps/gateway POST /relay), served by the same relayer path.
+describe("POST /relay (CK's RelayRequest)", () => {
+  const relayReq = (n = 1) => ({ registrant: registrant.address, schemeId: 1, stealthMetaAddress: metaHex(n), signature: SIG });
+
+  it("relays through the same registerKeysOnBehalf path and returns {txHash}", async () => {
+    const t = makeTestApp();
+    const res = await t.post("/relay", relayReq());
+    expect(res.status).toBe(200);
+    const body = await j(res);
+    expect(body).toEqual({ txHash: expect.stringMatching(/^0x[0-9a-f]{64}$/) });
+    const sim = t.client.simulateContract.mock.calls[0]![0];
+    expect(sim.functionName).toBe("registerKeysOnBehalf");
+    expect(sim.args).toEqual([registrant.address, 1n, SIG, metaHex()]);
+    // Receipt stored like /register.
+    const row = t.db.prepare("SELECT * FROM registrations").get() as any;
+    expect(row).toMatchObject({ registrant: registrant.address, meta_bytes: metaHex(), tx_hash: body.txHash, status: "success" });
+  });
+
+  it("shares idempotency with /register (one relayer tx)", async () => {
+    const t = makeTestApp();
+    const first = await j(await t.post("/register", { registrant: registrant.address, metaAddress: metaUri(), signature: SIG }));
+    t.client.readContract.mockResolvedValue(metaHex());
+    const again = await t.post("/relay", relayReq());
+    expect(again.status).toBe(200);
+    expect(await j(again)).toEqual({ txHash: first.txHash });
+    expect(t.relayer.writeContract).toHaveBeenCalledTimes(1);
+  });
+
+  it("shares the per-registrant rate limit with /register", async () => {
+    const t = makeTestApp();
+    for (let i = 1; i <= 3; i++) {
+      t.setIp(`10.0.1.${i}`);
+      expect((await t.post(i % 2 ? "/relay" : "/register", i % 2 ? relayReq(i) : { registrant: registrant.address, metaAddress: metaUri(i), signature: SIG })).status).toBe(200);
+    }
+    t.setIp("10.0.1.9");
+    const res = await t.post("/relay", relayReq(4));
+    expect(res.status).toBe(429);
+    expect(res.headers.get("retry-after")).toMatch(/^\d+$/);
+    expect(typeof (await j(res)).error).toBe("string");
+  });
+
+  it("answers errors in CK's flat {error} shape with the HTTP status", async () => {
+    const t = makeTestApp();
+    const bad = async (body: unknown, status: number) => {
+      const r = await t.post("/relay", body);
+      expect(r.status).toBe(status);
+      const b = await j(r);
+      expect(typeof b.error).toBe("string");
+    };
+    await bad({ ...relayReq(), schemeId: 2 }, 400);
+    await bad({ ...relayReq(), stealthMetaAddress: metaUri() }, 400);
+    await bad({ ...relayReq(), registrant: "nope" }, 400);
+    await bad({ ...relayReq(), signature: "zz" }, 400);
+    t.client.simulateContract.mockRejectedValue(new BaseError("ERC6538Registry__InvalidSignature"));
+    await bad(relayReq(), 400);
+    expect(t.relayer.writeContract).not.toHaveBeenCalled();
+  });
+
+  it("returns 503 {error} when no relayer is configured", async () => {
+    const t = makeTestApp({ relayer: false });
+    const res = await t.post("/relay", relayReq());
+    expect(res.status).toBe(503);
+    expect((await j(res)).error).toMatch(/relayer/i);
+  });
+});

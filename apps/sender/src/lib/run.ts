@@ -151,6 +151,8 @@ export type RunPath = "batch" | "disperse" | "safe-export";
 export type RunRecord = {
   id: string;
   createdAt: number;
+  /** Optional employer-chosen title (CK's editable run title), e.g. "September payroll". */
+  label?: string;
   chainId: number;
   path: RunPath;
   token: Address;
@@ -296,4 +298,18 @@ export function runTotals(run: RunRecord): { planned: bigint; paid: bigint; outs
   const outstanding = rows.reduce((s, r) => s + r.outstanding, 0n);
   const planned = run.attempts[0]?.chunks.reduce((s, c) => s + c.amount, 0n) ?? 0n;
   return { planned, paid, outstanding };
+}
+
+/** Max run label length; longer input is cut. */
+export const MAX_RUN_LABEL = 80;
+
+/** Trimmed, length-capped label, or undefined when blank (then the run is not labelled). */
+export function normalizeRunLabel(input: string | undefined): string | undefined {
+  const t = (input ?? "").replace(/\s+/g, " ").trim().slice(0, MAX_RUN_LABEL);
+  return t ? t : undefined;
+}
+
+/** Display title: the label when set, else the fallback (pay path and date). */
+export function runTitle(run: Pick<RunRecord, "label">, fallback: string): string {
+  return run.label ?? fallback;
 }

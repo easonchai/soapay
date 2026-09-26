@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^2.1.1",
+    "@scopelift/stealth-address-sdk": "1.0.0-beta.5",
     "@soapay/sdk": "workspace:*",
     "@worldcoin/idkit-server": "^1.1.1",
     "hono": "^4.13.9",

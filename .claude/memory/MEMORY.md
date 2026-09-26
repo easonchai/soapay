@@ -10,5 +10,6 @@
 - [Bounties](decision-bounties.md) — ENSv2 + World IDKit + Uniswap API; Intercepta rejected (needs agents)
 - [CK's UI](team-ui-ck.md) — teammate CK builds a separate UI; keep ours simple with logic in hooks for a later merge/compare
 - [CK integration](decision-ck-integration.md) — CK's UI + our engine; keys, spend, sender-mode, backend and names decisions for the merge
-- [Privacy roadmap](decision-privacy-roadmap.md) — build shielded rail + timing fix + swap-proxy fix; IDKit only; pre-submission order
+- [Privacy roadmap](decision-privacy-roadmap.md) — timing fix + swap-proxy fix; shielded rail post-hackathon (D-31); IDKit only; pre-submission order
 - [Decision log](../../docs/decision-log.md) — D-xx entries with PRD ref, decider, why, commits; trace mistakes here first
+- [Frontend M1](decision-frontend-m1.md) — CK's M1 as built (signature keys, gateway relayer, 3 sender modes); superseded by CK integration where they differ

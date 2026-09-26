@@ -1,10 +1,13 @@
 import { useState, type FormEvent } from "react";
-import { Trash2 } from "lucide-react";
+import { ANNOUNCER_ADDRESS, REGISTRY_ADDRESS, getChainConfig } from "@soapay/sdk";
+import { Copy } from "@soapay/ui";
+import { chainName } from "../config.js";
 import { useSettings } from "../hooks/useSettings.js";
 import { useServices } from "../services/ServicesProvider.js";
-import { Addr, Alert, Button, Card, CardHeader, Checkbox, CopyButton, Field, Input, PageHeader, errorMessage } from "../ui/kit.js";
+import { Addr, Alert, Button, Checkbox, Field, Input, PageHeader, errorMessage } from "../ui/kit.js";
 import type { Settings as S } from "../vault/types.js";
 
+/** CK's Settings layout (Network facts, Receiving, Reset) with our items: known payers, editable network, backups. */
 export function Settings() {
   const st = useSettings();
   const svc = useServices();
@@ -13,6 +16,15 @@ export function Settings() {
   const [payer, setPayer] = useState({ address: "", name: "" });
   const [error, setError] = useState<string | null>(null);
   const [wipe, setWipe] = useState(false);
+  const [keysAck, setKeysAck] = useState(false);
+  const chainId = st.settings.chainId;
+  const usdc = (() => {
+    try {
+      return getChainConfig(chainId).usdc;
+    } catch {
+      return undefined;
+    }
+  })();
 
   const text = (k: "apiUrl" | "rpcUrl" | "bundlerUrl" | "l1RpcUrl", label: string, hint?: string) => (
     <Field label={label} hint={hint}>
@@ -46,99 +58,194 @@ export function Settings() {
   };
 
   return (
-    <>
-      <PageHeader title="Settings" description="Stored inside your encrypted vault on this device." />
-      <div className="space-y-4">
-        <Card>
-          <CardHeader title="Known payers" description="Payments announced by anyone else are flagged as unknown payer." />
-          <div className="space-y-3 px-4 py-3">
-            <ul className="space-y-1 text-sm">
-              {st.settings.knownPayers.map((p) => (
-                <li key={p.address} className="flex items-center justify-between gap-2">
-                  <span>
-                    {p.name} · <Addr address={p.address} />
-                  </span>
-                  <Button variant="ghost" size="sm" onClick={() => void st.removePayer(p.address)} aria-label={`Remove ${p.name}`}>
-                    <Trash2 className="size-4" aria-hidden />
-                  </Button>
-                </li>
-              ))}
-            </ul>
-            <form onSubmit={addPayer} className="grid gap-2 sm:grid-cols-[1fr_10rem_auto] sm:items-end">
-              <Field label="Payer address">
-                {({ id }) => <Input id={id} className="font-mono" placeholder="0x…" value={payer.address} onChange={(e) => setPayer({ ...payer, address: e.target.value })} />}
-              </Field>
-              <Field label="Name">{({ id }) => <Input id={id} value={payer.name} onChange={(e) => setPayer({ ...payer, name: e.target.value })} />}</Field>
-              <Button type="submit" variant="outline">
-                Add
-              </Button>
-            </form>
-            {error && <Alert variant="destructive">{error}</Alert>}
-          </div>
-        </Card>
+    <div className="onb stack-lg">
+      <PageHeader eyebrow="This browser" title="Settings" description="Where this app points, and what it keeps (encrypted) in this browser." />
 
-        <Card>
-          <CardHeader title="Network" description={svc.mock ? "Mock mode: these are ignored until you run without VITE_MOCK_API." : undefined} />
-          <form onSubmit={saveNetwork} className="space-y-3 px-4 py-3">
-            {text("apiUrl", "Soapay API URL")}
-            {text("rpcUrl", "Base RPC URL", "Empty = the chain's public RPC.")}
-            {text("bundlerUrl", "Bundler URL", "Needed to send and convert (e.g. a Pimlico URL).")}
-            {text("l1RpcUrl", "Ethereum Sepolia RPC URL", "For the ENS record update when rotating keys.")}
-            <Checkbox
-              checked={draft.useRpcAnnouncements}
-              onChange={(v) => setDraft({ ...draft, useRpcAnnouncements: v })}
-              label="Read announcements over RPC instead of the Soapay API"
-              description="Slower, but doesn't depend on our indexer."
-            />
-            <Checkbox
-              checked={draft.swapViaApi}
-              onChange={(v) => setDraft({ ...draft, swapViaApi: v })}
-              label="Convert through the Soapay API's Uniswap proxy"
-              description="Better routes via the Uniswap Trading API. Off = quote directly from the Universal Router."
-            />
-            <Button type="submit">{saved ? "Saved" : "Save"}</Button>
-          </form>
-        </Card>
-
-        <Card>
-          <CardHeader title="This device" />
-          <div className="space-y-3 px-4 py-3 text-sm">
-            <p className="text-muted-foreground">Your meta-address:</p>
-            <p className="font-mono text-xs break-all">{st.keys.metaAddressURI}</p>
-            <div className="flex flex-wrap gap-2">
-              <CopyButton value={st.keys.metaAddressURI} label="Copy meta-address" />
-              <Button variant="outline" size="sm" onClick={() => void st.exportBackup()}>
-                Download encrypted backup
-              </Button>
-              <Button variant="outline" size="sm" onClick={st.lock}>
-                Lock now
-              </Button>
-            </div>
-            {wipe ? (
-              <Alert
-                variant="destructive"
-                title="Delete this vault?"
-                action={
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="destructive" onClick={() => void st.wipe()}>
-                      Delete
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setWipe(false)}>
-                      Cancel
-                    </Button>
-                  </div>
-                }
-              >
-                Only your recovery phrase can bring it back.
-              </Alert>
-            ) : (
-              <Button variant="ghost" size="sm" className="text-destructive" onClick={() => setWipe(true)}>
-                Delete vault from this browser
-              </Button>
+      <section className="stack-sm">
+        <h2>Network</h2>
+        <div className="card">
+          <dl className="facts">
+            <dt>Chain</dt>
+            <dd>
+              {chainName(chainId)} ({chainId})
+            </dd>
+            <dt>Soapay API</dt>
+            <dd>
+              <code>{st.settings.apiUrl}</code>
+              <span className="note">Registration relayer, names, invites, announcement index, Uniswap proxy.</span>
+            </dd>
+            <dt>Announcer</dt>
+            <dd>
+              <code>{ANNOUNCER_ADDRESS}</code>
+            </dd>
+            <dt>Registry</dt>
+            <dd>
+              <code>{REGISTRY_ADDRESS}</code>
+            </dd>
+            {usdc && (
+              <>
+                <dt>USDC</dt>
+                <dd>
+                  <code>{usdc}</code>
+                </dd>
+              </>
             )}
+            <dt>StealthDisperse</dt>
+            <dd>
+              {svc.stealthDisperse.length ? (
+                svc.stealthDisperse.map((a) => <code key={a} className="block">{a}</code>)
+              ) : (
+                <span className="muted">None configured: payers are read from the announcing account.</span>
+              )}
+            </dd>
+            <dt>Bundler</dt>
+            <dd>{st.settings.bundlerUrl ? <code>{st.settings.bundlerUrl}</code> : <span className="muted">Not set: Send and Convert are off.</span>}</dd>
+          </dl>
+        </div>
+        {svc.mock && <Alert variant="info">Mock mode: the values below are ignored until you run without VITE_MOCK_API.</Alert>}
+        <form onSubmit={saveNetwork} className="card stack">
+          {text("apiUrl", "Soapay API URL")}
+          {text("rpcUrl", "Base RPC URL", "Empty = the chain's public RPC.")}
+          {text("bundlerUrl", "Bundler URL", "Needed to send and convert (e.g. a Pimlico URL).")}
+          {text("l1RpcUrl", "Ethereum Sepolia RPC URL", "For the ENS record update when rotating keys.")}
+          <Checkbox
+            checked={draft.useRpcAnnouncements}
+            onChange={(v) => setDraft({ ...draft, useRpcAnnouncements: v })}
+            label="Read announcements over RPC instead of the Soapay API"
+            description="Slower, but doesn't depend on our indexer."
+          />
+          <Checkbox
+            checked={draft.swapViaApi}
+            onChange={(v) => setDraft({ ...draft, swapViaApi: v })}
+            label="Convert through the Soapay API's Uniswap proxy"
+            description="Better routes via the Uniswap Trading API. Off = quote directly from the Universal Router."
+          />
+          <div className="actions">
+            <Button type="submit">{saved ? "Saved" : "Save"}</Button>
           </div>
-        </Card>
-      </div>
+        </form>
+      </section>
+
+      <section className="stack-sm">
+        <h2>Known payers</h2>
+        <p className="muted">Payments announced by anyone else are flagged as unknown payer.</p>
+        <div className="card stack">
+          {st.settings.knownPayers.length > 0 && (
+            <dl className="facts">
+              {st.settings.knownPayers.map((p) => (
+                <FactRow key={p.address} k={p.name}>
+                  <Addr address={p.address} />
+                  <button type="button" className="btn-text btn-inline btn-danger" onClick={() => void st.removePayer(p.address)} aria-label={`Remove ${p.name}`}>
+                    Remove
+                  </button>
+                </FactRow>
+              ))}
+            </dl>
+          )}
+          <form onSubmit={addPayer} className="grid gap-2 sm:grid-cols-[1fr_10rem_auto] sm:items-end">
+            <Field label="Payer address">
+              {({ id }) => <Input id={id} className="font-mono" placeholder="0x…" value={payer.address} onChange={(e) => setPayer({ ...payer, address: e.target.value })} />}
+            </Field>
+            <Field label="Name">{({ id }) => <Input id={id} value={payer.name} onChange={(e) => setPayer({ ...payer, name: e.target.value })} />}</Field>
+            <Button type="submit" variant="outline">
+              Add
+            </Button>
+          </form>
+          {error && <Alert variant="destructive">{error}</Alert>}
+        </div>
+      </section>
+
+      <section className="stack-sm">
+        <h2>Receiving</h2>
+        <div className="card">
+          <dl className="facts">
+            <dt>Meta-address</dt>
+            <dd>
+              <code>{st.keys.metaAddressURI}</code>
+              <Copy value={st.keys.metaAddressURI} />
+            </dd>
+            <dt>Registrant</dt>
+            <dd>
+              <code>{st.keys.registrantAddress}</code>
+              <span className="note">A throwaway address that stands in for you on-chain. Never send it funds from your own wallet.</span>
+            </dd>
+            <dt>Keys from</dt>
+            <dd>
+              {st.keySource.kind === "wallet-signature" ? (
+                <>
+                  Wallet signature by <Addr address={st.keySource.wallet} />
+                  <span className="note">Recovery: sign the Soapay message again with this same wallet. Key rotation isn't available for these keys.</span>
+                </>
+              ) : (
+                <>
+                  Recovery phrase
+                  <span className="note">Your phrase recovers every key and every payment. It is never shown again.</span>
+                </>
+              )}
+            </dd>
+          </dl>
+        </div>
+      </section>
+
+      <section className="stack-sm">
+        <h2>This device</h2>
+        <div className="actions">
+          <Button variant="outline" onClick={() => void st.exportBackup()}>
+            Download encrypted backup
+          </Button>
+          <Button variant="outline" onClick={st.lock}>
+            Lock now
+          </Button>
+          {!wipe && (
+            <Button variant="ghost" className="btn-danger" onClick={() => setWipe(true)}>
+              Delete vault from this browser
+            </Button>
+          )}
+        </div>
+        {wipe && (
+          <Alert
+            variant="destructive"
+            title="Delete this vault?"
+            action={
+              <div className="flex gap-2">
+                <Button size="sm" variant="destructive" onClick={() => void st.wipe()}>
+                  Delete
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setWipe(false)}>
+                  Cancel
+                </Button>
+              </div>
+            }
+          >
+            {st.keySource.kind === "wallet-signature"
+              ? "Only signing again with the same wallet can bring the keys back."
+              : "Only your recovery phrase can bring it back."}
+          </Alert>
+        )}
+      </section>
+
+      <section className="stack-sm">
+        <h2>Advanced recovery</h2>
+        <Alert variant="warning" title="Exports your private keys in plain text">
+          Anyone with this file can spend every payment sent to you, now and later. You don't need it to use Soapay: Send, Convert and Exit spend
+          in-app without exposing a key. Use it only to move to other software, then delete the file.
+        </Alert>
+        <Checkbox checked={keysAck} onChange={setKeysAck} tone="destructive" label="I understand this file can spend all my payments" />
+        <div className="actions">
+          <Button variant="destructive" disabled={!keysAck} onClick={st.exportRawKeys}>
+            Export private keys
+          </Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function FactRow({ k, children }: { k: string; children: React.ReactNode }) {
+  return (
+    <>
+      <dt>{k}</dt>
+      <dd>{children}</dd>
     </>
   );
 }

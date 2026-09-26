@@ -116,6 +116,7 @@ Name claim, EIP-712 (`metaAddress` is signed in canonical lowercase `st:eth:0x�
 | --- | --- |
 | `GET /health` | Liveness, plus chain ids and indexer head |
 | `POST /register` | `{registrant, metaAddress, signature}` → simulate, then send `registerKeysOnBehalf` from `RELAYER_PRIVATE_KEY` → `{txHash}`. Rate limit per IP and registrant; refuse if the registry already holds the same meta-address. |
+| `POST /relay` | CK's M1 shape `{registrant, schemeId: 1, stealthMetaAddress, signature}` → `{txHash}` \| `{error}`, through the same relayer path as `/register`. |
 | `POST /names` | `{label, registrant, metaAddress, deadline, signature}` → verify the EIP-712 NameClaim, check `stealthMetaAddressOf(registrant,1) == metaAddress`, check the label is free and valid (`[a-z0-9-]{3,32}`) → store |
 | `GET /names/:label` | Public record, for debugging |
 | `GET /announcements?from=&to=&cursor=` | All Announcer events, scheme 1, paginated. The indexer backfills from `ERC5564_StartBlocks` in chunks, then polls the tip. No filtering by recipient. |

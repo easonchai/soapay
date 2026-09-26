@@ -34,6 +34,8 @@ export type AppConfig = {
   attester: Address | undefined;
   /** Recipient app base URL for invite links (VITE_RECIPIENT_URL). */
   recipientUrl: string;
+  /** Recipient app link in the top bar ("Receive"): VITE_OTHER_APP_URL, else recipientUrl. */
+  otherAppUrl: string;
 };
 
 const SETTINGS_KEY = "soapay.sender.settings.v1";
@@ -50,7 +52,8 @@ function envString(v: string | undefined): string | undefined {
 export function envDefaults(env: ImportMetaEnv = import.meta.env): Settings {
   const envChain = Number(env.VITE_CHAIN_ID ?? DEFAULT_CHAIN_ID);
   const chainId: SupportedChainId = isSupportedChainId(envChain) ? envChain : DEFAULT_CHAIN_ID;
-  const disperse = envString(env.VITE_STEALTH_DISPERSE);
+  // CK's name is an alias; ours wins when both are set.
+  const disperse = envString(env.VITE_STEALTH_DISPERSE) ?? envString(env.VITE_STEALTH_DISPERSE_ADDRESS);
   const rpc = envString(env.VITE_RPC_URL);
   const ensRpc = envString(env.VITE_ENS_RPC_URL);
   return {
@@ -104,6 +107,25 @@ export function pinnedAttester(env: ImportMetaEnv = import.meta.env): Address | 
   return a && isAddress(a) ? getAddress(a) : undefined;
 }
 
+export function recipientAppUrls(env: ImportMetaEnv = import.meta.env): { recipientUrl: string; otherAppUrl: string } {
+  const recipientUrl = envString(env.VITE_RECIPIENT_URL) ?? "http://localhost:5173";
+  return { recipientUrl, otherAppUrl: envString(env.VITE_OTHER_APP_URL) ?? recipientUrl };
+}
+
+// Company name in the top bar (CK's setting). Not a secret: plain localStorage.
+const ORG_KEY = "soapay:org";
+
+export function getOrgName(): string {
+  return safeStorage()?.getItem(ORG_KEY) ?? "";
+}
+
+export function setOrgName(v: string): void {
+  const s = safeStorage();
+  if (!s) return;
+  if (v.trim()) s.setItem(ORG_KEY, v.trim());
+  else s.removeItem(ORG_KEY);
+}
+
 export function resolveConfig(settings: Settings = loadSettings()): AppConfig {
   const sdk = CHAINS[settings.chainId] as SoapayChainConfig;
   const disperse = settings.stealthDisperse[settings.chainId] ?? sdk.stealthDisperse ?? null;
@@ -120,7 +142,7 @@ export function resolveConfig(settings: Settings = loadSettings()): AppConfig {
     mockEns: isMockEns(),
     apiUrl: envString(import.meta.env.VITE_API_URL),
     attester: pinnedAttester(),
-    recipientUrl: envString(import.meta.env.VITE_RECIPIENT_URL) ?? "http://localhost:5173",
+    ...recipientAppUrls(),
   };
 }
 

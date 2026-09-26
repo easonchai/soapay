@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from "react";
 import { keyRing, scanKeysOf, type KeyRing } from "../features/rotation/keys.js";
 import { useUnlocked } from "../vault/VaultProvider.js";
-import { chainState, settingsOf, type ChainState, type Settings, type VaultData } from "../vault/types.js";
+import { chainState, phraseOffsetOf, settingsOf, type ChainState, type Settings, type VaultData } from "../vault/types.js";
 
 /** Every key generation derived from the seed (rotation). Memoised per mnemonic + generation. */
 export function useKeyRing(): KeyRing {
@@ -9,7 +9,8 @@ export function useKeyRing(): KeyRing {
   const mnemonic = v.data.mnemonic;
   const generation = v.data.profile.keyGeneration ?? 0;
   const gen0 = v.keys;
-  return useMemo(() => keyRing(mnemonic, generation, gen0), [mnemonic, generation, gen0]);
+  const offset = phraseOffsetOf(v.data);
+  return useMemo(() => keyRing(mnemonic, generation, gen0, offset), [mnemonic, generation, gen0, offset]);
 }
 
 export function useScanKeys() {

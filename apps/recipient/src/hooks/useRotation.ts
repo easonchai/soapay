@@ -12,7 +12,7 @@ import { canonicalMeta } from "../features/rotation/claim.js";
 import { useServices } from "../services/ServicesProvider.js";
 import { errorMessage } from "../ui/kit.js";
 import { useUnlocked } from "../vault/VaultProvider.js";
-import type { PendingRotation, Profile } from "../vault/types.js";
+import { adoptRecoveryPhrase, hasRecoveryPhrase, phraseOffsetOf, type PendingRotation, type Profile } from "../vault/types.js";
 import type { HumanCheckResult } from "../worldid/types.js";
 import { useKeyRing } from "./useChain.js";
 
@@ -64,14 +64,23 @@ export function useRotation() {
   const start = useCallback(() => {
     if (!name) return setState({ step: "idle", error: "Claim a name first: rotation moves a name to new keys." });
     if (profile.pendingRotation) return setState({ step: "idle", error: "Finish the pending rotation first." });
+    // Wallet-signature accounts rotate by moving to a recovery-phrase account first (owner decision
+    // 2026-09-26): `adoptPhrase`, then this same route. See vault/types.ts adoptRecoveryPhrase.
+    if (!hasRecoveryPhrase(v.data)) {
+      return setState({
+        step: "idle",
+        error: "Rotating means moving to a recovery-phrase account. Create your recovery phrase first (step 1 below).",
+      });
+    }
     const draft = prepareRotation({
       mnemonic: v.data.mnemonic,
       label: name.label,
       currentGeneration: profile.keyGeneration ?? 0,
       oldMeta: ring.current.metaAddressURI,
+      phraseOffset: phraseOffsetOf(v.data),
     });
     setState({ step: "confirm", draft, path });
-  }, [name, profile.pendingRotation, profile.keyGeneration, v.data.mnemonic, ring, path]);
+  }, [name, profile.pendingRotation, profile.keyGeneration, v.data, ring, path]);
 
   /** Sends the registrant's setText and records the rotation as complete. */
   const complete = useCallback(
@@ -196,6 +205,18 @@ export function useRotation() {
 
   const cancel = useCallback(() => setState({ step: "idle", error: null }), []);
 
+  /**
+   * Step 1 of moving a wallet-signature account to a phrase account: store the new phrase (already
+   * shown to and confirmed by the user) in the vault. Generation 1 onward then comes from it.
+   */
+  const adoptPhrase = useCallback(
+    async (mnemonic: string) => {
+      await v.update((d) => adoptRecoveryPhrase(d, mnemonic));
+      setState({ step: "idle", error: null });
+    },
+    [v],
+  );
+
   /** Attach a freshly created World ID session to the name (POST /names/:label/session). */
   const attach = useCallback(
     async (r: HumanCheckResult) => {
@@ -224,6 +245,13 @@ export function useRotation() {
     name,
     currentMeta: canonicalMeta(ring.current.metaAddressURI),
     generation: profile.keyGeneration ?? 0,
+    /** False until a wallet-signature account has moved to a recovery phrase (`adoptPhrase`). */
+    canRotate: hasRecoveryPhrase(v.data),
+    /** Wallet-signature account: rotating = moving to a phrase account (guided path on the Name screen). */
+    walletKeys: Boolean(v.data.walletKeys),
+    /** The account moved from wallet-signature keys to a phrase; old addresses stay spendable. */
+    migrated: Boolean(v.data.walletKeys) && hasRecoveryPhrase(v.data),
+    adoptPhrase,
     rotations: profile.rotations ?? [],
     pending: profile.pendingRotation ?? null,
     recovery: profile.recovery ?? null,

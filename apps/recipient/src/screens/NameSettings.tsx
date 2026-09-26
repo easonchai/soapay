@@ -2,7 +2,9 @@ import { useState } from "react";
 import { KeyRound, ShieldCheck, UserRound } from "lucide-react";
 import { useRotation } from "../hooks/useRotation.js";
 import { useServices } from "../services/ServicesProvider.js";
-import { Addr, Alert, Badge, Button, Card, CardHeader, CopyButton, EmptyState, PageHeader } from "../ui/kit.js";
+import { Link } from "react-router";
+import { generateMnemonic } from "@soapay/sdk";
+import { Addr, Alert, Badge, Button, Card, CardHeader, Checkbox, CopyButton, EmptyState, PageHeader, errorMessage } from "../ui/kit.js";
 import { relativeTime } from "../ui/format.js";
 import { useUnlocked } from "../vault/VaultProvider.js";
 import { HumanCheck, sessionSignal } from "../worldid/index.js";
@@ -15,6 +17,73 @@ const STAGE_TEXT: Record<string, string> = {
   done: "Done",
 };
 
+/**
+ * Wallet-signature accounts rotate by moving to a recovery-phrase account (owner decision 2026-09-26):
+ * 1. create a phrase (new keys), 2. optionally Exit or Send funds from the old stealth addresses (they
+ * stay scanned and spendable here either way), 3. point the name at the new keys with the normal
+ * rotation below (World ID session if linked, otherwise the employer re-approves).
+ */
+export function MoveToPhrase({ canRotate, onAdopt }: { canRotate: boolean; onAdopt: (mnemonic: string) => Promise<void> }) {
+  const [phrase, setPhrase] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="space-y-3" data-testid="move-to-phrase">
+      <Alert variant="info" title="Rotating means moving to a recovery-phrase account">
+        This account's keys come from a wallet signature, which can't produce new keys. You get a recovery phrase for the new keys; your
+        old payments stay in this account and remain spendable. Keep the wallet you signed with: it still controls your name.
+      </Alert>
+      <ol className="space-y-3 text-sm">
+        <li>
+          <strong>1. Create your recovery phrase.</strong>{" "}
+          {canRotate ? (
+            <Badge tone="success">Done</Badge>
+          ) : phrase === null ? (
+            <Button size="sm" variant="outline" onClick={() => setPhrase(generateMnemonic())}>
+              Create recovery phrase
+            </Button>
+          ) : (
+            <span className="mt-2 block space-y-2">
+              <span className="block font-mono text-xs" data-testid="new-phrase">
+                {phrase}
+              </span>
+              <Checkbox checked={saved} onChange={setSaved} label="I wrote down all 12 words, in order" />
+              <Button
+                size="sm"
+                disabled={!saved || busy}
+                onClick={async () => {
+                  setBusy(true);
+                  setError(null);
+                  try {
+                    await onAdopt(phrase);
+                    setPhrase(null);
+                  } catch (e) {
+                    setError(errorMessage(e));
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                Use this phrase for my new keys
+              </Button>
+            </span>
+          )}
+        </li>
+        <li>
+          <strong>2. Move funds from the old addresses (optional).</strong> Cash out privately with <Link to="/exit">Exit</Link>, or use{" "}
+          <Link to="/spend">Send</Link>. You can also do this later: the old addresses stay in your ledger.
+        </li>
+        <li>
+          <strong>3. Point your name at the new keys</strong> with "Rotate to new keys" below. With a World ID session your employer's app accepts it
+          automatically; otherwise your employer re-approves you by hand.
+        </li>
+      </ol>
+      {error && <Alert variant="destructive">{error}</Alert>}
+    </div>
+  );
+}
+
 export function NameSettings() {
   const r = useRotation();
   const svc = useServices();
@@ -25,7 +94,7 @@ export function NameSettings() {
   if (!r.name) {
     return (
       <>
-        <PageHeader title="Name" />
+        <PageHeader eyebrow="Name" title="Name" />
         <Card>
           <EmptyState icon={UserRound} title="No name yet">
             You're sharing your raw meta-address. A name lets you change keys later without re-sending anything to your employer.
@@ -37,7 +106,7 @@ export function NameSettings() {
 
   return (
     <>
-      <PageHeader title={r.name.name} description="Your employer pays this name. It points to your current meta-address." action={<CopyButton value={r.name.name} />} />
+      <PageHeader eyebrow="Name settings" title={r.name.name} description="Your employer pays this name. It points to your current meta-address." action={<CopyButton value={r.name.name} />} />
       <div className="space-y-4">
         <Card>
           <CardHeader title="Current keys" description={`Generation ${r.generation}. Older generations are still scanned and spendable.`} />
@@ -106,7 +175,8 @@ export function NameSettings() {
             {s.step === "idle" && (
               <>
                 {s.error && <Alert variant="destructive">{s.error}</Alert>}
-                <Button onClick={r.start} disabled={!!r.pending}>
+                {r.walletKeys && <MoveToPhrase canRotate={r.canRotate} onAdopt={r.adoptPhrase} />}
+                <Button onClick={r.start} disabled={!!r.pending || !r.canRotate}>
                   <KeyRound className="size-4" aria-hidden /> Rotate to new keys
                 </Button>
               </>

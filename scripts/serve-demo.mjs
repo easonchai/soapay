@@ -26,6 +26,8 @@ const TYPES = {
   ".json": "application/json",
   ".wasm": "application/wasm",
   ".ico": "image/x-icon",
+  ".woff2": "font/woff2",
+  ".woff": "font/woff",
 };
 
 function sendFile(res, path) {

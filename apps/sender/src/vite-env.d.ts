@@ -10,6 +10,9 @@ interface ImportMetaEnv {
   readonly VITE_API_URL?: string;
   readonly VITE_ATTESTER?: string;
   readonly VITE_RECIPIENT_URL?: string;
+  /** CK alias of VITE_STEALTH_DISPERSE; ours wins when both are set. */
+  readonly VITE_STEALTH_DISPERSE_ADDRESS?: string;
+  readonly VITE_OTHER_APP_URL?: string;
 }
 
 interface ImportMeta {

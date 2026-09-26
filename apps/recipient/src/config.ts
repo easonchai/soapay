@@ -16,6 +16,8 @@ export type EnvConfig = {
    * UNISWAP_API_KEY server-side. Off = the SDK's Universal Router fallback. The key is never in the bundle.
    */
   swapViaApi: boolean;
+  /** The company (sender) app, for the top bar's "Pay" link (VITE_OTHER_APP_URL). */
+  otherAppUrl: string;
 };
 
 export const SUPPORTED_CHAIN_IDS = Object.keys(CHAINS).map(Number);
@@ -33,16 +35,33 @@ export function readEnv(env: Record<string, string | boolean | undefined> = impo
     return typeof v === "string" ? v.trim() : "";
   };
   const chainId = Number(str("VITE_CHAIN_ID") || DEFAULT_CHAIN_ID);
+  const dev = env.DEV === true || env.DEV === "true";
   return {
-    apiUrl: str("VITE_API_URL") || "http://localhost:8787",
+    // CK's VITE_RELAY_URL (`…/relay` on the API) is accepted when VITE_API_URL is unset: its origin is the API.
+    apiUrl: str("VITE_API_URL") || apiFromRelayUrl(str("VITE_RELAY_URL")) || "http://localhost:8787",
     chainId: SUPPORTED_CHAIN_IDS.includes(chainId) ? chainId : DEFAULT_CHAIN_ID,
     bundlerUrl: str("VITE_BUNDLER_URL"),
     rpcUrl: str("VITE_RPC_URL"),
-    stealthDisperse: parseAddressList(str("VITE_STEALTH_DISPERSE")),
+    // Ours wins; CK's VITE_STEALTH_DISPERSE_ADDRESS is the fallback name.
+    stealthDisperse: parseAddressList(str("VITE_STEALTH_DISPERSE") || str("VITE_STEALTH_DISPERSE_ADDRESS")),
     mockApi: str("VITE_MOCK_API") === "1" || str("VITE_MOCK_API") === "true",
     l1RpcUrl: str("VITE_L1_RPC_URL"),
     swapViaApi: str("VITE_SWAP_VIA_API") !== "0" && str("VITE_SWAP_VIA_API") !== "false",
+    // Dev: the sender's dev server. Build: scripts/build-demo.sh serves the sender at /sender/.
+    otherAppUrl: str("VITE_OTHER_APP_URL") || (dev ? "http://localhost:5174" : "/sender/"),
   };
+}
+
+/** `https://api.example/relay` → `https://api.example` (a path prefix before `/relay` is kept). */
+export function apiFromRelayUrl(relayUrl: string): string {
+  if (!relayUrl) return "";
+  try {
+    const u = new URL(relayUrl);
+    const path = u.pathname.replace(/\/+$/, "").replace(/\/relay$/, "");
+    return `${u.origin}${path}`;
+  } catch {
+    return "";
+  }
 }
 
 export const ENV: EnvConfig = readEnv();
