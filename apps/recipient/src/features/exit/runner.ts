@@ -6,16 +6,18 @@
 import type { AdvanceOptions, ExitKeys, ExitService } from "./sdk.js";
 import { isTerminal, legChanged, loadLeg, storeLeg, type ExitLeg, type ExitRecord, type StoredExitLeg } from "./types.js";
 
-export type LegAction = "advance" | "hold" | "schedule" | "idle";
+export type LegAction = "advance" | "hold" | "schedule" | "idle" | "queued";
 
 /**
  * - idle: finished (done / refunded / failed; a failed leg only moves on an explicit retry)
+ * - queued: planned, waiting for its timing-queue window (D-28) before the first on-chain step
  * - schedule: just approved with the random delay on, and no withdrawal time picked yet
  * - hold: approved, waiting out the random delay
  * - advance: call the SDK
  */
-export function nextAction(leg: ExitLeg, record: Pick<ExitRecord, "privacy" | "holdUntil">, now: number): LegAction {
+export function nextAction(leg: ExitLeg, record: Pick<ExitRecord, "privacy" | "holdUntil">, now: number, queued = false): LegAction {
   if (isTerminal(leg.status)) return "idle";
+  if (leg.status === "planned" && queued) return "queued";
   if (leg.status === "approved" && record.privacy.randomDelay) {
     const until = record.holdUntil[leg.id];
     if (until === undefined) return "schedule";
@@ -55,13 +57,15 @@ export async function tickExits(p: {
   random?: () => number;
   save: (exitId: string, legId: string, patch: LegPatch) => Promise<void>;
   onError?: (legId: string, message: string | null) => void;
+  /** True while the leg waits in the timing queue (D-28). */
+  isQueued?: (legId: string) => boolean;
 }): Promise<void> {
   for (const record of p.records) {
     const opts: AdvanceOptions = { destination: record.destination, roundWithdrawals: record.privacy.roundWithdrawals };
     for (const stored of record.legs) {
       const leg = loadLeg(stored);
-      const action = nextAction(leg, record, p.now());
-      if (action === "idle" || action === "hold") continue;
+      const action = nextAction(leg, record, p.now(), p.isQueued?.(leg.id) ?? false);
+      if (action === "idle" || action === "hold" || action === "queued") continue;
       if (action === "schedule") {
         await p.save(record.id, leg.id, { holdUntil: p.now() + pickDelay(p.service.delayRangeMs, p.random) });
         continue;
