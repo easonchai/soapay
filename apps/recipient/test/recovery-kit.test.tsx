@@ -90,7 +90,8 @@ describe("Keys step: save your recovery kit", () => {
     const user = userEvent.setup();
     mount();
     await user.click(screen.getByRole("button", { name: "Create a new account" }));
-    expect(screen.getByRole("heading", { name: "Save your recovery kit" })).toBeTruthy();
+    // Steps swap through Presence/Fade, so the new step arrives a beat after the click.
+    expect(await screen.findByRole("heading", { name: "Save your recovery kit" })).toBeTruthy();
     expect(screen.getByText("Losing the seed loses the funds.")).toBeTruthy();
     expect(screen.getByText(/You don't need to remember it/)).toBeTruthy();
     // No quiz, no hidden words list until "Show words".
@@ -148,7 +149,7 @@ describe("Keys step: save your recovery kit", () => {
     await user.click(continueButton());
     expect(await screen.findByRole("heading", { name: "Lock this device" })).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "← Back" }));
-    expect(screen.getByRole("heading", { name: "Recovery kit saved" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Recovery kit saved" })).toBeTruthy();
     expect(screen.queryByRole("list", { name: "Recovery phrase" })).toBeNull();
     expect(screen.queryByRole("button", { name: /Download recovery kit/ })).toBeNull();
     expect(screen.queryByRole("button", { name: "Copy phrase" })).toBeNull();
@@ -162,7 +163,7 @@ describe("Restore step", () => {
     const user = userEvent.setup();
     const vaultRef = mount();
     await user.click(screen.getByRole("button", { name: "Restore from recovery phrase" }));
-    expect(screen.getByRole("button", { name: /Open recovery kit/ })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: /Open recovery kit/ })).toBeTruthy();
     const kit = recoveryKitText({ mnemonic: M, createdAt: new Date() });
     await user.upload(screen.getByTestId("kit-file"), new File([kit], "soapay-recovery-kit-2026-09-26.txt", { type: "text/plain" }));
     expect(await screen.findByRole("heading", { name: "Lock this device" })).toBeTruthy();
@@ -177,7 +178,7 @@ describe("Restore step", () => {
     const user = userEvent.setup();
     mount();
     await user.click(screen.getByRole("button", { name: "Restore from recovery phrase" }));
-    await user.upload(screen.getByTestId("kit-file"), new File(["just some notes"], "notes.txt", { type: "text/plain" }));
+    await user.upload(await screen.findByTestId("kit-file"), new File(["just some notes"], "notes.txt", { type: "text/plain" }));
     expect((await screen.findByTestId("kit-file-error")).textContent).toMatch(/doesn't contain a valid recovery phrase/);
     expect(screen.getByRole("heading", { name: "Restore your account" })).toBeTruthy();
   });
@@ -186,7 +187,7 @@ describe("Restore step", () => {
     const user = userEvent.setup();
     mount();
     await user.click(screen.getByRole("button", { name: "Restore from recovery phrase" }));
-    await user.type(screen.getByLabelText("Recovery phrase"), M);
+    await user.type(await screen.findByLabelText("Recovery phrase"), M);
     await user.click(continueButton());
     expect(await screen.findByRole("heading", { name: "Lock this device" })).toBeTruthy();
   });
@@ -196,15 +197,16 @@ describe("Restore step", () => {
     const vaultRef = mount();
     expect(screen.queryByTestId("use-wallet")).toBeNull();
     await user.click(screen.getByRole("button", { name: "Create a new account" }));
+    expect(await screen.findByRole("heading", { name: "Save your recovery kit" })).toBeTruthy();
     expect(screen.queryByTestId("use-wallet")).toBeNull();
     await user.click(screen.getByRole("button", { name: "← Back" }));
-    await user.click(screen.getByRole("button", { name: "Restore from recovery phrase" }));
-    await user.click(screen.getByRole("button", { name: "Made your account with a wallet signature?" }));
-    expect(screen.getByRole("heading", { name: "Restore from a wallet signature" })).toBeTruthy();
+    await user.click(await screen.findByRole("button", { name: "Restore from recovery phrase" }));
+    await user.click(await screen.findByRole("button", { name: "Made your account with a wallet signature?" }));
+    expect(await screen.findByRole("heading", { name: "Restore from a wallet signature" })).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "← Back" }));
-    expect(screen.getByRole("heading", { name: "Restore your account" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Restore your account" })).toBeTruthy();
     await user.click(screen.getByTestId("use-wallet"));
-    await user.click(screen.getByRole("button", { name: "Sign with the demo EOA" }));
+    await user.click(await screen.findByRole("button", { name: "Sign with the demo EOA" }));
     expect(await screen.findByRole("heading", { name: "Lock this device" })).toBeTruthy();
     const primary = await screen.findByRole("button", { name: "Use Face ID / fingerprint (passkey)" });
     await waitFor(() => expect((primary as HTMLButtonElement).disabled).toBe(false));

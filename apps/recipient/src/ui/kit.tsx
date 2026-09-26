@@ -12,8 +12,7 @@ import {
   type ReactNode,
   type TextareaHTMLAttributes,
 } from "react";
-import { Loader2 } from "lucide-react";
-import { Copy as LedgerCopy, Dots, Pill, type Tone } from "@soapay/ui";
+import { Bloom, Copy as LedgerCopy, Dots, InView, LogoLoader, Pill, Reveal, type Tone } from "@soapay/ui";
 import { shortAddr } from "./format.js";
 
 export function cn(...parts: (string | false | null | undefined)[]): string {
@@ -44,7 +43,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       )}
       {...props}
     >
-      {loading && <Loader2 className="size-4 animate-spin" aria-hidden />}
+      {loading && <LogoLoader size={14} label="Working" style={{ marginRight: 6 }} />}
       {children}
     </button>
   ),
@@ -103,12 +102,13 @@ export function Field({
 }
 
 /** Ledger panel: 1px line, white surface, 2px corners. Padding comes from `className` or CardHeader. */
-export function Card({ className, children, as: As = "section", ...rest }: { className?: string; children: ReactNode; as?: "section" | "div" | "article"; "aria-labelledby"?: string }) {
-  return (
+export function Card({ className, children, as: As = "section", reveal, ...rest }: { className?: string; children: ReactNode; as?: "section" | "div" | "article"; "aria-labelledby"?: string; /** Fade + rise when scrolled into view, after this many seconds. */ reveal?: number | undefined }) {
+  const panel = (
     <As className={cn("panel", className)} {...rest}>
       {children}
     </As>
   );
+  return reveal === undefined ? panel : <InView delay={reveal}>{panel}</InView>;
 }
 
 export function CardHeader({ title, description, action, id }: { title: ReactNode; description?: ReactNode; action?: ReactNode; id?: string }) {
@@ -239,24 +239,49 @@ export function PageHeader({ title, description, action, eyebrow }: { title: Rea
   return (
     <div className="pagehead mb-6">
       <div className="text">
-        {eyebrow && <span className="eyebrow">{eyebrow}</span>}
-        <h1>{title}</h1>
-        {description && <p className="lead">{description}</p>}
+        {eyebrow && (
+          <Reveal delay={0.05} as="span" className="eyebrow">
+            {eyebrow}
+          </Reveal>
+        )}
+        <Reveal delay={0.12} y={10}>
+          <h1>{title}</h1>
+        </Reveal>
+        {description && (
+          <Reveal delay={0.2} as="p" className="lead">
+            {description}
+          </Reveal>
+        )}
       </div>
-      <Dots mode="right" animate className="dots" />
+      <Dots mode="right" animate minWidth={220} className="dots" />
       {action && <div className="actions">{action}</div>}
     </div>
   );
 }
 
 /** CK's `.empty` panel with the dot texture. `icon` is kept for API compatibility and not drawn. */
-export function EmptyState({ title, children, action }: { icon?: unknown; title: string; children?: ReactNode; action?: ReactNode }) {
+export function EmptyState({ title, children, action, eyebrow }: { icon?: unknown; title: string; children?: ReactNode; action?: ReactNode; eyebrow?: ReactNode }) {
   return (
     <div className="empty">
-      <Dots mode="field" className="dots" />
-      <h2>{title}</h2>
-      {children && <div className="lead">{children}</div>}
-      {action}
+      <Bloom />
+      {eyebrow && (
+        <Reveal delay={0.4} as="span" className="eyebrow">
+          {eyebrow}
+        </Reveal>
+      )}
+      <Reveal delay={0.55}>
+        <h2>{title}</h2>
+      </Reveal>
+      {children && (
+        <Reveal delay={0.7} className="lead">
+          {children}
+        </Reveal>
+      )}
+      {action && (
+        <Reveal delay={0.85} className="actions" style={{ marginTop: 8 }}>
+          {action}
+        </Reveal>
+      )}
     </div>
   );
 }

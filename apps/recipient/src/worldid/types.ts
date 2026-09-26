@@ -27,6 +27,8 @@ export type HumanCheckProps = {
   onResult: (r: HumanCheckResult) => void | Promise<void>;
   onCancel?: () => void;
   onError?: (e: Error & { code?: string }) => void;
+  /** Buttons only: the caller renders the explainer itself (onboarding's right-hand object). */
+  compact?: boolean;
 };
 
 /** The session id to keep in the vault (needed to rotate later). */
