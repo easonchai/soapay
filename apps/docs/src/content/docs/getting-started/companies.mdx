@@ -1,0 +1,56 @@
+---
+title: Companies
+description: From wallet login to a signed pay run on Base Sepolia.
+sidebar:
+  order: 1
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+
+This guide takes you from opening the company app to a signed pay run. On the live demo everything runs on Base Sepolia with Soapay's test USDC, so nothing here costs real money.
+
+## What you need
+
+- A wallet on Base Sepolia. A smart wallet (for example Coinbase Smart Wallet) signs a run once and pays no gas. A plain wallet such as MetaMask works with two prompts and needs a little Base Sepolia ETH for gas. A Safe pays through an export for its Transaction Builder.
+- A browser. The roster and run history are encrypted in that browser and never sent to a server.
+- Names to pay. Every payee is a pinned, verified ENS name such as `alice.soapay.eth`. Plain addresses and raw meta-addresses are rejected.
+
+<Aside type="tip" title="No wallet? Try the demo">
+  Open [the demo](/?demo=1) for a look without a wallet. It loads sample data, mock names, a demo wallet and an in-memory chain. Nothing goes on chain and the API is never called. A banner reads "Demo mode · sample data, nothing on-chain." with an **Exit demo** button.
+</Aside>
+
+## Your first pay run
+
+<Steps>
+
+1. **Log in.** Open the [company app](/) and click **Login with wallet**. Pick your wallet under **Choose a wallet**. Your wallet is your login; there is no account to create.
+
+2. **Set up the payroll vault.** Choose how this browser unlocks the vault: **Device key** (fastest, tied to this browser profile) or **Passphrase** (at least 10 characters, survives cleared site data and works on another device). Click **Create vault**. The vault holds your roster and history, encrypted here; nothing is sent to a server.
+
+3. **Receive the welcome drop.** On Base Sepolia the first login sends 1,000,000 test USDC to your wallet, once per wallet. A banner reads "Welcome: 1,000,000 test USDC sent to your wallet." with a Basescan link. A plain wallet still needs a little Base Sepolia ETH for gas; smart wallets pay no gas here.
+
+4. **Add recipients.** On **Recipients**, either add a name under **Add by name** (name, salary in USDC, optional label) and click **Resolve and pin**, or use **Invite employee**: enter a name, a salary per run and an optional organisation, click **Sign and create link**, then **Copy link** and send it only to that person. The row shows **Invited (pending)** until they join, then flips to a recipient on its own.
+
+5. **Start the run.** Click **Start pay run**. The roster becomes the run table. You can add more people with **Paste rows** (one per line: name, amount, optional label) and **Resolve and add**, or **Import CSV**. Click **Resolve names** to re-check every name against its pinned record. **Denominated payouts** is on by default: every salary is split into same-size chunks so on-chain amounts identify nobody. The chunk size is a company-wide setting (5 USDC on the testnet by default, 500 USDC on mainnet).
+
+   ![Pay run screen](../../../assets/screens/s07-sender-payrun.png)
+
+6. **Review.** Click **Review**. The headline reads "X USDC to N people, on M fresh addresses." Check the warnings: a small team (fewer than 10 recipients), remainder lines that stand out, or amounts that occur only once. The right-hand table shows what each person receives and their first fresh address.
+
+   ![Review screen](../../../assets/screens/s09-sender-review.png)
+
+7. **Sign.** With a smart wallet, click **Sign and send**: one signature per batch. With a plain wallet, click **Approve and send**: approve the exact total, then pay. Paying from a Safe? Click **Export for Safe** and import each part into Safe's Transaction Builder.
+
+8. **Check History.** Every run this wallet has signed is on **History**, with its transaction and the names beside the fresh addresses. The run page also shows **What coworkers see**: the same lines as they appear on chain, with no names.
+
+</Steps>
+
+## What happened on chain
+
+Your wallet sent one transaction (or a few, for large runs). It moved USDC from your wallet to a fresh stealth address for every line and, in the same transaction, published one announcement per line on the public ERC-5564 Announcer. The lines are sorted by address. A coworker who reads that transaction sees every address and amount and your company as the payer. They cannot see which address belongs to which colleague, and if the run was denominated, they cannot see how many chunks each person received. The full walk-through is in [What the chain sees](/docs/concepts/what-the-chain-sees/).
+
+## Names and pins
+
+The app resolves a name once and pins its meta-address. Every later run re-resolves the name. If the record changed, the line is accepted automatically only when the employee re-verified with World ID; otherwise it shows **Blocked · record changed** and waits for you to confirm with the person and click **Re-approve**. See [Names](/docs/concepts/names/) and [Key rotation and recovery](/docs/concepts/key-rotation-and-recovery/).
+
+Next: the [Company app guide](/docs/company-app/overview/), or the [Concepts](/docs/concepts/stealth-addresses/) behind it.

@@ -1,0 +1,67 @@
+---
+title: Key rotation and recovery
+description: Moving a name to new keys, what World ID proves, and what the employer sees.
+sidebar:
+  order: 7
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+A name's meta-address decides where all future salary goes, and the key that controls it can leak. Rotation replaces that key. The hard part is not writing the new record; it is convincing the employer's app that the change is yours and not a thief's.
+
+## What rotation does
+
+From **Name**, **Rotate to new keys** points your name at fresh keys derived from the same recovery phrase. Keys come in generations: older generations are still scanned and spendable, so nothing already received is lost. The rotation writes the new meta-address in two places, your ENS `stealth` record and the ERC-6538 registry, so the company app's cross-check keeps passing.
+
+There are two paths, and the app says which one you are on before you start:
+
+- **Attested.** A World ID session is linked to your name. You confirm in the World App, the Soapay API signs an attestation, and your employer's app accepts the change automatically.
+- **Manual.** No session is linked. You can still rotate, but the employer must approve the change by hand before paying you again.
+
+## The attestation
+
+World ID is used at one trust moment only: recovery. There is no World ID gate on onboarding and no Orb requirement.
+
+When you set up your name, you may create a World ID **session** with the **Proof of Human** credential. To rotate later, you prove that same session. The API checks that the session matches the one saved for your name, that the proof has not been used before, and that your registrant key signed the request. It then signs an EIP-712 `MetaRotation` attestation covering exactly the change from the old meta-address to the new one, relays your new registry entry, and tops up the gas for your ENS record update. Your app writes the new `stealth` record.
+
+<Aside type="note" title="Why Proof of Human">
+  Recovery moves all future salary, the highest-stakes action in the product. The question is "is this the same person who set up this name?", and a session answers it. Proof of Human is World's strongest same-human proof and reveals nothing about who you are. Passport-level identity would collect data the product does not need.
+</Aside>
+
+## What World ID proves, and what it does not
+
+| Proves | Does not prove or protect |
+| --- | --- |
+| The same human who created the session is asking for this exact key change | Who that human is. No identity data is stored or seen |
+| The proof is fresh, single-use and bound to one change | Funds already received. A thief with the phrase can still spend what is in the stealth addresses |
+
+World ID protects **future** pay. A thief with your phrase can rewrite the record, but the employer's app will not follow. After a leak, rotate and move your funds promptly.
+
+Two limits exist to stop a thief from adding their own World ID:
+
+- A session attached **after** the claim needs a 72-hour wait before it can back a key change. Link World ID during sign-up to avoid it.
+- Each name gets its own session. A session already used for another name is refused.
+
+## What the employer sees
+
+The company app re-resolves every name before each run. When a record changed:
+
+- With a valid attestation from the attester the app pinned, the row shows **Verified** with a **Re-verified by World ID** pill, and the run goes ahead.
+- Without one, the row shows **Blocked · record changed**. The recipient's page reads "Blocked: record changed since pinned." and "Possible salary redirect: confirm with the person on another channel first.", with a **Re-approve new record** button. Nothing is paid to the new keys until the employer clicks it.
+
+The attester's address is pinned in the company app's settings, so a forged attestation from anywhere else is refused. The CLI applies the same rule: a changed name without an attestation stops the run with exit code 3.
+
+Every refusal ends the same way: no attestation, so the line is blocked and a human decides. That covers a name with no session, a cancelled proof, a different person, a replayed proof, or World ID being unreachable. Nothing in Soapay depends on World ID being available.
+
+## The attack, demonstrated
+
+A scripted attacker with a stolen recovery phrase rewrote a demo name's ENS record and registry entry directly, then asked the API for an attestation without a World ID proof. The API refused, the company app's pin check reported the line as blocked, and the CLI stopped with exit code 3. Restoring the record made the name verified again. The run is recorded in the repository's testnet notes.
+
+## Recovery
+
+- **Lost device.** Install the app on a new device and restore from your recovery kit: open the kit file or paste the phrase. Every payment ever received is found again from the chain, and the keys are the same, so no rotation is needed.
+- **Passkey not working.** The passkey only unlocks one device. Delete the vault on that device and restore from the phrase.
+- **Leaked phrase.** Rotate to new keys, then move funds off the old addresses. With World ID linked, your employer's app follows on its own; without it, tell your employer to re-approve.
+- **Soapay gone.** The recovery phrase plus the public SDK recover addresses, ledger and pool secrets. Nothing depends on Soapay's servers.
+
+Next: [Keys and recovery](/docs/employee-app/keys-and-recovery/) in the employee app guide, or [Rotation](/docs/employee-app/rotation/) for the screens.

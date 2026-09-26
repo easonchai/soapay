@@ -1,6 +1,66 @@
 ---
 title: Introduction
-description: Why Soapay exists and who it is for.
+description: Why Soapay exists, who it is for, and who can see what you earn.
 ---
 
-Filled in by the content tasks.
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+![Every wallet address is a public bank statement](../../assets/screens/landing-hero.png)
+
+## The problem
+
+Every wallet address is a public bank statement. On a public chain, one payroll batch on Base shows every recipient and every amount side by side, readable forever by anyone with a browser. Your colleagues can read it too: at Gitcoin DAO, a contributor started from their own pay address and put names to fifteen salaries.
+
+The fixes built for companies (Base Ledgers, Tempo Zones, Toku on Aleo) are private ledgers for enterprises. You apply for access, and every payment goes through the operator, who sees it and decides what you can withdraw. Everyone else still pays in public.
+
+## What Soapay does
+
+Soapay is privacy infrastructure for payments on chain. Every payment lands on a fresh address that only you can open, and you can spend it without it ever linking back to you. A recipient shares one ENS name. Each payment to it goes to a new ERC-5564 stealth address, so a coworker reading the same payroll batch sees a list of never-before-seen addresses and cannot tell which line is theirs.
+
+Nothing sits between payer and recipient. The sender's browser derives a fresh stealth address for every line, pays it directly on Base, and throws the ephemeral key away. There is no account at Soapay and no server of ours in the loop. Nothing of ours holds money, and the one contract we wrote keeps no state and has no owner.
+
+## Who it is for
+
+- **Companies paying a team.** Payroll, contributors, grants. Paste names and amounts, sign once, and the whole run goes out in one transaction. Works with a plain wallet, a smart wallet or a Safe.
+- **Anyone paid on chain.** Save a recovery kit, claim a name such as `alice.soapay.eth`, share that one string, and see every payment in your ledger. You need no wallet and no gas to get started.
+- **Developers and agents.** The same rails run from the SDK, the CLI and an MCP server, so a script or an AI agent can pay by name or be paid by name.
+
+## Who sees what you earn
+
+| Party | Sees | Cannot see |
+| --- | --- | --- |
+| Coworker in the same batch | The whole pay run on chain: every stealth address and amount, in address order, and your company as the payer | Which line is whose, any link between one person's payments across months, anyone's main wallet |
+| Employer | Everything, by design: name, stealth address, amount | Your keys, your other income |
+| Soapay API | Registrations, names, World ID proofs, public announcements | Your viewing key, your spending keys, your funds |
+| You | Only your own lines, found with your viewing key | Other people's lines |
+
+Amounts stay visible. Denominated payouts split every salary into identical chunks so the amounts identify nobody; see [Denominated payouts](/docs/concepts/denominated-payouts/). The full model is in [Threat model](/docs/concepts/threat-model/).
+
+## Built for payroll, ready for any payout
+
+Payroll comes first because it is where public payments hurt most: one payer, many recipients who know each other, every month. Nothing in the rail is specific to salaries. Any payment from one place to many names works the same way: resolve the names, derive a fresh address per line, pay and announce in one transaction.
+
+- Dividends and revenue share
+- Token and equity allocations: vesting unlocks, stock and option settlements, investor distributions
+- Vendor and supplier payments
+- Grants and bounties
+- Prizes and airdrops
+- Tips, donations and creator payouts
+- Agents paying agents by name
+
+The SDK plans any of these with presets for payroll, dividend (pro rata by largest remainder, so the allocations sum exactly to the total), grant (checked against a budget) and vesting. The CLI runs one from a CSV, dry run by default. See [Examples](/docs/developers/examples/).
+
+## Not another stealth wallet
+
+Fluidkey and Umbra use the same ERC-5564 and ERC-6538 standards, and both hide your wallet from strangers. They are wallets for an individual receiving payments: a server derives your addresses at name resolution and holds your viewing key, so it sees every payment you receive. And it never touches the batch, which is where a coworker reads your salary.
+
+Soapay is the rail for the payer side of the same standards. The sender's browser derives every address and throws the ephemeral key away. Only you hold your viewing key. One transaction pays and announces every recipient. Amounts are chunked and sorted so per-transaction totals never leak. A consolidation guard and a timing queue keep spends from linking your addresses, and a compliant exit through Privacy Pools lets you cash out. Everything rebuilds from your seed with the public SDK. Row by row: [Compared](/docs/reference/compared/).
+
+## Where next
+
+<CardGrid>
+  <LinkCard title="Companies" href="/docs/getting-started/companies/" description="From wallet login to a signed pay run." />
+  <LinkCard title="Employees" href="/docs/getting-started/employees/" description="From an invite link to your first payment." />
+  <LinkCard title="Stealth addresses" href="/docs/concepts/stealth-addresses/" description="ERC-5564 and ERC-6538 in plain words." />
+  <LinkCard title="What the chain sees" href="/docs/concepts/what-the-chain-sees/" description="One pay run, as seen on the explorer." />
+</CardGrid>

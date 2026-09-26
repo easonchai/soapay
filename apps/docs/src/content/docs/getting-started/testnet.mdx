@@ -1,0 +1,72 @@
+---
+title: Testnet versus mainnet
+description: What differs on the Base Sepolia demo, and what stays the same on Base mainnet.
+sidebar:
+  order: 3
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+The live demo runs on Base Sepolia so anyone can try the whole platform without hunting for test tokens. It differs from Base mainnet in four places. The mainnet code paths are unchanged.
+
+## The four differences
+
+| | Base Sepolia (the demo) | Base mainnet |
+| --- | --- | --- |
+| Pay token (shown as "USDC" in the apps) | Soapay's mock USDC, not Circle's. Same 6 decimals and permit support, minted only by the API's faucet | Circle USDC, fixed |
+| Gas for stealth spends | Sponsored: a sponsorship paymaster pays it, reached through the Soapay API | The Circle Paymaster takes gas in USDC from the same address |
+| Funding | A welcome drop of 1,000,000 test USDC, once per wallet, when a wallet first opens the company app. Smart-wallet employers get their batch gas sponsored too | The company's own USDC and ETH |
+| Compliant exit (Privacy Pools via CCTP) | Hidden: CCTP only moves Circle USDC, so the mock cannot bridge | Available once a mainnet route is configured |
+
+<Aside type="note" title="Test tokens have no value">
+  The apps say "USDC" everywhere, but on Base Sepolia the token is Soapay's test token. It is worth nothing and only exists so the demo works end to end.
+</Aside>
+
+## Mock USDC
+
+The Base Sepolia pay token is a plain ERC-20 named "USD Coin (Soapay test)" at [`0x028D969c20b740582428f5043954c380686214Bb`](https://sepolia.basescan.org/address/0x028D969c20b740582428f5043954c380686214Bb). It holds no funds of its own: its balances are its own token's ledger. It never ships to mainnet. Circle's Base Sepolia USDC still exists at `0x036CbD53842c5426634e7929541eC2318f3dCF7e`, but the demo only uses it for exit and Circle-paymaster testing.
+
+## The welcome drop
+
+When a wallet logs in to the company app on Base Sepolia, the app asks the API for a drop once per wallet. The API mints 1,000,000 test USDC to that wallet and the app shows "Welcome: 1,000,000 test USDC sent to your wallet." with a Basescan link. A second login answers that the drop was already claimed. Nothing of this exists on mainnet.
+
+If a run would send more than the drop, the Review screen asks you to confirm with a **Send it anyway** checkbox.
+
+## Gas
+
+- **Stealth spends** from the employee app are sponsored. The address pays nothing, holds no ETH, and still gets the same EIP-7702 upgrade and single user operation as on mainnet. The gas proof panel after a send reads "0 ETH here. Gas was sponsored (testnet); on mainnet the Circle paymaster takes it in USDC."
+- **Smart-wallet employers** paying by EIP-5792 batch get their gas sponsored too, so a smart wallet needs no ETH at all.
+- **Plain-wallet employers** (the StealthDisperse path) still pay their own gas for the approve and pay transactions, so a regular wallet needs a little Base Sepolia ETH from any public faucet.
+
+## Why the exit is hidden
+
+The compliant exit bridges each stealth address to Ethereum with Circle's CCTP, deposits into a Privacy Pool, and withdraws to a fresh destination. CCTP only bridges Circle USDC, and the demo pays in the mock token, so the employee app hides the Exit tab, its route and the guard's exit offer on Base Sepolia. The code and its tests stay, and the flow ran end to end once with Circle USDC on 2026-09-26. Details: [Compliant exit](/docs/concepts/compliant-exit/).
+
+## Testnet-sized defaults
+
+- The company-wide chunk size defaults to 5 USDC on a testnet and 500 USDC on mainnet. A saved value is never overridden.
+- Example salaries in placeholders and the CSV template are small (12 and 8.5) instead of mainnet-sized.
+- Names live on Ethereum Sepolia (ENSv2) while payments and spending run on Base Sepolia.
+
+## Chains and addresses
+
+| Chain | Id | Used for |
+| --- | --- | --- |
+| Base Sepolia | 84532 | Payments and spending on the demo |
+| Base | 8453 | Mainnet payments and spending |
+| Ethereum Sepolia | 11155111 | ENSv2 names and the exit destination |
+
+| Contract | Base Sepolia | Base mainnet |
+| --- | --- | --- |
+| StealthDisperse (ours) | [`0x6B7a1cC570Af2DDd427DA694351438F0FE8039CA`](https://sepolia.basescan.org/address/0x6B7a1cC570Af2DDd427DA694351438F0FE8039CA) | Not deployed |
+| Pay token | Mock USDC, above | Circle USDC `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
+| ERC-5564 Announcer (canonical) | `0x55649E01B5Df198D18D95b5cc5051630cfD45564` | Same |
+| ERC-6538 Registry (canonical) | `0x6538E6bf4B0eBd30A8Ea093027Ac2422ce5d6538` | Same |
+
+The complete list, with the ENSv2 and World ID addresses, is in [Addresses](/docs/reference/addresses/).
+
+## Live URLs
+
+The demo is one origin: the landing page and company app at the root, the employee app under `/app/`, this documentation under `/docs/`, and the API proxied under `/api`. Open the [company app](/) or the [employee app](/app/).
+
+Next: [Addresses](/docs/reference/addresses/) for every contract, or [Environment](/docs/reference/environment/) to run it yourself.

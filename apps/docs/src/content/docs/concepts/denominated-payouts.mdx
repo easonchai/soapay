@@ -1,0 +1,55 @@
+---
+title: Denominated payouts
+description: Splitting every salary into identical chunks so on-chain amounts identify nobody.
+sidebar:
+  order: 5
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+Stealth addresses hide who received a line, not the number on it. In a payroll, the number alone can identify a person: a coworker who knows a colleague's salary finds their line at once. Denominated payouts are the v1 answer.
+
+## Chunks
+
+With denominations on, the company app splits each salary into fixed chunks and derives a separate stealth address for every chunk. A batch of six salaries then reads as, say, 56 identical transfers of 500 USDC to 56 unrelated addresses. A colleague learns the total payroll and the chunk size, not who got how many chunks.
+
+- **One company-wide chunk size.** Set it once in Settings. It defaults to 500 USDC on Base mainnet and 5 USDC on a testnet, and a saved value is never overridden.
+- **On by default.** The pay run's **Denominated payouts** toggle starts on: "Same-size chunks for every salary, so on-chain amounts identify nobody. Costs more gas."
+- **Off is never remembered.** You can turn it off for one run, and the app warns: "Off for this run: each line is a whole salary, readable by coworkers." The next run starts on again.
+
+## The remainder
+
+A salary rarely divides evenly. The remainder is paid as one smaller final line, the exact amount, in the same run. The Review table shows it as, for example, "3 × 500 + 200 rem." and notes "rem. = remainder: one smaller final line, the only one that stands out."
+
+The remainder is never carried over to the next run. Rounding it up or down would over- or under-pay wages, so exact payment wins. The cost is one distinctive line per person. The Review screen warns when remainder lines stand out and when any line amount occurs only once and could single someone out.
+
+## What it costs
+
+Each chunk is one more transfer and one more announcement. Gas grows with the number of lines, and a transaction holds at most 350 of them, so a large denominated run is cut into several transactions from one globally sorted list. See [What the chain sees](/docs/concepts/what-the-chain-sees/).
+
+## Spending without undoing it
+
+Denominations only help if the chunks stay apart after payday. Two things in the employee app keep them apart:
+
+- **The consolidation guard.** Every stealth address starts in its own cluster. Spending from several addresses in one action, or to one destination, merges their clusters, and the app warns before it does. Sending to a destination you have labelled as identifiable (your main wallet, an exchange deposit, or any address known to coworkers) is blocked unless you override. Coworker-known wallets count as identifiable by default.
+- **The timing queue.** Sends from several addresses are queued, one address per random window of 2 to 12 hours, in random order, so your addresses are not linked by timing. **Send now** skips the wait but links them.
+
+When the guard blocks a send, the mainnet app offers the compliant exit instead. See [Compliant exit](/docs/concepts/compliant-exit/) and [Send](/docs/employee-app/send/).
+
+<Aside type="caution" title="Consolidating reveals the salary">
+  If you gather all your chunks into one address or one destination, the total on chain is your salary again, and a coworker who spots the link can name you. This is the main remaining leak, and the guard exists to stop you doing it by accident.
+</Aside>
+
+## Small teams
+
+Below about 10 recipients, amounts or elimination alone can identify people even with identical chunks. The pay run and Review screens show the warning: "Only N recipients in this run. With fewer than 10, coworkers can often tell lines apart by amount or by elimination, even with denominated payouts." Larger runs, or combining several payouts into one run, are the answer.
+
+## What denominations do not do
+
+- They do not hide the payroll total or the chunk size.
+- They do not hide the number of lines.
+- They do not protect a remainder line, which is the one distinctive amount per person.
+
+Full amount privacy, where per-person amounts never appear on chain, needs a shielded rail. Privacy Pools v2 is the planned candidate after the hackathon: the employer would deposit the total once and pay each employee inside the pool. See [Roadmap](/docs/reference/roadmap/).
+
+Next: [Compliant exit](/docs/concepts/compliant-exit/).

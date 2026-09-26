@@ -1,0 +1,57 @@
+---
+title: Compliant exit
+description: Cashing out to a wallet people know is yours, through Privacy Pools, without revealing which lines were yours.
+sidebar:
+  order: 6
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+A coworker knows your main wallet. The moment a stealth address sends to it, the two are linked on chain and that payroll line has your name on it. Without a screened exit, an employee cannot cash out without revealing which lines were theirs. So the exit is part of v1, and it uses an existing screened pool rather than anything Soapay wrote.
+
+## The route
+
+Each stealth address exits on its own, in one leg. A leg never combines addresses.
+
+1. **Bridge.** The stealth address burns its USDC on Base with Circle's CCTP V2, using the Forwarding Service so the mint on the other side needs no ETH from you.
+2. **Mint.** The USDC is minted to the same stealth address on Ethereum (the burn message names the recipient anyway, so a fresh address would add nothing).
+3. **Deposit.** The address deposits into the 0xbow USDC Privacy Pool. Pool secrets are derived from your recovery phrase, so a lost device recovers them.
+4. **Screening.** The pool's association set provider reviews the deposit. On the testnet this took about 10 to 12 minutes. A declined deposit goes back to the same stealth address through the pool's ragequit.
+5. **Withdraw.** Once approved, a zero-knowledge proof withdraws to your destination without saying which deposit it came from. A relayer can submit the withdrawal, or your destination wallet can submit it directly and pay a little Sepolia ETH.
+
+Every step is saved before it leaves, so a leg resumes after a reload, and a step that already landed is never sent twice.
+
+## What is live and what is hidden
+
+The whole route ran end to end on 2026-09-26 with Circle USDC, from Base Sepolia to Ethereum Sepolia: [pay](https://sepolia.basescan.org/tx/0xbd9d0001b4fe5fbee969003921b43a82608e7e3d0748a3fcd347f33244a3799b), [burn](https://sepolia.basescan.org/tx/0x78fa2c713458f30879096a4d79a024f4fc0eab55aceffc8789111beaf19b6c89), [mint](https://sepolia.etherscan.io/tx/0x5feec0c529b0b424b98c3b4c28f00191d20e7ca25b52b5d8d41627e7779436ab), [deposit](https://sepolia.etherscan.io/tx/0xa7c6ff5f59c0c231b53df82859fca712798d398e9a907aefba778a5495d013e0), [direct withdrawal](https://sepolia.etherscan.io/tx/0xed9235c87f7643bde048cd9e29c8abebe989a64016a628c85faa7ed5724fc672). It paid 18 USDC to one stealth address, bridged 16.12, deposited 10.05 (9.95 after the pool fee), was approved, and 9.95 USDC arrived at a fresh wallet.
+
+On the public demo the exit is **hidden**: the employee app shows no Exit tab, route or guard offer on Base Sepolia. The demo pays in Soapay's mock USDC, and CCTP only bridges Circle USDC. The code and its tests stay, and the mainnet path is unchanged. The only route configured today is Base Sepolia to Ethereum Sepolia; the production pool chain is deliberately still open. See [Testnet versus mainnet](/docs/getting-started/testnet/).
+
+## Fees and minimums
+
+Fees are roughly fixed per leg, so small exits lose most of their value. The Exit screen shows bridge fees, deposit gas on both chains, the pool entry fee, the relayer, the total, and "You receive ≈ X of Y" before you start, and warns when fees take more than 15%.
+
+| Item | On the testnet route |
+| --- | --- |
+| Pool minimum deposit | 10 USDC |
+| Pool entry fee | 1% |
+| CCTP and forwarding | About 2.2 USDC per leg |
+| Relayer | 10 basis points plus a fixed fee of about 21.5 USDC for its gas; the pool refuses a relayer fee above 30% of the withdrawal |
+| Smallest leg, withdrawing directly | About 18.6 USDC on one stealth address |
+| Smallest leg, through the relayer | About 81.3 USDC |
+
+A direct withdrawal means your destination wallet sends the withdrawal itself and pays about 0.001 Sepolia ETH of gas. Fund that ETH from a source not linked to you, such as a public faucet or an exchange. The stealth address itself never holds ETH.
+
+<Aside type="tip" title="Fund a leg on its own">
+  A leg needs its minimum on one stealth address. A chunk above the minimum, or a run with denominations off for that person, gives you an address that can exit.
+</Aside>
+
+## Honest limits
+
+- **What it hides:** which deposit a withdrawal came from, and so the link between a payroll line and your cash-out wallet. The relayer and the pool operator see the withdrawal but not the deposit.
+- **What it does not hide:** amounts and timing. A withdrawal of deposit minus fees, right after approval, points back to its deposit. The app defaults to round partial withdrawals (leaving the change in the pool) and a random delay of 2 to 24 hours after approval. Exit legs are also queued, one per random window, so payday does not produce a burst of deposits.
+- **The anonymity set:** the testnet pool is small, a few hundred deposits, so treat the demo as a demonstration of the mechanics, not strong privacy. Ethereum mainnet's pool is the only meaningfully large one.
+- **Out of scope:** Circle (bridge, forwarder, paymaster), the bundler and RPC providers see both chains, per the [threat model](/docs/concepts/threat-model/).
+- **It is not mixing.** The only pooling the product performs is through Privacy Pools' association-set-gated withdrawal. No unscreened pool is integrated.
+
+Next: [Key rotation and recovery](/docs/concepts/key-rotation-and-recovery/).
