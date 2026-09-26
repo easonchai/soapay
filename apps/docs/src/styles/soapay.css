@@ -148,13 +148,15 @@ header.header {
   justify-content: center;
 }
 
-/* Hero effects (src/components/Hero.astro): the landing page's two diamond dot fields flank the copy
-   (packages/ui styles.css .land-hero .dots), a mono eyebrow carries the scrambling fresh address, and
-   the copy fades up in a stagger. Dots hide on narrow screens, like the landing. */
+/* Hero effects (src/components/Hero.astro): two circular dot rings flank the copy (the landing uses
+   diamonds, packages/ui styles.css .land-hero .dots), a mono eyebrow carries the scrambling fresh
+   address, and the copy fades up in a stagger. The rings sit fully inside the hero and take their
+   size from the free gutter beside the copy, so they are never clipped; they hide on narrow screens. */
 .hero[class] {
   position: relative;
-  overflow: hidden;
   min-height: 24rem;
+  /* the copy is 46rem wide; each ring gets the gutter beside it plus a small overlap */
+  --ring: clamp(220px, calc((100% - 46rem) / 2 + 70px), 340px);
 }
 .hero .sl-flex.stack {
   position: relative;
@@ -162,16 +164,16 @@ header.header {
 .hero .sl-dots {
   position: absolute;
   top: 50%;
-  width: 360px;
-  height: 360px;
+  width: var(--ring);
+  height: var(--ring);
   transform: translateY(-50%);
   pointer-events: none;
 }
 .hero .sl-dots.l {
-  left: -100px;
+  left: 0;
 }
 .hero .sl-dots.r {
-  right: -100px;
+  right: 0;
 }
 @media (max-width: 72rem) {
   .hero .sl-dots {

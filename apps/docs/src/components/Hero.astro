@@ -96,7 +96,8 @@ const { title = data.title, tagline, actions = [] } = data.hero || {};
     return s - Math.floor(s);
   };
 
-  /** Port of packages/ui Dots ("diamond" mode): breathing ring, per-dot pulse, pointer push. */
+  /** Port of packages/ui Dots, as a circular ring (the landing uses the diamond): breathing ring,
+   *  per-dot pulse, pointer push. */
   function mountDots(c: HTMLCanvasElement) {
     const live = !off;
     let raf = 0;
@@ -136,7 +137,7 @@ const { title = data.title, tagline, actions = [] } = data.hero || {};
       const R = Math.min(W, H) * 0.46 * breath;
       for (let i = 0; i < W; i += cell) {
         for (let j = 0; j < H; j += cell) {
-          const d = Math.abs(Math.abs(i - cx) + Math.abs(j - cy) - R);
+          const d = Math.abs(Math.hypot(i - cx, j - cy) - R);
           const a = Math.max(0, 1 - d / (R * 0.4));
           const h = hash(i, j);
           if (h > a * 0.9) continue;
