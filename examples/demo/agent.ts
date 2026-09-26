@@ -284,16 +284,20 @@ async function join(client: Client, s: Settings, invite: string): Promise<void> 
     `Join ${hint.org ? `${hint.org} payroll` : "the employer's payroll"} with the invite${hint.label ? ` for ${hint.label}.${PARENT_NAME}` : ""}`,
   );
   line(k.dim("registers the agent's own keys (ERC-6538, gas relayed), then claims the name on ENSv2 Sepolia"));
-  const id = await call(
-    client,
-    "create_agent_identity",
-    {
-      invite,
-      description: process.env.AGENT_DESCRIPTION ?? "Bills clients and gets paid privately in USDC.",
-      capabilities: (process.env.AGENT_CAPABILITIES ?? "billing,invoice,pay").split(",").map((x) => x.trim()).filter(Boolean),
-    },
-    "registering and claiming the name",
-  );
+  const input = {
+    invite,
+    description: process.env.AGENT_DESCRIPTION ?? "Bills clients and gets paid privately in USDC.",
+    capabilities: (process.env.AGENT_CAPABILITIES ?? "billing,invoice,pay").split(",").map((x) => x.trim()).filter(Boolean),
+  };
+  let id: any;
+  try {
+    id = await call(client, "create_agent_identity", input, "registering and claiming the name");
+  } catch (e) {
+    // A transient Sepolia failure stores nothing, and the tool is idempotent: retry once.
+    if (!(e instanceof ToolError) || e.code !== "names_issue_failed") throw e;
+    line(k.yellow("Sepolia hiccup on the name claim; retrying once"));
+    id = await call(client, "create_agent_identity", input, "retrying the name claim");
+  }
   ok(`${k.green(id.name)} ${id.created ? "claimed now" : k.dim("(already this agent's name)")}${id.invite?.org ? ` · joined ${k.bold(id.invite.org)}` : ""}`);
   line(`meta-address   ${k.dim(id.metaAddress)}`);
   if (id.registration?.txHash) line(`registration   ${BASESCAN}/tx/${id.registration.txHash}`);
@@ -359,7 +363,7 @@ async function spend(client: Client, s: Settings, amount: string, toArg: string)
   }
   const runSum = inRun.reduce((sum: number, p: any) => sum + Number(p.balanceUsdc), 0);
   out("");
-  out(`   ${k.bold(`${total ?? "?"} lines in this pay run; ${inRun.length} ${inRun.length === 1 ? "is" : "are"} mine`)} ${k.green(`(${+runSum.toFixed(6)} USDC)`)}`);
+  out(`   ${k.bold(`${total ?? "?"} line${total === 1 ? "" : "s"} in this pay run; ${inRun.length} ${inRun.length === 1 ? "is" : "are"} mine`)} ${k.green(`(${+runSum.toFixed(6)} USDC)`)}`);
   line(k.dim("the rest are strangers' addresses: the agent can't tell whose they are"));
   for (const p of inRun) line(`${k.green(`+${p.balanceUsdc} USDC`)}  ${p.stealthAddress}  ${k.dim(p.payerKnown ? "known payer" : "unknown payer")}`);
   line(k.dim(`pay run  ${BASESCAN}/tx/${latest.txHash}`));
