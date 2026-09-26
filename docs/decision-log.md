@@ -38,6 +38,7 @@ Every product or architecture decision gets an entry here, with the PRD section 
 | D-29 | 09-26 | Next after the merge: a platform-agnostic SDK refactor | SDK goals | addition | owner | Reuse for dividends and grants | d9a8fe8 | queued |
 | D-31 | 09-26 | Hackathon amount privacy = **denominations ON by default with one company-wide chunk size** + the timing queue (D-28) + exit per chunk. Shielded rail (PP v2) is post-hackathon; no early-access request | Amount privacy ("Denominated payouts: Mostly, chunk count hidden", v1); Non-goals | aligned | owner | This is the PRD's own v1 promise; the PP v2 SDK needs early access and time. The PP v1 pool as a rail was checked and rejected: announcements expose the address set | (this commit) | queued after the CK merge |
 | D-30 | 09-26 | Public demo on Railway (Aqua0 workspace), default URLs | Submission | n/a | owner | The prize needs a live demo link | 4a0d08b | active |
+| D-35 | 09-26 | Recipient unlock: passkey (WebAuthn PRF → HKDF → AES-GCM over the same vault data) by default, passphrase fallback (no WebAuthn/PRF, or the user's choice; switchable in Settings); the phrase is still shown once; wallet signature moved under "Advanced". CK's step flow unchanged | Flow 1 step 1; Key handling / Recovery | addition | owner | One secret to keep instead of two; PRD recovery unchanged (seed alone recovers; the passkey only locks this device) | (this commit) | active |
 
 ## Mistakes caught and corrected (for tracing)
 
