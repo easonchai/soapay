@@ -10,6 +10,7 @@ import {
   type RotationStage,
 } from "../features/rotation/flow.js";
 import { canonicalMeta } from "../features/rotation/claim.js";
+import { rotationRefusal, type RotationRefusal } from "../features/rotation/refusal.js";
 import { useServices } from "../services/ServicesProvider.js";
 import { errorMessage } from "../ui/kit.js";
 import { useUnlocked } from "../vault/VaultProvider.js";
@@ -29,6 +30,11 @@ export type RotationState =
   /** Attested path: waiting for `<HumanCheck mode="rotate">`. */
   | { step: "human"; draft: RotationDraft }
   | { step: "working"; stage: RotationStage | "register"; path: RotationPath }
+  /**
+   * The World ID step refused the change (the API, e.g. `session_mismatch`, or the World ID app).
+   * Nothing was saved: no pending rotation, no new key generation; the name keeps its current keys.
+   */
+  | { step: "refused"; refusal: RotationRefusal; draft: RotationDraft }
   | { step: "done"; path: RotationPath };
 
 /**
@@ -218,11 +224,25 @@ export function useRotation() {
         await savePending(pending);
         await complete(pending);
       } catch (e) {
+        // A World ID refusal comes from the API before anything is persisted (savePending runs only
+        // after the API attested), so the vault is exactly as it was.
+        const refusal = name ? rotationRefusal(e, name.name, "api") : null;
+        if (refusal) return setState({ step: "refused", refusal, draft });
         fail(e);
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [state, svc.api, svc.client, chainId, ring, complete],
+  );
+
+  /** Attested path: the World ID app answered with an error instead of a proof (or couldn't start). */
+  const onHumanError = useCallback(
+    (e: unknown) => {
+      if (state.step !== "human") return;
+      const refusal = name ? rotationRefusal(e, name.name, "world-app") : null;
+      setState(refusal ? { step: "refused", refusal, draft: state.draft } : { step: "idle", error: null });
+    },
+    [state, name],
   );
 
   /** Retry the on-chain part of a rotation the API (or relayer) already accepted. */
@@ -298,6 +318,7 @@ export function useRotation() {
     start,
     confirm,
     onHuman,
+    onHumanError,
     resume,
     cancel,
     attach,
