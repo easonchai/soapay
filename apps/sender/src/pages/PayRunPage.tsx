@@ -306,9 +306,9 @@ export function PayRunPage({ run, roster, wallet, payPath, chainName, onReview, 
             <div style={{ borderTop: "1px solid var(--hairline)", paddingTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
               <div className="between num" style={{ fontSize: 12 }}>
                 <span style={{ fontFamily: "var(--sans)" }} className="ink2">
-                  Chunk size (company-wide)
+                  Chunk size
                 </span>
-                <span>
+                <span style={{ whiteSpace: "nowrap" }}>
                   {denomOn && !denomError ? `${trimZeros(chunk)} USDC` : "—"}
                   {onOpenSettings && (
                     <button className="btn-text" style={{ marginLeft: 6, fontSize: 12 }} onClick={onOpenSettings}>

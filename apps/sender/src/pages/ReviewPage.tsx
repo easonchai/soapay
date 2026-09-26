@@ -45,7 +45,7 @@ export function ReviewPage({ run, plan, wallet, payPath, chainName, onBack }: Re
     if (!chunk || p.amounts.length === 1) return String(p.amounts.length);
     const full = p.amounts.filter((a) => a === chunk).length;
     const rest = p.amounts.filter((a) => a !== chunk);
-    return `${full} × ${chunkLabel}${rest.length ? ` + ${rest.map((a) => trim(usdc(a))).join(", ")} remainder` : ""}`;
+    return `${full} × ${chunkLabel}${rest.length ? ` + ${rest.map((a) => trim(usdc(a))).join(", ")} rem.` : ""}`;
   };
 
   const modeCard = !wallet.isConnected
@@ -194,7 +194,7 @@ export function ReviewPage({ run, plan, wallet, payPath, chainName, onBack }: Re
               {chunk
                 ? plan.denomination?.mode === "carry"
                   ? "Carry mode: every line is a whole chunk."
-                  : "A remainder is sent as one smaller final line: the only line that stands out."
+                  : "rem. = the remainder, sent as one smaller final line: the only line that stands out."
                 : "One line per recipient."}
             </span>
           </div>
