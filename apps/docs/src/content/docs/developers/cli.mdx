@@ -30,7 +30,7 @@ soapay distribute --csv <file> --asset <symbol|token> [--chain 84532] [--preset 
 | `--total` | Required for `dividend`, an optional budget for `grant`, and invalid for `payroll` |
 | `--decimals` | Token decimals from 0 to 36; otherwise the registered asset value is used |
 | `--chunk` | Split each recipient into whole denominations plus one remainder line |
-| `--max-lines` | Positive per-transaction line limit, bounded by the SDK maximum |
+| `--max-lines` | Positive per-transaction line target; payment encoders reject values above 350 |
 | `--disperse` | Override the chain registry's StealthDisperse address |
 | `--rpc`, `--ens-rpc` | Pay-chain and ENS-chain HTTP RPC URLs |
 | `--show-lines` | Print every derived stealth address and amount |

@@ -1,0 +1,233 @@
+---
+title: API
+description: HTTP routes, payloads, errors, configuration, and deployment for the Soapay service.
+sidebar:
+  order: 5
+---
+
+`@soapay/api` is a Hono service on Node 24. It uses the built-in `node:sqlite` module, so it has no native database dependency. The production bundle is created with esbuild because the ScopeLift SDK dependency cannot load in plain Node.
+
+Except for the compatibility `/relay` route and upstream JSON-RPC responses, errors use:
+
+```json
+{"error":{"code":"invalid_input","message":"Explanation"}}
+```
+
+Unknown routes return 404 `not_found`, oversized bodies return 413 `payload_too_large`, and rate limits return 429 `rate_limited` with `Retry-After`.
+
+## Routes
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/health` | Liveness and indexer progress |
+| `POST` | `/register` | Relay ERC-6538 `registerKeysOnBehalf` |
+| `POST` | `/relay` | Compatibility registration shape |
+| `POST` | `/names` | Claim or update `<label>.soapay.eth` |
+| `GET` | `/names/:label` | Read a public name record |
+| `POST` | `/invites` | Reserve a label for an employer invite |
+| `GET` | `/invites/:codeHash` | Read invite state |
+| `GET` | `/worldid/config` | Read public IDKit and attester settings |
+| `POST` | `/worldid/rp-context` | Sign one World ID session request |
+| `POST` | `/names/:label/session` | Attach a World ID session to a name |
+| `POST` | `/names/:label/rotation` | Verify a session proof, rotate keys, and attest |
+| `GET` | `/names/:label/attestations` | Read MetaRotation attestations |
+| `POST` | `/uniswap/:endpoint` | Proxy the Trading API `quote` endpoint only |
+| `POST` | `/paymaster` | Proxy ERC-7677 sponsorship on Base Sepolia |
+| `POST` | `/faucet` | Issue the one-time testnet welcome drop |
+| `GET` | `/announcements` | Page through indexed scheme-1 announcements |
+
+## Health and announcements
+
+### `GET /health`
+
+Response: `{ ok: true, chainId, indexerHead, latestBlock, lag, indexerError? }`. Block fields are decimal strings or `null`; `lag` is a number or `null`.
+
+### `GET /announcements`
+
+Query: `from`, `to`, `cursor`, and `limit`; `fromBlock` and `toBlock` are aliases. `limit` defaults to 500 and is capped at 2000. Invalid values return 400 `invalid_query`.
+
+```json
+{
+  "items": [{
+    "blockNumber": "7600123",
+    "txHash": "0x...",
+    "logIndex": 4,
+    "stealthAddress": "0x...",
+    "caller": "0x...",
+    "ephemeralPubKey": "0x02...",
+    "metadata": "0x..."
+  }],
+  "nextCursor": "7600123:4",
+  "head": "7610000"
+}
+```
+
+Items are ordered by block and log index, contain scheme 1 only, and are never filtered by recipient. `nextCursor` is `null` on the last page. `head` is omitted when no indexer runs.
+
+## Registration
+
+### `POST /register`
+
+Request: `{ registrant, metaAddress, signature, proof? }`. `metaAddress` may be a canonical URI or raw 66-byte hex. `signature` is the registrant's EIP-712 signature for the current registry nonce.
+
+Success is 200 `{ txHash, status: "success", idempotent? }`. A receipt timeout returns 202 `{ txHash, status: "pending" }`. Relevant errors are 400 `invalid_registrant`, `invalid_meta_address`, `invalid_signature`, or `registration_rejected`; 409 `already_registered`; 502 `tx_reverted`; 503 `relayer_disabled`; and 429 `rate_limited`.
+
+Identical requests are deduplicated, including requests in flight. Sends share the relayer's serialized nonce sequence.
+
+### `POST /relay`
+
+Request: `{ registrant, schemeId: 1, stealthMetaAddress, signature }`. `stealthMetaAddress` is raw 66-byte hex. Success is `{ txHash }`. It uses the same registration path, status codes, relayer, and rate-limit buckets. Errors are the legacy flat shape `{ "error": "message" }`; a scheme other than 1 returns 400 `invalid_scheme`.
+
+## Names and invites
+
+### `POST /names`
+
+Request:
+
+```ts
+{
+  label: string;
+  registrant: Address;
+  metaAddress: string;
+  deadline: string | number;
+  signature: Hex;
+  worldIdSession?: unknown;
+  proof?: unknown;
+  inviteCode?: Hex;
+  agent?: {
+    context: string;
+    endpoints?: Record<string, string>;
+    registrations?: { registry: Hex; agentId: string }[];
+  };
+}
+```
+
+The route checks the label, EIP-712 NameClaim, deadline, ERC-6538 entry, invite, and optional World ID session before issuing. A new record returns 201; an update or identical retry returns 200:
+
+```json
+{
+  "label": "alice",
+  "name": "alice.soapay.eth",
+  "registrant": "0x...",
+  "metaAddress": "st:eth:0x...",
+  "deadline": "...",
+  "txHash": "0x...",
+  "createdAt": 0,
+  "updatedAt": 0,
+  "worldIdSession": null
+}
+```
+
+Errors include 400 `expired`, `invalid_agent`, `agent_immutable`, or `use_session_route`; 401 `bad_signature`; 403 `label_reserved`, `invalid_invite_code`, or `invite_label_mismatch`; 409 `label_taken`, `meta_mismatch`, `stale_claim`, `invite_claimed`, or `invite_expired`; 502 `issue_failed`; and 503 `worldid_disabled`.
+
+### `GET /names/:label`
+
+Returns the same public name record. An unknown label returns 404 `not_found`.
+
+### `POST /invites`
+
+Request: `{ label, employer, codeHash, expiresAt, signature, org? }`. `codeHash` is bytes32, `expiresAt` is Unix seconds as an integer or decimal string, and `org` is at most 64 printable characters. The employer signature supports EOA, ERC-1271, and ERC-6492 wallets.
+
+Success is 201 `{ codeHash, expiresAt }`; an identical retry is 200. Errors include 400 `expired` or `expiry_too_far`, 401 `bad_signature`, 409 `code_exists`, `label_taken`, or `label_reserved`, and 429 `rate_limited`.
+
+### `GET /invites/:codeHash`
+
+Response: `{ codeHash, label, employer, org?, expiresAt, status, name? }`, where `status` is `pending`, `claimed`, or `expired`. Unknown hashes return 404.
+
+## World ID and rotation
+
+### `GET /worldid/config`
+
+Response: `{ enabled, app_id, rp_id, environment, credential, attach_cooldown_seconds, attester }`. `credential` is `"proof_of_human"`. The signing key is never returned.
+
+### `POST /worldid/rp-context`
+
+Request is `{}` or `{ kind: "session", bind?: string }`. Response is `{ rp_context: { rp_id, nonce, created_at, expires_at, signature }, app_id, environment, kind: "session" }`. The nonce is single-use. Errors are 400 `invalid_kind` or `invalid_bind`, 429 `rate_limited`, and 503 `worldid_disabled`.
+
+### `POST /names/:label/session`
+
+Request: `{ deadline, signature, worldIdResult }`. `signature` covers `AttachSession(label, sessionId, deadline)`. Success is 201 `{ label, sessionId, attachedAt, rotationAllowedFrom }`.
+
+Errors include 401 `bad_signature`, 403 `proof_missing` or `proof_malformed`, and 409 `session_exists` or `session_taken`.
+
+### `POST /names/:label/rotation`
+
+Request: `{ newMeta, deadline, registrantSig, registerSig, worldIdResult }`. The API verifies the saved session, proof-of-human credential, request nonce, signal, environment, nullifier, RotationClaim, and registry signature before signing an attestation.
+
+Success is 201, or 200 for an idempotent retry:
+
+```ts
+{
+  attester: Address;
+  attestation: { label: string; oldMeta: string; newMeta: string; verifiedAt: string; signature: Hex };
+  registry: { status: "pending" | "success" | "already_registered" | "skipped" | "failed"; txHash?: Hex };
+  topup: { status: "sent" | "skipped" | "failed" };
+  idempotent?: true;
+}
+```
+
+Refusals include 400 `expired`, `registration_rejected`, or `invalid_registerSig`; 401 `bad_signature`; 403 `session_mismatch`, `session_replayed`, `request_used`, `request_expired`, `unknown_request`, `proof_cancelled`, `proof_missing`, `proof_malformed`, `environment_mismatch`, `wrong_credential`, `signal_mismatch`, `proof_invalid`, or `legacy_proof_unsupported`; 409 `no_session`, `session_cooldown`, `no_change`, or `stale_rotation`; 429 `rate_limited`; and 503 `worldid_disabled`, `attester_disabled`, `worldid_unavailable`.
+
+### `GET /names/:label/attestations`
+
+Response: `{ attester, items: [{ label, oldMeta, newMeta, verifiedAt, signature }] }`, newest first. `attester` may be `null`. A client must pin its expected attester rather than trusting this field.
+
+## Swap, sponsorship, and faucet
+
+### `POST /uniswap/:endpoint`
+
+Only `POST /uniswap/quote` exists. Other endpoint values return 404. The service forwards the JSON body with its `x-api-key` and the allowed `x-universal-router-version`, `x-agent-info`, and `x-permit2-disabled` headers, then passes through the upstream status and body.
+
+Errors are 400 `invalid_json`, 413 `payload_too_large`, 429 `rate_limited`, 502 or 504 `uniswap_unreachable`, and 503 `uniswap_disabled` when no API key is configured. Request and response bodies are not logged.
+
+### `POST /paymaster`
+
+Accepts one JSON-RPC request for `pm_getPaymasterStubData`, `pm_getPaymasterData`, or `pm_sponsorUserOperation`. It exists only on chain 84532. The route validates EntryPoint version, factory, 7702 delegate, zero ETH value, and every target before forwarding to Pimlico. Validation refusals are JSON-RPC errors with HTTP 400. Missing configuration returns 503 `sponsorship_disabled`; upstream failures return 502 or 504 `paymaster_unreachable`; other chains return 404.
+
+### `POST /faucet`
+
+Request: `{ address }`. First success:
+
+```json
+{
+  "status": "sent",
+  "address": "0x...",
+  "usdc": {"amount": "1000000000000", "txHash": "0x..."},
+  "eth": null
+}
+```
+
+A repeat returns `{ status: "already_claimed", address }`. Errors are 400 `invalid_address`, 502 `faucet_failed`, and 503 `faucet_disabled`.
+
+## Configuration
+
+`RPC_URL` is required. `WORLD_RP_SIGNING_KEY` is required unless `WORLD_ID_DISABLED=true`. Other secrets enable individual features:
+
+| Variables | Effect |
+| --- | --- |
+| `CHAIN_ID=84532`, `PORT=8787`, `DB_PATH=./data/soapay.db` | Core chain and server settings |
+| `RELAYER_PRIVATE_KEY` | Enables registration relay and the faucet minter |
+| `L1_RPC_URL`, `ISSUER_PRIVATE_KEY`, `ENS_SUBNAME_REGISTRY`, `ENS_RESOLVER_ADMIN` | Enable on-chain ENSv2 issuance |
+| `WORLD_APP_ID`, `WORLD_RP_ID`, `WORLD_ENV`, `WORLD_RP_SIGNING_KEY` | Configure World ID |
+| `WORLD_VERIFY_BASE_URL=https://developer.world.org` | Developer Portal verification base URL |
+| `ATTESTER_PRIVATE_KEY`, `L1_RELAYER_PRIVATE_KEY` | Sign rotation attestations and fund Sepolia record writes |
+| `UNISWAP_API_KEY`, `UNISWAP_API_URL=https://trade-api.gateway.uniswap.org/v1` | Enable the quote proxy |
+| `PIMLICO_API_KEY`, `PIMLICO_PAYMASTER_URL`, `PIMLICO_SPONSORSHIP_POLICY_ID` | Enable sponsored gas |
+| `PAY_TOKEN`, `STEALTH_DISPERSE` | Base Sepolia token override and sponsored-target address |
+| `INDEXER_ENABLED=true`, `INDEXER_START_BLOCK`, `INDEXER_CHUNK_SIZE=10000`, `INDEXER_POLL_MS=4000`, `INDEXER_REORG_DEPTH=10` | Configure the announcement index |
+| `CORS_ORIGINS`, `TRUST_PROXY`, `BODY_LIMIT_BYTES` and `RATE_LIMIT_*` | Configure HTTP policy |
+
+The code default for `INDEXER_CHUNK_SIZE` is 10000. The checked-in `.env.example` sets 1000 for the public Base Sepolia RPC. See [Environment](/docs/reference/environment/) for every variable and default.
+
+## Deployment
+
+`apps/api/Dockerfile` builds SDK and API bundles in `node:24-slim`, then runs only `index.js` as the `node` user. Production defaults are `PORT=8787` and `DB_PATH=/data/soapay.db`; mount persistent storage at `/data`.
+
+```bash
+docker build -f apps/api/Dockerfile -t soapay-api .
+docker run -p 8787:8787 -v soapay-data:/data --env-file apps/api/.env soapay-api
+```
+
+Railway runs the `api` service privately at `api.railway.internal:8787` with a volume at `/data`. The public `web` service proxies `/api` to it through `scripts/serve-demo.mjs`, stripping the prefix. A proxy failure returns 502 `api_down`.
+
+Every push to `main` triggers `.github/workflows/deploy.yml`, which uploads the checked-out commit to both Railway services. Production deployment is automatic; no manual `railway up` step is required.

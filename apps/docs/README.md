@@ -33,6 +33,13 @@ pnpm --filter @soapay/docs test     # link checker over dist/ (turbo builds firs
 2px radius) onto Starlight's variables. IBM Plex is self-hosted through `@fontsource`, like the apps. The logo is
 the `packages/ui` lockup as two SVGs (`src/assets/lockup-navy.svg` for light mode, `lockup-light.svg` for dark).
 
+## Why `cookie` is a devDependency
+
+Astro's build imports its generated prerender entry from `dist/.prerender/`, and that entry imports `cookie` by bare
+specifier, so Node resolves it upward from `dist/`. A stray `node_modules/cookie` above the repo (for example in a
+home directory) would shadow Astro's own `cookie` 2.x and break the build with "Named export 'parseCookie' not
+found". Declaring `cookie` here puts the right version at `apps/docs/node_modules/cookie`, which wins the lookup.
+
 ## Type checking
 
 There is no `typecheck` script: `@astrojs/check` needs TypeScript 5 or 6 and the repo pins TypeScript 7. The

@@ -67,11 +67,11 @@ Input:
 
 ```ts
 {
-  label?: string;          // 3 to 32 lowercase letters, digits, or hyphens
+  label?: string;          // /^[a-z0-9-]{3,32}$/ plus Soapay label rules
   invite?: string;         // full join link or 32-byte 0x code, 66 to 2048 chars
   description?: string;    // 1 to 500 chars
   capabilities?: string[]; // at most 16, each 1 to 40 chars
-  endpoints?: Record<string, string>; // protocol to URL
+  endpoints?: Record<string, string>; // /^[a-z0-9][a-z0-9-]{0,31}$/ to URL, max 512 chars
 }
 ```
 
@@ -79,7 +79,7 @@ Output: `{ name, metaAddress, registrant, created, registration?, txHash, record
 
 ### `pay`
 
-Plan input: `{ payments: [{ name, amount }], dry_run?: true }`, with 1 to 350 payments. Confirmation input: `{ confirm: planId }`.
+Plan input: `{ payments: [{ name, amount }], dry_run?: true }`, with 1 to 350 payments. Confirmation input: `{ confirm: planId }`. An amount is a positive finite number or a decimal string with at most six decimal places.
 
 The plan returns `{ planId, expiresAt, confirmWith, totalUsdc, lineCount, txCount, lines, gas, payer, guardrails, warnings, note }`. Confirmation returns `{ ok, planId, totalUsdc, lineCount, steps }`. It approves the exact total, waits for the allowance to become visible, then sends chunks of at most 350 lines.
 
@@ -99,7 +99,7 @@ The plan reports `{ decision, reason, warnings, to, amountUsdc, maxFeesUsdc, par
 
 ### `swap_in_place`
 
-Plan input: `{ tokenOut, amount, slippage_bps?, dry_run?: true }`. `tokenOut` is `"ETH"` or an address. Slippage is 0 to 500 basis points and defaults to 50. Confirmation input is `{ confirm: planId }`.
+Plan input: `{ tokenOut, amount, slippage_bps?, dry_run?: true }`. `tokenOut` is a 3 to 42 character string containing `"ETH"` or an address. Slippage is 0 to 500 basis points and defaults to 50. Confirmation input is `{ confirm: planId }`.
 
 The plan returns the source stealth address, input, quoted output, minimum output, route, source, and confirmation fields. Confirmation returns `{ ok, from, userOpHash, txHash, amountInUsdc, tokenOut, amountOut, minOut, route }`. It refuses confirmation if the new minimum output falls below the dry-run floor.
 

@@ -97,6 +97,10 @@ importers:
       sharp:
         specifier: ^0.35.4
         version: 0.35.4(@types/node@26.6.2)
+    devDependencies:
+      cookie:
+        specifier: ^2.0.1
+        version: 2.0.1
 
   apps/mcp:
     dependencies:
