@@ -286,6 +286,8 @@ How the name itself is set up:
 
 Full role table and calls: [contracts/ENSV2.md](../contracts/ENSV2.md).
 
+**See it live:** `pnpm demo:ens <label-or-name> [--derive N]` (for example `pnpm demo:ens alex-demo`) walks one name end to end with read-only calls: the ENSv2 registry path from the root to the name's own resolver (Etherscan link) and its owner; the `stealth` record split into its spending and viewing public keys, `soapay:registrant`, any ENSIP-26 agent records, and the deliberately empty `addr`; the EAC roles on the resolver (the registrant holds `ROLE_SET_TEXT` on `keccak256("stealth")` only, the `soapay.eth` owner every root role); the ERC-6538 cross-check on Base Sepolia; and N fresh stealth addresses (ephemeral key, view tag, address) derived exactly as a pay run does. RPCs come from `RPC_URL` and `ENS_RPC_URL`/`L1_RPC_URL` (environment, then `scripts/.demo-agent.local.env`, then `apps/api/.env`, then public endpoints); only their host is printed. Code: `examples/demo/ens.ts`.
+
 ### The ERC-6538 registry entry (Base Sepolia)
 
 `registrant → (scheme 1, meta-address)`, written by our relayer with `registerKeysOnBehalf` using the registrant's signature, so the employee never needs gas or a funded wallet. It's the canonical, chain-local copy of the same meta-address, and the payer's cross-check source.
