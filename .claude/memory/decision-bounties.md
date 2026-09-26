@@ -17,8 +17,9 @@ Main track (not Continuity). The owner chose these on 2026-09-25:
 - Every request needs a fresh backend RP signature (`signRequest`).
 - Verification: POST https://developer.world.org/api/v4/verify/{rp_id} with the result forwarded as-is.
 - A staging action works only with the simulator.
-- App id `app_0cc7167efe114ac2e0ef7d9827098353`.
-- **World ID 4.0 configured 2026-09-25 (managed RP):**
+- **Current app/RP since 2026-09-26 (D-59):** app `app_c47a43da4fea435146d14ae5e9f503ea`, RP `rp_25e1826d2548c1d9`, created fresh because the first RP silently rejected session requests. Set only through `WORLD_APP_ID` / `WORLD_RP_ID` / `WORLD_RP_SIGNING_KEY` (Railway); the code has no defaults. Credential: Proof of Human (D-54), sessions (D-59; D-58's one-time-request design is superseded because production allows one uniqueness proof per person per action).
+- Old app id `app_0cc7167efe114ac2e0ef7d9827098353` (no longer used).
+- **World ID 4.0 configured 2026-09-25 (managed RP, the OLD app; no longer used since D-59):**
   - `rp_id` = `rp_3ede5fe1cab9af48`; signer address `0xCaf38A54bA7B0C15Eb253cb513f0B0A93AAA349D`.
   - Registered on-chain in production AND staging.
   - Action `soapay-enroll` exists in staging (`action_v4_bf971ef0421e15a478e79756fe4b43a6`) and production (`action_v4_ae297f57ed07717e7713c802da03ade3`).

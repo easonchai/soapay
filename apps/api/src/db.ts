@@ -153,6 +153,45 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE worldid_requests ADD COLUMN bind TEXT;
   `,
+  // D-58: World ID recovery uses one-time Proof of Human requests on one action
+  // (WORLD_ACTION, `soapay-recovery`). A name's World ID link is the verified proof's nullifier,
+  // which is stable per (human, RP, action), so a rotation must carry the same nullifier.
+  // name_sessions is rebuilt: `nullifier` is added, and `session_id` loses NOT NULL / UNIQUE
+  // (it stays only for rows linked with a D-16/D-57 session, which can no longer back a
+  // rotation). The same human may link several names, so the nullifier isn't unique.
+  // worldid_requests.kind is now 'uniqueness' for new nonces.
+  `
+  CREATE TABLE name_sessions_v2 (
+    label         TEXT PRIMARY KEY,
+    session_id    TEXT,                   -- legacy session_<hex>; NULL for nullifier links
+    nullifier     TEXT,                   -- decimal string: the World ID link (D-58)
+    attached_at   INTEGER NOT NULL,
+    via           TEXT NOT NULL           -- enroll (POST /names) | attach (POST /names/:label/session)
+  );
+  INSERT INTO name_sessions_v2 (label, session_id, nullifier, attached_at, via)
+    SELECT label, session_id, NULL, attached_at, via FROM name_sessions;
+  DROP TABLE name_sessions;
+  ALTER TABLE name_sessions_v2 RENAME TO name_sessions;
+  CREATE INDEX name_sessions_nullifier ON name_sessions(nullifier);
+  `,
+  // D-59 (supersedes D-58): back to World ID sessions. Production enforces one uniqueness proof
+  // per person per action, so D-58's link-then-recover can't work; a session (on an RP that
+  // supports sessions) can be proved again and again. A name's link is `session_id` again;
+  // `nullifier` stays (migrations are append-only) but is unused, and a nullifier-only row
+  // counts as unlinked. `session_id` stays non-unique: one session may back several names.
+  `
+  CREATE INDEX name_sessions_session ON name_sessions(session_id);
+  `,
+  // D-62: encrypted app backups (PUT/GET /backups/:address, docs/mvp-spec.md §4). One row per
+  // wallet; the server only ever sees the client-encrypted envelope, never plaintext or keys.
+  `
+  CREATE TABLE vault_backups (
+    address       TEXT PRIMARY KEY,       -- checksummed wallet that signed the latest write
+    version       INTEGER NOT NULL,       -- strictly increasing per address (no rollback)
+    ciphertext    TEXT NOT NULL,          -- base64, at most 512 KiB decoded
+    updated_at    INTEGER NOT NULL
+  );
+  `,
 ];
 
 export function migrate(db: Db): void {

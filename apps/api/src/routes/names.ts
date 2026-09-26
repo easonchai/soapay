@@ -28,7 +28,7 @@ export function getName(db: Db, label: string): NameRow | undefined {
 }
 
 function present(row: NameRow, parent: string, db: Db) {
-  const session = db.prepare("SELECT attached_at FROM name_sessions WHERE label = ?").get(row.label) as
+  const session = db.prepare("SELECT attached_at FROM name_sessions WHERE label = ? AND session_id IS NOT NULL").get(row.label) as
     | { attached_at: number }
     | undefined;
   return {

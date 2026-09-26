@@ -10,7 +10,9 @@
     "typecheck": "turbo run typecheck",
     "clean": "turbo run clean && rm -rf node_modules",
     "demo:setup-recovery": "pnpm --filter @soapay/examples exec tsx ../scripts/demo-setup-recovery.ts",
+    "demo:seed-company": "pnpm --filter @soapay/examples exec tsx ../scripts/demo-seed-company.ts",
     "demo:attacker": "pnpm --filter @soapay/examples exec tsx ../scripts/demo-attacker.ts",
+    "demo:agent": "pnpm --filter @soapay/examples exec tsx ../scripts/demo-agent.ts",
     "demo:recovery-check": "pnpm --filter @soapay/examples exec tsx ../scripts/demo-recovery-check.ts"
   },
   "devDependencies": {

@@ -6,7 +6,10 @@ import {
   metaRotationTypedData,
   rotationClaimTypedData,
   rotationSignal,
+  SESSION_LOOKUP_MAX_TTL_SECONDS,
+  sessionLookupTypedData,
   sessionSignal,
+  signSessionLookup,
   worldIdSignalHash,
 } from "../src/rotation.js";
 
@@ -37,6 +40,31 @@ describe("rotation typed data (docs/mvp-spec.md §2.1)", () => {
     expect(await verifyTypedData({ address: key.address, ...td, signature: sig })).toBe(true);
     expect(() => attachSessionTypedData({ label: "alice", sessionId: "nope", deadline: 1n, chainId: 1 })).toThrow(/session_/);
     expect(() => attachSessionTypedData({ label: "A!", sessionId: "session_ab", deadline: 1n, chainId: 1 })).toThrow(/label/);
+  });
+});
+
+describe("SessionLookup typed data (D-64)", () => {
+  it("signs label and deadline under the Soapay Names domain, with a distinct type from AttachSession", async () => {
+    const td = sessionLookupTypedData({ label: "alice", deadline: 7n, chainId: 84532 });
+    expect(td.primaryType).toBe("SessionLookup");
+    expect(td.domain).toEqual({ name: "Soapay Names", version: "1", chainId: 84532 });
+    expect(td.types.SessionLookup).toEqual([
+      { name: "label", type: "string" },
+      { name: "deadline", type: "uint256" },
+    ]);
+    const sig = await signSessionLookup({ label: "alice", deadline: 7n, chainId: 84532, registrantKey: `0x${"42".repeat(32)}` });
+    expect(await verifyTypedData({ address: key.address, ...td, signature: sig })).toBe(true);
+    // Bound to the label and the chain.
+    expect(await verifyTypedData({ address: key.address, ...sessionLookupTypedData({ label: "bob", deadline: 7n, chainId: 84532 }), signature: sig })).toBe(false);
+    expect(await verifyTypedData({ address: key.address, ...sessionLookupTypedData({ label: "alice", deadline: 7n, chainId: 8453 }), signature: sig })).toBe(false);
+    expect(SESSION_LOOKUP_MAX_TTL_SECONDS).toBe(3_600);
+  });
+
+  it("refuses a bad label, and a key that isn't the registrant", async () => {
+    expect(() => sessionLookupTypedData({ label: "A!", deadline: 1n, chainId: 1 })).toThrow(/label/);
+    await expect(
+      signSessionLookup({ label: "alice", deadline: 1n, chainId: 1, registrantKey: `0x${"42".repeat(32)}`, registrant: `0x${"11".repeat(20)}` }),
+    ).rejects.toThrow(/registrant/);
   });
 });
 

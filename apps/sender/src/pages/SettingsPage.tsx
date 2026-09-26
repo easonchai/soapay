@@ -5,6 +5,8 @@ import { isTestnetChain } from "@soapay/sdk";
 import { defaultChunkUsdc, type AppConfig } from "../config.js";
 import { tryParseUsdc } from "../lib/amount.js";
 import type { VaultMode } from "../lib/vault.js";
+import type { BackupState, WalletLock } from "../hooks/store.js";
+import { describeOutcome, type BackupOutcome } from "../lib/backup.js";
 import { Notice } from "../ui/kit.js";
 
 export type SettingsPageProps = SettingsState & {
@@ -21,7 +23,107 @@ export type SettingsPageProps = SettingsState & {
   onDestroyVault(): void;
   /** Test-USDC affordance (pages/Faucet.tsx); nothing on mainnet. */
   faucet?: ReactNode;
+  /** Encrypted backup to the API (D-62). */
+  backup?: BackupState;
+  walletLock?: WalletLock;
+  onBackupNow?(): Promise<BackupOutcome>;
+  onEnableWalletLock?(): Promise<void>;
 };
+
+const MODE_LABEL: Record<VaultMode, string> = { wallet: "wallet signature", device: "device key", passphrase: "passphrase" };
+
+function ago(ms: number): string {
+  try {
+    return new Date(ms).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  } catch {
+    return new Date(ms).toISOString();
+  }
+}
+
+/** "Last backed up …", Back up now, and whether the browser keeps the vault under storage pressure. */
+function BackupPanel(p: SettingsPageProps) {
+  const b = p.backup;
+  const [err, setErr] = useState<string | null>(null);
+  const [working, setWorking] = useState(false);
+  if (!b) return null;
+  const persistLine =
+    b.persisted === true
+      ? "This browser keeps the vault even when disk space runs low."
+      : b.persisted === false
+        ? "This browser may clear the vault when disk space runs low (it didn't grant persistent storage)."
+        : "Persistent storage: unknown in this browser.";
+  if (!b.enabled) {
+    return (
+      <div className="panel panel-pad stack-sm">
+        <p className="ink2 pretty">
+          {p.app.demo || p.app.mockEns ? "Backups are off in demo and dev-mock modes." : "Backups are off: no Soapay API is configured (VITE_API_URL)."} {persistLine}
+        </p>
+      </div>
+    );
+  }
+  const run = async (fn: () => Promise<unknown>) => {
+    setErr(null);
+    setWorking(true);
+    try {
+      await fn();
+    } catch (e) {
+      setErr((e as { shortMessage?: string }).shortMessage ?? (e as Error).message ?? String(e));
+    } finally {
+      setWorking(false);
+    }
+  };
+  const conflict = b.last?.status === "conflict";
+  return (
+    <div className="panel panel-pad stack-sm">
+      {b.supported ? (
+        <>
+          <dl className="facts">
+            <dt>Last backed up</dt>
+            <dd>{b.sync.lastBackupAt ? `${ago(b.sync.lastBackupAt)} (version ${b.sync.version})` : "Never"}</dd>
+            <dt>Backs up to</dt>
+            <dd className="mono">{b.sync.owner ?? "the connected wallet"}</dd>
+            <dt>Status</dt>
+            <dd>{b.busy ? "Backing up… confirm in your wallet" : b.sync.dirty ? "Changes not backed up yet" : "Up to date"}</dd>
+          </dl>
+          {b.last && b.last.status !== "saved" && (
+            <Notice tone={conflict ? "warn" : "info"} role="status">
+              {describeOutcome(b.last)}
+            </Notice>
+          )}
+          <p className="ink2 pretty">
+            The API stores only the encrypted vault, under your wallet address; each backup is one wallet signature. It runs after you enrol or re-pin
+            recipients, change invites or record a pay run. Log in with this wallet in any browser to restore it
+            {p.vaultMode === "passphrase" ? " (it will ask for your passphrase)." : "."}
+          </p>
+          <div className="actions">
+            <button className="btn-primary" disabled={b.busy || working} onClick={() => void run(() => p.onBackupNow!())}>
+              {conflict ? "Replace with this browser's data" : "Back up now"}
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="ink2 pretty">
+            This vault is locked with a device key, which can&apos;t leave this browser, so it isn&apos;t backed up. Clearing site data would lose the roster,
+            pins and history.
+          </p>
+          {p.walletLock === "available" && (
+            <div className="actions">
+              <button className="btn-primary" disabled={working} onClick={() => void run(() => p.onEnableWalletLock!())}>
+                Lock with my wallet and back up
+              </button>
+            </div>
+          )}
+          {p.walletLock === "unavailable" && (
+            <p className="note">Your wallet signs differently each time (typical of passkey smart wallets), so it can&apos;t lock the vault. A passphrase vault can be backed up.</p>
+          )}
+        </>
+      )}
+      <ErrorLine error={err} />
+      <p className="note">{persistLine}</p>
+    </div>
+  );
+}
 
 /** CK's Settings (company name, network facts) plus ours: per-browser chain, StealthDisperse and RPCs, attester, vault. */
 export function SettingsPage(p: SettingsPageProps) {
@@ -144,16 +246,23 @@ export function SettingsPage(p: SettingsPageProps) {
         </>
       )}
 
+      <h2>Backup</h2>
+      <BackupPanel {...p} />
+
       <h2>Stored in this browser</h2>
       <p className="ink2 pretty">
-        Encrypted vault ({p.vaultMode ?? "none"}): {p.counts.employees} pinned {p.counts.employees === 1 ? "employee" : "employees"}, {p.counts.invites} invite
+        Encrypted vault ({p.vaultMode ? MODE_LABEL[p.vaultMode] : "none"}): {p.counts.employees} pinned {p.counts.employees === 1 ? "employee" : "employees"}, {p.counts.invites} invite
         {p.counts.invites === 1 ? "" : "s"} and {p.counts.runs} run record{p.counts.runs === 1 ? "" : "s"}. Stored addresses are never reused as payment targets.
       </p>
       <div className="actions">
         <button onClick={p.onLock}>Lock vault</button>
         <button
           className="btn-danger"
-          onClick={() => confirm("Delete roster, invites and run history from this browser? This can't be undone.") && p.onDestroyVault()}
+          onClick={() => confirm(
+              p.backup?.enabled && p.backup.supported
+                ? "Delete roster, invites and run history from this browser? The encrypted backup stays with your wallet and is offered again at your next login."
+                : "Delete roster, invites and run history from this browser? This can't be undone.",
+            ) && p.onDestroyVault()}
         >
           Delete vault
         </button>

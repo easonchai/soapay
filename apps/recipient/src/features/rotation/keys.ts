@@ -51,5 +51,18 @@ export function keyRing(mnemonic: string, generation: number, gen0?: SoapayKeys,
   };
 }
 
+/**
+ * Which key generation a registered meta-address belongs to, or null if none of the first `max`.
+ * A restore recreates generation 0; this finds the generation a rotated account had reached, so the
+ * restore continues from it instead of pointing the name and registry back at old keys.
+ */
+export function detectGeneration(mnemonic: string, metaAddressURI: string, phraseOffset = 0, max = 32): number | null {
+  const target = metaAddressURI.toLowerCase();
+  for (let g = phraseOffset; g <= max; g++) {
+    if (keysForAccountGeneration(mnemonic, g, phraseOffset).metaAddressURI.toLowerCase() === target) return g;
+  }
+  return null;
+}
+
 export const scanKeysOf = (ring: KeyRing): ScanKeys[] =>
   ring.all.map((k) => ({ spendingPublicKey: k.spendingPublicKey, viewingPrivateKey: k.viewingKey }));

@@ -19,6 +19,20 @@ The employee app has no Convert screen on any chain (D-53); the SDK's swap-in-pl
 
 ## The whole system
 
+One page at the protocol level. Three lanes: names on Ethereum Sepolia, people and keys off chain, payments on Base Sepolia. The numbered badges on the arrows are the five steps: name, pay, find, spend, exit. No app code in the picture, only chains, standards, contracts, people and partners.
+
+![Soapay on chain: ENSv2 names on Ethereum Sepolia, people and keys off chain, StealthDisperse, the ERC-5564 Announcer, EIP-7702 spending and the CCTP exit on Base Sepolia](diagrams/soapay-system-overview.png)
+
+The source is [`diagrams/soapay-system-overview.excalidraw`](diagrams/soapay-system-overview.excalidraw); open it at excalidraw.com to edit.
+
+### The full walk-through
+
+The same system step by step: onboard, pay, find and spend, recover, agents, and who sees what.
+
+![Soapay architecture: onboard, pay, find and spend, recover, agents, and who sees what](diagrams/soapay-architecture.png)
+
+The source is [`diagrams/soapay-architecture.excalidraw`](diagrams/soapay-architecture.excalidraw); open it at excalidraw.com to edit.
+
 Blue borders are ENS, black World ID, pink Uniswap, navy our own code. The dashed red node is the adversary.
 
 ```mermaid
@@ -111,7 +125,7 @@ flowchart LR
 
 ### World ID (IDKit): changing where your salary goes needs proof it's still you
 
-- **What we built:** World ID 4.0 through IDKit with a **Proof of Human** credential in a **session**. The employee can attach a session when claiming their name, or later. Rotating keys proves it's the same human; the API verifies the proof and signs an EIP-712 `MetaRotation` attestation (D-13, D-16).
+- **What we built:** World ID 4.0 through IDKit with the **Proof of Human** credential, in a **World ID session**. The employee can link World ID when claiming their name, or later: the app creates a session (`IDKit.createSession`, QR shown inline) and the API stores its **session id** (not a nullifier). Rotating keys needs a proof of that same session (`IDKit.proveSession`); the API verifies it and signs an EIP-712 `MetaRotation` attestation (D-13, D-16, D-54, D-59).
 - **In the product:** the company app (and the CLI) accepts a changed meta-address automatically only with that attestation, from the attester it pinned. Without it, the line is blocked and the employer re-approves by hand.
 - **Why it's central:** ENS decides where salaries go, so a stolen key that rewrites the record is the real risk. It matters most for pseudonymous contributors (a DAO paying a handle), where there's no phone number to call. Details: [docs/worldid.md](worldid.md).
 - **Code:** `packages/worldid-react`, `packages/sdk/src/rotation.ts`, `pins.ts`, `apps/api` World ID routes.
@@ -191,8 +205,8 @@ sequenceDiagram
   participant A as Soapay API
   participant N as ENS record
   participant E as Company app
-  R->>W: Proof of Human (same session)
-  W-->>R: proof
+  R->>W: proveSession(saved session), Proof of Human
+  W-->>R: proof (same session id as at linking)
   R->>A: proof + new meta-address
   A-->>R: EIP-712 MetaRotation attestation
   R->>N: write new stealth record
@@ -239,6 +253,46 @@ sequenceDiagram
 
 Fees are roughly fixed per leg, so the Exit screen shows the whole cost and "you receive ≈ X of Y" before starting (D-48). On testnet the relayer charges about 21.5 USDC per withdrawal, so small exits withdraw directly, with the destination paying a little Sepolia ETH.
 
+### 7. Use a dApp from one payment address (WalletConnect, D-61)
+
+The employee app is also a WalletConnect wallet (Reown WalletKit), so a salary address can use Aave, Morpho or any other dApp directly, gaslessly, without first moving the money to a wallet that would link it.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant D as dApp
+  participant WC as WalletConnect relay
+  participant R as Employee app
+  participant X as Stealth address
+  D->>WC: session proposal (wc: link pasted into the app)
+  R->>WC: approve with ONE stealth address, active chain only
+  D->>WC: eth_sendTransaction / wallet_sendCalls / personal_sign / eth_signTypedData_v4
+  R->>R: approval sheet: decoded calls + privacy guard (checkDappPrivacy)
+  R->>X: one userOp (7702 + paymaster), same path as Send
+  R-->>D: real tx hash (after inclusion), or an EIP-5792 bundle id
+```
+
+- **One address per session.** The session namespace carries exactly one account (`buildSessionNamespaces`), and every request re-checks it (`sessionAccount`); a session with two addresses is refused. A dApp never sees a second payment address.
+- **Where the logic lives.** Signing, call decoding and the privacy check are in the SDK (`packages/sdk/src/dapp.ts`: `signMessageAsStealth`, `signTypedDataAsStealth`, `decodeDappCall`, `checkDappPrivacy`, `waitForStealthExecution`); execution is the SDK's `executeFromStealth`. The app only routes requests (`apps/recipient/src/features/walletconnect/`).
+- **Privacy guard.** ERC-20 transfers in the calls go through `planSpend` exactly like Send. Any other place the request names an address (Aave's `onBehalfOf`, a typed-data field, a signed message) is matched against your other stealth addresses and every identifiable address; a match blocks until you tick the override. Transfers you approve are recorded as guard links.
+- **No ETH.** Stealth addresses hold none, so any request with `value` is refused. `eth_sign` and `eth_signTransaction` are refused too.
+- **Gas.** Base mainnet: Circle paymaster, fee in USDC from the address, any target. Base Sepolia: the API's `/paymaster` only sponsors allow-listed targets (pay token, Permit2, Universal Router, StealthDisperse, Announcer). A dApp contract works there only after the operator adds it to `PAYMASTER_EXTRA_TARGETS` (an explicit opt-in that already exists; nothing was widened).
+- **Leaks this doesn't hide.** The dApp learns the one address and everything it does. WalletConnect's session store (IndexedDB, outside the encrypted vault) records which address is connected to which dApp. The relay sees the browser's IP, like the RPC and bundler (out of scope for v1).
+
+### 8. Get your account back with a synced passkey (D-63)
+
+The employee app keeps its vault (keys, name, World ID session, labels, settings) encrypted in the browser. Clearing site data or opening a new device used to leave only the recovery phrase. Passkeys already sync (iCloud Keychain, Google Password Manager), so the vault now follows them:
+
+1. **Keys from the passkey alone.** The vault's passkey evaluates PRF over the fixed app salt `PRF_SALT` on every unlock. HKDF-SHA256 over that output, with fixed info strings (`soapay-backup/v1/aes-256-gcm`, `soapay-backup/v1/secp256k1-signer`), gives an AES-256-GCM **backup key** and a secp256k1 **backup signer** (48 bytes reduced mod n, zero rejected). No per-vault salt or anything else local goes in, so any browser holding the synced passkey derives the same keys. The signer's address is the **backup address**; it isn't derived from the recovery phrase, so it has no link to the stealth, registrant or name keys. Code: `apps/recipient/src/vault/backup.ts`.
+2. **Sync.** About 3 s after a vault write, the app encrypts the vault (`0x01 | IV | AES-GCM`, with the backup address and version as additional data, fresh IV each time) and uploads it with `PUT /backups/:address {version, ciphertext, signature}`. The signature is EIP-191 by the backup signer over `soapay-backup:v1:<address>:<version>:<keccak256(ciphertext)>`; versions strictly increase, and on `409 stale_version` the app refetches the stored version and retries once (last writer wins between devices). No prompt: the keys stay in memory while unlocked and are never stored. An unchanged vault (same content hash) isn't re-uploaded. Code: `apps/recipient/src/vault/BackupSync.tsx`.
+3. **Restore.** The welcome screen shows **Unlock with passkey**: a discoverable WebAuthn request (no `allowCredentials`) with PRF over `PRF_SALT`. The app derives the backup address, calls `GET /backups/:address`, decrypts, and writes a fresh local vault locked with that same passkey, then opens the ledger; the unlock scan continues from the backed-up block and refreshes balances. No backup for that passkey: "No backup for this passkey", with **Restore from recovery phrase**.
+4. **Where it doesn't work.** Passphrase vaults and passkeys without PRF (some password managers) have no backup: the restore button is hidden when the browser can't do passkeys with PRF, and Settings shows "Backup off". The recovery phrase stays the last resort everywhere.
+5. **Storage.** After unlock the app calls `navigator.storage.persist()` once (a refusal is ignored); Settings shows "Backed up ..." and whether storage is persistent.
+
+**Spending keys never leave the client in plaintext.** The vault is encrypted on the device before upload, under a key only the passkey can reproduce; the server stores ciphertext it can't open.
+
+**What the server learns.** That some backup address has a Soapay vault, its size, and when it's updated. It can't read the vault or link the backup address to a name, a registrant or a stealth address (nothing in the request carries them). It does see the IP of each request; RPC/IP linkage is out of scope for v1, as for the rest of the API. It could serve an older genuine version of the backup (a rollback), but not forge, relabel or move one: the version and address are authenticated inside the ciphertext.
+
 ## What each piece stores, and why
 
 ### An employee's ENS name (`alice.soapay.eth`, ENSv2 on Sepolia)
@@ -270,13 +324,25 @@ Full role table and calls: [contracts/ENSV2.md](../contracts/ENSV2.md).
 
 The first time a name is paid, the company app stores `name → meta-address` locally (the **pin**). Every later run re-resolves the name. If the record changed, it pays only if a valid World ID attestation from the attester it pinned covers exactly *pinned → current*; otherwise the line is blocked until the employer approves by hand. The CLI does the same in `.soapay/pins.json`.
 
+### The company vault and its encrypted backup (D-62)
+
+The company app keeps the roster (names, amounts, pins), invites (codes included) and run history in an encrypted vault in IndexedDB (`apps/sender/src/lib/vault.ts`, AES-GCM-256, each record bound to its slot). A browser data clear used to lose all of it, so the vault now follows the wallet:
+
+- **Lock.** By default the vault key is HKDF-SHA256 over the wallet's `personal_sign` of a fixed message ("Soapay company vault … Wallet: <address> Chain: <id>"). At setup the app asks for that signature twice: EOAs and 7702-delegated EOAs (e.g. MetaMask smart accounts) sign identically, so the same wallet re-derives the same key in any browser. Passkey smart wallets (Coinbase Smart Wallet) sign differently each time; the app then falls back to a passphrase (PBKDF2, 600k) and says so. The device-key option stays, but it can't be backed up; Settings offers to re-lock it with the wallet.
+- **Backup.** The app uploads the vault's encrypted envelope (sealed records plus KDF metadata, never a key or a signature) to `PUT /backups/:walletAddress` with a version counter, signed by the wallet. The API checks the signature (ERC-1271 / 6492 / 7702 too) and that the version only goes up, and stores only ciphertext. Each write needs the wallet's own signature, so the app backs up at the moments that matter, one prompt each: after recipients are enrolled or re-pinned, after invites change, after a pay run is recorded (never mid-run), and on **Back up now** in Settings. Bursts share one prompt (2 s debounce). Settings shows when the last backup ran and whether changes are pending. A newer backup from another browser is never overwritten silently (409 → "Replace with this browser's data").
+- **Restore.** Logging in on a browser with no vault looks up `GET /backups/:address`. If there is one, the gate offers **Restore with wallet** (one signature) or asks for the passphrase; the secret is checked before anything is written. **Start a new vault instead** keeps the old backup until the new vault's first backup replaces it.
+- **Eviction.** Once a vault exists the app calls `navigator.storage.persist()` and shows the result in Settings.
+- **Demo and dev-mock modes** never call the API or ask for a signature.
+
+The employer is trusted (threat model), but the API still learns nothing beyond "this wallet stores a blob of this size, updated at these times".
+
 ### The World ID pieces
 
 | Piece | Contents | Why |
 | --- | --- | --- |
-| Session signal (link World ID) | `soapay:session:<label>:<registrant>` | Binds the World ID session to this exact name and key, so a proof can't be replayed for another name |
+| Link signal (link World ID) | `soapay:session:<label>:<registrant>` | Binds the new session to this exact name and key (through the single-use RP nonce, D-57), so it can't be replayed for another name |
 | Rotation signal | `soapay:rotate:<label>:<new meta-address>:<deadline>` | Binds the proof to this exact change and a deadline |
-| What the API stores | per name: the `session_id`, when and how it was attached; globally: used session nullifiers and RP nonces | Continuity check and replay protection. **No identity data** is stored or seen |
+| What the API stores | per name: the World ID **session id** it's linked to, when and how it was linked; per proof: its session nullifier; globally: every RP nonce it signed, marked used once a proof consumed it | Continuity check (same session = same person) and replay protection. The session is scoped to our RP, so it can't be linked across apps. **No identity data** is stored or seen |
 | `MetaRotation` attestation (EIP-712, signed by the API's attester) | `label`, `oldMeta`, `newMeta`, `verifiedAt` | What the payer's app verifies before accepting a changed record. It covers one exact change, from one pinned attester |
 | `RotationClaim` (EIP-712, signed by the employee's registrant key) | `label`, `oldMeta`, `newMeta`, `deadline` | Proves the key holder asked for this change, alongside the World ID proof that it's the same person |
 
@@ -357,7 +423,7 @@ Beyond the qualification checklist in [docs/bounty-integrations.md](bounty-integ
 | Brief highlights | Soapay |
 | --- | --- |
 | A real trust moment | ✅ **Account recovery**: replacing a leaked key, which changes where future salary goes |
-| The proportionate credential, and why | ✅ **Proof of Human** in a **session**. Recovery redirects all future salary, the highest-stakes action in the product, and World calls Selfie Check "a medium-assurance signal", so Proof of Human is the proportionate strength. Passport or identity attributes would collect identity we don't need (D-54) |
+| The proportionate credential, and why | ✅ **Proof of Human**, in a World ID session (D-59). Recovery redirects all future salary, the highest-stakes action in the product, and World calls Selfie Check "a medium-assurance signal", so Proof of Human is the proportionate strength. Passport or identity attributes would collect identity we don't need (D-54) |
 | Selfie Check "now live with Sybil score" | ➖ Tried first, then replaced by Proof of Human: medium assurance doesn't match an action that moves someone's pay |
 | A workflow that becomes safer or simpler | ✅ Safer: a stolen key can't redirect pay. Simpler: no call to HR to approve a key change. Essential for pseudonymous contributors paid by a DAO |
 
@@ -395,7 +461,7 @@ We don't enter "World ID for Agents". Our agents are payees, and no agent action
 | --- | --- | --- |
 | Coworker | The whole pay run on-chain: every line, every amount | Which line is whose. Lines are fresh, sorted by address and split into standard chunks |
 | Employer | Everything (trusted by design): name → address → amount | The employee's keys |
-| Soapay API | Registrations, names, World ID proofs, public announcements | Stealth addresses in swaps (quote-only), keys, funds |
+| Soapay API | Registrations, names, World ID proofs, public announcements; encrypted vault backups under an unlinked backup address (size, update times) | Stealth addresses in swaps (quote-only), keys, funds, what's inside a backup or whose it is |
 | Uniswap | A quote's pair and amount | The address that swaps |
 | Employee | Only their own lines, found with their viewing key | Other people's lines |
 

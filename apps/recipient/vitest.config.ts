@@ -10,6 +10,6 @@ export default defineConfig({
     testTimeout: 30_000,
     // @scopelift/stealth-address-sdk ships ESM with extensionless imports that plain Node cannot
     // resolve; inline it so Vite's resolver handles it (same as packages/sdk/vitest.config.ts).
-    server: { deps: { inline: ["@scopelift/stealth-address-sdk", "@soapay/sdk"] } },
+    server: { deps: { inline: ["@scopelift/stealth-address-sdk", "@soapay/sdk", "@soapay/worldid-react"] } },
   },
 });

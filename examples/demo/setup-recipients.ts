@@ -21,7 +21,7 @@ for (const h of local.holders) await claim(h.label, h.phrase);
 for (const h of local.holders) await verify(h.label, h.phrase);
 
 // The AI agent is a holder like the others: one pay run, indistinguishable lines. Its name is
-// claimed by `demo:agent claim` (through the MCP server), which the demo script runs first.
+// claimed by `demo:pluggable-agent claim` (through the MCP server), which the demo script runs first.
 const rows = [
   "# Revenue-share register for the Soapay demo (public data only): three people, one raw meta-address, one AI agent.",
   "# recipient = a soapay name (resolved on ENSv2, cross-checked against ERC-6538) or a raw meta-address.",
