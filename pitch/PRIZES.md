@@ -48,15 +48,18 @@ Suggested: **7**. The server side was easy (the Developer Portal v4 verify endpo
 **Additional feedback for the sponsor**
 
 ```text
-Time to first success: a World ID session verified at the Developer Portal on the first try on a freshly created RP (2026-09-26). On our first RP, sessions never succeeded; see friction (3).
+Time to first success: a session verified at the Portal on the first try on a fresh RP (2026-09-26). On our first RP, sessions never succeeded.
 
-What went well: the Developer Portal v4 verify endpoint takes the IDKit result unchanged, so our server is local checks plus one call. signRequest from @worldcoin/idkit-server made the RP context a five-line route, and its single-use nonce doubled as our replay guard. The session_id / session_nullifier split maps directly onto "bind to the account" and "reject replays".
+Went well: the v4 verify endpoint takes the IDKit result unchanged, so our server is local checks plus one call. signRequest made the RP context five lines, and its nonce doubled as our replay guard. Sessions are the right primitive for "same human again".
 
-Friction: (1) The session-proofs page shows IDKitSessionWidget with preset={selfieCheck()}, but in IDKit 4.3 session requests only accept constraints ("Use .constraints() instead"). That cost a round of type errors. (2) A hand-built Selfie Check constraint made the production World App answer generic_error with no cause, so we switched to IDKit core's createSession / proveSession and render the QR code and polling ourselves to get at the debug report. (3) Our first RP, created in the Developer Portal like any other, silently did not support sessions: World App answered verification_rejected, the staging simulator a bare bad_request, and the portal only showed synced: false with no explanation. We spent most of a day on the wrong theory (sessions do not work for us) before a fresh RP fixed it. (4) Staging and production differ on repeat proofs: staging verified a second proof with the same nullifier, production returned nullifier_replayed. Right rule, but it broke a fallback design that had passed in staging. (5) Staging proofs verify only with the x-staging-verification-token header and inside the portal's staging window; neither is in the integration guide. (6) Proof results, the Portal response and the IDKit config each carry an environment, and the Portal defaults to production, so a mismatch is easy to get wrong silently. We refuse it at both checkpoints.
+Friction:
+1. Our first RP silently did not support sessions: verification_rejected in World App, bare bad_request in the simulator, synced: false in the portal, no explanation. Cost most of a day.
+2. The session docs show preset={selfieCheck()}, but IDKit 4.3 sessions only accept constraints. A hand-built constraint returned generic_error with no cause.
+3. Staging verifies repeat proofs with the same nullifier; production returns nullifier_replayed. Correct rule, easy to miss.
+4. Staging verification needs x-staging-verification-token and the portal's staging window. Neither is in the integration guide.
+5. The Portal defaults environment to production, so a mismatch fails silently unless you check it yourself.
 
-Missing: a portal status or error code that says an RP does not support sessions, a specific error code instead of generic_error, and a documented environment for testing sessions with each credential (sandbox versus the staging simulator, including the staging verification token).
-
-The one improvement with the greatest impact: make an RP that does not support sessions fail loudly, with a specific error code or a portal status that says "sessions unavailable for this RP, here is why". That single fix would have saved us most of a day and a wrong redesign.
+Biggest fix: make an RP that does not support sessions fail loudly, with a specific error code or a portal status.
 ```
 
 ## ENS ($10,000): Best Use of ENSv2
