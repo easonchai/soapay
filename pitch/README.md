@@ -2,7 +2,7 @@
 
 Pitch materials for ETHGlobal Tokyo 2026.
 
-- `deck/soapay-deck.pdf`: the deck, twelve slides, 16:9.
+- `deck/soapay-deck.pdf`: the deck, thirteen slides, 16:9.
 - `deck/soapay-deck.html`: the deck source. Edit the HTML, then rebuild the PDF (below). The deck is styled with the product's own design system, Direction A "Ledger" (`packages/ui/src/styles.css`): IBM Plex Sans and Mono, navy `#1e3a5f`, hairline panels, the dot-matrix texture and the lockup, scaled about 2.4x for a projector. If the UI tokens change, change the `:root` block in the deck to match.
 - `deck/assets/`: screenshots of the cited sources and sponsor logos used on the slides.
 - `PITCH.md`: talk track with timings, Q&A sheet, slide-by-slide notes, and every quote with its source URL.
@@ -29,11 +29,12 @@ To render one slide as a PNG for a quick look, open the HTML with `?only=N` in t
 2. Team
 3. Problem statement: "Who sees what you earn?"
 4. Everyone sees everything (a live payout batch on Base)
-5. Your colleagues (Gitcoin DAO)
+5. The chain published it anyway (Gitcoin DAO, 2022, and nothing has changed since)
 6. Dealbreaker for companies (Visa, plus Stripe, Circle, J.P. Morgan, Fireblocks)
 7. Existing solutions today (Toku on Aleo, Tempo Zones with Deel, Base Ledgers), and the two flaws they share
 8. Solution
-9. Architecture, high level
-10. Use cases
-11. Future plan
-12. Demo
+9. Architecture diagram
+10. Partner tracks (ENS, World, and the Curvegrid dashboard track)
+11. Use cases
+12. Future plan
+13. Demo

@@ -369,8 +369,8 @@ Five people, built at ETHGlobal Tokyo 2026.
 
 | Who | Role | Also | GitHub | X |
 | --- | --- | --- | --- | --- |
-| **Eason Chai** | Founder & CEO, Foresight and ELVTD | ELVTD: web3 solutions. ex-Virtuals Protocol | [@easonchai](https://github.com/easonchai) | [@easonchaiii](https://x.com/easonchaiii) |
-| **Yudhishthra** | Co-Founder, Aqua0 | ex-Nethermind, ex-Etherscan | [@0xYudhishthra](https://github.com/0xYudhishthra) | [@0xYudhishthra](https://x.com/0xYudhishthra) |
-| **Ee Sheng** | Head of Engineering, Thetanuts | Founder, zBase: private payments for agents. Base Batches 003 finalist | [@goheesheng](https://github.com/goheesheng) | [@goheesheng](https://x.com/goheesheng) |
+| **Eason Chai** | Founder & CEO, Foresight and ELVTD | Ex-engineer, Gitcoin. Previously contracted for Virtuals Protocol | [@easonchai](https://github.com/easonchai) | [@easonchaiii](https://x.com/easonchaiii) |
+| **Yudhishthra** | Co-Founder, Aqua0 | Ex-engineer, Nethermind and Etherscan | [@0xYudhishthra](https://github.com/0xYudhishthra) | [@0xYudhishthra](https://x.com/0xYudhishthra) |
+| **Ee Sheng** | Head of Engineering, Thetanuts | Founder, zBase: private payments for agents (Base Batches 003 finalist) | [@goheesheng](https://github.com/goheesheng) | [@goheesheng](https://x.com/goheesheng) |
 | **Marcus Tan** | Founding Engineer, Predictefy | ex-engineer, ELVTD | [@Marcussy34](https://github.com/Marcussy34) | [@marcustan1337](https://x.com/marcustan1337) |
 | **Cheong Kian** | Founding Engineer, Predictefy | | [@Ckayz](https://github.com/Ckayz) | [@LCKian88](https://x.com/LCKian88) |

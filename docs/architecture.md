@@ -19,6 +19,20 @@ The employee app has no Convert screen on any chain (D-53); the SDK's swap-in-pl
 
 ## The whole system
 
+One page at the protocol level. Three lanes: names on Ethereum Sepolia, people and keys off chain, payments on Base Sepolia. The numbered badges on the arrows are the five steps: name, pay, find, spend, exit. No app code in the picture, only chains, standards, contracts, people and partners.
+
+![Soapay on chain: ENSv2 names on Ethereum Sepolia, people and keys off chain, StealthDisperse, the ERC-5564 Announcer, EIP-7702 spending and the CCTP exit on Base Sepolia](diagrams/soapay-system-overview.png)
+
+The source is [`diagrams/soapay-system-overview.excalidraw`](diagrams/soapay-system-overview.excalidraw); open it at excalidraw.com to edit.
+
+### The full walk-through
+
+The same system step by step: onboard, pay, find and spend, recover, agents, and who sees what.
+
+![Soapay architecture: onboard, pay, find and spend, recover, agents, and who sees what](diagrams/soapay-architecture.png)
+
+The source is [`diagrams/soapay-architecture.excalidraw`](diagrams/soapay-architecture.excalidraw); open it at excalidraw.com to edit.
+
 Blue borders are ENS, black World ID, pink Uniswap, navy our own code. The dashed red node is the adversary.
 
 ```mermaid
