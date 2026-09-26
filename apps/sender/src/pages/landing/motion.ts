@@ -14,6 +14,17 @@ gsap.registerPlugin(useGSAP, ScrollTrigger, DrawSVGPlugin);
  * stay for the app screens; the landing does not import them.
  */
 
+// Sections change height after mount (the product frame scales to its column, fonts and dot canvases
+// settle), which leaves ScrollTrigger's recorded positions stale and can keep a late section hidden.
+// Refresh whenever the document's height settles.
+if (typeof window !== "undefined" && typeof ResizeObserver !== "undefined" && !motionOff()) {
+  let pending: gsap.core.Tween | null = null;
+  new ResizeObserver(() => {
+    pending?.kill();
+    pending = gsap.delayedCall(0.15, () => ScrollTrigger.refresh());
+  }).observe(document.documentElement);
+}
+
 export const EASE_OUT = "power3.out";
 /** Default ScrollTrigger start for section reveals: the element's top at 82% of the viewport. */
 export const REVEAL_START = "top 82%";
