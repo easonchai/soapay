@@ -155,8 +155,13 @@ header.header {
 .hero[class] {
   position: relative;
   min-height: 24rem;
-  /* the copy is 46rem wide; each ring gets the gutter beside it plus a small overlap */
-  --ring: clamp(220px, calc((100% - 46rem) / 2 + 70px), 340px);
+  /* Break out of the content column to the full viewport, like the landing hero, so the rings can sit
+     near the screen edges. The copy stays centred at 46rem; each ring is the gutter beside it minus a
+     margin, so it never reaches the words. */
+  width: 100vw;
+  margin-inline: calc(50% - 50vw);
+  overflow-x: clip;
+  --ring: clamp(180px, calc((100% - 46rem) / 2 - 2.5rem), 360px);
 }
 .hero .sl-flex.stack {
   position: relative;
@@ -170,12 +175,12 @@ header.header {
   pointer-events: none;
 }
 .hero .sl-dots.l {
-  left: 0;
+  left: 1.5rem;
 }
 .hero .sl-dots.r {
-  right: 0;
+  right: 1.5rem;
 }
-@media (max-width: 72rem) {
+@media (max-width: 76rem) {
   .hero .sl-dots {
     display: none;
   }
