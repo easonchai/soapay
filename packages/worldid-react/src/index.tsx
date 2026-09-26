@@ -61,18 +61,20 @@ export const HUMAN_CHECK_CREDENTIAL = "proof_of_human" as const;
  * The required credential as a session constraint. IDKit 4.3's `IDKitSessionWidget`
  * takes `constraints` (not `preset={selfieCheck()}` as the session-proof docs show).
  */
-export function humanCheckConstraint(signal: string): ConstraintNode {
-  return CredentialRequest(HUMAN_CHECK_CREDENTIAL, { signal });
+export function humanCheckConstraint(_signal?: string): ConstraintNode {
+  // No signal: World App stalls on session requests that carry one (World's own session example
+  // sends none). The API binds the proof to our signal through the RP nonce instead (`bind`).
+  return CredentialRequest(HUMAN_CHECK_CREDENTIAL, {});
 }
 
 /** POST {apiUrl}/worldid/rp-context: a fresh, single-use RP signature for one session request. */
-export async function fetchRpContext(apiUrl: string, f: typeof fetch = fetch): Promise<RpContextResponse> {
+export async function fetchRpContext(apiUrl: string, f: typeof fetch = fetch, bind?: string): Promise<RpContextResponse> {
   let res: Response;
   try {
     res = await f(`${apiUrl.replace(/\/+$/, "")}/worldid/rp-context`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ kind: "session" }),
+      body: JSON.stringify(bind ? { kind: "session", bind } : { kind: "session" }),
     });
   } catch {
     throw new HumanCheckError("api_unreachable", "Soapay API is unreachable");
@@ -135,7 +137,7 @@ export function HumanCheck(props: HumanCheckProps) {
     void (async () => {
       let request: IDKitRequest;
       try {
-        const ctx = await fetchRpContext(apiUrl, props.fetch); // a fresh RP context per request
+        const ctx = await fetchRpContext(apiUrl, props.fetch, signal); // fresh, and bound to this signal
         const config = {
           app_id: ctx.app_id,
           rp_context: ctx.rp_context,
@@ -145,7 +147,7 @@ export function HumanCheck(props: HumanCheckProps) {
         const builder = mode === "rotate" && sessionId ? IDKit.proveSession(sessionId, config) : IDKit.createSession(config);
         // IDKit 4.3 rejects presets for session flows ("Use .constraints() instead"), although
         // World's session docs show `.preset(...)`.
-        request = await builder.constraints(humanCheckConstraint(signal));
+        request = await builder.constraints(humanCheckConstraint());
         activeRequest.current = request;
       } catch (e) {
         if (ac.signal.aborted) return;

@@ -148,6 +148,11 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX faucet_claims_created ON faucet_claims(created_at);
   `,
+  // World ID sessions carry no signal (World App stalls on session requests with one), so the
+  // name / key change a proof is for is bound to its single-use RP nonce instead.
+  `
+  ALTER TABLE worldid_requests ADD COLUMN bind TEXT;
+  `,
 ];
 
 export function migrate(db: Db): void {

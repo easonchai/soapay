@@ -137,6 +137,8 @@ Per name: its `session_id`, when it was attached, and how (`enroll` or `attach`)
 
 **Time to first success:** *(fill in after the first live World App run)*.
 
+- **Session requests with a signal stall in World App.** Our session request carried a `signal` (binding the proof to the name, or to the exact key change). World App accepted the QR and then hung on "signing". World's own session example sends no signal, and removing it fixed the difference. We now bind each proof to its purpose on our server instead: the RP context is issued for one signal and stored with its single-use nonce, and the API only accepts a proof that answers that exact request (D-57). Documenting whether sessions support signals would have saved hours.
+
 **The one improvement with the greatest impact:** let `IDKitSessionWidget` accept `preset={selfieCheck()}` (today it only takes `constraints`, and a hand-built Selfie Check constraint fails in the production World App with `generic_error`), and return a specific error code instead of `generic_error` so the cause is visible. That single fix would have saved us the most time.
 
 What went well:

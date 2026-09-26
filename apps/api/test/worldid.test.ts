@@ -55,7 +55,7 @@ function sessionResult(o: {
       {
         identifier: o.identifier ?? "proof_of_human",
         issuer_schema_id: o.schema ?? 1,
-        signal_hash: worldIdSignalHash(o.signal),
+        signal_hash: o.signal === "" ? "0x0" : worldIdSignalHash(o.signal),
         session_nullifier: [o.sessionNullifier ?? `0x${(nullifierCounter++).toString(16).padStart(64, "0")}`, "0x01"],
         proof: ["0x1", "0x2", "0x3", "0x4", "0x5"],
         expires_at_min: NOW + 86_400,
@@ -74,7 +74,8 @@ function setup(opts: { env?: Record<string, string>; l1Funder?: L1Funder } = {})
   // The registry holds meta 1 for the registrant (checked by POST /names), until a relay lands.
   const registry = new Map<string, Hex>([[registrant.address, metaHex(1)], [other.address, metaHex(3)]]);
   t.client.readContract.mockImplementation(async (a: any) => registry.get(a.args[0]) ?? "0x");
-  const rpNonce = async (): Promise<string> => (await j(await t.post("/worldid/rp-context", {}))).rp_context.nonce;
+  const rpNonce = async (bind?: string): Promise<string> =>
+    (await j(await t.post("/worldid/rp-context", bind ? { bind } : {}))).rp_context.nonce;
   return { ...t, portal: p, registry, rpNonce };
 }
 
@@ -523,5 +524,26 @@ describe("gas top-up", () => {
     const t = makeTestApp();
     const f = { ...funder(0n), sendTransaction: async () => Promise.reject(new Error("nonce too low")) };
     expect(await topUpRegistrant({ ...t.deps, config: t.config, l1Funder: f } as any, who)).toEqual({ status: "failed", reason: "top-up transaction failed" });
+  });
+});
+
+describe("session proofs without a signal (World App runs sessions without one)", () => {
+  it("accepts a proof whose single-use request was bound to this exact signal", async () => {
+    const t = setup();
+    const nonce = await t.rpNonce(sessionSignal("alice", registrant.address));
+    const res = await t.post("/names", { ...(await claimBody()), worldIdSession: sessionResult({ nonce, signal: "" }) });
+    expect(res.status).toBe(201);
+  });
+
+  it("refuses one bound to a different signal, or not bound at all", async () => {
+    const t = setup();
+    const other = await t.rpNonce(sessionSignal("mallory", registrant.address));
+    const a = await t.post("/names", { ...(await claimBody()), worldIdSession: sessionResult({ nonce: other, signal: "" }) });
+    expect(a.status).toBe(403);
+    expect((await j(a)).error.code).toBe("signal_mismatch");
+    const unbound = await t.rpNonce();
+    const b = await t.post("/names", { ...(await claimBody()), worldIdSession: sessionResult({ nonce: unbound, signal: "" }) });
+    expect(b.status).toBe(403);
+    expect((await j(b)).error.code).toBe("signal_mismatch");
   });
 });
