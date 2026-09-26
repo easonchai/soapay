@@ -143,28 +143,3 @@ export function useCountUp(ref: RefObject<HTMLElement | null>, value: number, fo
     { dependencies: [value, active, opts.duration], revertOnUpdate: true },
   );
 }
-
-
-/**
- * Top bar: full width at the top of the page, a floating island once the page has scrolled 40px.
- * ScrollTrigger toggles `is-island` (the layout switch lives in landing.css); a short drop-in masks
- * the switch. With motion off the class still toggles, since it is layout, not decoration.
- */
-export function useIslandBar(bar: RefObject<HTMLElement | null>) {
-  useGSAP(
-    () => {
-      const el = bar.current;
-      if (!el) return;
-      ScrollTrigger.create({
-        start: 40,
-        end: "max",
-        toggleClass: { targets: el, className: "is-island" },
-        onToggle: () => {
-          if (motionOff()) return;
-          gsap.fromTo(el, { y: -10, opacity: 0.6 }, { y: 0, opacity: 1, duration: 0.3, ease: EASE_OUT, clearProps: "opacity,transform" });
-        },
-      });
-    },
-    { scope: bar },
-  );
-}
