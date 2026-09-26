@@ -85,7 +85,17 @@ describe.skipIf(!live)("LIVE exit (EXIT_LIVE=1)", () => {
     }
 
     // 2. Recipient side: find the payment by scanning, recover the stealth key.
-    const announcements = await fetchAnnouncementsRpc({ client: baseClient as never, fromBlock: BigInt(state.payBlock!), toBlock: BigInt(state.payBlock!) });
+    // Public RPCs are load-balanced: the node answering getLogs can lag the one that returned the receipt.
+    const announcements = await (async () => {
+      for (let i = 0; ; i++) {
+        try {
+          return await fetchAnnouncementsRpc({ client: baseClient as never, fromBlock: BigInt(state.payBlock!), toBlock: BigInt(state.payBlock!) });
+        } catch (e) {
+          if (i >= 20 || !/beyond current head|block range/i.test(String(e))) throw e;
+          await new Promise((r) => setTimeout(r, 3_000));
+        }
+      }
+    })();
     const [match] = scanAnnouncements(announcements, { spendingPublicKey: keys.spendingPublicKey, viewingPrivateKey: keys.viewingKey });
     expect(match).toBeDefined();
     const stealthKey = deriveStealthKey(match!, { spendingPrivateKey: keys.spendingKey, viewingPrivateKey: keys.viewingKey });
