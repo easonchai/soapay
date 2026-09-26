@@ -28,10 +28,10 @@ To render one slide as a PNG for a quick look, open the HTML with `?only=N` in t
 1. Title
 2. Team
 3. Problem statement: "Who sees what you earn?"
-4. Everyone with a browser (a live payout batch on Base)
+4. Everyone sees everything (a live payout batch on Base)
 5. Your colleagues (Gitcoin DAO)
-6. So companies walk away (Visa, plus Stripe, Circle, J.P. Morgan, Fireblocks)
-7. So they built private payrolls (Toku on Aleo, Tempo Zones with Deel, Base Ledgers), and the two flaws they share
+6. Dealbreaker for companies (Visa, plus Stripe, Circle, J.P. Morgan, Fireblocks)
+7. Existing solutions today (Toku on Aleo, Tempo Zones with Deel, Base Ledgers), and the two flaws they share
 8. Solution
 9. Architecture, high level
 10. Use cases
