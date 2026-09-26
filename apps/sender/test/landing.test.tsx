@@ -1,8 +1,11 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { Landing } from "../src/pages/Landing.js";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 const ICON = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciLz4=";
 
@@ -17,6 +20,28 @@ function mount(connectors: { id: string; name: string; icon?: string }[]) {
 }
 
 describe("Landing", () => {
+  it("renders the hero headline as two lines with Private as a dot word over its text", () => {
+    const { container } = mount([{ id: "a", name: "MetaMask", icon: ICON }]);
+    const heading = container.querySelector<HTMLElement>(".land-h1");
+    expect(heading).not.toBeNull();
+    if (!heading) return;
+    const lines = heading.querySelectorAll(":scope > .line");
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toHaveTextContent("Public chain.");
+    expect(lines[1]).toHaveTextContent("Private payroll.");
+    expect(heading.textContent).toContain("Public chain. Private payroll.");
+    const word = container.querySelector<HTMLElement>(".dot-word");
+    expect(word).toHaveTextContent("Private");
+    expect(word?.querySelector(".dot-word-canvas")).not.toBeNull();
+    // The last word starts on "payroll." and only rolls on once its interval fires.
+    expect(container.querySelector(".roll-item")).toHaveTextContent("payroll.");
+  });
+
+  it("keeps the word as plain text while the canvas cannot paint (jsdom has no 2d context)", () => {
+    const { container } = mount([{ id: "a", name: "MetaMask", icon: ICON }]);
+    expect(container.querySelector(".dot-word")).not.toHaveClass("is-dots");
+  });
+
   it("shows the GitHub mark next to the header and footer GitHub links", () => {
     mount([{ id: "a", name: "MetaMask", icon: ICON }]);
     const links = screen.getAllByRole("link", { name: /github/i });
