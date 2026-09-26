@@ -91,14 +91,16 @@ EXIT_LIVE=1 EMPLOYER_KEY=$DEPLOYER_PRIVATE_KEY PAY_AMOUNT=18000000 EXIT_LIVE_MIN
 
   It pays one fresh stealth address through StealthDisperse, scans for it, then drives the leg (burn → attestation → forwarded mint → deposit → ASP → withdrawal) and prints each tx's explorer link. If the ASP hasn't approved within `EXIT_LIVE_MINUTES`, **re-run the same command** later: it resumes from the state file and finishes the withdrawal. Record the printed links in the table below.
 
+**Completed 2026-09-26.** The testnet relayer's fixed ~21.5 USDC fee exceeded the 9.95 USDC in the pool, so the leg withdrew directly (D-48).
+
 | Step | Tx |
 | --- | --- |
-| Pay run (Base Sepolia) | pending funding |
-| CCTP burn (Base Sepolia) | pending |
-| Forwarded mint (Ethereum Sepolia) | pending |
-| Pool deposit (Ethereum Sepolia) | pending |
-| ASP approval | pending |
-| Relayed withdrawal (Ethereum Sepolia) | pending |
+| Pay run (Base Sepolia), 18 USDC to one fresh stealth address | [0xbd9d…799b](https://sepolia.basescan.org/tx/0xbd9d0001b4fe5fbee969003921b43a82608e7e3d0748a3fcd347f33244a3799b) |
+| CCTP burn (Base Sepolia), gas in USDC | [0x78fa…6c89](https://sepolia.basescan.org/tx/0x78fa2c713458f30879096a4d79a024f4fc0eab55aceffc8789111beaf19b6c89) |
+| Forwarded mint to the same address (Ethereum Sepolia), 16.12 USDC | [0x5fee…36ab](https://sepolia.etherscan.io/tx/0x5feec0c529b0b424b98c3b4c28f00191d20e7ca25b52b5d8d41627e7779436ab) |
+| Pool deposit (Ethereum Sepolia), 10.05 USDC (value 9.95 after the pool fee) | [0xa7c6…13e0](https://sepolia.etherscan.io/tx/0xa7c6ff5f59c0c231b53df82859fca712798d398e9a907aefba778a5495d013e0) |
+| ASP approval | approved |
+| **Direct** withdrawal (Ethereum Sepolia) to a fresh wallet funded only from a public faucet: 9.95 USDC arrived | [0xed92…c672](https://sepolia.etherscan.io/tx/0xed9235c87f7643bde048cd9e29c8abebe989a64016a628c85faa7ed5724fc672) |
 
 ## Not yet run live
 
