@@ -13,3 +13,7 @@ coverage/
 .gstack/
 apps/mcp/.state/
 .exit-live.json
+# Demo secrets and state (scripts/demo-pluggable.sh)
+scripts/*.local.json
+scripts/*.local.env
+scripts/.demo-state/

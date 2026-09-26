@@ -12,7 +12,7 @@ Stealth-address payroll on Base. Product spec: `PRD.md`. PRD review: `docs/prd-a
 | `apps/api` | Hono on Node: registration relayer (`POST /register`, and `POST /relay` for CK's request shape), ENSv2 subname issuer, World ID verification, announcement indexer (docs/mvp-spec.md §4). Gateway *derivation* mode is out of scope (proposed cut) |
 | `apps/mcp` | `@soapay/mcp`: stdio MCP server (spec §8), so agents get `<label>.soapay.eth` identities with ENSIP-26 records and can pay, scan and spend. Bundled with esbuild |
 | `apps/cli` | `@soapay/cli`: headless `soapay distribute` (CSV → plan, dry run by default, `--execute` via StealthDisperse) and `soapay scan`. Bundled with esbuild |
-| `examples` | `@soapay/examples`: `dividend-run.ts`, `grant-round.ts` (tsx, dry run by default) |
+| `examples` | `@soapay/examples`: `dividend-run.ts`, `grant-round.ts` (tsx, dry run by default); `demo/` drives the live "plug it into anything" beat (`scripts/demo-pluggable.sh`) |
 | `packages/ui` | `@soapay/ui`: Direction A Ledger tokens (light, navy #1E3A5F, IBM Plex, 2px), `TopBar`, `PageHead`, `Dots`, `NavyPanel`, `Toggle`, `FreshMark`, `Pill`, `Copy`, `ErrorLine`, `Shell`/`Steps`. Source-only, no build |
 | `contracts` | `@soapay/contracts`: Foundry, `StealthDisperse`, plus `tools/derive.ts` for test vectors |
 
