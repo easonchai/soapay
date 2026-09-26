@@ -63,11 +63,11 @@ Don't rotate many fresh addresses through the faucet to get around the per-addre
 
 ## Live exit (Privacy Pools v1 via CCTP V2)
 
-Route: Base Sepolia stealth address → CCTP V2 burn with the Forwarding Service → minted back to the **same** stealth address on Ethereum Sepolia → 0xbow USDC pool deposit (`0x0b062Fe3…4C0f`, Entrypoint `0x34A20681…21cB`) → ASP approval → relayed withdrawal to a fresh destination. The stealth address and the destination never hold ETH.
+Route: Base Sepolia stealth address → CCTP V2 burn with the Forwarding Service → minted back to the **same** stealth address on Ethereum Sepolia → 0xbow USDC pool deposit (`0x0b062Fe3…4C0f`, Entrypoint `0x34A20681…21cB`) → ASP approval → withdrawal to a fresh destination, relayed or (D-48) sent directly by the destination. The stealth address never holds ETH; a direct withdrawal needs a little Sepolia ETH on the destination.
 
-**Status (2026-09-26): not run yet, blocked on test USDC. Nothing was spent.**
+**Status (2026-09-26): run once with 18 USDC: bridged (16.12 USDC minted), deposited and approved; the withdrawal is pending. The relayer's fixed ≈ 21.5 USDC fee exceeds the ≈ 9.95 USDC in the pool, so it goes out directly once the destination holds Sepolia ETH. The funding table below predates the run.**
 
-- The smallest exit leg is **≈ 16.40 USDC** on one stealth address (`exitLegMinimum`: 10 USDC pool minimum + ≈ 2.21 forward fee + ≈ 0.002 CCTP fee + ≈ 4.13 USDC Sepolia paymaster prefund + ≈ 0.06 Base Sepolia prefund, the prefunds with 10% headroom; the unused prefund is refunded to the address). The run pays **18 USDC** for margin.
+- The smallest exit leg (D-48, `exitLegMinimum`) is **≈ 18.6 USDC** with a direct withdrawal (10 USDC pool minimum + ≈ 2.21 forward fee + ≈ 0.002 CCTP fee + ≈ 6.38 USDC Sepolia paymaster prefund + ≈ 0.06 Base Sepolia prefund, the prefunds with 10% headroom; the unused prefund is refunded to the address) and **≈ 81.3 USDC** through the relayer (it charges a fixed ≈ 21.5 USDC per withdrawal, and the pool refuses a relayer fee above 30% of it, so the withdrawal must be ≥ ≈ 72 USDC). The 2026-09-26 run paid 18 USDC: bridged to 16.12, deposited, approved; its withdrawal goes out directly (`EXIT_WITHDRAW=direct`, the destination needs a little Sepolia ETH).
 - Wallets we control (addresses derived from the git-ignored env files; balances read 2026-09-26):
 
 | Wallet | Address | Base Sepolia USDC | Base Sepolia ETH | Sepolia ETH |

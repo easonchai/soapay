@@ -12,7 +12,10 @@
  *   destination, and Circle's Forwarding Service submits the mint, so the address never needs ETH.
  * - Deposit: approve + `Entrypoint.deposit` from the stealth address on the destination (same path).
  * - Withdraw: a Groth16 proof (0xbow SDK) relayed by the 0xbow relayer to `destination`; the relayer
- *   pays gas and takes its fee from the withdrawn amount.
+ *   pays gas and takes its fee from the withdrawn amount (on testnet a fixed ≈ 21.5 USDC, D-48). Or
+ *   directly (`withdrawDirect`, `withdrawVia: "direct"`): the destination wallet sends
+ *   `PrivacyPool.withdraw` itself and pays the gas in ETH, with no relayer fee.
+ * - Fees: `fetchExitFeeQuote` (live) → `exitLegMinimum` / `exitLegCost` / `planExit`.
  * - Declined: `PrivacyPool.ragequit` from the stealth address returns the funds to it, publicly.
  *
  * `advanceExitLeg` is an idempotent, resumable step machine: each call does at most one transition
@@ -81,6 +84,8 @@ export type ExitConfig = {
     minDeposit: bigint;
     /** `assetConfig(asset).vettingFeeBPS`: taken from the deposit on entry. */
     vettingFeeBps: bigint;
+    /** `assetConfig(asset).maxRelayFeeBPS`: the pool reverts a relayed withdrawal whose fee is higher. */
+    maxRelayFeeBps: bigint;
   };
   aspApiUrl: string;
   relayerUrl: string;
@@ -94,13 +99,15 @@ export type ExitConfig = {
   /** USDC kept on the destination stealth address after deposit, to pay a ragequit's gas if declined. */
   ragequitReserve: bigint;
   /**
-   * Planning estimates for `planExit` and `exitLegMinimum` (the real fees are quoted at each step).
-   * `sourceGas` / `destGas` are the Circle paymaster's USDC **prefund** for the burn and the deposit
-   * userOps (the step machine keeps that much, plus 10%, on the address; the unused part is refunded
-   * after the op, so it is an upper bound on the fee but a hard floor on the balance). `forwardFee`
-   * is the Forwarding Service fee, conservative (the high tier).
+   * Planning estimates for `planExit` and `exitLegMinimum`, used when no live quote is at hand
+   * (`fetchExitFeeQuote`; the real fees are quoted again at each step). `sourceGas` / `destGas` are
+   * the Circle paymaster's USDC **prefund** for the burn and the deposit userOps (the step machine
+   * keeps that much, plus 10%, on the address; the unused part is refunded to the address after the
+   * op, so it is an upper bound on the fee but a hard floor on the balance). `forwardFee` is the
+   * Forwarding Service fee, conservative (the high tier). The relayer charges `relayFeeBps` of the
+   * withdrawal plus `relayGas`, a roughly fixed USDC amount that pays its gas.
    */
-  estimates: { sourceGas: bigint; destGas: bigint; forwardFee: bigint; relayFeeBps: bigint };
+  estimates: { sourceGas: bigint; destGas: bigint; forwardFee: bigint; relayFeeBps: bigint; relayGas: bigint };
 };
 
 /** Forwarding Service v0 hook data: "cctp-forward" (bytes24) | version 0 | length 0. */
@@ -140,6 +147,7 @@ export const EXIT_BASE_SEPOLIA_TO_SEPOLIA: ExitConfig = {
     scope: 18021368285297593722986850677939473668942851500120722179451099768921996600282n,
     minDeposit: 10_000_000n,
     vettingFeeBps: 100n,
+    maxRelayFeeBps: 3000n, // assetConfig(USDC), read 2026-09-26
   },
   aspApiUrl: "https://dw.0xbow.io",
   relayerUrl: "https://testnet-relayer.privacypools.com",
@@ -150,12 +158,16 @@ export const EXIT_BASE_SEPOLIA_TO_SEPOLIA: ExitConfig = {
   // Testnet: 0, because faucet funds are scarce and the testnet ASP approves ordinary deposits.
   // Production should reserve roughly one ragequit's gas.
   ragequitReserve: 0n,
-  // Measured 2026-09-26: Circle paymaster prices ETH at 3000 USDC on both chains. Sepolia gas ≈ 1.1–1.6
-  // gwei, and the first deposit userOp (7702 authorization + approve + Entrypoint.deposit) carries
-  // ≈ 0.8M gas of limits, so its prefund is ≈ 3–4 USDC (the fork run spent ≈ 2.12 of it). Base Sepolia
-  // gas is ≈ 0.006 gwei, so the burn's prefund is cents. Forwarding Service fee high tier: 2.20 USDC.
-  // Together with the 10 USDC pool minimum this puts the smallest leg at ≈ 16.4 USDC (exitLegMinimum).
-  estimates: { sourceGas: 50_000n, destGas: 3_750_000n, forwardFee: 2_210_000n, relayFeeBps: 10n },
+  // Live run 2026-09-26 (18 USDC, one stealth address; D-48): CCTP burn + forwarded mint 18 → 16.12
+  // USDC. The Sepolia deposit userOp's paymaster prefund quoted 5.1–5.8 USDC (Circle prices ETH at
+  // 3000 USDC; ≈ 0.9M gas of limits at the bundler's fee), not the 3.75 the fork run suggested. The
+  // testnet relayer charges 10 bps plus a FIXED ≈ 21.5 USDC for its gas (650k gas at its own ETH
+  // price), whatever the amount: `/relayer/quote` gave 225,233 bps for 0.95 USDC, 21,517 for 9.95 and
+  // 2,150 for 100. The pool refuses a relayer fee above 30% of the withdrawal, so a withdrawal needs
+  // ≥ 72 USDC and the smallest leg is ≈ 81 USDC (exitLegMinimum). Base Sepolia gas is ≈ 0.006 gwei,
+  // so the burn's prefund is cents. Forwarding Service fee high tier: 2.21 USDC. Every figure here is
+  // a fallback: `fetchExitFeeQuote` replaces them with live quotes.
+  estimates: { sourceGas: 50_000n, destGas: 5_800_000n, forwardFee: 2_210_000n, relayFeeBps: 10n, relayGas: 21_500_000n },
 };
 
 export const EXIT_CONFIGS: Record<string, ExitConfig> = {
@@ -190,6 +202,7 @@ export const ppPoolAbi = parseAbi([
   "event Deposited(address indexed _depositor, uint256 _commitment, uint256 _label, uint256 _value, uint256 _precommitmentHash)",
   "event Withdrawn(address indexed _processooor, uint256 _value, uint256 _spentNullifier, uint256 _newCommitment)",
   "event Ragequit(address indexed _ragequitter, uint256 _commitment, uint256 _label, uint256 _value)",
+  "function withdraw((address processooor, bytes data) _withdrawal, (uint256[2] pA, uint256[2][2] pB, uint256[2] pC, uint256[8] pubSignals) _proof)",
 ]);
 const entryPointNonceAbi = parseAbi([
   "function getNonce(address sender, uint192 key) view returns (uint256)",
@@ -252,6 +265,24 @@ export type ExitLeg = {
    * resume, the pool's `nullifierHashes` tells whether it landed (then its `Withdrawn` log gives the tx).
    */
   pendingWithdraw?: { spentNullifier: string; amount: string; child: number; at: number };
+  /**
+   * Fee limits accepted when the exit was planned (`planExit`): `relayFee` is the most the relayer may
+   * take from one withdrawal, in USDC base units. A higher live quote waits (retryable) instead.
+   */
+  feeLimits?: { relayFee?: string };
+  /** How withdrawals go out: through the relayer (default) or directly from the destination wallet. */
+  withdrawVia?: ExitWithdrawVia;
+};
+
+export type ExitWithdrawVia = "relayer" | "direct";
+
+/**
+ * The destination wallet, for direct withdrawals: it sends `PrivacyPool.withdraw` itself and pays the
+ * destination chain's gas in ETH. `address` must be the leg's destination (the pool pays `msg.sender`).
+ */
+export type DirectWithdrawSender = {
+  address: Address;
+  sendTransaction(tx: { to: Address; data: Hex; chainId: number }): Promise<Hash>;
 };
 
 const bi = (s: string | undefined): bigint => BigInt(s ?? "0");
@@ -385,20 +416,25 @@ export function cctpMaxFee(amount: bigint, row: CctpFeeRow, tier: "low" | "med" 
 }
 
 /**
- * Split a pool balance into round withdrawal parts (multiples of `unit`), largest first, plus the
- * non-round remainder as a last part unless `leaveChange`. Round, repeated amounts don't match any
- * deposit; leaving the change in the pool avoids the one tell-tale odd amount.
+ * Split a pool balance into `parts` withdrawals (default 1). With `leaveChange`, each part is a round
+ * multiple of `unit` and the non-round change stays in the pool (round, repeated amounts don't match
+ * any deposit, and there is no tell-tale odd amount). Without it, the change is folded into the last
+ * part, so `parts` is exactly the number of withdrawals: every withdrawal pays the relayer's fixed
+ * fee, and a sub-unit change part on its own is not worth relaying (or not relayable at all).
  */
 export function planRoundWithdrawals(value: bigint, opts: { unit: bigint; parts?: number; leaveChange?: boolean; min?: bigint }): bigint[] {
-  const parts = BigInt(Math.max(1, opts.parts ?? 2));
+  const parts = BigInt(Math.max(1, opts.parts ?? 1));
   const min = opts.min ?? 1n;
   const per = (value / parts / opts.unit) * opts.unit;
   const out: bigint[] = [];
   if (per > 0n) for (let i = 0n; i < parts; i++) out.push(per);
   const rest = value - per * BigInt(out.length);
-  if (rest >= min && !opts.leaveChange) out.push(rest);
+  if (!opts.leaveChange && rest > 0n) {
+    if (out.length > 0) out[out.length - 1] = out[out.length - 1]! + rest;
+    else if (value >= min) out.push(value);
+  }
   if (out.length === 0 && value >= min) out.push(value);
-  return out;
+  return out.filter((w) => w >= min);
 }
 
 /** Uniform random delay in [min, max] ms before a withdrawal. */
@@ -414,10 +450,13 @@ export type ExitFees = {
   sourceGas: bigint;
   destGas: bigint;
   vettingFee: bigint;
+  /** Every relayed withdrawal: `relayFeeBps` of it plus the relayer's fixed gas charge. */
   relayFee: bigint;
   total: bigint;
   /** What reaches `destination` after every fee (estimate). */
   estimatedReceived: bigint;
+  /** Change left in the pool by round withdrawals (not a fee; it stays withdrawable). */
+  leftInPool: bigint;
 };
 
 /** Paymaster fee headroom for the re-quote at send time (gas prices move between quotes). */
@@ -427,7 +466,47 @@ const withMargin = (fee: bigint) => fee + fee / 10n;
 const CCTP_FAST_CENTI_BPS = 130n;
 const ceilDiv = (a: bigint, b: bigint) => (a + b - 1n) / b;
 
-/** Live fee inputs for `exitLegMinimum`; anything left out falls back to `config.estimates`. */
+/** Above this share of the amount (15%), `planExit` and the apps suggest a larger exit. */
+export const EXIT_HIGH_FEE_SHARE_BPS = 1500n;
+
+/** USDC per ETH the Circle paymaster charges gas at on the testnet route (measured 2026-09-26). */
+export const EXIT_PAYMASTER_USDC_PER_ETH = 3000n;
+/**
+ * Gas the paymaster prefunds for the destination deposit userOp (7702 authorization + approve +
+ * `Entrypoint.deposit`), calibrated so that `paymasterPrefundUsdc` reproduces the live run's 5.1–5.8
+ * USDC quotes at Sepolia's ≈ 1.0–1.1 gwei.
+ */
+export const EXIT_DEPOSIT_PREFUND_GAS = 900_000n;
+/** Hard ceiling on the default destination paymaster fee cap (testnet: Sepolia gas spikes). */
+export const EXIT_DEST_FEE_CEILING = 15_000_000n;
+/**
+ * Upper-bound gas for a direct `PrivacyPool.withdraw` (Groth16 verify + tree insert + transfer); the
+ * relayer budgets 650k for its `Entrypoint.relay`, which wraps the same call. The destination wallet
+ * pays it in ETH: ≈ 0.0007 ETH at 1 gwei.
+ */
+export const EXIT_DIRECT_WITHDRAW_GAS = 650_000n;
+
+/**
+ * The paymaster's USDC prefund for a userOp of `gasUnits` at a network gas price: the bundler bids
+ * about twice the current gas price as `maxFeePerGas`, and the paymaster pulls
+ * gas limits × maxFeePerGas × its ETH price before the op runs.
+ */
+export function paymasterPrefundUsdc(gasPriceWei: bigint, gasUnits = EXIT_DEPOSIT_PREFUND_GAS, usdcPerEth = EXIT_PAYMASTER_USDC_PER_ETH): bigint {
+  return ceilDiv(gasUnits * gasPriceWei * 2n * usdcPerEth, 1_000_000_000_000n);
+}
+
+/**
+ * Default fee cap for destination-chain userOps (deposit, ragequit): twice the planning estimate or
+ * twice a live prefund estimate, whichever is higher, never above `EXIT_DEST_FEE_CEILING`. A normal
+ * Sepolia deposit (5.1–5.8 USDC on 2026-09-26) passes with room; `ExitContext.maxFeeUsdc` overrides.
+ */
+export function defaultDestFeeCap(config: Pick<ExitConfig, "estimates">, gasPriceWei?: bigint): bigint {
+  const live = gasPriceWei !== undefined && gasPriceWei > 0n ? 2n * paymasterPrefundUsdc(gasPriceWei) : 0n;
+  const want = live > 2n * config.estimates.destGas ? live : 2n * config.estimates.destGas;
+  return want < EXIT_DEST_FEE_CEILING ? want : EXIT_DEST_FEE_CEILING;
+}
+
+/** Live fee inputs for `exitLegMinimum` and `planExit`; anything left out falls back to `config.estimates`. */
 export type ExitFeeInputs = {
   /** Forwarding Service fee (USDC base units), e.g. from a live Iris quote. */
   forwardFee?: bigint;
@@ -437,17 +516,53 @@ export type ExitFeeInputs = {
   sourceGas?: bigint;
   /** Paymaster prefund quote for the deposit userOp (destination chain). */
   destGas?: bigint;
+  /** The relayer's percentage fee (its `baseFeeBPS`). */
+  relayFeeBps?: bigint;
+  /** The relayer's fixed USDC charge for its gas, per withdrawal. */
+  relayGas?: bigint;
 };
 
+/** What the relayer charges for one withdrawal of `amount`: `relayFeeBps` of it plus its gas. */
+export function relayFeeFor(config: Pick<ExitConfig, "estimates">, amount: bigint, live: ExitFeeInputs = {}): bigint {
+  if (amount <= 0n) return 0n;
+  const bps = live.relayFeeBps ?? config.estimates.relayFeeBps;
+  const gas = live.relayGas ?? config.estimates.relayGas;
+  return ceilDiv(amount * bps, 10_000n) + gas;
+}
+
+/** A relayer fee as bps of the withdrawal (what the pool checks against `maxRelayFeeBPS`), rounded up. */
+export function relayFeeBpsOf(amount: bigint, fee: bigint): bigint {
+  return amount > 0n ? ceilDiv(fee * 10_000n, amount) : 0n;
+}
+
+/**
+ * The most the step machine pays the relayer for a withdrawal planned at `fee`: the plan plus half
+ * again (at least 1 USDC more), so ordinary gas moves pass and a spike waits instead of eating the
+ * exit. `planExit` stores it on the leg (`feeLimits.relayFee`) and the apps show it before the start.
+ */
+export function relayFeeCap(fee: bigint): bigint {
+  const room = fee / 2n > 1_000_000n ? fee / 2n : 1_000_000n;
+  return fee + room;
+}
+
 export type ExitLegMinimum = {
-  /** The smallest source balance whose leg clears the pool minimum. */
+  /** The smallest source balance whose leg clears the pool minimum and a withdrawal the relayer can take. */
   minimum: bigint;
   /** What must land on the destination stealth address. */
   minted: bigint;
   /** What the burn must carry. */
   burn: bigint;
-  /** Each part, with the 10% paymaster headroom the step machine keeps already added to the gas lines. */
-  breakdown: { minDeposit: bigint; ragequitReserve: bigint; destGas: bigint; forwardFee: bigint; cctpProtocolFee: bigint; sourceGas: bigint };
+  /** The deposit the minimum leg makes: the pool minimum, or more when the relayer's fixed fee needs it. */
+  deposit: bigint;
+  /** The smallest withdrawal the relayer can take within the pool's fee limit. */
+  withdrawal: bigint;
+  /** True when the relayer's fixed fee, not the pool minimum, sets the deposit. */
+  relayBound: boolean;
+  /**
+   * Each part, with the 10% paymaster headroom the step machine keeps already added to the gas lines.
+   * `relayFee` is what the relayer takes from the minimum leg's withdrawal.
+   */
+  breakdown: { minDeposit: bigint; ragequitReserve: bigint; destGas: bigint; forwardFee: bigint; cctpProtocolFee: bigint; sourceGas: bigint; relayFee: bigint };
 };
 
 function protocolFee(burn: bigint, centiBps: bigint): bigint {
@@ -459,20 +574,57 @@ function centiBpsOf(config: ExitConfig, live?: ExitFeeInputs): bigint {
   return config.cctp.minFinalityThreshold === 1000 ? CCTP_FAST_CENTI_BPS : 0n;
 }
 
+/** The pool's entry fee on a deposit (`Entrypoint`: value × vettingFeeBPS / 10000, rounded down). */
+const vettingFeeOf = (config: ExitConfig, deposit: bigint) => (deposit > 0n ? (deposit * config.pool.vettingFeeBps) / 10_000n : 0n);
+
+/** True when the pool accepts the relayer's fee on a withdrawal of `amount` (fee ≤ `maxRelayFeeBps` of it). */
+export function isRelayable(config: ExitConfig, amount: bigint, live: ExitFeeInputs = {}): boolean {
+  return amount > 0n && relayFeeFor(config, amount, live) * 10_000n <= amount * config.pool.maxRelayFeeBps;
+}
+
 /**
- * The smallest leg that reaches the pool, derived the way the step machine spends it:
- *   deposit = minted − ragequitReserve − (destGas + 10%)        ≥ pool.minDeposit
+ * The smallest withdrawal whose relayer fee the pool accepts (fee ≤ `pool.maxRelayFeeBps` of it),
+ * a multiple of `unit` when the withdrawal is rounded.
+ */
+export function minRelayableWithdrawal(config: ExitConfig, live: ExitFeeInputs = {}, unit = 1n): bigint {
+  const bps = live.relayFeeBps ?? config.estimates.relayFeeBps;
+  const gas = live.relayGas ?? config.estimates.relayGas;
+  const headroom = config.pool.maxRelayFeeBps - bps;
+  if (headroom <= 0n) throw new ExitError(`Soapay exit: the relayer's ${bps} bps fee is at or above the pool's ${config.pool.maxRelayFeeBps} bps limit`);
+  let w = ceilDiv(ceilDiv(gas * 10_000n, headroom), unit) * unit;
+  if (w < unit) w = unit;
+  while (!isRelayable(config, w, live)) w += unit;
+  return w;
+}
+
+/**
+ * The smallest leg that reaches the pool AND can leave it, derived the way the step machine spends it:
+ *   withdrawal ≥ the smallest one the relayer can take within the pool's fee limit (its fixed gas)
+ *   deposit − entry fee ≥ that withdrawal, and deposit ≥ pool.minDeposit
+ *   minted  = deposit + ragequitReserve + (destGas + 10%)
  *   minted  = burn − ceil(burn · CCTP bps) − forwardFee
  *   balance = burn + (sourceGas + 10%)
  * The paymaster pulls its whole prefund before the calls run (the unused part comes back after), so
- * the prefund, not the fee finally charged, sets the floor. On the testnet route this is ≈ 16.4 USDC.
+ * the prefund, not the fee finally charged, sets the floor. `roundTo` is the withdrawal unit when
+ * round withdrawals leave the change in the pool. On the testnet route the relayer's fixed ≈ 21.5
+ * USDC sets it: ≈ 81 USDC (a withdrawal of ≥ 72 USDC keeps the fee under the pool's 30% limit).
+ * With `via: "direct"` (the destination wallet withdraws and pays ETH gas) it is ≈ 18.6 USDC.
  */
-export function exitLegMinimum(config: ExitConfig, live: ExitFeeInputs = {}): ExitLegMinimum {
+export function exitLegMinimum(config: ExitConfig, live: ExitFeeInputs = {}, opts: { roundTo?: bigint; via?: ExitWithdrawVia } = {}): ExitLegMinimum {
   const sourceGas = live.sourceGas ?? config.estimates.sourceGas;
   const destGas = live.destGas ?? config.estimates.destGas;
   const forwardFee = live.forwardFee ?? config.estimates.forwardFee;
   const centi = centiBpsOf(config, live);
-  const minted = config.pool.minDeposit + config.ragequitReserve + withMargin(destGas);
+  // A direct withdrawal pays no relayer (the destination pays ETH gas), so only the pool minimum binds.
+  const direct = opts.via === "direct";
+  const withdrawal = direct ? 1n : minRelayableWithdrawal(config, live, opts.roundTo ?? 1n);
+  // Smallest deposit whose value after the entry fee covers that withdrawal.
+  let deposit = ceilDiv(withdrawal * 10_000n, 10_000n - config.pool.vettingFeeBps);
+  while (deposit - vettingFeeOf(config, deposit) < withdrawal) deposit++;
+  while (deposit > 0n && deposit - 1n - vettingFeeOf(config, deposit - 1n) >= withdrawal) deposit--;
+  const relayBound = deposit > config.pool.minDeposit;
+  if (!relayBound) deposit = config.pool.minDeposit;
+  const minted = deposit + config.ragequitReserve + withMargin(destGas);
   let burn = ceilDiv((minted + forwardFee) * 1_000_000n, 1_000_000n - centi);
   while (burn - protocolFee(burn, centi) - forwardFee < minted) burn++;
   while (burn > 0n && burn - 1n - protocolFee(burn - 1n, centi) - forwardFee >= minted) burn--;
@@ -480,6 +632,9 @@ export function exitLegMinimum(config: ExitConfig, live: ExitFeeInputs = {}): Ex
     minimum: burn + withMargin(sourceGas),
     minted,
     burn,
+    deposit,
+    withdrawal,
+    relayBound,
     breakdown: {
       minDeposit: config.pool.minDeposit,
       ragequitReserve: config.ragequitReserve,
@@ -487,7 +642,87 @@ export function exitLegMinimum(config: ExitConfig, live: ExitFeeInputs = {}): Ex
       forwardFee,
       cctpProtocolFee: protocolFee(burn, centi),
       sourceGas: withMargin(sourceGas),
+      relayFee: direct ? 0n : relayFeeFor(config, withdrawal, live),
     },
+  };
+}
+
+export type ExitLegCost = {
+  amount: bigint;
+  burn: bigint;
+  cctpProtocolFee: bigint;
+  forwardFee: bigint;
+  /** Both paymaster prefunds with the step machine's 10% headroom (the unused part stays on the address). */
+  sourceGas: bigint;
+  destGas: bigint;
+  deposit: bigint;
+  vettingFee: bigint;
+  /** The planned withdrawals, and what the relayer takes from them in total. */
+  withdrawals: bigint[];
+  relayFee: bigint;
+  /** False when some planned withdrawal's relayer fee is above the pool's limit (the relay would fail). Always true for direct. */
+  relayable: boolean;
+  leftInPool: bigint;
+  /** What reaches the destination. */
+  received: bigint;
+  /** Every fee: bridge + gas + pool entry + relayer (the change left in the pool is not a fee). */
+  totalFees: bigint;
+  /** `totalFees` as bps of `amount`. */
+  feeShareBps: bigint;
+};
+
+/**
+ * The full cost of one leg, the same arithmetic the step machine spends by. `withdrawParts` and
+ * `leaveChange` match `ExitContext` (defaults 1 and false); `withdrawUnit` defaults to the config's.
+ * With `via: "direct"` there is no relayer fee; the destination wallet's ETH gas is not counted here
+ * (see `EXIT_DIRECT_WITHDRAW_GAS`).
+ */
+export function exitLegCost(
+  config: ExitConfig,
+  amount: bigint,
+  opts: { live?: ExitFeeInputs; withdrawParts?: number; leaveChange?: boolean; withdrawUnit?: bigint; via?: ExitWithdrawVia } = {},
+): ExitLegCost {
+  const live = opts.live ?? {};
+  const direct = opts.via === "direct";
+  const sourceGas = withMargin(live.sourceGas ?? config.estimates.sourceGas);
+  const destGas = withMargin(live.destGas ?? config.estimates.destGas);
+  const forwardFee = live.forwardFee ?? config.estimates.forwardFee;
+  const burn = amount > sourceGas ? amount - sourceGas : 0n;
+  const cctpProtocolFee = protocolFee(burn, centiBpsOf(config, live));
+  const minted = burn - cctpProtocolFee - forwardFee;
+  const d = minted - destGas - config.ragequitReserve;
+  const deposit = d > 0n ? d : 0n;
+  const vettingFee = vettingFeeOf(config, deposit);
+  const inPool = deposit - vettingFee;
+  // Direct: everything in one part, no change left behind (the step machine does the same).
+  const withdrawals = direct
+    ? inPool > 0n
+      ? [inPool]
+      : []
+    : inPool > 0n
+      ? planRoundWithdrawals(inPool, { unit: opts.withdrawUnit ?? config.withdrawUnit, parts: opts.withdrawParts ?? 1, leaveChange: opts.leaveChange ?? false, min: 100n })
+      : [];
+  const out = withdrawals.reduce((a, w) => a + w, 0n);
+  const relayFee = direct ? 0n : withdrawals.reduce((a, w) => a + relayFeeFor(config, w, live), 0n);
+  const received = out > relayFee ? out - relayFee : 0n;
+  const leftInPool = inPool > out ? inPool - out : 0n;
+  const totalFees = amount - received - leftInPool;
+  return {
+    amount,
+    burn,
+    cctpProtocolFee,
+    forwardFee,
+    sourceGas,
+    destGas,
+    deposit,
+    vettingFee,
+    withdrawals,
+    relayFee,
+    relayable: withdrawals.length > 0 && (direct || withdrawals.every((w) => isRelayable(config, w, live))),
+    leftInPool,
+    received,
+    totalFees,
+    feeShareBps: amount > 0n ? ceilDiv(totalFees * 10_000n, amount) : 0n,
   };
 }
 
@@ -498,18 +733,25 @@ export type PlanExitParams = {
   /** Next unused pool index in the recipient's vault; legs take consecutive indices. */
   firstPoolIndex?: number;
   now?: number;
-  /** Live fee quotes; default `config.estimates`. */
+  /** Live fee quotes (`fetchExitFeeQuote`); default `config.estimates`. */
   live?: ExitFeeInputs;
+  /** Same as `ExitContext.withdrawParts` / `leaveChange` (defaults 1 and false): each part pays the relayer's fixed fee. */
+  withdrawParts?: number;
+  leaveChange?: boolean;
+  /** Withdraw through the relayer (default) or directly from the destination wallet (it pays ETH gas). */
+  withdrawVia?: ExitWithdrawVia;
 };
 
 export type ExitPlan = {
   legs: ExitLeg[];
   fees: ExitFees;
   warnings: string[];
-  /** The smallest leg that clears the pool minimum (`exitLegMinimum`). */
+  /** The smallest leg that clears the pool minimum and the relayer (`exitLegMinimum`). */
   minimum: bigint;
-  /** Legs below `minimum`: they would stop at "minted", with the funds on the destination chain. */
+  /** Legs below `minimum`: they would stop at "minted", or in the pool with no relayable withdrawal. */
   belowMinimum: Address[];
+  /** Total fees as bps of the total amount. */
+  feeShareBps: bigint;
 };
 
 export function planExit(p: PlanExitParams): ExitPlan {
@@ -518,37 +760,43 @@ export function planExit(p: PlanExitParams): ExitPlan {
   const warnings: string[] = [];
   const seen = new Set<string>();
   const belowMinimum: Address[] = [];
-  const min = exitLegMinimum(config, p.live);
-  const { sourceGas, destGas, forwardFee } = min.breakdown;
-  const centi = centiBpsOf(config, p.live);
-  const zero: ExitFees = { cctpProtocolFee: 0n, forwardFee: 0n, sourceGas: 0n, destGas: 0n, vettingFee: 0n, relayFee: 0n, total: 0n, estimatedReceived: 0n };
-  const fees = { ...zero };
+  const via = p.withdrawVia ?? "relayer";
+  const direct = via === "direct";
+  const leaveChange = direct ? false : (p.leaveChange ?? false);
+  const min = exitLegMinimum(config, p.live, { via, ...(leaveChange ? { roundTo: config.withdrawUnit } : {}) });
+  const fees: ExitFees = { cctpProtocolFee: 0n, forwardFee: 0n, sourceGas: 0n, destGas: 0n, vettingFee: 0n, relayFee: 0n, total: 0n, estimatedReceived: 0n, leftInPool: 0n };
+  let amount = 0n;
   const legs = p.sources.map((s, i): ExitLeg => {
     const stealthAddress = getAddress(s.stealthAddress);
     if (seen.has(stealthAddress)) throw new Error(`Soapay exit: ${stealthAddress} listed twice (one leg per address)`);
     seen.add(stealthAddress);
     if (s.amount <= 0n) throw new Error("Soapay exit: amount must be positive");
     const poolIndex = (p.firstPoolIndex ?? 0) + i;
-    const burn = s.amount > sourceGas ? s.amount - sourceGas : 0n;
-    const protocol = protocolFee(burn, centi);
-    const minted = burn - protocol - forwardFee;
-    const deposit = minted - destGas - config.ragequitReserve;
-    const vetting = deposit > 0n ? ceilDiv(deposit * config.pool.vettingFeeBps, 10_000n) : 0n;
-    const inPool = deposit - vetting;
-    const relay = inPool > 0n ? ceilDiv(inPool * config.estimates.relayFeeBps, 10_000n) : 0n;
-    fees.cctpProtocolFee += protocol;
-    fees.forwardFee += forwardFee;
-    fees.sourceGas += sourceGas;
-    fees.destGas += destGas;
-    fees.vettingFee += vetting;
-    fees.relayFee += relay;
-    fees.estimatedReceived += inPool > relay ? inPool - relay : 0n;
+    const c = exitLegCost(config, s.amount, {
+      ...(p.live ? { live: p.live } : {}),
+      ...(p.withdrawParts !== undefined ? { withdrawParts: p.withdrawParts } : {}),
+      leaveChange,
+      via,
+    });
+    amount += s.amount;
+    fees.cctpProtocolFee += c.cctpProtocolFee;
+    fees.forwardFee += c.forwardFee;
+    fees.sourceGas += c.sourceGas;
+    fees.destGas += c.destGas;
+    fees.vettingFee += c.vettingFee;
+    fees.relayFee += c.relayFee;
+    fees.estimatedReceived += c.received;
+    fees.leftInPool += c.leftInPool;
     if (s.amount < min.minimum) {
       belowMinimum.push(stealthAddress);
       warnings.push(
-        `${stealthAddress}: holds ${s.amount}, below the ${min.minimum} a leg needs to deposit the pool's ${config.pool.minDeposit} minimum after bridge fees and paymaster gas (add ${min.minimum - s.amount}).`,
+        min.relayBound
+          ? `${stealthAddress}: holds ${s.amount}, below the ${min.minimum} minimum a leg needs to withdraw through the relayer: it charges a fixed ${p.live?.relayGas ?? config.estimates.relayGas} per withdrawal for its gas, and the pool refuses a relayer fee above ${bpsToPercent(config.pool.maxRelayFeeBps)} of the withdrawal (add ${min.minimum - s.amount}, or withdraw directly from the destination wallet: minimum ${exitLegMinimum(config, p.live, { via: "direct" }).minimum}).`
+          : `${stealthAddress}: holds ${s.amount}, below the ${min.minimum} a leg needs to deposit the pool's ${config.pool.minDeposit} minimum after bridge fees and paymaster gas (add ${min.minimum - s.amount}).`,
       );
     }
+    // The most the step machine pays the relayer per withdrawal: the largest planned part's fee plus headroom.
+    const largest = c.withdrawals.reduce((m, w) => (w > m ? w : m), 0n);
     return {
       id: `exit-${config.source}-${config.dest}-${stealthAddress.toLowerCase()}-${poolIndex}`,
       stealthAddress,
@@ -561,17 +809,119 @@ export function planExit(p: PlanExitParams): ExitPlan {
       poolIndex,
       updatedAt: now,
       withdrawals: [],
+      ...(direct ? { withdrawVia: "direct" as const } : largest > 0n ? { feeLimits: { relayFee: relayFeeCap(relayFeeFor(config, largest, p.live)).toString() } } : {}),
     };
   });
   fees.total = fees.cctpProtocolFee + fees.forwardFee + fees.sourceGas + fees.destGas + fees.vettingFee + fees.relayFee;
+  const spent = amount - fees.estimatedReceived - fees.leftInPool;
+  const feeShareBps = amount > 0n ? ceilDiv(spent * 10_000n, amount) : 0n;
+  if (legs.length > belowMinimum.length && feeShareBps > EXIT_HIGH_FEE_SHARE_BPS)
+    warnings.push(
+      `Fees take about ${bpsToPercent(feeShareBps)} of this exit. They are mostly fixed per leg (bridge forwarding, destination gas, the relayer's gas), so a larger exit loses a smaller share: exit more at once, later.`,
+    );
   if (legs.length > 1)
     warnings.push(`${legs.length} exits to the same destination: the withdrawals link to each other (not to their deposits). Spread them over time or use separate destinations.`);
   for (const s of p.sources)
     if (s.amount % config.withdrawUnit !== 0n)
       warnings.push(`A deposit of an exact salary-sized amount can point to you in a small pool; round partial withdrawals and random delays are applied.`);
   if (config.dest === 11155111) warnings.push("Testnet pool: the anonymity set is tiny; this shows the mechanics, not privacy.");
-  return { legs, fees, warnings: [...new Set(warnings)], minimum: min.minimum, belowMinimum };
+  return { legs, fees, warnings: [...new Set(warnings)], minimum: min.minimum, belowMinimum, feeShareBps };
 }
+
+/** bps as a percent string, one decimal ("22.5%"). */
+export function bpsToPercent(bps: bigint): string {
+  const tenths = (bps + 5n) / 10n;
+  return `${tenths / 10n}.${tenths % 10n}%`;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Live fee quotes
+// ---------------------------------------------------------------------------------------------
+
+/** The amount `fetchExitFeeQuote` asks the relayer about by default (its fixed part is what matters). */
+export const EXIT_RELAY_QUOTE_AMOUNT = 100_000_000n;
+
+export type ExitFeeQuote = {
+  /** Live inputs for `exitLegMinimum` / `planExit` / `exitLegCost`; missing parts fall back to the config. */
+  live: ExitFeeInputs;
+  /** Which parts came from a live source. */
+  sources: { cctp: boolean; relayer: boolean; destGas: boolean };
+  /** The raw relayer quote the relay fee was derived from. */
+  relayQuote?: { amount: bigint; feeBps: bigint; baseFeeBps: bigint; gasPriceWei?: bigint };
+  /** Why a part fell back to the estimate. */
+  errors: string[];
+  at: number;
+};
+
+type RelayerQuoteResponse = { baseFeeBPS?: string; feeBPS?: string; gasPrice?: string };
+
+/**
+ * Live fee quotes for planning, each independent (a failing source falls back to `config.estimates`):
+ * - Circle Iris: the CCTP protocol fee and the Forwarding Service fee at the configured tier.
+ * - The 0xbow relayer (`POST /relayer/quote` for `quoteAmount`): its `baseFeeBPS`, and its fixed gas
+ *   charge `quoteAmount × (feeBPS − baseFeeBPS)`. The pool's own limit is applied by `exitLegMinimum`.
+ * - The destination paymaster prefund, from the destination gas price (`destGasPriceWei`, else the
+ *   relayer's `gasPrice`) via `paymasterPrefundUsdc`.
+ */
+export async function fetchExitFeeQuote(
+  config: ExitConfig,
+  opts: { fetch?: ExitFetch; quoteAmount?: bigint; destGasPriceWei?: bigint; now?: () => number } = {},
+): Promise<ExitFeeQuote> {
+  const f = opts.fetch ?? env().fetch?.bind(globalThis);
+  const out: ExitFeeQuote = { live: {}, sources: { cctp: false, relayer: false, destGas: false }, errors: [], at: (opts.now ?? Date.now)() };
+  if (!f) {
+    out.errors.push("no fetch available");
+    return out;
+  }
+  const getOk = async (url: string, init?: Parameters<ExitFetch>[1]) => {
+    const res = await f(url, init);
+    if (!res.ok) throw new Error(`${init?.method ?? "GET"} ${url} → ${res.status}`);
+    return res.json();
+  };
+  const { cctp } = config;
+  const amount = opts.quoteAmount ?? EXIT_RELAY_QUOTE_AMOUNT;
+  const [iris, relay] = await Promise.allSettled([
+    getOk(`${cctp.irisApiUrl}/v2/burn/USDC/fees/${cctp.source.domain}/${cctp.dest.domain}?forward=true`),
+    getOk(`${config.relayerUrl}/relayer/quote`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: jsonBody({ chainId: config.dest, amount: amount.toString(), asset: config.pool.asset, extraGas: false }),
+    }),
+  ]);
+  if (iris.status === "fulfilled") {
+    const rows = iris.value as CctpFeeRow[] | undefined;
+    const row = Array.isArray(rows) ? rows.find((r) => r.finalityThreshold === cctp.minFinalityThreshold) : undefined;
+    if (row && typeof row.minimumFee === "number") {
+      out.live.cctpMinimumFeeBps = row.minimumFee;
+      if (row.forwardFee) out.live.forwardFee = BigInt(Math.ceil(row.forwardFee[cctp.forwardFeeTier]));
+      out.sources.cctp = true;
+    } else out.errors.push("CCTP fee quote: no row for the configured finality");
+  } else out.errors.push(`CCTP fee quote: ${errText(iris.reason)}`);
+  let gasPrice = opts.destGasPriceWei;
+  if (relay.status === "fulfilled") {
+    const q = relay.value as RelayerQuoteResponse;
+    try {
+      const feeBps = BigInt(q.feeBPS ?? "");
+      const baseFeeBps = BigInt(q.baseFeeBPS ?? q.feeBPS ?? "");
+      const extra = feeBps > baseFeeBps ? feeBps - baseFeeBps : 0n;
+      out.live.relayFeeBps = baseFeeBps;
+      out.live.relayGas = ceilDiv(amount * extra, 10_000n);
+      const gp = q.gasPrice ? BigInt(q.gasPrice) : undefined;
+      out.relayQuote = { amount, feeBps, baseFeeBps, ...(gp !== undefined ? { gasPriceWei: gp } : {}) };
+      gasPrice ??= gp;
+      out.sources.relayer = true;
+    } catch {
+      out.errors.push("relayer quote: unreadable response");
+    }
+  } else out.errors.push(`relayer quote: ${errText(relay.reason)}`);
+  if (gasPrice !== undefined && gasPrice > 0n) {
+    out.live.destGas = paymasterPrefundUsdc(gasPrice);
+    out.sources.destGas = true;
+  }
+  return out;
+}
+
+const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 // ---------------------------------------------------------------------------------------------
 // Context
@@ -602,15 +952,33 @@ export type ExitContext = {
   /** Injected for tests; default `estimateExecute`. */
   estimate?: typeof estimateExecute;
   prover?: ExitProver;
-  /** Fee caps per chain id (USDC base units). Default 1 USDC source, 5 USDC destination. */
+  /**
+   * Paymaster fee caps per chain id (USDC base units). Default 1 USDC on the source; on the
+   * destination `defaultDestFeeCap` (2× the estimate or 2× a live gas-price estimate, ≤ 15 USDC).
+   */
   maxFeeUsdc?: Record<number, bigint>;
-  /** Highest relayer fee accepted for a withdrawal, in bps. Default 500 (5%). */
+  /**
+   * Highest relayer fee accepted for a withdrawal, in bps. Default the pool's own `maxRelayFeeBps`
+   * (a higher fee reverts on-chain anyway).
+   */
   maxRelayFeeBps?: bigint;
+  /**
+   * Highest relayer fee accepted for one withdrawal, in USDC. Default the leg's `feeLimits.relayFee`
+   * (what the user saw when planning, plus headroom); none for legs planned without it.
+   */
+  maxRelayFeeUsdc?: bigint;
+  /** Overrides each leg's `withdrawVia`. */
+  withdrawVia?: ExitWithdrawVia;
+  /** The destination wallet, needed for direct withdrawals; without it an approved direct leg waits. */
+  directWithdraw?: DirectWithdrawSender;
   /** Blocks to scan back for logs (mint, userOp events). Default 5000. */
   logLookbackBlocks?: bigint;
   /** Fallback when the Forwarding Service fails: submit `receiveMessage` some other way (e.g. apps/api). */
   mintFallback?: (args: { message: Hex; attestation: Hex; dest: number }) => Promise<Hash | undefined>;
-  /** Withdrawal split. Default 2 round parts plus change. */
+  /**
+   * Number of withdrawals. Default 1: each one pays the relayer's fixed gas fee (≈ 21.5 USDC on
+   * testnet), so splitting costs a whole fee per extra part. With `leaveChange` the parts are round.
+   */
   withdrawParts?: number;
   /**
    * After a relayed withdrawal whose outcome was lost, wait this long for it to land before relaying
@@ -645,7 +1013,19 @@ function secretsFor(ctx: ExitContext, poolIndex: number, child: number): PoolSec
   if (!ctx.keys) throw new ExitError("Soapay exit: keys or poolSecrets required");
   return derivePoolSecrets(ctx.keys, poolIndex, child);
 }
-const maxFeeFor = (ctx: ExitContext, chainId: number) => ctx.maxFeeUsdc?.[chainId] ?? (chainId === ctx.config.source ? 1_000_000n : 5_000_000n);
+/**
+ * The paymaster fee cap for a userOp on `chainId`: the override, else 1 USDC on the source (Base gas
+ * is cents) and `defaultDestFeeCap` on the destination, from the chain's live gas price when readable.
+ */
+async function maxFeeFor(ctx: ExitContext, chainId: number): Promise<bigint> {
+  const override = ctx.maxFeeUsdc?.[chainId];
+  if (override !== undefined) return override;
+  if (chainId === ctx.config.source) return 1_000_000n;
+  const gasPrice = await Promise.resolve()
+    .then(() => clientFor(ctx, chainId).publicClient.getGasPrice())
+    .catch(() => undefined);
+  return defaultDestFeeCap(ctx.config, typeof gasPrice === "bigint" ? gasPrice : undefined);
+}
 
 async function getJson<T>(ctx: ExitContext, url: string, init?: Parameters<ExitFetch>[1]): Promise<T | undefined> {
   const res = await fetcher(ctx)(url, init);
@@ -710,12 +1090,13 @@ async function sendOnce(
   chainId: number,
   calls: StealthCall[],
   feeTokenSpend: bigint,
+  maxFeeUsdc?: bigint,
 ): Promise<Hash> {
   const client = clientFor(ctx, chainId);
   const execute = ctx.execute ?? executeFromStealth;
   const res = await execute(
     client,
-    { stealthKey: ctx.stealthKey, calls, feeTokenSpend, maxFeeUsdc: maxFeeFor(ctx, chainId) },
+    { stealthKey: ctx.stealthKey, calls, feeTokenSpend, maxFeeUsdc: maxFeeUsdc ?? (await maxFeeFor(ctx, chainId)) },
     {
       onSubmit: async ({ sender, nonce }) => {
         leg.pending = { step, chainId, sender, nonce: nonce.toString() };
@@ -781,7 +1162,7 @@ async function stepBurn(ctx: ExitContext, leg: ExitLeg): Promise<void> {
   }
   const client = clientFor(ctx, config.source);
   const balance = await usdcBalance(client, config.cctp.source.usdc, leg.stealthAddress);
-  const cap = maxFeeFor(ctx, config.source);
+  const cap = await maxFeeFor(ctx, config.source);
   const row = await fetchCctpFees(ctx);
   const want = bi(leg.amount);
   // Size the burn so burn + paymaster fee fits the balance (the fee is quoted on a first estimate).
@@ -799,7 +1180,7 @@ async function stepBurn(ctx: ExitContext, leg: ExitLeg): Promise<void> {
   const maxFee = cctpMaxFee(amount, row, config.cctp.forwardFeeTier);
   if (amount <= maxFee) throw new ExitError("Soapay exit: amount does not cover the bridge fee");
   leg.burn = { amount: amount.toString(), maxFee: maxFee.toString() };
-  leg.txs.burn = await sendOnce(ctx, leg, "burn", config.source, buildBurnCalls(config, leg.stealthAddress, amount, maxFee), amount);
+  leg.txs.burn = await sendOnce(ctx, leg, "burn", config.source, buildBurnCalls(config, leg.stealthAddress, amount, maxFee), amount, cap);
   leg.status = "burning";
 }
 
@@ -884,7 +1265,7 @@ async function stepDeposit(ctx: ExitContext, leg: ExitLeg): Promise<void> {
   }
   const client = clientFor(ctx, config.dest);
   const balance = await usdcBalance(client, config.pool.asset, leg.stealthAddress);
-  const cap = maxFeeFor(ctx, config.dest);
+  const cap = await maxFeeFor(ctx, config.dest);
   const precommitment = await precommitmentOf(ctx, leg);
   const usable = balance - config.ragequitReserve;
   const guess = usable - cap;
@@ -904,7 +1285,7 @@ async function stepDeposit(ctx: ExitContext, leg: ExitLeg): Promise<void> {
   });
   const amount = usable - withMargin(est.fee);
   if (amount < config.pool.minDeposit) throw new ExitError(need(config.pool.minDeposit - amount));
-  leg.txs.deposit = await sendOnce(ctx, leg, "deposit", config.dest, buildDepositCalls(config, amount, precommitment), amount);
+  leg.txs.deposit = await sendOnce(ctx, leg, "deposit", config.dest, buildDepositCalls(config, amount, precommitment), amount, cap);
   leg.deposit = { amount: amount.toString(), label: "", value: "", commitment: "", precommitment: precommitment.toString() };
   leg.status = "depositing";
 }
@@ -980,7 +1361,15 @@ async function stepAsp(ctx: ExitContext, leg: ExitLeg): Promise<void> {
 type RelayerDetails = { feeBPS: string; feeReceiverAddress: Address; minWithdrawAmount: string };
 type RelayerQuote = { feeBPS: string; feeCommitment?: { expiration: number; withdrawalData: Hex; signedRelayerCommitment: Hex; extraGas?: boolean } };
 
-export type WithdrawResult = { leg: ExitLeg; amount: bigint; relayFeeBps: bigint; txHash: Hash; suggestedDelayMs: number };
+export type WithdrawResult = {
+  leg: ExitLeg;
+  amount: bigint;
+  /** The relayer's fee in bps; 0 for a direct withdrawal. */
+  relayFeeBps: bigint;
+  via: ExitWithdrawVia;
+  txHash: Hash;
+  suggestedDelayMs: number;
+};
 
 /**
  * One withdrawal through the 0xbow relayer to `leg.destination` (the relayer pays gas and keeps
@@ -989,39 +1378,109 @@ export type WithdrawResult = { leg: ExitLeg; amount: bigint; relayFeeBps: bigint
  */
 export async function withdrawToDestination(ctx: ExitContext, leg: ExitLeg, opts: { amount?: bigint } = {}): Promise<WithdrawResult> {
   if (leg.status !== "approved") throw new ExitError(`Soapay exit: leg is ${leg.status}, not approved`);
-  return relayWithdrawal(ctx, structuredCloneLeg(leg), opts);
+  return performWithdrawal(ctx, structuredCloneLeg(leg), { ...opts, via: "relayer" });
+}
+
+/**
+ * A direct withdrawal, with no relayer: `ctx.directWithdraw` (the destination wallet itself) calls
+ * `PrivacyPool.withdraw(Withdrawal{processooor: destination, data: 0x}, proof)` and pays the gas in
+ * the destination chain's ETH. The pool requires `msg.sender == processooor` and the proof's context
+ * = keccak256(abi.encode(withdrawal, SCOPE)), so only that wallet can submit it. Withdraws everything
+ * left in ONE part (no change split). The leg is marked `withdrawVia: "direct"`, so later calls
+ * (a resume, a retry) stay direct. Persist-before-send and resume-if-landed work as for a relay.
+ */
+export async function withdrawDirect(ctx: ExitContext, leg: ExitLeg): Promise<WithdrawResult> {
+  if (leg.status !== "approved") throw new ExitError(`Soapay exit: leg is ${leg.status}, not approved`);
+  const next = structuredCloneLeg(leg);
+  next.withdrawVia = "direct";
+  return performWithdrawal(ctx, next, { via: "direct" });
 }
 
 /** Proof index of the existing-nullifier hash in the withdraw circuit's public signals (ProofLib). */
 const PUB_EXISTING_NULLIFIER_HASH = 1;
 
-/** The relay itself, on `next` in place, so a failure after the request keeps `pendingWithdraw`. */
-async function relayWithdrawal(ctx: ExitContext, next: ExitLeg, opts: { amount?: bigint } = {}): Promise<WithdrawResult> {
+/** USDC base units as "12.34" (for messages). */
+const usdcText = (v: bigint) => `${v / 1_000_000n}.${((v % 1_000_000n) / 10_000n).toString().padStart(2, "0")}`;
+
+/**
+ * Whether to accept a relayer quote of `relayFeeBps` on a withdrawal of `amount`: judged in USDC.
+ * Refuses (returns the reason, retryable: the leg waits and re-quotes) when the fee is at least the
+ * withdrawal, above the bps cap (default the pool's `maxRelayFeeBps`, which would revert on-chain),
+ * or above `maxUsdc` (the fee the user accepted when planning). Null when acceptable.
+ */
+export function checkRelayQuote(
+  config: Pick<ExitConfig, "pool">,
+  amount: bigint,
+  relayFeeBps: bigint,
+  caps: { maxBps?: bigint; maxUsdc?: bigint } = {},
+): string | null {
+  const fee = (amount * relayFeeBps) / 10_000n;
+  const what = `the relayer asks ${usdcText(fee)} USDC (${bpsToPercent(relayFeeBps)}) to withdraw ${usdcText(amount)} USDC`;
+  if (fee >= amount) return `Soapay exit: ${what}, more than the withdrawal itself; waiting for a lower quote (or withdraw directly)`;
+  const maxBps = caps.maxBps ?? config.pool.maxRelayFeeBps;
+  if (relayFeeBps > maxBps)
+    return `Soapay exit: ${what}, above the ${bpsToPercent(maxBps)} limit${caps.maxBps === undefined ? " the pool enforces" : ""}; waiting for a lower quote (or withdraw directly)`;
+  if (caps.maxUsdc !== undefined && fee > caps.maxUsdc)
+    return `Soapay exit: ${what}, above the ${usdcText(caps.maxUsdc)} USDC accepted for this exit; waiting for a lower quote (or withdraw directly)`;
+  return null;
+}
+
+/** How a leg's withdrawals go out: `ctx.withdrawVia`, else the leg's own choice, else the relayer. */
+const viaOf = (ctx: ExitContext, leg: ExitLeg): ExitWithdrawVia => ctx.withdrawVia ?? leg.withdrawVia ?? "relayer";
+
+/** A wallet error that means nothing was broadcast (rejected, unfunded), so the marker can go. */
+function notBroadcast(err: unknown): boolean {
+  const e = err as { code?: unknown; message?: unknown } | undefined;
+  if (e?.code === 4001) return true;
+  return /reject|denied|insufficient funds|cancel/i.test(String(e?.message ?? err));
+}
+
+/** One withdrawal (relayed or direct), on `next` in place, so a failure after the send keeps `pendingWithdraw`. */
+async function performWithdrawal(ctx: ExitContext, next: ExitLeg, opts: { amount?: bigint; via: ExitWithdrawVia }): Promise<WithdrawResult> {
   const { config } = ctx;
   const remaining = bi(next.remaining ?? next.deposit!.value);
-  const amount = opts.amount ?? bi(next.withdrawPlan?.[next.withdrawals.filter((w) => w.done).length] ?? remaining.toString());
+  const direct = opts.via === "direct";
+  // Direct: everything in one part (the destination pays gas per withdrawal, and no change is left behind).
+  const amount = direct ? remaining : (opts.amount ?? bi(next.withdrawPlan?.[next.withdrawals.filter((w) => w.done).length] ?? remaining.toString()));
   if (amount <= 0n || amount > remaining) throw new ExitError(`Soapay exit: withdrawal ${amount} exceeds the ${remaining} left`);
+  const sender = ctx.directWithdraw;
+  if (direct) {
+    if (!sender) throw new ExitError("Soapay exit: a direct withdrawal needs the destination wallet (ctx.directWithdraw)");
+    if (!isAddressEqual(sender.address, next.destination))
+      throw new ExitError(`Soapay exit: connect the destination wallet ${next.destination} to withdraw directly (connected: ${sender.address})`);
+  }
   const pp = await loadPrivacyPoolsSdk();
 
-  const details = await getJson<RelayerDetails>(ctx, `${config.relayerUrl}/relayer/details?chainId=${config.dest}&assetAddress=${config.pool.asset}`);
-  if (!details) throw new ExitError("Soapay exit: relayer details unavailable");
-  if (amount < BigInt(details.minWithdrawAmount)) throw new ExitError(`Soapay exit: relayer minimum is ${details.minWithdrawAmount}`);
-  const quote = await getJson<RelayerQuote>(ctx, `${config.relayerUrl}/relayer/quote`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: jsonBody({ chainId: config.dest, amount: amount.toString(), asset: config.pool.asset, recipient: next.destination, extraGas: false }),
-  });
-  if (!quote?.feeCommitment) throw new ExitError("Soapay exit: relayer quote without a fee commitment");
-  const [recipient, feeRecipient, relayFeeBps] = decodeAbiParameters(
-    parseAbiParameters("address recipient, address feeRecipient, uint256 relayFeeBPS"),
-    quote.feeCommitment.withdrawalData,
-  );
-  if (!isAddressEqual(recipient, next.destination)) throw new ExitFatalError("Soapay exit: relayer committed to a different recipient");
-  if (relayFeeBps !== BigInt(quote.feeBPS)) throw new ExitError("Soapay exit: relayer fee commitment mismatch");
-  const maxRelay = ctx.maxRelayFeeBps ?? 500n;
-  if (relayFeeBps > maxRelay) throw new ExitError(`Soapay exit: relayer fee ${relayFeeBps} bps is too high (cap ${maxRelay})`);
-  void feeRecipient;
-  const withdrawal = { processooor: getAddress(config.pool.entrypoint), data: quote.feeCommitment.withdrawalData };
+  let withdrawal: { processooor: Address; data: Hex };
+  let relayFeeBps = 0n;
+  let feeCommitment: RelayerQuote["feeCommitment"];
+  if (direct) {
+    withdrawal = { processooor: getAddress(next.destination), data: "0x" };
+  } else {
+    const details = await getJson<RelayerDetails>(ctx, `${config.relayerUrl}/relayer/details?chainId=${config.dest}&assetAddress=${config.pool.asset}`);
+    if (!details) throw new ExitError("Soapay exit: relayer details unavailable");
+    if (amount < BigInt(details.minWithdrawAmount)) throw new ExitError(`Soapay exit: relayer minimum is ${details.minWithdrawAmount}`);
+    const quote = await getJson<RelayerQuote>(ctx, `${config.relayerUrl}/relayer/quote`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: jsonBody({ chainId: config.dest, amount: amount.toString(), asset: config.pool.asset, recipient: next.destination, extraGas: false }),
+    });
+    if (!quote?.feeCommitment) throw new ExitError("Soapay exit: relayer quote without a fee commitment");
+    const [recipient, , quotedBps] = decodeAbiParameters(
+      parseAbiParameters("address recipient, address feeRecipient, uint256 relayFeeBPS"),
+      quote.feeCommitment.withdrawalData,
+    );
+    if (!isAddressEqual(recipient, next.destination)) throw new ExitFatalError("Soapay exit: relayer committed to a different recipient");
+    if (quotedBps !== BigInt(quote.feeBPS)) throw new ExitError("Soapay exit: relayer fee commitment mismatch");
+    const refused = checkRelayQuote(config, amount, quotedBps, {
+      ...(ctx.maxRelayFeeBps !== undefined ? { maxBps: ctx.maxRelayFeeBps } : {}),
+      ...(ctx.maxRelayFeeUsdc !== undefined ? { maxUsdc: ctx.maxRelayFeeUsdc } : next.feeLimits?.relayFee ? { maxUsdc: BigInt(next.feeLimits.relayFee) } : {}),
+    });
+    if (refused) throw new ExitError(refused);
+    relayFeeBps = quotedBps;
+    feeCommitment = quote.feeCommitment;
+    withdrawal = { processooor: getAddress(config.pool.entrypoint), data: quote.feeCommitment.withdrawalData };
+  }
 
   // The commitment being spent: the deposit (child 0) or the change of the last withdrawal.
   const child = next.withdrawals.filter((w) => w.done).length;
@@ -1044,6 +1503,7 @@ async function relayWithdrawal(ctx: ExitContext, next: ExitLeg, opts: { amount?:
   const onchainRoot = await clientFor(ctx, config.dest).publicClient.readContract({ address: config.pool.entrypoint, abi: ppEntrypointAbi, functionName: "latestRoot" });
   if (onchainRoot !== aspProof.root) throw new ExitError("Soapay exit: ASP root not on-chain yet");
   const padTo = (a: bigint[]) => [...a, ...Array(Math.max(0, 32 - a.length)).fill(0n)] as bigint[];
+  // keccak256(abi.encode(withdrawal, SCOPE)) mod the field: what the pool checks for either path.
   const context = BigInt(pp.calculateContext(withdrawal, config.pool.scope as never));
   const input: WithdrawalProofInputs = {
     withdrawalAmount: amount,
@@ -1060,30 +1520,48 @@ async function relayWithdrawal(ctx: ExitContext, next: ExitLeg, opts: { amount?:
   const prover = ctx.prover ?? privacyPoolsProver(config.circuitsBaseUrl);
   const proof = await prover.proveWithdrawal({ value: remaining, label, nullifier: cur.nullifier, secret: cur.secret, hash: commitment.hash }, input);
 
-  // Save before the request leaves: if the response is lost, resume checks the nullifier on-chain.
+  // Save before anything leaves: if the outcome is lost, resume checks the nullifier on-chain.
   const spentNullifier = proof.publicSignals[PUB_EXISTING_NULLIFIER_HASH];
   if (spentNullifier !== undefined) {
     next.pendingWithdraw = { spentNullifier, amount: amount.toString(), child, at: nowOf(ctx) };
     next.updatedAt = nowOf(ctx);
     await ctx.persist?.(structuredCloneLeg(next));
   }
-  const res = await getJson<{ success: boolean; txHash?: Hash; error?: string }>(ctx, `${config.relayerUrl}/relayer/request`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: jsonBody({ withdrawal, proof: proof.proof, publicSignals: proof.publicSignals, scope: config.pool.scope.toString(), chainId: config.dest, feeCommitment: quote.feeCommitment }),
-  });
-  if (!res?.success || !res.txHash) {
-    // The relayer answered and refused: nothing went out, so the next attempt may relay again.
-    delete next.pendingWithdraw;
-    throw new ExitError(`Soapay exit: relay failed: ${res?.error ?? "no tx hash"}`);
+  let txHash: Hash;
+  if (direct) {
+    const f = formatGroth16(proof);
+    const data = encodeFunctionData({
+      abi: ppPoolAbi,
+      functionName: "withdraw",
+      args: [withdrawal, { pA: f.pA, pB: f.pB, pC: f.pC, pubSignals: f.pubSignals.slice(0, 8) as unknown as readonly [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint] }],
+    });
+    try {
+      txHash = await sender!.sendTransaction({ to: getAddress(config.pool.pool), data, chainId: config.dest });
+    } catch (err) {
+      // Refused or unfunded: nothing went out. Anything else may have been broadcast: keep the marker.
+      if (notBroadcast(err)) delete next.pendingWithdraw;
+      throw new ExitError(`Soapay exit: direct withdrawal not sent: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  } else {
+    const res = await getJson<{ success: boolean; txHash?: Hash; error?: string }>(ctx, `${config.relayerUrl}/relayer/request`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: jsonBody({ withdrawal, proof: proof.proof, publicSignals: proof.publicSignals, scope: config.pool.scope.toString(), chainId: config.dest, feeCommitment }),
+    });
+    if (!res?.success || !res.txHash) {
+      // The relayer answered and refused: nothing went out, so the next attempt may relay again.
+      delete next.pendingWithdraw;
+      throw new ExitError(`Soapay exit: relay failed: ${res?.error ?? "no tx hash"}`);
+    }
+    txHash = res.txHash;
   }
   delete next.pendingWithdraw;
-  next.withdrawals.push({ amount: amount.toString(), child, tx: res.txHash });
-  next.txs.withdraw = res.txHash;
+  next.withdrawals.push({ amount: amount.toString(), child, tx: txHash });
+  next.txs.withdraw = txHash;
   next.status = "withdrawing";
   next.updatedAt = nowOf(ctx);
   delete next.error;
-  return { leg: next, amount, relayFeeBps, txHash: res.txHash, suggestedDelayMs: suggestedDelayMs(config, ctx.random) };
+  return { leg: next, amount, relayFeeBps, via: opts.via, txHash, suggestedDelayMs: suggestedDelayMs(config, ctx.random) };
 }
 
 /**
@@ -1212,7 +1690,10 @@ async function advance(ctx: ExitContext, input: ExitLeg): Promise<ExitLeg> {
       case "approved": {
         if (leg.pendingWithdraw && (await resolvePendingWithdraw(ctx, leg))) break;
         if (leg.notBefore !== undefined && nowOf(ctx) < leg.notBefore) return input;
-        await relayWithdrawal(ctx, leg);
+        const via = viaOf(ctx, leg);
+        // A direct withdrawal needs the destination wallet; without one the leg waits (no error).
+        if (via === "direct" && !ctx.directWithdraw) return input;
+        await performWithdrawal(ctx, leg, { via });
         break;
       }
       case "withdrawing":
