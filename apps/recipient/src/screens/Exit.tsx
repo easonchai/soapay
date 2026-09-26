@@ -8,6 +8,8 @@ import { fmtUsdcUp, noEligibleMessage, type ExitEstimate } from "../features/exi
 import { legLabel, timelineOf, type TimelineStep } from "../features/exit/timeline.js";
 import type { ExitLeg, ExitPrivacy, ExitRecord } from "../features/exit/types.js";
 import { DEFAULT_PRIVACY, useExit, type ExitView } from "../hooks/useExit.js";
+import { useChain } from "../hooks/useChain.js";
+import { isTestnetChain } from "@soapay/sdk";
 import { Addr, Alert, Badge, Button, Card, CardHeader, Checkbox, Field, Input, PageHeader, cn } from "../ui/kit.js";
 import { formatUsdc, windowTime } from "../ui/format.js";
 
@@ -66,6 +68,7 @@ export function PrivacyNote() {
 
 function Planner({ prefill }: { prefill: { destination: Address; sources: Address[] } | null }) {
   const exit = useExit();
+  const testnet = isTestnetChain(useChain().chainId);
   const [destination, setDestination] = useState<string>(prefill?.destination ?? "");
   const [privacy, setPrivacy] = useState<ExitPrivacy>(DEFAULT_PRIVACY);
   const all = useMemo(() => exit.estimate(exit.sources.map((s) => s.stealthAddress), privacy), [exit, privacy]);
@@ -128,6 +131,13 @@ function Planner({ prefill }: { prefill: { destination: Address; sources: Addres
             <div data-testid="exit-none-eligible">
               <Alert variant="warning" title="Below the exit minimum">
                 {nothingEligible}
+                {testnet && (
+                  <span data-testid="exit-testnet-hint">
+                    {" "}
+                    On testnet, pay runs default to small 5 USDC chunks to save faucet USDC, so ask the employer for one line of at least {minLeg}{" "}
+                    USDC (a run with denominated payouts off, or a larger chunk).
+                  </span>
+                )}
               </Alert>
             </div>
           )}

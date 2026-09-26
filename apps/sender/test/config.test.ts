@@ -1,15 +1,29 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_CHUNK_USDC, envDefaults, getChunkSize, getOrgName, recipientAppUrls, setChunkSize, setOrgName } from "../src/config.js";
+import { DEFAULT_CHUNK_USDC, TESTNET_CHUNK_USDC, defaultChunkUsdc, envDefaults, getChunkSize, getOrgName, recipientAppUrls, setChunkSize, setOrgName } from "../src/config.js";
 
-describe("company chunk size (D-31)", () => {
-  it("defaults to 500 USDC and persists a change", () => {
-    setChunkSize("");
-    expect(getChunkSize()).toBe(DEFAULT_CHUNK_USDC);
+describe("company chunk size (D-31, D-47)", () => {
+  it("defaults to 5 USDC on a testnet and 500 on mainnet", () => {
+    setChunkSize("", 84532);
     expect(DEFAULT_CHUNK_USDC).toBe("500");
-    setChunkSize(" 250 ");
-    expect(getChunkSize()).toBe("250");
-    setChunkSize("500");
-    expect(getChunkSize()).toBe("500");
+    expect(TESTNET_CHUNK_USDC).toBe("5");
+    expect(defaultChunkUsdc(84532)).toBe("5");
+    expect(defaultChunkUsdc(8453)).toBe("500");
+    expect(getChunkSize(84532)).toBe("5");
+    expect(getChunkSize(8453)).toBe("500");
+  });
+
+  it("persists a change and never overrides a saved value", () => {
+    setChunkSize(" 250 ", 84532);
+    expect(getChunkSize(84532)).toBe("250");
+    expect(getChunkSize(8453)).toBe("250");
+    // 500 saved on testnet is a real choice (it differs from the testnet default), so it sticks.
+    setChunkSize("500", 84532);
+    expect(getChunkSize(84532)).toBe("500");
+    // Saving the chain's own default follows the default.
+    setChunkSize("5", 84532);
+    expect(getChunkSize(84532)).toBe("5");
+    expect(getChunkSize(8453)).toBe("500");
+    setChunkSize("", 84532);
   });
 });
 

@@ -2,7 +2,7 @@
 // hands their results to CK's Ledger screens (props-only). See README "How to plug in another UI".
 import { useEffect, useState, type ReactNode } from "react";
 import { Fade, Presence, TopBar } from "@soapay/ui";
-import { CHAINS, PARENT_NAME } from "@soapay/sdk";
+import { CHAINS, PARENT_NAME, isTestnetChain } from "@soapay/sdk";
 import { getChunkSize, getOrgName, setChunkSize, setOrgName, txUrl } from "./config.js";
 import { useStore } from "./hooks/store.js";
 import { usePayPath, useWallet } from "./hooks/usePayPath.js";
@@ -78,7 +78,7 @@ function RecipientsContainer({ go, org }: { go(r: Route): void; org: string }) {
         )
       }
       onPay={() => go({ page: "pay" })}
-      invitesPanel={<InvitesPanel {...invites} parentName={PARENT_NAME} defaultOrg={org} />}
+      invitesPanel={<InvitesPanel {...invites} parentName={PARENT_NAME} defaultOrg={org} testnet={isTestnetChain(app.chainId)} />}
     />
   );
 }
@@ -107,7 +107,7 @@ function PayRunContainer({ go, chunk }: { go(r: Route): void; chunk: string }) {
     return <SafeExportPage chunks={run.safeChunks} onDownload={run.downloadSafeChunk} onOpenRun={() => go({ page: "run", id })} onNewRun={run.reset} />;
   }
   if (run.plan && run.stage === "planned" && !editing) {
-    return <ReviewPage run={run} plan={run.plan} wallet={wallet} payPath={payPath} chainName={app.chain.name} onBack={() => setEditing(true)} />;
+    return <ReviewPage run={run} plan={run.plan} wallet={wallet} payPath={payPath} chainName={app.chain.name} testnet={isTestnetChain(app.chainId)} onBack={() => setEditing(true)} />;
   }
   return (
     <PayRunPage
@@ -118,6 +118,7 @@ function PayRunContainer({ go, chunk }: { go(r: Route): void; chunk: string }) {
       chainName={app.chain.name}
       onOpenRecipients={() => go({ page: "roster" })}
       chunk={chunk}
+      testnet={isTestnetChain(app.chainId)}
       onOpenSettings={() => go({ page: "settings" })}
       onReview={(d: Denomination | null) => {
         setEditing(false);
@@ -241,7 +242,9 @@ export function App() {
   const [route, go] = useRoute();
   const [loggedOut, setLoggedOut] = useState(session.get);
   const [org, setOrg] = useState(getOrgName);
-  const [chunk, setChunk] = useState(getChunkSize);
+  const [chunk, setChunk] = useState(() => getChunkSize(app.chainId));
+  // The default follows the chain (5 USDC on a testnet, 500 elsewhere); a saved value never changes.
+  useEffect(() => setChunk(getChunkSize(app.chainId)), [app.chainId]);
 
   if (!wallet.isConnected || loggedOut) {
     return (
@@ -278,8 +281,8 @@ export function App() {
         }}
         chunk={chunk}
         onChunkChange={(v) => {
-          setChunkSize(v);
-          setChunk(getChunkSize());
+          setChunkSize(v, app.chainId);
+          setChunk(getChunkSize(app.chainId));
         }}
       />
     );

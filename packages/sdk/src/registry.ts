@@ -242,6 +242,19 @@ export function listChains(): RegisteredChain[] {
   return [...chainRegistry.values()];
 }
 
+/** Testnets Soapay knows without a registration (Base Sepolia, Ethereum Sepolia). */
+export const KNOWN_TESTNET_CHAIN_IDS: readonly number[] = [84532, 11155111];
+
+/**
+ * True on a testnet: a registered chain whose viem `Chain` says `testnet: true`, or one of
+ * KNOWN_TESTNET_CHAIN_IDS. Apps use it for testnet-sized default amounts (faucet USDC is scarce).
+ */
+export function isTestnetChain(chainId: number): boolean {
+  const c = chainRegistry.get(chainId);
+  if (c?.chain.testnet !== undefined) return c.chain.testnet === true;
+  return KNOWN_TESTNET_CHAIN_IDS.includes(chainId);
+}
+
 /** Removes a registration (tests, or apps that restrict chains). Returns true if one existed. */
 export function unregisterChain(chainId: number): boolean {
   return chainRegistry.delete(chainId);

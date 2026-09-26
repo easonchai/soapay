@@ -120,6 +120,12 @@ describe("Pay run screen (CK design on our hooks)", () => {
     expect(screen.queryByText(/Off for this run/)).toBeNull();
   });
 
+  it("shows a 5 USDC default chunk on a testnet (D-47)", () => {
+    const r = run({ stage: "verified", rows: [{ employee: emp("alice"), check: undefined, payability: { payable: true } }] });
+    render(<PayRunPage run={r} roster={roster([emp("alice")])} wallet={wallet} payPath={payPath} chainName="Base Sepolia" testnet onReview={() => undefined} onOpenRecipients={() => undefined} />);
+    expect(screen.getByText("5 USDC")).toBeInTheDocument();
+  });
+
   it("needs a Resolve before Review", () => {
     render(<PayRunPage run={run()} roster={roster([emp("alice")])} wallet={wallet} payPath={payPath} chainName="Base Sepolia" onReview={() => undefined} onOpenRecipients={() => undefined} />);
     expect(screen.getByRole("button", { name: /Review — resolve names first/ })).toBeDisabled();
