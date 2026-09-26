@@ -4,7 +4,7 @@ import { CheckCircle2, Circle, ExternalLink, Loader2, XCircle } from "lucide-rea
 import type { Address } from "viem";
 import { exitChainName, exitTxLink } from "../features/exit/config.js";
 import { exitPrefill } from "../features/exit/entry.js";
-import { fmtUsdcUp, type ExitEstimate } from "../features/exit/planner.js";
+import { fmtUsdcUp, noEligibleMessage, type ExitEstimate } from "../features/exit/planner.js";
 import { legLabel, timelineOf, type TimelineStep } from "../features/exit/timeline.js";
 import type { ExitLeg, ExitPrivacy, ExitRecord } from "../features/exit/types.js";
 import { DEFAULT_PRIVACY, useExit, type ExitView } from "../hooks/useExit.js";
@@ -96,7 +96,8 @@ function Planner({ prefill }: { prefill: { destination: Address; sources: Addres
   };
 
   if (!all) return null;
-  const minDeposit = all.legs[0] ? fmtUsdcUp(all.legs[0].minAmount) : null;
+  const minLeg = fmtUsdcUp(all.minAmount);
+  const nothingEligible = noEligibleMessage(all);
   return (
     <Card>
       <CardHeader
@@ -120,8 +121,16 @@ function Planner({ prefill }: { prefill: { destination: Address; sources: Addres
         <fieldset className="space-y-2">
           <legend className="text-sm font-medium">Sources</legend>
           <p className="text-xs text-muted-foreground">
-            The pool minimum is 10 USDC per leg on testnet{minDeposit ? `, so a leg needs at least ${minDeposit} USDC before bridge and gas fees` : ""}.
+            The pool takes deposits of {fmtUsdcUp(all.minDeposit)} USDC or more, so after bridge fees and gas each leg needs at least{" "}
+            <span className="font-medium" data-testid="exit-minimum">{minLeg} USDC</span> on one address.
           </p>
+          {nothingEligible && (
+            <div data-testid="exit-none-eligible">
+              <Alert variant="warning" title="Below the exit minimum">
+                {nothingEligible}
+              </Alert>
+            </div>
+          )}
           {exit.sources.length === 0 && <p className="text-sm text-muted-foreground">No stealth addresses with a balance. Scan first.</p>}
           <ul className="divide-y rounded-md border">
             {all.legs.map((l) => (
@@ -194,7 +203,7 @@ export function FeeSummary({ est, destination }: { est: ExitEstimate; destinatio
     <dl className="rounded-md border px-3 py-2 text-sm" data-testid="exit-fees">
       {row(`From ${n} address${n === 1 ? "" : "es"} (${n} leg${n === 1 ? "" : "s"})`, `${formatUsdc(t.amount)} USDC`)}
       {row("CCTP forwarding (Circle mints for you)", `−${formatUsdc(t.forwardFeeLow)}–${formatUsdc(t.forwardFeeHigh)}`, "fee-forward")}
-      {row("Paymaster gas, both chains (estimate)", `−${formatUsdc(t.gas)}`, "fee-gas")}
+      {row("Paymaster gas reserve, both chains (unused gas is refunded to the address)", `−${formatUsdc(t.gas)}`, "fee-gas")}
       {row("Pool entry fee (1%)", `−${formatUsdc(t.vettingFee)}`, "fee-pool")}
       {row("Relayer (0.1%)", `−${formatUsdc(t.relayerFee, { precise: true })}`, "fee-relayer")}
       {t.leftInPool > 0n && row("Left in the pool (round withdrawals)", formatUsdc(t.leftInPool, { precise: true }), "left-in-pool")}

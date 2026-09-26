@@ -1,14 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
-import { ClusterGraph, generateMnemonic, planSpend } from "@soapay/sdk";
+import { ClusterGraph, exitLegMinimum, generateMnemonic, planSpend } from "@soapay/sdk";
 import type { Address } from "viem";
 import { TESTNET_EXIT_CONFIG } from "../src/features/exit/config.js";
 import { exitPrefill, offersExit } from "../src/features/exit/entry.js";
 import { createMockExitService } from "../src/features/exit/mock.js";
-import { estimateExit, estimateLeg, minLegAmount, validateExit } from "../src/features/exit/planner.js";
-import { nextAction, patchRecords } from "../src/features/exit/runner.js";
-import { buildCtx, createSdkExitService, destBundlerUrl, type ExitSdkModule } from "../src/features/exit/sdk.js";
+import { estimateExit, estimateLeg, minLegAmount, noEligibleMessage, validateExit } from "../src/features/exit/planner.js";
+import { nextAction, patchRecords, tickExits, type LegPatch } from "../src/features/exit/runner.js";
+import { buildCtx, createSdkExitService, destBundlerUrl, type ExitSdkModule, type ExitService } from "../src/features/exit/sdk.js";
 import { timelineOf } from "../src/features/exit/timeline.js";
 import type { ExitLeg, ExitRecord } from "../src/features/exit/types.js";
 import { ExitProvider, useExit, type ExitApi } from "../src/hooks/useExit.js";
@@ -31,34 +31,50 @@ describe("exit planner: minimum and fees", () => {
   it("fee math for a 500 USDC leg (worst case, round withdrawal)", () => {
     const l = estimateLeg({ stealthAddress: A, amount: 500n * USDC }, cfg, { roundWithdrawals: true });
     expect(l.eligible).toBe(true);
-    expect(l.forwardFeeHigh).toBe(2_210_000n + 65_000n); // forward fee + 1.3 bps CCTP
-    expect(l.forwardFeeLow).toBe(1_540_000n + 65_000n);
-    expect(l.gas).toBe(450_000n);
-    expect(l.deposit).toBe(497_275_000n);
-    expect(l.vettingFee).toBe(4_972_750n); // 1%
-    expect(l.withdraw).toBe(492_000_000n); // round: whole USDC
-    expect(l.leftInPool).toBe(302_250n);
-    expect(l.relayerFee).toBe(492_000n); // 0.1%
-    expect(l.receive).toBe(491_508_000n);
-    expect(l.receiveHigh).toBe(l.receive); // the forward-fee spread is absorbed by the round-down
-    expect(estimateLeg({ stealthAddress: A, amount: 500n * USDC }, cfg, { roundWithdrawals: false }).receiveHigh).toBeGreaterThan(491_809_947n);
+    expect(l.forwardFeeHigh).toBe(2_210_000n + 64_993n); // forward fee (high tier) + 1.3 bps CCTP on the burn
+    expect(l.forwardFeeLow).toBe(1_530_000n + 64_993n);
+    // The paymaster prefunds (+10% headroom): 0.05 USDC on Base Sepolia, 3.75 USDC on Ethereum Sepolia.
+    expect(l.gas).toBe(55_000n + 4_125_000n);
+    expect(l.deposit).toBe(493_545_007n);
+    expect(l.vettingFee).toBe(4_935_450n); // 1%
+    expect(l.withdraw).toBe(488_000_000n); // round: whole USDC
+    expect(l.leftInPool).toBe(609_557n);
+    expect(l.relayerFee).toBe(488_000n); // 0.1%
+    expect(l.receive).toBe(487_512_000n);
+    expect(l.receiveHigh).toBe(488_511_000n); // with the low forward fee
+    expect(estimateLeg({ stealthAddress: A, amount: 500n * USDC }, cfg, { roundWithdrawals: false }).receiveHigh).toBe(488_793_474n);
   });
 
   it("full withdrawal leaves nothing in the pool", () => {
     const l = estimateLeg({ stealthAddress: A, amount: 500n * USDC }, cfg, { roundWithdrawals: false });
     expect(l.leftInPool).toBe(0n);
-    expect(l.withdraw).toBe(492_302_250n);
-    expect(l.relayerFee).toBe(492_303n); // rounded up
+    expect(l.withdraw).toBe(488_609_557n);
+    expect(l.relayerFee).toBe(488_610n); // rounded up
   });
 
-  it("pool minimum: 10 USDC deposit per leg after fees; below it the leg is disabled with a reason", () => {
+  it("leg minimum = the SDK's (≈ 16.4 USDC on testnet, not 12.6); below it the leg is disabled with the shortfall", () => {
     const min = minLegAmount(cfg);
-    expect(estimateLeg({ stealthAddress: A, amount: min }, cfg, { roundWithdrawals: true }).deposit).toBeGreaterThanOrEqual(cfg.pool.minDeposit);
-    expect(estimateLeg({ stealthAddress: A, amount: min }, cfg, { roundWithdrawals: true }).eligible).toBe(true);
+    expect(min).toBe(exitLegMinimum(cfg).minimum);
+    expect(min).toBeGreaterThan(16_300_000n);
+    expect(min).toBeLessThan(16_600_000n);
+    const at = estimateLeg({ stealthAddress: A, amount: min }, cfg, { roundWithdrawals: true });
+    expect(at.eligible).toBe(true);
+    expect(at.deposit).toBeGreaterThanOrEqual(cfg.pool.minDeposit);
+    expect(at.shortBy).toBe(0n);
     const below = estimateLeg({ stealthAddress: A, amount: min - 1n }, cfg, { roundWithdrawals: true });
     expect(below.eligible).toBe(false);
-    expect(below.reason).toMatch(/pool minimum.*12\.6\d USDC.*10\.00 USDC/);
+    expect(below.shortBy).toBe(1n);
+    expect(below.reason).toMatch(/exit minimum: a leg needs at least 16\.\d\d USDC \(the pool's 10\.00 USDC minimum deposit.*holds 16\.\d\d\. Add 0\.01 USDC/);
     expect(below.receive).toBe(0n);
+    // 12.2 USDC (what the deployer wallet held on 2026-09-26) can't exit: 4.20 short.
+    expect(estimateLeg({ stealthAddress: A, amount: 12_200_000n }, cfg, { roundWithdrawals: true }).reason).toMatch(/holds 12\.20\. Add 4\.\d\d USDC/);
+  });
+
+  it("says so up front when no address can exit", () => {
+    const none = estimateExit([{ stealthAddress: DUST, amount: 12_200_000n }, { stealthAddress: B, amount: USDC }], cfg, { roundWithdrawals: true });
+    expect(noEligibleMessage(none)).toMatch(/None of your addresses can exit yet.*at least 16\.\d\d USDC.*largest holds 12\.20 USDC/);
+    expect(noEligibleMessage(estimateExit([], cfg, { roundWithdrawals: true }))).toBeNull();
+    expect(noEligibleMessage(estimateExit([{ stealthAddress: A, amount: 500n * USDC }], cfg, { roundWithdrawals: true }))).toBeNull();
   });
 
   it("totals only count eligible legs; every address stays its own leg", () => {
@@ -74,7 +90,7 @@ describe("exit planner: minimum and fees", () => {
     expect(est.legs).toHaveLength(3);
     expect(est.eligible.map((l) => l.stealthAddress)).toEqual([A, B].map((a) => est.legs.find((l) => l.stealthAddress.toLowerCase() === a)!.stealthAddress));
     expect(est.totals.amount).toBe(1_000n * USDC);
-    expect(est.totals.receive).toBe(2n * 491_508_000n);
+    expect(est.totals.receive).toBe(2n * 487_512_000n);
   });
 
   it("validation", () => {
@@ -84,7 +100,7 @@ describe("exit planner: minimum and fees", () => {
     expect(validateExit({ ...base, destination: "nope" })).toMatch(/0x address/);
     expect(validateExit({ ...base, destination: A })).toMatch(/one of your stealth addresses/);
     expect(validateExit({ ...base, selected: [] })).toMatch(/at least one/);
-    expect(validateExit({ ...base, selected: [DUST] })).toMatch(/pool minimum/);
+    expect(validateExit({ ...base, selected: [DUST] })).toMatch(/exit minimum/);
   });
 });
 
@@ -172,6 +188,17 @@ describe("SDK seam", () => {
     expect(destBundlerUrl("https://bundler.example", 84532, 11155111)).toBe("https://public.pimlico.io/v2/11155111/rpc");
   });
 
+  it("hands the SDK the persist-before-send callback", async () => {
+    const saved: ExitLeg[] = [];
+    const ctx = buildCtx(cfg, {}, fetch, legOf("planned"), { stealthKey: () => "0x01", spendingKey: "0x02" }, {
+      destination: MAIN,
+      roundWithdrawals: true,
+      persist: async (l) => void saved.push(l),
+    });
+    await ctx.persist!(legOf("planned", { pending: { step: "burn", chainId: 84532, sender: A, nonce: "0" } }));
+    expect(saved[0]!.pending).toMatchObject({ step: "burn" });
+  });
+
   it("full withdrawals when round withdrawals are off", () => {
     const ctx = buildCtx(cfg, {}, fetch, legOf("approved"), { stealthKey: () => "0x01", spendingKey: "0x02" }, { destination: MAIN, roundWithdrawals: false });
     expect(ctx.config.withdrawUnit).toBe(1n);
@@ -201,6 +228,34 @@ describe("runner", () => {
     expect(nextAction(leg("done"), record(), 10)).toBe("idle");
     expect(nextAction(leg("failed"), record(), 10)).toBe("idle");
     expect(patchRecords([record({ holdUntil: { l: 5 } })], "e", "l", { holdUntil: null })[0]!.holdUntil).toEqual({});
+  });
+
+  it("saves the in-flight leg before the on-chain step, so a crash mid-send resumes without resending", async () => {
+    const pendingLeg = legOf("planned", { pending: { step: "burn", chainId: 84532, sender: A, nonce: "3" } });
+    const service = {
+      delayRangeMs: [0, 0],
+      // The SDK persists the leg with its in-flight marker, then the bundler connection drops.
+      advance: vi.fn(async (_leg: ExitLeg, _k: unknown, opts: { persist?: (l: ExitLeg) => Promise<void> }) => {
+        await opts.persist!(pendingLeg);
+        throw new Error("bundler connection dropped");
+      }),
+    } as unknown as ExitService;
+    const saves: { exitId: string; legId: string; patch: LegPatch }[] = [];
+    const errors: (string | null)[] = [];
+    await tickExits({
+      records: [record({ legs: [leg("planned")] })],
+      service,
+      keysFor: () => ({ stealthKey: () => "0x01", spendingKey: "0x02" }),
+      now: () => 0,
+      save: async (exitId, legId, patch) => void saves.push({ exitId, legId, patch }),
+      onError: (_id, m) => void errors.push(m),
+    });
+    expect(saves).toEqual([{ exitId: "e", legId: "l", patch: { leg: pendingLeg } }]);
+    expect(errors).toEqual(["bundler connection dropped"]);
+    // Queued legs are not started at all.
+    const idle = { advance: vi.fn(), delayRangeMs: [0, 0] } as unknown as ExitService;
+    await tickExits({ records: [record({ legs: [leg("planned")] })], service: idle, keysFor: () => ({ stealthKey: () => "0x01", spendingKey: "0x02" }), now: () => 0, save: async () => {}, isQueued: () => true });
+    expect(idle.advance).not.toHaveBeenCalled();
   });
 
   it("timeline: declined legs branch to refund, with the refund tx on the destination chain", () => {
@@ -317,7 +372,8 @@ describe("useExit", () => {
     const burnLink = [...refunded.querySelectorAll("a")].find((a) => a.textContent?.includes("Basescan Sepolia"));
     expect(burnLink?.getAttribute("href")).toMatch(/^https:\/\/sepolia\.basescan\.org\/tx\/0x/);
     // Below-minimum source shows why it's disabled.
-    expect(screen.getByTestId("below-minimum").textContent).toMatch(/pool minimum/);
+    expect(screen.getByTestId("below-minimum").textContent).toMatch(/exit minimum.*Add \d+\.\d\d USDC/);
+    expect(screen.getByTestId("exit-minimum").textContent).toMatch(/^16\.\d\d USDC$/);
   });
 
   it("queues each leg's deposit in its own window (D-28); Start now overrides", async () => {

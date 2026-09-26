@@ -61,9 +61,15 @@ export async function tickExits(p: {
   isQueued?: (legId: string) => boolean;
 }): Promise<void> {
   for (const record of p.records) {
-    const opts: AdvanceOptions = { destination: record.destination, roundWithdrawals: record.privacy.roundWithdrawals };
     for (const stored of record.legs) {
       const leg = loadLeg(stored);
+      // Persist-before-send: the SDK hands us the leg with its in-flight marker before each on-chain
+      // step, and it reaches the vault before the userOp or relay request leaves.
+      const opts: AdvanceOptions = {
+        destination: record.destination,
+        roundWithdrawals: record.privacy.roundWithdrawals,
+        persist: (l) => p.save(record.id, leg.id, { leg: storeLeg(l) }),
+      };
       const action = nextAction(leg, record, p.now(), p.isQueued?.(leg.id) ?? false);
       if (action === "idle" || action === "hold" || action === "queued") continue;
       if (action === "schedule") {
