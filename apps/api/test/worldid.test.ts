@@ -516,6 +516,34 @@ describe("POST /names/:label/rotation", () => {
       expect(t.portal.calls).toHaveLength(1); // refused before the portal call
     });
 
+    it("a different person, as pnpm demo:attacker-worldid presents it (no signal hash, a request bound to this change)", async () => {
+      const t = setup();
+      await enrollWithSession(t);
+      const newMeta = metaUri(2);
+      const deadline = BigInt(NOW + 600);
+      const nonce = await t.rpNonce(rotationSignal("alice", newMeta, deadline));
+      const result = {
+        protocol_version: "4.0",
+        nonce,
+        session_id: `session_${"ef".repeat(64)}`,
+        environment: "staging",
+        responses: [{ identifier: "proof_of_human", issuer_schema_id: 1, proof: ["0x1", "0x2", "0x3", "0x4"], session_nullifier: [`0x${"12".repeat(31)}`, "0x0"], expires_at_min: 0 }],
+      };
+      const res = await rotate(t, await rotationBody(t, { newMeta, deadline, result }));
+      await expectRefused(t, res, 403, "session_mismatch");
+      expect(t.portal.calls).toHaveLength(1); // only the enrollment; the refusal needs no call to World
+      // The request stays unused and the nullifier unrecorded: a refusal spends nothing.
+      expect((t.db.prepare("SELECT used_at FROM worldid_requests WHERE nonce = ?").get(nonce.toLowerCase()) as { used_at: number | null }).used_at).toBeNull();
+    });
+
+    it("the name's own linking proof, captured and replayed as a rotation proof (demo:attacker-worldid --replay)", async () => {
+      const t = setup();
+      const nonce = await t.rpNonce();
+      const linking = sessionResult({ nonce, signal: sessionSignal("alice", registrant.address) });
+      expect((await t.post("/names", { ...(await claimBody()), worldIdSession: linking })).status).toBe(201);
+      await expectRefused(t, await rotate(t, await rotationBody(t, { result: linking })), 403, "session_replayed");
+    });
+
     it("a replayed session_nullifier", async () => {
       const t = setup();
       await enrollWithSession(t);

@@ -11,17 +11,22 @@
     "demo:setup-recovery": "tsx demo/setup-recovery.ts",
     "demo:seed-company": "tsx demo/seed-company.ts",
     "demo:attacker": "tsx demo/attacker.ts",
+    "demo:attacker-worldid": "tsx demo/worldid-attacker.ts",
     "demo:recovery-check": "tsx demo/recovery-check.ts",
     "typecheck": "tsc --noEmit",
+    "test": "tsx --test demo/*.test.ts",
     "clean": "rm -rf .turbo"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.1",
     "@soapay/sdk": "workspace:*",
+    "@worldcoin/idkit-core": "4.3.0",
+    "qrcode": "^1.5.4",
     "viem": "^2.56.9"
   },
   "devDependencies": {
     "@types/node": "^26.6.2",
+    "@types/qrcode": "^1.5.6",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   }
