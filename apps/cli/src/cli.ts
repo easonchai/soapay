@@ -5,6 +5,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import {
   apiAnnouncementSource,
   compositeResolver,
+  configurePayToken,
   emptyPinBook,
   encodeDistribution,
   ensNameResolver,
@@ -264,6 +265,8 @@ async function scan(args: ScanArgs, io: CliIo): Promise<number> {
 
 export async function run(argv: readonly string[], io: CliIo): Promise<number> {
   try {
+    // Base Sepolia pay token (D-52): Soapay's mock USDC ("--asset usdc") unless PAY_TOKEN overrides it.
+    configurePayToken(84532, io.env.PAY_TOKEN?.trim() || undefined);
     const args = parseCli(argv);
     if (args.command === "help") {
       io.stdout(USAGE);

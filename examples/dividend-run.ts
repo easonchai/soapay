@@ -1,6 +1,7 @@
 // Private dividend run: split a USDC total pro rata by shareholding, one stealth address per line,
 // in identical denominations so line amounts do not reveal holdings. On a testnet the amounts are
-// testnet-sized (2.5 USDC in 0.1 USDC chunks; faucet USDC is scarce), else 25,000 USDC in 100 USDC chunks.
+// testnet-sized (2.5 USDC in 0.1 USDC chunks, readable in a demo), else 25,000 USDC in 100 USDC chunks.
+// On Base Sepolia "USDC" is Soapay's mock token (D-52); fund the payer with scripts/fund-usdc.sh.
 //
 //   pnpm --filter @soapay/examples dividend                 # dry run
 //   EXECUTE=1 PAYER_PRIVATE_KEY=0x… pnpm --filter @soapay/examples dividend

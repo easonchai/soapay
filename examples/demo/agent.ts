@@ -3,7 +3,8 @@
 //
 // The agent is a payee like any person: it gets <label>.soapay.eth, is paid in the same pay run as
 // the humans (indistinguishable lines on-chain), scans with its own viewing key, and spends
-// gaslessly (7702 + USDC paymaster). It holds no payer key and no ETH.
+// gaslessly (7702; on Base Sepolia the gas is sponsored through the API's /paymaster, on Base the
+// Circle paymaster takes it in USDC). It holds no payer key and no ETH.
 //
 //   pnpm --filter @soapay/mcp build
 //   pnpm --filter @soapay/examples demo:agent claim
@@ -100,11 +101,11 @@ async function receive(agent: Client) {
   console.log(`  the pay run has ${batch.length} lines; ${c.green(`${mine.length} are mine, ${+sum.toFixed(6)} USDC`)}. The rest are not mine to see.`);
   for (const p of mine) console.log(`  ${c.green(`+${p.balanceUsdc} USDC`)} at ${p.stealthAddress} ${c.dim(`(${scan.matches} payments to this agent so far)`)}`);
 
-  // 2. Spend gaslessly: plan (consolidation guard), then confirm. Gas is paid in USDC.
+  // 2. Spend gaslessly: plan (consolidation guard), then confirm. Gas is sponsored on the testnet.
   say(`spend ${SPEND_USDC} USDC to ${SPEND_TO}`);
   const plan = await call(agent, "spend", { to: SPEND_TO, amount: SPEND_USDC });
   if (!plan.planId) throw new Error(`guard ${plan.decision}: ${plan.reason}`);
-  console.log(`  guard: ${plan.decision}${plan.warnings?.length ? ` (${plan.warnings.map((w: any) => w.code).join(", ")})` : ""} · ${plan.userOps} userOp, max fee ${plan.maxFeesUsdc} USDC paid in USDC, no ETH`);
+  console.log(`  guard: ${plan.decision}${plan.warnings?.length ? ` (${plan.warnings.map((w: any) => w.code).join(", ")})` : ""} · ${plan.userOps} userOp, max fee ${plan.maxFeesUsdc} USDC${Number(plan.maxFeesUsdc) === 0 ? " (gas sponsored on this testnet)" : " paid in USDC"}, no ETH`);
   if (process.env.SPEND_DRY) {
     console.log(c.dim("  SPEND_DRY set: not confirming."));
     return;
