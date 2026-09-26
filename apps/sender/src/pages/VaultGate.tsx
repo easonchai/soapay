@@ -1,7 +1,7 @@
 import { useState } from "react";
+import { ErrorLine, PageHead } from "@soapay/ui";
 import type { VaultPhase } from "../hooks/store.js";
 import type { VaultMode } from "../lib/vault.js";
-import { Banner, Button, Card, Input } from "../ui/kit.js";
 
 export type VaultGateProps = {
   phase: Exclude<VaultPhase, "ready">;
@@ -12,38 +12,60 @@ export type VaultGateProps = {
   onUnlock(passphrase?: string): void;
 };
 
-/** Create or unlock the encrypted roster + history vault. */
+/** Create or unlock the encrypted roster + history vault, in the Ledger design. */
 export function VaultGate(p: VaultGateProps) {
   const [pass, setPass] = useState("");
-  if (p.phase === "loading") return <p className="text-sm text-slate-500">Opening vault…</p>;
+  if (p.phase === "loading") return <p className="ink2">Opening vault…</p>;
+
   if (p.phase === "locked") {
     return (
-      <Card title="Unlock">
-        {p.vaultMode === "passphrase" ? (
-          <form className="flex gap-2" onSubmit={(e) => (e.preventDefault(), p.onUnlock(pass))}>
-            <Input type="password" placeholder="Passphrase" value={pass} onChange={(e) => setPass(e.target.value)} autoFocus />
-            <Button type="submit">Unlock</Button>
-          </form>
-        ) : (
-          <Button onClick={() => p.onUnlock()}>Unlock on this device</Button>
-        )}
-        {p.error && <div className="mt-3"><Banner tone="error">{p.error}</Banner></div>}
-      </Card>
+      <div className="gate stack-lg">
+        <PageHead eyebrow="Payroll vault · locked" title="Unlock your payroll" line="Your roster and run history are encrypted in this browser." />
+        <div className="panel panel-pad stack">
+          {p.vaultMode === "passphrase" ? (
+            <form className="actions" onSubmit={(e) => (e.preventDefault(), p.onUnlock(pass))}>
+              <input type="password" aria-label="Passphrase" placeholder="Passphrase" value={pass} onChange={(e) => setPass(e.target.value)} autoFocus style={{ flex: 1 }} />
+              <button type="submit" className="btn-primary">
+                Unlock
+              </button>
+            </form>
+          ) : (
+            <button className="btn-primary btn-lg" onClick={() => p.onUnlock()}>
+              Unlock on this device
+            </button>
+          )}
+          <ErrorLine error={p.error} />
+        </div>
+      </div>
     );
   }
+
   return (
-    <Card title="Set up the payroll vault">
-      <p className="mb-3 text-sm text-slate-600">
-        The roster (names → amounts) and run history are encrypted in this browser. Nothing is sent to a server.
-      </p>
-      <div className="flex flex-col gap-3">
-        <Button variant="ghost" onClick={() => p.onCreate("device")}>Use a device key (no passphrase)</Button>
-        <form className="flex gap-2" onSubmit={(e) => (e.preventDefault(), p.onCreate("passphrase", pass))}>
-          <Input type="password" placeholder={`Passphrase (${p.minPassphrase}+ characters)`} value={pass} onChange={(e) => setPass(e.target.value)} />
-          <Button type="submit" disabled={pass.length < p.minPassphrase}>Create with passphrase</Button>
+    <div className="gate stack-lg">
+      <PageHead
+        eyebrow="Payroll vault · new"
+        title="Set up the payroll vault"
+        line="The roster (names → amounts) and run history are encrypted in this browser. Nothing is sent to a server."
+      />
+      <div className="panel panel-pad stack">
+        <button className="btn-lg" onClick={() => p.onCreate("device")}>
+          Use a device key (no passphrase)
+        </button>
+        <form className="actions" onSubmit={(e) => (e.preventDefault(), p.onCreate("passphrase", pass))}>
+          <input
+            type="password"
+            aria-label="New passphrase"
+            placeholder={`Passphrase (${p.minPassphrase}+ characters)`}
+            value={pass}
+            onChange={(e) => setPass(e.target.value)}
+            style={{ flex: 1 }}
+          />
+          <button type="submit" className="btn-primary" disabled={pass.length < p.minPassphrase}>
+            Create with passphrase
+          </button>
         </form>
+        <ErrorLine error={p.error} />
       </div>
-      {p.error && <div className="mt-3"><Banner tone="error">{p.error}</Banner></div>}
-    </Card>
+    </div>
   );
 }

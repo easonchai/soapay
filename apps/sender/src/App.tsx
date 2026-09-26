@@ -1,9 +1,9 @@
-// The only file that knows both the hooks and the pages: each container calls a hook
-// and hands its result to a props-only page. Swap the pages (or this file) to plug in
-// another UI; see README "How to plug in another UI".
-import { useState, type ReactNode } from "react";
+// The only file that knows both the hooks and the pages: each container calls our hooks and
+// hands their results to CK's Ledger screens (props-only). See README "How to plug in another UI".
+import { useEffect, useState, type ReactNode } from "react";
+import { Fade, Presence, TopBar } from "@soapay/ui";
 import { CHAINS, PARENT_NAME } from "@soapay/sdk";
-import { txUrl } from "./config.js";
+import { getOrgName, setOrgName, txUrl } from "./config.js";
 import { useStore } from "./hooks/store.js";
 import { usePayPath, useWallet } from "./hooks/usePayPath.js";
 import { usePayRun } from "./hooks/usePayRun.js";
@@ -12,102 +12,73 @@ import { useRoute, type Route } from "./hooks/useRoute.js";
 import { useInvitePolling, useInvites } from "./hooks/useInvites.js";
 import { useHistory, useRunActions } from "./hooks/useRunActions.js";
 import { useSettings } from "./hooks/useSettings.js";
+import { useWalletBalances } from "./hooks/useWalletBalances.js";
+import { formatUsdc } from "./lib/amount.js";
 import { MIN_PASSPHRASE_LENGTH, type VaultMode } from "./lib/vault.js";
+import { employeeWallets, historyCsv } from "./lib/wallets.js";
+import type { Denomination } from "./lib/run.js";
 import { HistoryPage } from "./pages/HistoryPage.js";
 import { InvitesPanel } from "./pages/InvitesPanel.js";
+import { Landing } from "./pages/Landing.js";
 import { PayRunPage } from "./pages/PayRunPage.js";
-import { RosterPage } from "./pages/RosterPage.js";
+import { RecipientsPage } from "./pages/RecipientsPage.js";
+import { ReviewPage } from "./pages/ReviewPage.js";
 import { RunDetailPage } from "./pages/RunDetailPage.js";
+import { SafeExportPage } from "./pages/SafeExportPage.js";
 import { SettingsPage } from "./pages/SettingsPage.js";
 import { VaultGate } from "./pages/VaultGate.js";
-import { Banner, Button, short } from "./ui/kit.js";
+import { Notice, short } from "./ui/kit.js";
 
 function chainName(id: number): string {
   return (CHAINS as Record<number, { chain: { name: string } } | undefined>)[id]?.chain.name ?? `Chain ${id}`;
 }
 
-function WalletButton() {
-  const w = useWallet();
-  const [open, setOpen] = useState(false);
-  if (w.isConnected && w.address) {
-    return (
-      <div className="flex items-center gap-2 text-sm">
-        {w.wrongChain && <span className="text-amber-700">wallet on another chain</span>}
-        <span className="font-mono">{short(w.address, 4)}</span>
-        <Button variant="ghost" onClick={w.disconnect}>Disconnect</Button>
-      </div>
-    );
-  }
-  return (
-    <div className="relative">
-      <Button onClick={() => setOpen((o) => !o)} disabled={w.connecting}>{w.connecting ? "Connecting…" : "Connect wallet"}</Button>
-      {open && (
-        <div className="absolute right-0 z-10 mt-1 flex w-56 flex-col gap-1 rounded border border-slate-200 bg-white p-2 shadow">
-          {w.connectors.map((c) => (
-            <Button key={c.id} variant="ghost" onClick={() => (c.connect(), setOpen(false))}>{c.name}</Button>
-          ))}
-        </div>
-      )}
-      {w.connectError && <div className="absolute right-0 mt-1 w-64 text-xs text-red-700">{w.connectError}</div>}
-    </div>
-  );
-}
+const LOGGED_OUT = "soapay:loggedOut";
+const session = {
+  get: () => {
+    try {
+      return sessionStorage.getItem(LOGGED_OUT) === "1";
+    } catch {
+      return false;
+    }
+  },
+  set: (v: boolean) => {
+    try {
+      if (v) sessionStorage.setItem(LOGGED_OUT, "1");
+      else sessionStorage.removeItem(LOGGED_OUT);
+    } catch {
+      /* ignore */
+    }
+  },
+};
 
-function Shell({ route, go, children }: { route: Route; go(r: Route): void; children: ReactNode }) {
-  const { app, phase } = useStore();
-  const tabs: { r: Route; label: string }[] = [
-    { r: { page: "roster" }, label: "Roster" },
-    { r: { page: "pay" }, label: "Pay run" },
-    { r: { page: "history" }, label: "History" },
-    { r: { page: "settings" }, label: "Settings" },
-  ];
-  const active = route.page === "run" ? "history" : route.page;
-  return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3">
-          <div className="flex items-center gap-4">
-            <span className="font-semibold">Soapay payroll</span>
-            <span className="text-xs text-slate-500">{app.chain.name}</span>
-            {phase === "ready" && (
-              <nav className="flex gap-1 text-sm">
-                {tabs.map((t) => (
-                  <button
-                    key={t.label}
-                    onClick={() => go(t.r)}
-                    className={`rounded px-2 py-1 ${active === t.r.page ? "bg-slate-900 text-white" : "hover:bg-slate-100"}`}
-                  >
-                    {t.label}
-                  </button>
-                ))}
-              </nav>
-            )}
-          </div>
-          <WalletButton />
-        </div>
-      </header>
-      <main className="mx-auto flex max-w-5xl flex-col gap-4 px-4 py-6">
-        {!app.stealthDisperse && (
-          <Banner tone="warn">
-            <b>EIP-5792 path only.</b> No StealthDisperse address is configured for {app.chain.name} (VITE_STEALTH_DISPERSE or Settings), so
-            plain EOA wallets can't pay. Connect a smart wallet with atomic batching, or export the run for a Safe.
-          </Banner>
-        )}
-        {app.mockEns && <Banner tone="info">Dev mock mode: names resolve to generated demo keys; the demo wallet can't sign. Invites are signed by a throwaway key and flip to claimed after a few seconds.</Banner>}
-        {children}
-      </main>
-    </div>
-  );
-}
-
-function RosterContainer() {
+function RecipientsContainer({ go, org }: { go(r: Route): void; org: string }) {
+  const { runs, app, updateEmployees } = useStore();
   const roster = useRoster();
   const invites = useInvites();
+  const [openId, setOpenId] = useState<string>();
+  const landed = openId ? employeeWallets(runs, openId).map((w) => w.stealthAddress) : [];
+  const { balances } = useWalletBalances(landed);
   return (
-    <div className="flex flex-col gap-4">
-      <InvitesPanel {...invites} parentName={PARENT_NAME} />
-      <RosterPage {...roster} />
-    </div>
+    <RecipientsPage
+      roster={roster}
+      runs={runs}
+      chainId={app.chainId}
+      openId={openId}
+      onOpen={setOpenId}
+      balances={balances}
+      onRename={(id, label) =>
+        updateEmployees((l) =>
+          l.map((e) => {
+            if (e.id !== id) return e;
+            const { label: _old, ...rest } = e;
+            return label.trim() ? { ...rest, label: label.trim() } : rest;
+          }),
+        )
+      }
+      onPay={() => go({ page: "pay" })}
+      invitesPanel={<InvitesPanel {...invites} parentName={PARENT_NAME} defaultOrg={org} />}
+    />
   );
 }
 
@@ -118,14 +89,60 @@ function InvitePoller() {
 }
 
 function PayRunContainer({ go }: { go(r: Route): void }) {
+  const { app } = useStore();
   const run = usePayRun();
+  const roster = useRoster();
   const wallet = useWallet();
   const payPath = usePayPath();
-  return <PayRunPage run={run} wallet={wallet} payPath={payPath} onOpenRun={(id) => go({ page: "run", id })} />;
+  const [editing, setEditing] = useState(false);
+
+  // A real pay run executes step by step: follow it on the run page (it persists every step).
+  useEffect(() => {
+    if (run.stage === "executing" && run.runId) go({ page: "run", id: run.runId });
+  }, [run.stage, run.runId, go]);
+
+  if (run.safeChunks && run.runId) {
+    const id = run.runId;
+    return <SafeExportPage chunks={run.safeChunks} onDownload={run.downloadSafeChunk} onOpenRun={() => go({ page: "run", id })} onNewRun={run.reset} />;
+  }
+  if (run.plan && run.stage === "planned" && !editing) {
+    return <ReviewPage run={run} plan={run.plan} wallet={wallet} payPath={payPath} chainName={app.chain.name} onBack={() => setEditing(true)} />;
+  }
+  return (
+    <PayRunPage
+      run={run}
+      roster={roster}
+      wallet={wallet}
+      payPath={payPath}
+      chainName={app.chain.name}
+      onOpenRecipients={() => go({ page: "roster" })}
+      onReview={(d: Denomination | null) => {
+        setEditing(false);
+        // Re-plans with fresh addresses every time; a plan is never reused.
+        run.preview(d);
+      }}
+    />
+  );
 }
 
 function HistoryContainer({ go }: { go(r: Route): void }) {
-  return <HistoryPage runs={useHistory()} onOpen={(id) => go({ page: "run", id })} />;
+  const views = useHistory();
+  const { runs } = useStore();
+  return (
+    <HistoryPage
+      runs={views}
+      onOpenRun={(id) => go({ page: "run", id })}
+      onStartRun={() => go({ page: "pay" })}
+      onExportCsv={() => {
+        const blob = new Blob([historyCsv(runs, formatUsdc)], { type: "text/csv" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `soapay-history-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      }}
+    />
+  );
 }
 
 function RunContainer({ id, go }: { id: string; go(r: Route): void }) {
@@ -134,17 +151,18 @@ function RunContainer({ id, go }: { id: string; go(r: Route): void }) {
   return <RunDetailPage {...actions} txUrl={(h) => txUrl(chainId, h)} onBack={() => go({ page: "history" })} />;
 }
 
-function SettingsContainer() {
+function SettingsContainer({ org, onOrgChange }: { org: string; onOrgChange(v: string): void }) {
   const s = useSettings();
-  const { app, vaultMode, lock, destroyVault } = useStore();
+  const { app, vaultMode, lock, destroyVault, employees, invites, runs } = useStore();
   return (
     <SettingsPage
       {...s}
+      app={app}
       chainName={chainName}
-      attester={app.attester}
-      apiUrl={app.apiUrl}
-      mockEns={app.mockEns}
+      org={org}
+      onOrgChange={onOrgChange}
       vaultMode={vaultMode}
+      counts={{ employees: employees.length, invites: invites.length, runs: runs.length }}
       onLock={lock}
       onDestroyVault={() => void destroyVault()}
     />
@@ -171,20 +189,113 @@ function VaultContainer() {
   );
 }
 
+function Banners() {
+  const { app } = useStore();
+  const wallet = useWallet();
+  const items: ReactNode[] = [];
+  if (!app.stealthDisperse) {
+    items.push(
+      <Notice key="5792" tone="warn">
+        <b>EIP-5792 path only.</b> No StealthDisperse address is configured for {app.chain.name} (VITE_STEALTH_DISPERSE or Settings), so plain EOA
+        wallets can&apos;t pay. Connect a smart wallet with atomic batching, or export the run for a Safe.
+      </Notice>,
+    );
+  }
+  if (app.mockEns) {
+    items.push(
+      <Notice key="mock" tone="info">
+        Dev mock mode: names resolve to generated demo keys; the demo wallet can&apos;t sign. Invites are signed by a throwaway key and flip to
+        claimed after a few seconds.
+      </Notice>,
+    );
+  }
+  if (wallet.wrongChain) {
+    items.push(
+      <Notice key="chain" tone="warn">
+        Your wallet is on another chain. Payments target {app.chain.name}.
+      </Notice>,
+    );
+  }
+  return items.length ? <div className="banners">{items}</div> : null;
+}
+
 export function App() {
-  const { phase } = useStore();
+  const { app, phase, lock } = useStore();
+  const wallet = useWallet();
   const [route, go] = useRoute();
-  let page: ReactNode;
-  if (phase !== "ready") page = <VaultContainer />;
-  else if (route.page === "pay") page = <PayRunContainer go={go} />;
-  else if (route.page === "history") page = <HistoryContainer go={go} />;
-  else if (route.page === "run") page = <RunContainer id={route.id} go={go} />;
-  else if (route.page === "settings") page = <SettingsContainer />;
-  else page = <RosterContainer />;
+  const [loggedOut, setLoggedOut] = useState(session.get);
+  const [org, setOrg] = useState(getOrgName);
+
+  if (!wallet.isConnected || loggedOut) {
+    return (
+      <Landing
+        wallet={wallet}
+        onLogin={() => {
+          session.set(false);
+          setLoggedOut(false);
+        }}
+      />
+    );
+  }
+
+  function logout() {
+    session.set(true);
+    setLoggedOut(true);
+    lock();
+    wallet.disconnect();
+  }
+
+  let body: ReactNode;
+  if (phase !== "ready") body = <VaultContainer />;
+  else if (route.page === "pay") body = <PayRunContainer go={go} />;
+  else if (route.page === "history") body = <HistoryContainer go={go} />;
+  else if (route.page === "run") body = <RunContainer id={route.id} go={go} />;
+  else if (route.page === "settings")
+    body = (
+      <SettingsContainer
+        org={org}
+        onOrgChange={(v) => {
+          setOrgName(v);
+          setOrg(v.trim());
+        }}
+      />
+    );
+  else body = <RecipientsContainer go={go} org={org} />;
+
+  const active = route.page === "run" ? "history" : route.page;
+  const tab = (label: string, r: Route) => ({ label, active: phase === "ready" && active === r.page, onSelect: () => go(r) });
   return (
-    <Shell route={route} go={go}>
-      {phase === "ready" && <InvitePoller />}
-      {page}
-    </Shell>
+    <div className="page">
+      <TopBar
+        org={org || undefined}
+        tabs={
+          phase === "ready"
+            ? [tab("Pay run", { page: "pay" }), tab("History", { page: "history" }), tab("Recipients", { page: "roster" }), tab("Settings", { page: "settings" })]
+            : []
+        }
+        right={
+          <>
+            <a className="btn-text" href={app.otherAppUrl} title="The employee app">
+              Receive
+            </a>
+            <span className="chip">
+              {wallet.address ? short(wallet.address, 4) : ""} · {app.chain.name}
+            </span>
+            <button className="btn-text" onClick={logout}>
+              Log out
+            </button>
+          </>
+        }
+      />
+      <main className="app-main">
+        {phase === "ready" && <InvitePoller />}
+        <Banners />
+        <Presence mode="wait" initial={false}>
+          <Fade key={phase !== "ready" ? "vault" : route.page === "run" ? `run-${route.id}` : route.page} y={8}>
+            {body}
+          </Fade>
+        </Presence>
+      </main>
+    </div>
   );
 }

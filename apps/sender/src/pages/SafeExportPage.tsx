@@ -1,33 +1,54 @@
+import { PageHead } from "@soapay/ui";
 import type { SafeExportChunk } from "../lib/safeExport.js";
-import { Banner, Button, Card, short } from "../ui/kit.js";
+import { Notice, short } from "../ui/kit.js";
 
 export type SafeExportPageProps = {
   chunks: SafeExportChunk[];
   onDownload(index: number): void;
   onOpenRun(): void;
+  onNewRun(): void;
 };
 
-/** Props-only: download the Transaction Builder files for a Safe-paid run. */
+/** Download the Transaction Builder files for a Safe-paid run. */
 export function SafeExportPage(p: SafeExportPageProps) {
   return (
-    <Card title="Safe export">
-      <Banner tone="info">
-        Import each file into Safe{"{"}Wallet{"}"} → Transaction Builder and execute every part. Each part DELEGATECALLs
-        MultiSendCallOnly ({short(p.chunks[0]?.multiSend.to ?? "")}) and pays + announces its lines. Never use MultiSend.
-      </Banner>
-      <ul className="mt-3 flex flex-col gap-2 text-sm">
+    <div className="stack-lg" style={{ maxWidth: 760 }}>
+      <PageHead
+        eyebrow={`Safe export · ${p.chunks.length} part${p.chunks.length === 1 ? "" : "s"}`}
+        title="Execute this run in your Safe"
+        line="Import each file into Safe{Wallet} → Transaction Builder and execute every part."
+      />
+      <Notice tone="info">
+        Each part DELEGATECALLs MultiSendCallOnly ({short(p.chunks[0]?.multiSend.to ?? "")}) and pays and announces its lines. Never use MultiSend.
+      </Notice>
+      <div className="table">
+        <div className="thead" style={{ gridTemplateColumns: "1fr 100px 2fr 120px" }}>
+          <span>Part</span>
+          <span className="r">Lines</span>
+          <span>File</span>
+          <span />
+        </div>
         {p.chunks.map((c) => (
-          <li key={c.index} className="flex items-center justify-between gap-2 border-t border-slate-100 pt-2">
+          <div key={c.index} className="tr" style={{ gridTemplateColumns: "1fr 100px 2fr 120px" }}>
             <span>
-              Part {c.index + 1} of {p.chunks.length}: {c.lines} lines <span className="text-slate-500">({c.fileName})</span>
+              Part {c.index + 1} of {p.chunks.length}
             </span>
-            <Button variant="ghost" onClick={() => p.onDownload(c.index)}>Download</Button>
-          </li>
+            <span className="r mono">{c.lines}</span>
+            <span className="mono ink2">{c.fileName}</span>
+            <span className="r">
+              <button className="btn-inline" onClick={() => p.onDownload(c.index)}>
+                Download
+              </button>
+            </span>
+          </div>
         ))}
-      </ul>
-      <div className="mt-3">
-        <Button variant="ghost" onClick={p.onOpenRun}>Open run record</Button>
       </div>
-    </Card>
+      <div className="actions">
+        <button className="btn-primary" onClick={p.onOpenRun}>
+          Open run record
+        </button>
+        <button onClick={p.onNewRun}>New pay run</button>
+      </div>
+    </div>
   );
 }

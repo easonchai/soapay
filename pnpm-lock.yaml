@@ -176,18 +176,12 @@ importers:
       '@soapay/ui':
         specifier: workspace:*
         version: link:../../packages/ui
-      '@tailwindcss/vite':
-        specifier: ^4
-        version: 4.3.3(vite@8.3.1(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15))
       '@tanstack/react-query':
         specifier: ^5.103.2
         version: 5.103.2(react@19.3.0)
       framer-motion:
         specifier: ^13.4.4
         version: 13.4.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
-      lucide-react:
-        specifier: ^1.48.0
-        version: 1.48.0(react@19.3.0)
       papaparse:
         specifier: ^5.7.0
         version: 5.7.0
@@ -203,9 +197,6 @@ importers:
       react-router:
         specifier: ^8
         version: 8.4.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
-      tailwindcss:
-        specifier: ^4
-        version: 4.3.3
       viem:
         specifier: ^2.56.9
         version: 2.56.9(typescript@7.0.2)(zod@4.6.5)
