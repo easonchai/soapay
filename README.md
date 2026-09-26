@@ -183,8 +183,8 @@ The skipped tests are the Base and Sepolia fork end-to-ends (a full payroll run,
 
 | What | Code |
 | --- | --- |
-| `quoteSwapInPlace`, `swapInPlace`, placeholder-swapper Trading API client, calldata checks | [`packages/sdk/src/swap.ts`](packages/sdk/src/swap.ts) (Trading API [L577-L840](packages/sdk/src/swap.ts#L577-L840), in-place checks [L350-L487](packages/sdk/src/swap.ts#L350-L487)) |
-| `executeFromStealth`: one 7702 userOp, any calls, gas in USDC | [`packages/sdk/src/spend.ts` L414-L497](packages/sdk/src/spend.ts#L414-L497) |
+| `quoteSwapInPlace`, `swapInPlace`, placeholder-swapper Trading API client, calldata checks | [`packages/sdk/src/swap.ts`](packages/sdk/src/swap.ts): Trading API quote with a placeholder swapper and the address guard [L594-L610](packages/sdk/src/swap.ts#L594-L610), re-encoding the quoted V2/V3 route [L645-L726](packages/sdk/src/swap.ts#L645-L726), `/quote`-only client [L727-L830](packages/sdk/src/swap.ts#L727-L830), in-place checks (every output stays at the stealth address) [L350-L499](packages/sdk/src/swap.ts#L350-L499), entry points [L831-L874](packages/sdk/src/swap.ts#L831-L874) |
+| `executeFromStealth`: one 7702 userOp, any calls, gas in USDC | [`packages/sdk/src/spend.ts`](packages/sdk/src/spend.ts): the userOp pipeline (session, 7702 authorization, paymaster permit, send) [L216-L498](packages/sdk/src/spend.ts#L216-L498), entry point [L499-L504](packages/sdk/src/spend.ts#L499-L504) |
 | Base mainnet fork E2E | [`packages/sdk/test/fork.e2e.test.ts`](packages/sdk/test/fork.e2e.test.ts) |
 | Developer feedback for Uniswap | [`FEEDBACK.md`](FEEDBACK.md) |
 
