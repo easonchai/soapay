@@ -524,6 +524,27 @@ describe("advanceExitLeg (mocked chain, ASP and relayer)", () => {
     expect(world.w.epNonce[SRC]).toBe(1n);
   });
 
+  it("never simulates a deposit below the pool minimum, even with a large fee cap", async () => {
+    // Live 2026-09-26: an 8 USDC Sepolia cap made balance - cap < minDeposit, so the fee probe reverted
+    // with MinimumDepositAmount although the real fee left enough to deposit.
+    const { stealthKey, world, leg: start } = freshLeg(18_000_000n);
+    const probes: bigint[] = [];
+    const ctx = makeCtx(world, stealthKey, {
+      maxFeeUsdc: { [DST]: 8_000_000n },
+      estimate: (async (_c: unknown, p: ExecuteParams) => {
+        if (p.calls[1] && getAddress(p.calls[1].to) === getAddress(CONFIG.pool.entrypoint)) {
+          const { args } = decodeFunctionData({ abi: ppEntrypointAbi, data: p.calls[1].data! });
+          probes.push(args[1] as bigint);
+        }
+        return { fee: PAYMASTER_FEE };
+      }) as never,
+    });
+    const leg = await toPendingAsp(ctx, world, start);
+    expect(probes.length).toBeGreaterThan(0);
+    for (const p of probes) expect(p).toBeGreaterThanOrEqual(CONFIG.pool.minDeposit);
+    expect(BigInt(leg.deposit!.amount)).toBeGreaterThanOrEqual(CONFIG.pool.minDeposit);
+  });
+
   it("resumes the deposit after a crash the same way", async () => {
     const { stealthKey, world, leg: planned } = freshLeg();
     const ctx = makeCtx(world, stealthKey);

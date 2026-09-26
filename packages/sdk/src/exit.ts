@@ -892,7 +892,8 @@ async function stepDeposit(ctx: ExitContext, leg: ExitLeg): Promise<void> {
     if (usable <= config.pool.minDeposit) throw new ExitError(need(config.pool.minDeposit - usable + 1n));
   }
   const estimate = ctx.estimate ?? estimateExecute;
-  const probe = guess > 0n ? guess : config.pool.minDeposit;
+  // Simulate at least the pool minimum: a smaller probe reverts (MinimumDepositAmount) and hides the real fee.
+  const probe = guess > config.pool.minDeposit ? guess : config.pool.minDeposit;
   const est = await estimate(client, {
     stealthKey: ctx.stealthKey,
     calls: buildDepositCalls(config, probe, precommitment),
