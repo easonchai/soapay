@@ -1,0 +1,83 @@
+---
+title: What the chain sees
+description: One pay run as it appears on the explorer, line by line.
+sidebar:
+  order: 3
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+Open a Soapay pay run on Basescan and you see one transaction that pays many strangers. This page walks through what is in it, what a coworker can read from it, and the rules the company app follows so that the structure of the run gives nothing away.
+
+## The transaction
+
+A plain-wallet employer pays through `StealthDisperse`, Soapay's one contract. In a single call it does two things for every line:
+
+1. Moves the USDC from the employer to that line's fresh stealth address, with an ordinary token transfer.
+2. Calls the canonical ERC-5564 Announcer for that line.
+
+The contract holds no funds and keeps no state. It has no owner. On the explorer, the transaction shows N token transfers from the employer and N announcement events, nothing else.
+
+A smart-wallet, EIP-7702 or Safe employer does not use the contract. It sends the same transfer and announce calls as one atomic batch, so the on-chain shape is the same. A Safe executes that batch through the standard `MultiSendCallOnly`. Either way, a payment can never land without its announcement, and one signature covers the whole run.
+
+Live example on Base Sepolia: [a pay run of two lines](https://sepolia.basescan.org/tx/0x24f23d610d1917905d3896e282243b07a038afb2bf266f94f11f31ea9e5b492d).
+
+## One announcement per payment
+
+Each announcement carries the scheme id (always 1), the stealth address, the payer's one-time ephemeral public key, and a metadata field laid out as:
+
+```text
+viewTag (1 byte) | transfer selector (4) | token (20) | amount (32) | payer (20)
+```
+
+- The **view tag** lets a scanner skip about 255 of every 256 announcements without doing any real work.
+- The **transfer selector, token and amount** describe the payment in the standard ERC-5564 way.
+- The **payer** is appended because the announcement's own caller field is always the contract, never the employer. Scanners use it to tell a known payer from an unknown one.
+
+Scanners recompute the stealth address themselves and read the real balance. They never trust the amount or token in the metadata: anyone can announce anything.
+
+## Strictly ascending addresses
+
+The stealth addresses in a batch must be strictly ascending, and the contract rejects a batch that is not. This rejects duplicates and the zero address in the same check.
+
+The order of lines is therefore a property of the addresses, which are random, and says nothing about names or about the order the employer typed them in. It also guards against bugs in the employer's own tooling and dedupes within a batch.
+
+<Aside type="note">
+  On its own, ascending order is not a privacy guarantee. It removes one leak, the order of lines. The privacy comes from the fresh addresses, the global sort across transactions and the denominated amounts together.
+</Aside>
+
+## Large runs
+
+A transaction holds at most 350 lines. Each line costs about 42k gas all in, so about 398 would fit under the per-transaction gas cap with no margin; 350 leaves room.
+
+When a run is larger, the company app derives every line first, sorts the whole list by stealth address, and only then cuts it into roughly equal transactions. It never partitions by employee. If it did, the total of each transaction would reveal a salary. The Review screen says "N transactions from one sorted list."
+
+## What a coworker can see
+
+- Every stealth address and amount, in address order.
+- Your company as the payer.
+- The batch total and, if the run was denominated, the chunk size.
+- Later spends, swaps and exits from each address.
+
+## What a coworker cannot learn
+
+- Which address belongs to which colleague.
+- Any link between one person's payments, across months.
+- Anyone's main wallet: no ETH ever reaches a stealth address.
+- If denominated, how many chunks each person received.
+
+The one thing that can still give a line away is its amount. In a run of fewer than 10 recipients, the app warns: "coworkers can often tell lines apart by amount or by elimination, even with denominated payouts." See [Denominated payouts](/docs/concepts/denominated-payouts/).
+
+## See it in the apps
+
+Both apps rebuild a run from the chain so you can check this yourself. In the employee app, **Pay runs** offers **Two views** on each transaction that paid you: **Coworker view** shows every line with the owner unknown, and **My view** highlights only the lines your viewing key matched. In the company app, a run's page shows **What coworkers see**: the chain's lines next to the names only you have.
+
+## The guarantees, in short
+
+- **Fresh address, every time.** Same name every month, new address every run; nothing ties runs together.
+- **No custody, one contract.** `StealthDisperse` pulls USDC and announces each line in one transaction. It holds no funds, keeps no state.
+- **Keys and roster stay in your browser.** Spending keys never leave the device; the roster and history are encrypted locally, never sent to a server.
+
+Up to 350 lines per transaction, one signature per run, zero funds held by Soapay, USDC on Base.
+
+Next: [Names](/docs/concepts/names/).

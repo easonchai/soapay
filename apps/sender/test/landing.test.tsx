@@ -15,11 +15,20 @@ function mount(connectors: { id: string; name: string; icon?: string }[]) {
       wallet={{ isConnected: false, connecting: false, connectError: null, connectors: connectors.map((c) => ({ ...c, connect() {} })) }}
       onLogin={() => {}}
       employeeUrl="http://localhost:5173"
+      docsUrl="/docs/"
     />,
   );
 }
 
 describe("Landing", () => {
+  it("links the docs from the top bar and the footer, never to PRD.md", () => {
+    mount([{ id: "a", name: "MetaMask", icon: ICON }]);
+    const docs = screen.getAllByRole("link", { name: /^docs$/i });
+    expect(docs.length).toBe(2);
+    for (const l of docs) expect(l.getAttribute("href")).toBe("/docs/");
+    expect(document.querySelector('a[href*="PRD.md"]')).toBeNull();
+  });
+
   it("renders the hero headline as two lines with Private as a dot word over its text", () => {
     const { container } = mount([{ id: "a", name: "MetaMask", icon: ICON }]);
     const heading = container.querySelector<HTMLElement>(".land-h1");

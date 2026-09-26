@@ -1,0 +1,58 @@
+---
+title: Names
+description: Your soapay.eth name on ENSv2, what it holds, and how the company app pins it.
+sidebar:
+  order: 4
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+Employees share a name, not an address. A salary goes to `alice.soapay.eth`, and the name is the one string an employer needs. Each payment to it lands on a different fresh address, so the name never shows a balance or a wallet.
+
+## What a name is
+
+`alice.soapay.eth` is a real ENSv2 subname on Ethereum Sepolia, with its own resolver. It holds:
+
+| Record | Value | Who can write it |
+| --- | --- | --- |
+| `stealth` (text) | The stealth meta-address, `st:eth:0x` followed by the two public keys (141 characters) | Only the employee's registrant key. The parent owner (the company) can also rewrite it, because the employer is trusted |
+| `soapay:registrant` (text) | The throwaway registrant address derived from the employee's keys | Set once at issuance |
+| `addr` | Not set | Nobody |
+| `agent-context`, `agent-endpoint[...]` | Agents only, ENSIP-26: what the agent does and where to reach it | Set once at issuance |
+
+Two of these are deliberate:
+
+- **No `addr` record.** A plain wallet paying `alice.soapay.eth` would send every payment to one static, linkable address. With no `addr`, only a stealth-aware sender can pay the name.
+- **One resolver per name.** ENSv2's access control scopes text-record roles per resolver, so a resolver of its own is what lets Soapay say "only this employee's key can write `stealth`" without anyone overwriting someone else's record.
+
+Names are non-transferable and never expire. The company, which owns `soapay.eth`, can revoke a name, for example when someone leaves. The parent name itself has no resolver, so a revoked subname cannot be answered for through wildcard resolution.
+
+## How a name is claimed
+
+During onboarding, after your keys are registered, you pick a label of 3 to 32 lowercase letters, digits or hyphens. Your app signs a claim with your registrant key and sends it to the Soapay API. The API checks that the ERC-6538 registry on Base holds the same meta-address for that registrant, that the label is free, and, if an employer reserved it with an invite, that the invite code matches. Then its issuer key, which can register names and do nothing else, deploys the resolver with the records already written and registers the name. The name is never visible half-configured.
+
+Invite links reserve a label for one person. The employer's app shows the row as "Invited (pending)" until the claim lands, then resolves and pins the name on its own.
+
+## How the company app resolves and pins
+
+The company app reads the name with standard ENS resolution through the ENSv2 Universal Resolver. It reads `stealth` and `soapay:registrant`, then cross-checks the meta-address against the ERC-6538 registry on Base for that registrant. If ENS and the registry agree, the app stores the pair (name, meta-address) locally: the **pin**.
+
+Every later run re-resolves the name and compares it with the pin. If the record changed, the app pays the new meta-address only when it finds a World ID attestation from its pinned attester that covers exactly that change. It then shows **Re-verified by World ID**. Otherwise the line shows **Blocked · record changed** and waits for the employer to confirm with the person on another channel and click **Re-approve**. See [Key rotation and recovery](/docs/concepts/key-rotation-and-recovery/).
+
+<Aside type="note" title="Why ENS and the registry both hold the meta-address">
+  ENS is the human-readable, employee-controlled pointer on Sepolia. The ERC-6538 registry is the chain-local copy on Base that stealth tooling reads. The payer cross-checks the two before pinning, so tampering with either one alone is caught.
+</Aside>
+
+## Your own ENS name
+
+Any pinned ENS name that carries the stealth records can be paid from the company app. World ID attestations, which let a changed record be accepted automatically, exist only for names directly under `soapay.eth`.
+
+## Agents get names too
+
+An AI agent gets a name exactly the way an employee does. Through the MCP server, `create_agent_identity` registers the agent's keys and claims `<label>.soapay.eth` with ENSIP-26 records beside `stealth`: `agent-context` (what the agent does and how to pay it) and `agent-endpoint` for its protocols. An agent joins with the same invite link as a person, and can be paid in the same batch. See [MCP](/docs/developers/mcp/).
+
+## Sepolia specifics
+
+Names live on Ethereum Sepolia (chain 11155111) while payments run on Base Sepolia. `soapay.eth` points at its own subname registry at `0x7403C470a91B21AB77B4E246a39c1Adfcc317969`, and the issuer key holds only the registrar role there. Live proof: [the issuance of an agent's name](https://sepolia.etherscan.io/tx/0x4b11d38050ef0020f5de0e4a269ed278f206ee0f0d5b61f84aa4e9b56db2e255), with its own resolver and `addr` unset. All addresses are in [Addresses](/docs/reference/addresses/).
+
+Next: [Denominated payouts](/docs/concepts/denominated-payouts/).

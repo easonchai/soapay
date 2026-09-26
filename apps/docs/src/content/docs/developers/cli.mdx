@@ -1,0 +1,94 @@
+---
+title: CLI
+description: Plan, execute, and scan private distributions with the soapay command.
+sidebar:
+  order: 3
+---
+
+`@soapay/cli` builds the `soapay` executable as one esbuild bundle. Build it in the workspace, then run the bundled entry point directly or through the package binary.
+
+```bash
+pnpm --filter @soapay/cli build
+node apps/cli/dist/index.js help
+```
+
+## Distribute
+
+```bash
+soapay distribute --csv <file> --asset <symbol|token> [--chain 84532] [--preset payroll|dividend|grant]
+                  [--total <amount>] [--decimals <n>] [--chunk <amount>] [--max-lines <n>]
+                  [--disperse <address>] [--rpc <url>] [--ens-rpc <url>] [--show-lines] [--json]
+                  [--pins <file>] [--accept-change <name>]... [--api <url>] [--attester <address>]
+                  [--dry-run | --execute [--allow-mainnet]]
+```
+
+`--csv` and `--asset` are required. The command defaults to Base Sepolia (`--chain 84532`), the `payroll` preset, and a dry run. `--execute` sends an exact-total approval followed by one `StealthDisperse.pay` transaction per chunk. It needs `PAYER_PRIVATE_KEY` in the environment. Mainnet execution also needs `--allow-mainnet`.
+
+| Flag | Meaning |
+| --- | --- |
+| `--preset` | `payroll`, `dividend`, or `grant`; vesting is available through the SDK only |
+| `--total` | Required for `dividend`, an optional budget for `grant`, and invalid for `payroll` |
+| `--decimals` | Token decimals from 0 to 36; otherwise the registered asset value is used |
+| `--chunk` | Split each recipient into whole denominations plus one remainder line |
+| `--max-lines` | Positive per-transaction line target; payment encoders reject values above 350 |
+| `--disperse` | Override the chain registry's StealthDisperse address |
+| `--rpc`, `--ens-rpc` | Pay-chain and ENS-chain HTTP RPC URLs |
+| `--show-lines` | Print every derived stealth address and amount |
+| `--json` | Write machine-readable output to stdout and progress to stderr |
+| `--pins` | Pin file, default `.soapay/pins.json` beside the CSV |
+| `--accept-change` | Repeatable, explicit approval for a changed recipient meta-address |
+| `--api`, `--attester` | Rotation-attestation API and pinned signing address |
+| `--dry-run`, `--execute` | Mutually exclusive; dry run is the default |
+| `--allow-mainnet` | Required with `--execute` on a non-testnet chain |
+
+### CSV formats
+
+The parser accepts a header row, commas, optional double quotes, blank lines, and `#` comment lines.
+
+```csv
+recipient,amount,id
+alice.soapay.eth,1250.50,alice
+st:eth:0x02...,900,bob
+```
+
+Use `recipient,amount[,id]` for payroll and grant. Use `recipient,holdings[,id]` for dividends; holdings are proportional values scaled internally at 18 decimals. A recipient may be a meta-address, a registrant address in ERC-6538, or an ENS name. Duplicate resolved meta-addresses are rejected.
+
+### Examples and output
+
+```bash
+soapay distribute --csv holders.csv --asset usdc --preset dividend --total 1000
+soapay distribute --csv payroll.csv --asset USDC --chunk 100 --show-lines
+PAYER_PRIVATE_KEY=0x... soapay distribute --csv payroll.csv --asset USDC --execute
+```
+
+A text dry run begins with `Soapay <preset> plan (dry run)`, then prints the chain, token, recipient and line counts, total, transaction chunks, gas estimate, payment path, and pin status. It ends with `Nothing sent`. Execution adds a preflight with payer balances and transaction counts, then prints an explorer link for the approval and every pay transaction.
+
+Names and registrant addresses are pinned on first use. A later change exits with code 3 unless a valid World ID rotation attestation covers the exact change or the operator passes `--accept-change <name>`.
+
+## Scan
+
+```bash
+soapay scan --mnemonic-env <VAR> [--chain 84532] [--api <url> | --rpc <url>] [--from <block>] [--to <block>]
+            [--known-payer <address>]... [--no-balances] [--json]
+```
+
+The command reads the BIP-39 phrase from the named environment variable. It fetches announcements from `--api`, or from the canonical Announcer over RPC, then scans locally. Unless `--no-balances` is set, it reads real balances for registered ERC-20 assets and tokens named in matched metadata.
+
+```bash
+SOAPAY_PHRASE="twelve words ..." \
+  soapay scan --mnemonic-env SOAPAY_PHRASE --from 47290000 --known-payer 0x1234...
+```
+
+Text output reports the number scanned and matched, live balances, payer, and ledger flags. JSON output is `{ scanned, matches, ledger }`, with bigints encoded as decimal strings.
+
+## Environment and exit codes
+
+| Variable | Used for |
+| --- | --- |
+| `PAYER_PRIVATE_KEY` | Required only for `distribute --execute` |
+| `PAY_TOKEN` | Base Sepolia pay-token override |
+| `SOAPAY_API_URL` | Rotation-attestation API |
+| `SOAPAY_ATTESTER` | Pinned rotation-attestation signer |
+| Variable named by `--mnemonic-env` | Recovery phrase for `scan` |
+
+Exit code 0 means success, 1 means an execution or network error, 2 means invalid usage, and 3 means a pin-change alert.

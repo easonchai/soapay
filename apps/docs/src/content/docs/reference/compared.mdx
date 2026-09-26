@@ -1,0 +1,41 @@
+---
+title: Compared with Fluidkey
+description: A row-by-row comparison of Fluidkey and Soapay from the repository README.
+sidebar:
+  order: 4
+---
+
+Both products use ERC-5564 and ERC-6538, and both hide a recipient's wallet from strangers. The difference is the payroll batch and who must see incoming payments. Fluidkey is an individual receiving wallet; Soapay is a payment rail for teams paying groups.
+
+## Comparison
+
+| | [Fluidkey](https://docs.fluidkey.com/readme/frequently-asked-questions/) | Soapay |
+| --- | --- | --- |
+| Who it's for | Individuals receiving payments | Teams paying groups: payroll, contributors, grants |
+| Hides your wallet from strangers | Yes | Yes |
+| Hides your salary from a coworker in the same batch | No | Yes |
+| Who derives your stealth address | Fluidkey's server, at name resolution | The sender's browser; the ephemeral key is thrown away |
+| Who holds your viewing key | Fluidkey | Only you |
+| What the company's server can see | Every payment you receive | Nothing beyond public chain data |
+| Account with the company | Required: a Fluidkey name, resolved by Fluidkey's off-chain resolver | None: any ENS name that carries the stealth records, with no server of ours in the loop |
+| What your employer learns | n/a | Name → stealth address → amount, never your main wallet |
+| Batch payments | No | One transaction, N recipients, pays and announces atomically |
+| Amounts in the batch | Visible per person | Split into identical chunks, sorted so per-tx totals never leak |
+| Spending | Stealth Safes with sponsored gas | Plain EOA, EIP-7702 on first spend, gas in USDC via the Circle Paymaster |
+| Receivable from any wallet by name | Yes | In the sender app; gateway mode for other wallets is on the roadmap |
+| Consolidation guard | No | Cluster graph, labels, block on identifiable destinations, timing queue |
+| Compliant exit | No | Privacy Pools via CCTP, screened by an association set |
+| Swap without linking | No | In place, inside the stealth address, placeholder quote |
+| Key rotation | Not documented | World ID attested; the employer's app accepts it automatically |
+| Recovery without the company | Addresses | Everything: addresses, ledger, pool secrets, from the seed and the public SDK |
+| Agents | No | MCP server, `.soapay.eth` names with ENSIP-26 records |
+| Chains | 7 mainnets plus a Near intents bridge | Base Sepolia today, Base first |
+| Fiat ramps | Yes | No |
+
+## Why the sender side matters
+
+A stealth wallet can hide a recipient from strangers and still leave payroll readable to a coworker. That coworker is already inside the transaction, knows their own line, and can inspect every other amount. Solving that problem requires the payer to derive a fresh address for every line, split amounts into standard chunks, sort all lines independently of names, and pay and announce them atomically.
+
+Soapay puts that logic in the sender's browser and the public SDK. The ephemeral key is discarded, only the recipient keeps the viewing key, and no Soapay account or address-derivation server sits between payer and recipient. The result is designed around the batch itself, while keeping the employer trusted under the stated [threat model](/docs/concepts/threat-model/).
+
+Read [Denominated payouts](/docs/concepts/denominated-payouts/) for the amount trade-offs and [Architecture](/docs/reference/architecture/) for the full data flow.

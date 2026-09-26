@@ -1,0 +1,33 @@
+---
+title: Soapay Docs
+description: Stealth-address payroll on Base. One name per person, every salary on a fresh address only they can open.
+template: splash
+hero:
+  title: Privacy infrastructure for payments on chain
+  tagline: Every payment lands on a fresh address only its recipient can open. Pay by name, one signature per batch. Built for payroll, ready for any payout. USDC on Base.
+  actions:
+    - text: Get started
+      link: /docs/getting-started/companies/
+      icon: right-arrow
+    - text: Open the company app
+      link: /
+      icon: external
+      variant: secondary
+---
+
+import { Card, CardGrid } from "@astrojs/starlight/components";
+
+<CardGrid stagger>
+  <Card title="Paying a team" icon="document">
+    Paste names and amounts, sign once, from a wallet, smart account or Safe. [Getting started for companies](/docs/getting-started/companies/).
+  </Card>
+  <Card title="Getting paid" icon="open-book">
+    Save a recovery kit, claim your name, see every payment in your ledger. [Getting started for employees](/docs/getting-started/employees/).
+  </Card>
+  <Card title="Concepts" icon="information">
+    Stealth addresses, the coworker threat model and what the chain sees. [Concepts](/docs/concepts/stealth-addresses/).
+  </Card>
+  <Card title="Developers" icon="setting">
+    SDK, CLI, MCP server, API and contracts. [Developer overview](/docs/developers/overview/).
+  </Card>
+</CardGrid>

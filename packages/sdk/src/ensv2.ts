@@ -677,6 +677,8 @@ export function createEnsV2NameIssuer(opts: {
   /** Default stealth writer (e.g. the World ID guard); falls back to each registrant. */
   defaultStealthWriter?: Address;
   deployment?: Deployment;
+  /** How long a retry waits for an earlier attempt's stealth record to appear (default 30 s). */
+  recoverWaitMs?: number;
 }): EnsV2NameIssuer {
   const d = opts.deployment ?? ENSV2_SEPOLIA;
   const parent = normalize(opts.parent ?? PARENT_NAME);
@@ -756,10 +758,19 @@ export function createEnsV2NameIssuer(opts: {
             functionName: "getResolver",
             args: [label],
           })) as Address;
-          const stealth = (await opts.publicClient
-            .readContract({ address: resolver, abi: resolverRecordsAbi, functionName: "text", args: [namehash(name), TEXT_KEY_STEALTH] })
-            .catch(() => "")) as string;
-          if (stealth && stealth.toLowerCase() === metaAddress.toLowerCase()) return { recovered: true, name, resolver, registry };
+          const readStealth = async () =>
+            (await opts.publicClient
+              .readContract({ address: resolver, abi: resolverRecordsAbi, functionName: "text", args: [namehash(name), TEXT_KEY_STEALTH] })
+              .catch(() => "")) as string;
+          // The earlier attempt's register tx can land before its resolver deploy (they're sent back to
+          // back), so a retry may briefly see the name owned but no record yet: wait for it.
+          const deadline = Date.now() + (opts.recoverWaitMs ?? 30_000);
+          for (;;) {
+            const stealth = await readStealth();
+            if (stealth && stealth.toLowerCase() === metaAddress.toLowerCase()) return { recovered: true, name, resolver, registry };
+            if (stealth || Date.now() >= deadline) break;
+            await new Promise((r) => setTimeout(r, 2_000));
+          }
         }
         throw new Error(`Soapay ENSv2: ${name} is already taken`);
       }

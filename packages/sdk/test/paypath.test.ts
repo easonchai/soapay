@@ -30,8 +30,14 @@ describe("selectPayPath", () => {
     expect(p.kind).toBe("batch");
   });
 
-  it("EOA whose wallet can upgrade via 7702 ('ready') → batch, even with StealthDisperse available", () => {
+  it("EOA whose wallet can upgrade via 7702 ('ready') → StealthDisperse when deployed (wallets cap batch size)", () => {
     const p = selectPayPath({ ...base, capabilities: { atomic: { status: "ready" } } });
+    expect(p.kind).toBe("disperse");
+    expect(p.reason).toMatch(/7702/);
+  });
+
+  it("EOA whose wallet can upgrade via 7702 ('ready') → batch when StealthDisperse isn't deployed", () => {
+    const p = selectPayPath({ ...base, stealthDisperse: null, disperseDeployed: false, capabilities: { atomic: { status: "ready" } } });
     expect(p.kind).toBe("batch");
     expect(p.reason).toMatch(/7702/);
   });

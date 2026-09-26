@@ -78,7 +78,8 @@ CK's company view (employee → stealth wallets → live balances) is derived fr
 localStorage (`soapay:org`), as are the pay-run draft toggles (`soapay:payrun`).
 
 Env: CK's `VITE_STEALTH_DISPERSE_ADDRESS` is accepted as an alias (`VITE_STEALTH_DISPERSE` wins);
-`VITE_OTHER_APP_URL` sets the top bar's **Receive** link (default `VITE_RECIPIENT_URL`). `?motion=off` disables
+`VITE_OTHER_APP_URL` sets the top bar's **Receive** link (default `VITE_RECIPIENT_URL`). `VITE_DOCS_URL` sets the
+landing page's **Docs** links (default `/docs/`, the docs site served next to the apps). `?motion=off` disables
 animations (screenshots, QA). All landing motion runs on GSAP through `src/pages/landing/motion.ts` (hero rise-in, the rolling last word, scroll reveals, line-art draw-in, count-ups, product-frame transitions; the headline word is a cursor-reactive dot field) and follows the same switch and the OS reduced-motion setting.
 
 ## How to plug in another UI

@@ -1,0 +1,59 @@
+---
+title: Addresses
+description: Canonical contracts, Soapay deployments, ENSv2 roles, and live service URLs.
+sidebar:
+  order: 1
+---
+
+These are the addresses selected by the SDK and used by the live Base Sepolia deployment. The canonical ERC-5564 Announcer and ERC-6538 Registry use the same addresses across supported chains. Base Sepolia is the current payroll network; Ethereum Sepolia hosts ENSv2 names and the test exit destination.
+
+## Base Sepolia (84532)
+
+| Component | Address | Use |
+| --- | --- | --- |
+| `StealthDisperse` | [`0x6B7a1cC570Af2DDd427DA694351438F0FE8039CA`](https://sepolia.basescan.org/address/0x6B7a1cC570Af2DDd427DA694351438F0FE8039CA) | Stateless batch payer, deployed with CREATE2 salt `soapay.StealthDisperse.v1` |
+| Soapay mock USDC | [`0x028D969c20b740582428f5043954c380686214Bb`](https://sepolia.basescan.org/address/0x028D969c20b740582428f5043954c380686214Bb) | Default demo pay token, 6 decimals with EIP-2612 permit |
+| Circle USDC | [`0x036CbD53842c5426634e7929541eC2318f3dCF7e`](https://sepolia.basescan.org/address/0x036CbD53842c5426634e7929541eC2318f3dCF7e) | Circle Paymaster and CCTP testing, not the default demo token |
+| ERC-6538 Registry | [`0x6538E6bf4B0eBd30A8Ea093027Ac2422ce5d6538`](https://sepolia.basescan.org/address/0x6538E6bf4B0eBd30A8Ea093027Ac2422ce5d6538) | Canonical registry for scheme 1 stealth meta-addresses |
+| ERC-5564 Announcer | [`0x55649E01B5Df198D18D95b5cc5051630cfD45564`](https://sepolia.basescan.org/address/0x55649E01B5Df198D18D95b5cc5051630cfD45564) | Canonical announcement contract |
+
+The Base Sepolia announcer scan starts at block `7552655`. The live `StealthDisperse` deployment is at block `47290264`, and the mock USDC deployment is at block `47319468`. See [Contracts](/docs/developers/contracts/) for how these pieces interact.
+
+## Base mainnet (8453)
+
+| Component | Address | Status |
+| --- | --- | --- |
+| `StealthDisperse` | not deployed | The deterministic salt is `soapay.StealthDisperse.v1` |
+| Soapay mock USDC | not deployed | Testnet only and never used on mainnet |
+| Circle USDC | [`0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`](https://basescan.org/address/0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913) | Fixed mainnet pay token |
+| ERC-6538 Registry | [`0x6538E6bf4B0eBd30A8Ea093027Ac2422ce5d6538`](https://basescan.org/address/0x6538E6bf4B0eBd30A8Ea093027Ac2422ce5d6538) | Canonical deployment |
+| ERC-5564 Announcer | [`0x55649E01B5Df198D18D95b5cc5051630cfD45564`](https://basescan.org/address/0x55649E01B5Df198D18D95b5cc5051630cfD45564) | Canonical deployment |
+
+The Base announcer scan starts at block `15502414`. Base mainnet uses Ethereum mainnet for ENS resolution, but the repository names no Soapay mainnet ENSv2 deployment. See [Testnet and mainnet](/docs/getting-started/testnet/) for the current differences.
+
+## Ethereum Sepolia (11155111)
+
+| Component | Address or value | Use |
+| --- | --- | --- |
+| ENSv2 parent | `soapay.eth` | Parent for issued employee and agent names |
+| Parent owner and resolver admin | [`0xC33FcD38117b76CC05dab2F3DD2d9B71111358dB`](https://sepolia.etherscan.io/address/0xC33FcD38117b76CC05dab2F3DD2d9B71111358dB) | Owns the parent; the documented expiry is 2027-09-25 |
+| ENSv2 subname registry | [`0x7403C470a91B21AB77B4E246a39c1Adfcc317969`](https://sepolia.etherscan.io/address/0x7403C470a91B21AB77B4E246a39c1Adfcc317969) | Permissioned registry under the parent |
+| Issuer | [`0x20E69b1fdEB0C945CE8FE758CF3B3B4BBfC0068b`](https://sepolia.etherscan.io/address/0x20E69b1fdEB0C945CE8FE758CF3B3B4BBfC0068b) | Holds only `ROLE_REGISTRAR` |
+| Parent resolver | not deployed | Deliberately absent to prevent wildcard answers for revoked names |
+| Example per-name resolver | [`0xF8A169c2b178A3B36A695F93cf2de4F85950Ca3D`](https://sepolia.etherscan.io/address/0xF8A169c2b178A3B36A695F93cf2de4F85950Ca3D) | Resolver documented for `sam-demo.soapay.eth`; every name gets its own resolver |
+| World ID rotation attester | [`0x62377F8ad1151f5b1917708FFD67220F37dF2574`](https://sepolia.etherscan.io/address/0x62377F8ad1151f5b1917708FFD67220F37dF2574) | Address pinned by the company app |
+| L1 gas relayer | [`0x8F4003C7404bAf73ba1182C0E9Ad09D993d1aC2a`](https://sepolia.etherscan.io/address/0x8F4003C7404bAf73ba1182C0E9Ad09D993d1aC2a) | Tops up registrants for key rotation writes |
+| Circle USDC | [`0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238`](https://sepolia.etherscan.io/address/0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238) | Spend-only exit destination token |
+
+World ID uses app `app_0cc7167efe114ac2e0ef7d9827098353` and relying party `rp_3ede5fe1cab9af48`. These identifiers are public, while the relying-party signing key is secret. Read [Names](/docs/concepts/names/) and [Key rotation and recovery](/docs/concepts/key-rotation-and-recovery/) before changing any pin.
+
+## Live services
+
+| Service | URL |
+| --- | --- |
+| Company app | [https://soapay.up.railway.app/](https://soapay.up.railway.app/) |
+| Employee app | [https://soapay.up.railway.app/app/](https://soapay.up.railway.app/app/) |
+| Documentation | [https://soapay.up.railway.app/docs/](https://soapay.up.railway.app/docs/) |
+| API proxy | [https://soapay.up.railway.app/api](https://soapay.up.railway.app/api) |
+
+The API service has no separate public domain. The one-origin web service proxies `/api` to the private Railway API service.

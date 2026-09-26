@@ -1,0 +1,55 @@
+---
+title: Company settings
+description: Configure the company name, denominations, network, and browser-local vault.
+sidebar:
+  order: 6
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+**Settings** controls where this browser points and what the company app keeps locally. Network overrides, the company name, and the denomination chunk size are stored in this browser's `localStorage`.
+
+## Company
+
+**Company name (top bar, invites)** sets the name shown in the top bar and pre-fills the optional organisation field on new invites. Select **Save** after changing it.
+
+**Chunk size (denominated payouts, company-wide)** sets the size of every full payment line. Each remainder becomes one smaller line so the exact wage is still paid. The default is 5 USDC on a testnet and 500 USDC on mainnet. A saved value remains your explicit choice when you switch back to that browser.
+
+The company name and chunk size are not secrets. They are stored in plain `localStorage`, outside the encrypted payroll vault.
+
+## Network
+
+The network form contains:
+
+- **Chain**, with Base Sepolia and Base as the supported payroll chains.
+- **StealthDisperse**, stored separately per chain. Leaving it empty means the browser can use only EIP-5792 batches and Safe exports.
+- **Payroll RPC**, used for the selected payment chain.
+- **ENS RPC**, used only for name resolution on the configured ENS chain.
+
+Select **Save and reload** to apply the form. Select **Reset to defaults** to remove the per-browser network overrides and return to build defaults.
+
+<Aside type="caution" title="Do not treat settings as a secret store">
+  These values are kept in plain browser storage. Do not paste private keys, seed phrases, or other secrets into them. An RPC URL may identify your provider account, so use one that is appropriate for this browser and organisation.
+</Aside>
+
+## Check this build
+
+**This build** shows the USDC address, the StealthDisperse address in use, the pinned rotation attester, the Soapay API, and the invite-link base. If no StealthDisperse is configured, the page says **Not configured: EIP-5792 batches and Safe exports only.**
+
+The pinned attester is security-sensitive. A changed recipient record is accepted automatically only when its World ID rotation attestation was signed by this address. If no attester is configured, every key rotation needs manual employer approval.
+
+On Base Sepolia, **Test funds** shows the connected wallet's test USDC balance and explains the one-time welcome drop.
+
+## Backup
+
+With a wallet-signature or passphrase vault, **Backup** shows when the vault was last backed up and offers **Back up now**. The backup is encrypted in the browser before it is uploaded, and the API cannot read it. If another browser has uploaded a newer version, the button becomes **Replace with this browser's data**. The section also reports whether the browser keeps the vault under persistent storage.
+
+## Lock or reset this browser
+
+**Stored in this browser** reports the vault mode and the counts of pinned employees, invites, and run records. Select **Lock vault** to require the device key or passphrase again.
+
+**Delete vault** removes the roster, invite codes, and run history from this browser after confirmation. The company name, chunk size, and network settings are separate browser values. Export or preserve any audit records you need before deleting the vault.
+
+For deployment addresses and chain defaults, use [Addresses](/docs/reference/addresses/) and [Environment](/docs/reference/environment/).
+
+Next: open the [Employee app overview](/docs/employee-app/overview/) to see the recipient side.

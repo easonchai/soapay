@@ -1,0 +1,240 @@
+---
+// Override of Starlight's Hero (dist/components/Hero.astro) for the splash page, with the landing
+// page's effects ported to vanilla JS: two breathing diamond dot fields that react to the pointer
+// (packages/ui/src/Dots.tsx), a hex "scramble" on a fresh-address eyebrow (apps/sender/src/pages/
+// landing/useScramble.ts), and staggered fade-up reveals. Everything is off under
+// prefers-reduced-motion or ?motion=off, like the apps. Hero images are not used here.
+import { LinkButton } from "@astrojs/starlight/components";
+
+const { data } = Astro.locals.starlightRoute.entry;
+const { title = data.title, tagline, actions = [] } = data.hero || {};
+---
+
+<div class="hero">
+  <canvas class="sl-dots l" aria-hidden="true"></canvas>
+  <canvas class="sl-dots r" aria-hidden="true"></canvas>
+  <div class="sl-flex stack">
+    <div class="sl-flex copy">
+      <p class="hero-eyebrow reveal" style="--d: 0s">
+        <span>Fresh address, every payment</span>
+        <code class="hero-addr" data-scramble>0x12e9…b04C</code>
+      </p>
+      <h1 id="_top" data-page-title class="reveal" style="--d: 0.08s" set:html={title} />
+      {tagline && <div class="tagline reveal" style="--d: 0.16s" set:html={tagline} />}
+    </div>
+    {
+      actions.length > 0 && (
+        <div class="sl-flex actions reveal" style="--d: 0.24s">
+          {actions.map(({ attrs: { class: className, ...attrs } = {}, icon, link: href, text, variant }) => (
+            <LinkButton {href} {variant} icon={icon?.name} class:list={[className]} {...attrs}>
+              {text}
+              {icon?.html && <Fragment set:html={icon.html} />}
+            </LinkButton>
+          ))}
+        </div>
+      )
+    }
+  </div>
+</div>
+
+<style>
+  /* Starlight's core hero layout (dist/components/Hero.astro), single centred column; overriding the
+     component drops its scoped styles, so they live here. Effects and theming: src/styles/soapay.css. */
+  .hero {
+    display: grid;
+    grid-template-columns: 100%;
+    align-items: center;
+    gap: 1rem;
+    padding-block: clamp(2.5rem, calc(1rem + 8vmin), 7rem);
+  }
+  .stack {
+    flex-direction: column;
+    align-items: center;
+    gap: clamp(1.5rem, calc(1.5rem + 1vw), 2rem);
+    text-align: center;
+    max-width: 46rem;
+    margin-inline: auto;
+  }
+  .copy {
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+  }
+  .copy > * {
+    max-width: 50ch;
+  }
+  h1 {
+    font-size: clamp(var(--sl-text-3xl), calc(0.25rem + 5vw), var(--sl-text-6xl));
+    line-height: var(--sl-line-height-headings);
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    color: var(--sl-color-white);
+  }
+  .tagline {
+    font-size: clamp(var(--sl-text-base), calc(0.0625rem + 2vw), var(--sl-text-xl));
+    color: var(--sl-color-gray-2);
+    max-width: 40rem;
+  }
+  .actions {
+    gap: 1rem 2rem;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+</style>
+
+<script>
+  // Motion policy shared with the apps: reduced-motion or ?motion=off turns every effect off.
+  const off =
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ||
+    new URLSearchParams(window.location.search).get("motion") === "off";
+  if (off) document.documentElement.dataset.motion = "off";
+
+  // Dot colour follows the theme: --soapay-dots is "r,g,b" in src/styles/soapay.css.
+  const dotColor = () => getComputedStyle(document.documentElement).getPropertyValue("--soapay-dots").trim() || "30,58,95";
+  const hash = (i: number, j: number) => {
+    const s = Math.sin(i * 12.9898 + j * 78.233) * 43758.5453;
+    return s - Math.floor(s);
+  };
+
+  /** Port of packages/ui Dots, as a circular ring (the landing uses the diamond): breathing ring,
+   *  per-dot pulse, pointer push. */
+  function mountDots(c: HTMLCanvasElement) {
+    const live = !off;
+    let raf = 0;
+    let last = 0;
+    let size = "";
+    const target = { x: -9999, y: -9999, on: false };
+    const cur = { x: -9999, y: -9999, k: 0 };
+
+    const paint = (t: number) => {
+      const W = c.offsetWidth;
+      const H = c.offsetHeight;
+      if (!W || !H) return;
+      const key = `${W}x${H}`;
+      if (key !== size) {
+        size = key;
+        c.width = W * 2;
+        c.height = H * 2;
+      }
+      const x = c.getContext("2d");
+      if (!x) return;
+      x.setTransform(2, 0, 0, 2, 0, 0);
+      x.clearRect(0, 0, W, H);
+      if (cur.k === 0 && target.on) {
+        cur.x = target.x;
+        cur.y = target.y;
+      }
+      cur.x += (target.x - cur.x) * 0.18;
+      cur.y += (target.y - cur.y) * 0.18;
+      cur.k += ((target.on ? 1 : 0) - cur.k) * 0.08;
+      const sigma = 90;
+      const hover = live && cur.k > 0.01;
+      const color = dotColor();
+      const cell = 6;
+      const cx = W / 2;
+      const cy = H / 2;
+      const breath = live ? 1 + 0.06 * Math.sin(t / 2200) : 1;
+      // 0.33 (the diamond uses 0.46): the ring's falloff reaches 1.4 R, so with the +6% breath the
+      // whole circle stays inside the canvas instead of being squared off at its edges.
+      const R = Math.min(W, H) * 0.33 * breath;
+      for (let i = 0; i < W; i += cell) {
+        for (let j = 0; j < H; j += cell) {
+          const d = Math.abs(Math.hypot(i - cx, j - cy) - R);
+          const a = Math.max(0, 1 - d / (R * 0.4));
+          const h = hash(i, j);
+          if (h > a * 0.9) continue;
+          const p = live ? 0.5 + 0.5 * Math.sin(t / (10000 + 8000 * h) + h * Math.PI * 2) : 0.5;
+          let alpha = 0.22 + 0.7 * h * (0.45 + 1.1 * p);
+          let len = 2 + h * 7 * (0.45 + 1.1 * p);
+          let ox = 0;
+          let oy = 0;
+          if (hover) {
+            const dx = i - cur.x;
+            const dy = j - cur.y;
+            const dist = Math.hypot(dx, dy) || 1;
+            const inf = Math.exp(-(dist * dist) / (2 * sigma * sigma)) * cur.k;
+            if (inf > 0.01) {
+              alpha += 0.55 * inf;
+              len *= 1 + 1.6 * inf;
+              const push = 10 * inf;
+              ox = (dx / dist) * push;
+              oy = (dy / dist) * push;
+            }
+          }
+          const L = Math.max(2, Math.round(len));
+          x.fillStyle = `rgba(${color},${Math.min(0.96, alpha).toFixed(2)})`;
+          x.fillRect(i + ox, j + oy - (L - 2) / 2, 2, L);
+        }
+      }
+    };
+
+    let visible = true;
+    const frame = (t: number) => {
+      if (!document.hidden && visible && t - last >= 33) {
+        last = t;
+        paint(t);
+      }
+      raf = requestAnimationFrame(frame);
+    };
+    const onMove = (e: MouseEvent) => {
+      const r = c.getBoundingClientRect();
+      const px = e.clientX - r.left;
+      const py = e.clientY - r.top;
+      const inside = px >= -40 && py >= -40 && px <= r.width + 40 && py <= r.height + 40;
+      target.on = inside;
+      if (inside) {
+        target.x = px;
+        target.y = py;
+      }
+    };
+    const onLeave = () => {
+      target.on = false;
+    };
+
+    paint(0);
+    new ResizeObserver(() => paint(live ? performance.now() : 0)).observe(c);
+    if (live) {
+      new IntersectionObserver((entries) => {
+        for (const e of entries) visible = e.isIntersecting;
+      }).observe(c);
+      raf = requestAnimationFrame(frame);
+      window.addEventListener("mousemove", onMove, { passive: true });
+      document.addEventListener("mouseleave", onLeave);
+    }
+    return () => cancelAnimationFrame(raf);
+  }
+
+  /** Port of useScramble: hex digits flicker through random frames; "0x" and "…" stay put. */
+  const HEX = "0123456789abcdef";
+  const isHex = (ch: string) => /^[0-9a-fA-F]$/.test(ch);
+  const scrambleOnce = (s: string) =>
+    [...s]
+      .map((ch, i) => {
+        if (i < 2 || !isHex(ch)) return ch;
+        const r = HEX[Math.floor(Math.random() * 16)]!;
+        return ch === ch.toUpperCase() && ch !== ch.toLowerCase() ? r.toUpperCase() : r;
+      })
+      .join("");
+  const freshAddress = () => {
+    const part = (n: number) => Array.from({ length: n }, () => HEX[Math.floor(Math.random() * 16)]).join("");
+    return `0x${part(4)}…${part(4)}`;
+  };
+  function mountScramble(el: HTMLElement) {
+    if (off) return;
+    const run = () => {
+      const next = freshAddress();
+      let n = 0;
+      el.textContent = scrambleOnce(next);
+      const id = window.setInterval(() => {
+        n += 1;
+        el.textContent = n >= 8 ? next : scrambleOnce(next);
+        if (n >= 8) window.clearInterval(id);
+      }, 70);
+    };
+    window.setTimeout(run, 1400);
+    window.setInterval(run, 3600);
+  }
+
+  document.querySelectorAll<HTMLCanvasElement>("canvas.sl-dots").forEach(mountDots);
+  document.querySelectorAll<HTMLElement>("[data-scramble]").forEach(mountScramble);
+</script>

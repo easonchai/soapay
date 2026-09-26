@@ -2,9 +2,10 @@
 // batch > StealthDisperse. There is deliberately no non-atomic "sequential" mode: CK's M1 fallback
 // (announce, then transfer, one tx each) is dropped per PRD invariant 3 and decision-ck-integration.
 // Picks how this employer's wallet pays a run (CLAUDE.md design decisions):
-// - atomic batching (smart account, or an EOA the wallet upgrades with EIP-7702)
+// - atomic batching on a smart account (or an EIP-7702 upgrade when StealthDisperse isn't deployed)
 //   → one EIP-5792 `wallet_sendCalls` per chunk: [USDC.transfer, Announcer.announce] × N;
-// - a plain EOA → StealthDisperse: approve the exact total, then `pay` per chunk;
+// - a plain EOA → StealthDisperse: approve the exact total, then `pay` per chunk (even when the wallet
+//   offers a 7702 upgrade: wallets cap batch size far below a payroll run);
 // - a Safe → Transaction Builder export through MultiSendCallOnly.
 import type { Address, Hex } from "viem";
 
@@ -72,6 +73,17 @@ export function selectPayPath(i: PayPathInput): PayPath {
   }
 
   const atomic = atomicSupport(i.capabilities, i.chainId);
+  // A plain EOA the wallet *could* upgrade with EIP-7702 ("ready") still pays through StealthDisperse
+  // when it's deployed: wallets cap EIP-5792 batches at a handful of calls (MetaMask refused a
+  // 125-line run, 250 calls, as "too large"), while StealthDisperse pays up to 350 lines per tx.
+  if (atomic === "ready" && i.stealthDisperse && i.disperseDeployed) {
+    return {
+      kind: "disperse",
+      title: "StealthDisperse (plain account)",
+      reason:
+        "Your wallet could batch by upgrading this account with EIP-7702, but wallets cap batch size. You approve the exact run total once, then sign one StealthDisperse payment per chunk of up to 350 lines; each pays and announces its lines in the same transaction.",
+    };
+  }
   if (atomic === "supported" || atomic === "ready") {
     return {
       kind: "batch",

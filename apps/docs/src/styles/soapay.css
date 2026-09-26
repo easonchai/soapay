@@ -1,0 +1,274 @@
+/* Soapay docs: Direction A Ledger tokens (packages/ui/src/styles.css, apps/sender/src/landing.css)
+   mapped onto Starlight's variables, so the docs read as part of the product: IBM Plex, navy
+   #1E3A5F accent, 2px corners, hairline borders, tight headings, flat buttons.
+   Starlight's :root is the dark theme; the light palette sits under [data-theme="light"]. */
+:root {
+  --sl-font: "IBM Plex Sans", system-ui, sans-serif;
+  --sl-font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* dark palette (the apps' [data-theme='dark'] tokens) */
+  --sl-color-accent-low: #1f3552;
+  --sl-color-accent: #8fb3e3;
+  --sl-color-accent-high: #c9daf0;
+  --sl-color-white: #e6eaf0;
+  --sl-color-gray-1: #e6eaf0;
+  --sl-color-gray-2: #9aa5b4;
+  --sl-color-gray-3: #5c6879;
+  --sl-color-gray-4: #3a4656;
+  --sl-color-gray-5: #263040;
+  --sl-color-gray-6: #12181f;
+  --sl-color-black: #0b0f14;
+  /* the app's --line / --line-strong / --accent-soft equivalents */
+  --soapay-line: #263040;
+  --soapay-line-strong: #3a4656;
+  --soapay-accent-soft: #1f3552;
+  --soapay-on-accent: #0b0f14;
+  /* dot-field colour for the splash hero canvases, "r,g,b" (the dark accent) */
+  --soapay-dots: 143,179,227;
+}
+:root[data-theme="light"] {
+  /* light palette: navy accent on a white canvas */
+  --sl-color-accent-low: #e4eefa;
+  --sl-color-accent: #1e3a5f;
+  --sl-color-accent-high: #162c49;
+  --sl-color-white: #0f1720;
+  --sl-color-gray-1: #0f1720;
+  --sl-color-gray-2: #4a5563;
+  --sl-color-gray-3: #8a94a3;
+  --sl-color-gray-4: #b8c0cb;
+  --sl-color-gray-5: #d5dae1;
+  --sl-color-gray-6: #eef0f3;
+  --sl-color-gray-7: #f4f5f7;
+  --sl-color-black: #ffffff;
+  /* the header is white with a hairline, like the app's top bar; the sidebar sits on the canvas grey */
+  --sl-color-bg-nav: #ffffff;
+  --sl-color-bg-sidebar: #f4f5f7;
+  --sl-color-hairline-shade: #eef0f3;
+  --soapay-line: #d5dae1;
+  --soapay-line-strong: #b8c0cb;
+  --soapay-accent-soft: #e4eefa;
+  --soapay-on-accent: #ffffff;
+  --soapay-dots: 30,58,95;
+}
+
+/* Type: a touch smaller than Starlight's default, tight headings like the app (600, negative tracking). */
+:root {
+  --sl-text-base: 0.9375rem; /* 15px */
+  --sl-line-height: 1.65;
+  --sl-line-height-headings: 1.15;
+  --sl-border-radius: 2px;
+}
+.sl-markdown-content :is(h1, h2, h3, h4),
+h1[data-page-title],
+.hero h1 {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.hero h1 {
+  letter-spacing: -0.03em;
+}
+
+/* 2px corners everywhere: code, images, cards, asides, search, buttons. */
+.sl-markdown-content :is(code, pre, img, .card, .starlight-aside, table),
+.card,
+.sl-link-card,
+.starlight-aside,
+site-search button,
+.sidebar-content a,
+.sl-link-button,
+.pagination-links a {
+  border-radius: 2px !important;
+}
+
+/* Header: hairline under the bar, mark sized like the app's top bar. */
+header.header {
+  border-bottom: 1px solid var(--soapay-line);
+}
+.site-title img {
+  height: 1.375rem;
+}
+
+/* Sidebar: the current page uses the app's soft accent chip, not a filled navy block. */
+.sidebar-content a[aria-current="page"],
+.sidebar-content a[aria-current="page"]:hover,
+.sidebar-content a[aria-current="page"]:focus {
+  background: var(--soapay-accent-soft);
+  color: var(--sl-color-accent);
+  font-weight: 500;
+}
+.sidebar-content summary .large,
+.sidebar-content .large {
+  font-weight: 600;
+}
+
+/* Buttons: the app's .btn / .btn-primary (flat, 2px, 500 weight, 44px "xl" height). */
+.sl-link-button {
+  font-weight: 500;
+  padding: 0 1.25rem;
+  min-height: 2.75rem;
+  border-width: 1px;
+}
+.sl-link-button.primary {
+  background: var(--sl-color-accent);
+  border-color: var(--sl-color-accent);
+  color: var(--soapay-on-accent);
+}
+.sl-link-button.primary:hover {
+  background: var(--sl-color-accent-high);
+  border-color: var(--sl-color-accent-high);
+}
+.sl-link-button.secondary {
+  background: var(--sl-color-black);
+  border-color: var(--soapay-line-strong);
+  color: var(--sl-color-white);
+}
+.sl-link-button.secondary:hover {
+  background: var(--sl-color-gray-7, var(--sl-color-gray-6));
+}
+
+/* Splash hero: one centred column like the landing page (Starlight's scoped rules use a 7fr/4fr grid and
+   start-aligned text at desktop widths; the doubled class selectors outrank them). */
+.hero[class] {
+  grid-template-columns: 1fr;
+  padding-block: clamp(2.5rem, calc(1rem + 8vmin), 7rem);
+}
+.hero .sl-flex.stack {
+  text-align: center;
+  align-items: center;
+  max-width: 46rem;
+  margin-inline: auto;
+}
+.hero .sl-flex.copy {
+  align-items: center;
+}
+.hero .tagline {
+  max-width: 40rem;
+  color: var(--sl-color-gray-2);
+}
+.hero .sl-flex.actions {
+  justify-content: center;
+}
+
+/* Hero effects (src/components/Hero.astro): two circular dot rings flank the copy (the landing uses
+   diamonds, packages/ui styles.css .land-hero .dots), a mono eyebrow carries the scrambling fresh
+   address, and the copy fades up in a stagger. The rings sit fully inside the hero and take their
+   size from the free gutter beside the copy, so they are never clipped; they hide on narrow screens. */
+.hero[class] {
+  position: relative;
+  min-height: 24rem;
+  /* Break out of the content column to the full viewport, like the landing hero, so the rings can sit
+     near the screen edges. The copy stays centred at 46rem; each ring is the gutter beside it minus a
+     margin, so it never reaches the words. */
+  width: 100vw;
+  margin-inline: calc(50% - 50vw);
+  overflow-x: clip;
+  /* ring diameter: the viewport gutter beside the 46rem copy, minus breathing room (percentages here
+     resolve against the width, so this var is only ever used in width and inset calculations) */
+  --ring: clamp(200px, calc((100% - 46rem) / 2 - 2.5rem), 400px);
+}
+.hero .sl-flex.stack {
+  position: relative;
+}
+.hero .sl-dots {
+  position: absolute;
+  top: 50%;
+  width: var(--ring);
+  height: auto;
+  aspect-ratio: 1 / 1;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+/* Each ring hugs the copy column: its inner edge sits 2rem outside the 46rem text box, at any width. */
+.hero .sl-dots.l {
+  left: calc(50% - 23rem - 2rem - var(--ring));
+}
+.hero .sl-dots.r {
+  right: calc(50% - 23rem - 2rem - var(--ring));
+}
+@media (max-width: 76rem) {
+  .hero .sl-dots {
+    display: none;
+  }
+}
+.hero-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0 0 0.25rem;
+  font-family: var(--sl-font-mono);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--sl-color-accent);
+}
+.hero-eyebrow .hero-addr {
+  font: inherit;
+  padding: 0.3em 0.5em;
+  border-radius: 2px;
+  background: var(--soapay-accent-soft);
+  color: var(--sl-color-accent);
+  min-width: 8.5ch;
+  text-align: center;
+}
+@keyframes hero-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.hero .reveal {
+  animation: hero-reveal 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation-delay: var(--d, 0s);
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero .reveal {
+    animation: none;
+  }
+}
+html[data-motion="off"] .hero .reveal {
+  animation: none;
+}
+
+/* Card icons use the app's soft accent chip, not Starlight's orange. */
+.card .icon[class] {
+  border-color: var(--sl-color-accent);
+  background-color: var(--soapay-accent-soft);
+  color: var(--sl-color-accent);
+}
+
+/* Cards and asides: white surface, hairline border (the app's panels). */
+.card,
+.sl-link-card {
+  background: var(--sl-color-black);
+  border: 1px solid var(--soapay-line);
+  box-shadow: none;
+}
+.card .title {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.starlight-aside {
+  border-inline-start-width: 2px;
+}
+
+/* Tables: dense ledger rows with hairlines. */
+.sl-markdown-content table {
+  font-size: var(--sl-text-sm);
+}
+.sl-markdown-content th {
+  font-weight: 600;
+  color: var(--sl-color-gray-2);
+  text-align: left;
+}
+.sl-markdown-content :is(th, td) {
+  border-color: var(--soapay-line);
+}
+
+/* Inline code in the app's mono, on the soft canvas. */
+.sl-markdown-content code:not(pre code) {
+  font-size: 0.875em;
+  padding: 0.1em 0.35em;
+}

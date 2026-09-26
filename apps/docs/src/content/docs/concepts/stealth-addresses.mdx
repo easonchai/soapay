@@ -1,0 +1,61 @@
+---
+title: Stealth addresses
+description: ERC-5564 and ERC-6538 in plain words, and how a payment is found and spent.
+sidebar:
+  order: 1
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+A stealth address is a fresh address that a payer can create for you from your public keys alone, and that only you can spend from. Soapay uses two Ethereum standards for this, unchanged: [ERC-5564](https://eips.ethereum.org/EIPS/eip-5564) (stealth addresses) and [ERC-6538](https://eips.ethereum.org/EIPS/eip-6538) (the meta-address registry). Nothing about the cryptography is Soapay's own.
+
+## The pieces
+
+| Piece | What it is |
+| --- | --- |
+| Recovery phrase | One BIP-39 phrase from which every other key is derived. It is the only backup |
+| Spending key | Signs spends from your stealth addresses. Never leaves your device |
+| Viewing key | Finds your payments among everyone's announcements. Only you hold it |
+| Registrant | A throwaway address derived from your keys. It registers your meta-address and holds no funds. It is never your main wallet |
+| Meta-address | Your two public keys, in the form `st:eth:0x` followed by the compressed spending key and the compressed viewing key. It is what you publish |
+| Ephemeral key | A random key the payer picks for one line and discards |
+| Stealth address | The fresh address derived from your meta-address and one ephemeral key |
+| View tag | One byte published with each announcement so a scanner can skip almost every announcement that is not for it |
+
+## Publishing your meta-address
+
+Your meta-address is public keys only. It reveals nothing about any payment. Two places carry it:
+
+- **The ERC-6538 Registry**, a canonical contract on Base that maps a registrant to a meta-address. Soapay's API writes the entry on your behalf with your registrant's signature, so you never need gas. Its address is the same on Base and Base Sepolia: `0x6538E6bf4B0eBd30A8Ea093027Ac2422ce5d6538`.
+- **Your ENS name**, whose `stealth` text record holds the same value. The payer reads the name and cross-checks it against the registry before pinning it. See [Names](/docs/concepts/names/).
+
+## How a payer derives a line
+
+For every line of a pay run, the sender's browser picks a random ephemeral key, combines it with your viewing public key, and derives a stealth address plus its view tag. It sends the USDC there and publishes an announcement. Then it throws the ephemeral key away. The next line, and the next run, use a new ephemeral key, so no two payments to you share an address and nothing ties them together.
+
+The announcement goes to the **ERC-5564 Announcer**, a canonical contract at `0x55649E01B5Df198D18D95b5cc5051630cfD45564` on both Base and Base Sepolia. It carries the scheme id (1), the stealth address, the one-time ephemeral public key, and a short metadata field. The layout of that field, and why the payer is added to it, is in [What the chain sees](/docs/concepts/what-the-chain-sees/).
+
+<Aside type="note" title="Why the payer never learns your spending key">
+  Deriving an address needs only your meta-address, which is public keys, and the payer's own ephemeral key. Spending from it needs your spending private key, which stays on your device. The payer can compute where to send money; only you can move it afterwards.
+</Aside>
+
+## How you find your payments
+
+Your app fetches the public announcements, from the Soapay API or straight from an RPC. For each one it first compares the view tag, which rules out about 255 of every 256 announcements cheaply. For the few that remain, it recomputes the stealth address with your viewing key and checks it against the announced one. A match is yours, and your spending key gives you that address's key.
+
+Two rules the scanner never breaks:
+
+- **It reads the real balance.** The token and amount in the announcement's metadata are hints from whoever announced. The ledger shows what the address actually holds.
+- **It never trusts the announcer.** Anyone can publish an announcement. Payments from a payer you have not marked as known are flagged as an unknown payer.
+
+Because both keys come from the recovery phrase, a new device restores every payment ever received by scanning again, with the public SDK, even if Soapay disappears.
+
+## How you spend
+
+Before any spend, a stealth address is an ordinary account with no code, and on an explorer it looks like any other fresh address. On its first spend, the address signs an [EIP-7702](https://eips.ethereum.org/EIPS/eip-7702) authorization that lets it run the audited `Simple7702Account` implementation, and a single user operation carries both that authorization and the transfer. A paymaster pays the gas: the Circle Paymaster takes it in USDC from the same address on Base mainnet, and a sponsoring paymaster pays it on Base Sepolia. No ETH ever reaches a stealth address, which is what would otherwise link it to whoever sent the ETH. Later spends skip the authorization. See [Send](/docs/employee-app/send/).
+
+## Where Soapay's own code sits
+
+Soapay adds no custom contract to receive or hold funds. `StealthDisperse`, the one contract Soapay wrote, moves USDC from the payer to each stealth address and calls the canonical Announcer in the same transaction. It holds no funds and keeps no state. Smart-wallet payers skip it and send the same transfer and announce calls as an atomic batch. See [Contracts](/docs/developers/contracts/).
+
+Next: [Threat model](/docs/concepts/threat-model/).

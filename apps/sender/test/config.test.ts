@@ -50,9 +50,15 @@ describe("env names (ours + CK's aliases)", () => {
     expect(recipientAppUrls(env({ VITE_RECIPIENT_URL: "https://r.example" }))).toEqual({
       recipientUrl: "https://r.example",
       otherAppUrl: "https://r.example",
+      docsUrl: "/docs/",
     });
     expect(recipientAppUrls(env({ VITE_RECIPIENT_URL: "https://r.example", VITE_OTHER_APP_URL: "/" })).otherAppUrl).toBe("/");
     expect(recipientAppUrls(env({})).recipientUrl).toBe("http://localhost:5173");
+  });
+
+  it("links the docs at /docs/ by default, or VITE_DOCS_URL", () => {
+    expect(recipientAppUrls(env({})).docsUrl).toBe("/docs/");
+    expect(recipientAppUrls(env({ VITE_DOCS_URL: "https://docs.example/" })).docsUrl).toBe("https://docs.example/");
   });
 
   it("stores the company name", () => {
