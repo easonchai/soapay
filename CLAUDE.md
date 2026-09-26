@@ -14,13 +14,14 @@ Stealth-address payroll on Base. Product spec: `PRD.md`. PRD review: `docs/prd-a
 | `apps/cli` | `@soapay/cli`: headless `soapay distribute` (CSV → plan, dry run by default, `--execute` via StealthDisperse) and `soapay scan`. Bundled with esbuild |
 | `examples` | `@soapay/examples`: `dividend-run.ts`, `grant-round.ts` (tsx, dry run by default); `demo/` drives the live "plug it into anything" beat (`scripts/demo-pluggable.sh`) |
 | `packages/ui` | `@soapay/ui`: Direction A Ledger tokens (light, navy #1E3A5F, IBM Plex, 2px), `TopBar`, `PageHead`, `Dots`, `NavyPanel`, `Toggle`, `FreshMark`, `Pill`, `Copy`, `ErrorLine`, `Shell`/`Steps`. Source-only, no build |
-| `contracts` | `@soapay/contracts`: Foundry, `StealthDisperse`, plus `tools/derive.ts` for test vectors |
+| `contracts` | `@soapay/contracts`: Foundry, `StealthDisperse`, the testnet-only `MockUSDC` (+ deploy and pool scripts), plus `tools/derive.ts` for test vectors |
 
 ## Commands
 
 - `git submodule update --init --recursive` once, for the Foundry libraries.
 - `pnpm install` · `pnpm build` · `pnpm test` · `pnpm typecheck` · `pnpm dev`, all run through turbo. `pnpm test` includes `forge test`.
-- Dev ports: recipient 5173, sender 5174, api 8787. Copy each app's `.env.example` to `.env.local` (Base Sepolia); the api needs `RELAYER_PRIVATE_KEY` for registration (`POST /register`, `POST /relay`).
+- Dev ports: recipient 5173, sender 5174, api 8787. Copy each app's `.env.example` to `.env.local` (Base Sepolia); the api needs `RELAYER_PRIVATE_KEY` for registration (`POST /register`, `POST /relay`) and the faucet, and `PIMLICO_API_KEY` for sponsored gas (`POST /paymaster`).
+- **Testnet vs mainnet (D-52):** on Base Sepolia the pay token is Soapay's **mock USDC** `0x028D969c20b740582428f5043954c380686214Bb` (`MOCK_USDC_BASE_SEPOLIA`; override with `VITE_PAY_TOKEN` / `PAY_TOKEN`), stealth spends are **gas-sponsored** through the API's `/paymaster` proxy, wallets get a one-time **welcome drop** (`/faucet`), and the **exit is hidden** (CCTP needs Circle USDC). Base mainnet keeps Circle USDC and the Circle paymaster; never change mainnet paths for the demo. Fund a wallet with `scripts/fund-usdc.sh`.
 - Frontend M1 design and task record: `docs/frontend-m1-design.md`, `docs/frontend-m1-plan.md`.
 - One package: `pnpm --filter @soapay/sdk test`, `pnpm --filter @soapay/contracts test`.
 - Contract fork tests run when `BASE_RPC_URL` is set.
@@ -35,7 +36,7 @@ Stealth-address payroll on Base. Product spec: `PRD.md`. PRD review: `docs/prd-a
 
 ## Design decisions
 
-- One custom contract, `StealthDisperse`: pulls tokens from `msg.sender` with `transferFrom`, and in the same tx calls the **canonical** ERC-5564 Announcer for each line. Holds no funds, keeps no state.
+- One custom production contract, `StealthDisperse`: pulls tokens from `msg.sender` with `transferFrom`, and in the same tx calls the **canonical** ERC-5564 Announcer for each line. Holds no funds, keeps no state.
 - Stealth addresses in a batch must be **strictly ascending**: the order is independent of names and duplicates are rejected, enforced on-chain.
 - Ascending order guards against bugs in the employer's own app and dedupes within a batch. On its own it is **not** a privacy guarantee.
 - ERC-5564 metadata per line: `viewTag(1) | transfer selector(4) | token(20) | amount(32) | payer(20)`. The payer is appended because `Announcement.caller` is always the contract. Scanners recompute the stealth address, read real balances, and never trust the metadata amount or token.
@@ -54,7 +55,8 @@ Stealth-address payroll on Base. Product spec: `PRD.md`. PRD review: `docs/prd-a
 
 - Apps and the api import protocol logic only from `@soapay/sdk`. No private code paths (PRD P0).
 - Spending keys never leave the client.
-- `StealthDisperse` is the only custom contract, and no custom contract may hold funds or keep state.
+- `StealthDisperse` is the only custom production contract, and no custom contract may hold funds or keep state. The one exception is testnet-only `MockUSDC` (D-52): a plain ERC-20 whose balances are its own token's ledger, so it custodies nothing; it never ships to mainnet.
+- The web employee app has no Convert/swap screen (D-53); swap-in-place stays in the SDK and the MCP server.
 - Every privacy invariant becomes a CI test when its code lands.
 - No telemetry that could link addresses without explicit opt-in.
 - `@scopelift/stealth-address-sdk` must be bundled, inlined, or run through tsx. Plain Node can't load it.
