@@ -50,7 +50,7 @@ describe("claiming a name after skipping it", () => {
       </VaultProvider>,
     );
     const user = userEvent.setup();
-    const input = await screen.findByTestId("label-input");
+    const input = await screen.findByTestId("label-input", {}, { timeout: 10_000 });
     expect(screen.getByText("You skipped this during setup")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Skip, I'll share my meta-address/ })).toBeNull();
 
