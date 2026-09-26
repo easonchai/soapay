@@ -8,7 +8,10 @@
     "dev": "turbo run dev",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
-    "clean": "turbo run clean && rm -rf node_modules"
+    "clean": "turbo run clean && rm -rf node_modules",
+    "demo:setup-recovery": "pnpm --filter @soapay/examples exec tsx ../scripts/demo-setup-recovery.ts",
+    "demo:attacker": "pnpm --filter @soapay/examples exec tsx ../scripts/demo-attacker.ts",
+    "demo:recovery-check": "pnpm --filter @soapay/examples exec tsx ../scripts/demo-recovery-check.ts"
   },
   "devDependencies": {
     "turbo": "^2.11.4",
