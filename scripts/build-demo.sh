@@ -11,6 +11,6 @@ cd "$(dirname "$0")/.."
 pnpm --filter @soapay/sdk build >/dev/null
 pnpm --filter @soapay/worldid-react build >/dev/null 2>&1 || true
 
-VITE_API_URL="$ORIGIN/api" pnpm --filter @soapay/recipient exec vite build
-VITE_API_URL="$ORIGIN/api" VITE_RECIPIENT_URL="$ORIGIN/" pnpm --filter @soapay/sender exec vite build --base=/sender/
+VITE_API_URL="$ORIGIN/api" VITE_OTHER_APP_URL="$ORIGIN/sender/" pnpm --filter @soapay/recipient exec vite build
+VITE_API_URL="$ORIGIN/api" VITE_RECIPIENT_URL="$ORIGIN/" VITE_OTHER_APP_URL="$ORIGIN/" pnpm --filter @soapay/sender exec vite build --base=/sender/
 echo "built for $ORIGIN (recipient /, sender /sender/, api /api)"

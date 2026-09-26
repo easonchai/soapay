@@ -4,6 +4,8 @@ description: Frontend M1 as built: signature-derived keys, relayer in gateway, t
 metadata:
   type: project
 ---
+> **Superseded where they differ by [[decision-ck-integration]] (2026-09-26 merge).** Keys: a recovery phrase is the default; this signature derivation survives only as an EOA-only option (SDK `keysFromWalletSignature`; smart/passkey wallets refused). Relayer: `apps/gateway` is deleted; `POST /relay` (same request shape) lives in `apps/api` on the `/register` path. Sequential mode: dropped (EIP-5792 > StealthDisperse > Safe export). Naming: the "link an existing name" step is replaced by `*.soapay.eth` ENSv2 issuance + invites. Spending: "reveal private key" is replaced by the guarded gasless Send and the Exit; key export only as advanced recovery. His stores (company/recipient/sender, localStorage) are replaced by our encrypted vaults; his formatters, `findRegistrationBlock` and live-balance status moved into the SDK. The rest below is the historical M1 record.
+
 Recipient and sender apps (M1 P0) landed 2026-09-25 on the Vite SPA layout; protocol logic lives in `@soapay/sdk` (45 vitest tests), shared styles and components in `@soapay/ui`.
 
 - **Keys:** derived from one wallet signature (ScopeLift `generateKeysFromSignature`); the throwaway registrant key is `keccak256(signature ‖ "soapay/registrant/v1")`. Recovery = sign again. This is the implemented default while the BIP-39 question in [[decision-scope-v1]] stays open; switching later means a new derivation function plus a migration note, not a UI change.
