@@ -5,8 +5,12 @@
 [![ERC-6538](https://img.shields.io/badge/ERC--6538-Registry-111111)](https://eips.ethereum.org/EIPS/eip-6538)
 [![EIP-7702](https://img.shields.io/badge/EIP--7702-Gasless%20spend-444444)](https://eips.ethereum.org/EIPS/eip-7702)
 [![EIP-5792](https://img.shields.io/badge/EIP--5792-Atomic%20batch-444444)](https://eips.ethereum.org/EIPS/eip-5792)
-[![Foundry](https://img.shields.io/badge/Foundry-27%20tests%20%2B%204%20fork-bd4a1f)](contracts/PLAN.md#test-matrix-forge-test--vv)
-[![Status](https://img.shields.io/badge/status-pre--M1-orange)](#roadmap)
+[![Tests](https://img.shields.io/badge/tests-809%20passing-2ea043)](#tests)
+[![Status](https://img.shields.io/badge/status-live%20on%20Base%20Sepolia-0052ff)](https://soapay.up.railway.app/)
+
+[![Soapay landing page: every wallet address is a public bank statement](docs/demo-screens/landing-hero.png)](https://soapay.up.railway.app/)
+
+**Live demo:** [soapay.up.railway.app](https://soapay.up.railway.app/) (company app) · [soapay.up.railway.app/app/](https://soapay.up.railway.app/app/) (employee app), on Base Sepolia.
 
 **Soapay lets you get paid on-chain without publishing your bank statement.** An employee shares one ENS name. Every salary payment lands on a fresh stealth address that only they can open and spend from, and a coworker reading the same payroll batch can't tell which line is theirs.
 
@@ -58,6 +62,34 @@ flowchart LR
 - **Big runs.** A run is cut into transactions of at most 350 lines, after sorting globally. It is never split by employee, because per-transaction totals would reveal salaries.
 - **Find payments.** The scanner filters Announcer events by view tag, recomputes each stealth address, and reads the real balance. It never trusts the token or amount in the metadata.
 - **Spend without linking.** A stealth address delegates to an audited 4337 account through EIP-7702 on its first spend, and a USDC paymaster pays the gas.
+
+## Screens
+
+The company app reviews a pay run before signing. With denominated payouts on, six salaries become 56 lines of 500 USDC to 56 fresh addresses, so the batch reads as identical transfers to strangers:
+
+![Company app: review a September payroll of 26,600 USDC to 6 people on 56 fresh addresses](docs/demo-screens/s09-sender-review.png)
+
+The employee app scans the Announcer, finds only its own lines, and shows live balances across every fresh address, with a gasless Send from each one:
+
+![Employee app: 7,951 USDC across 19 addresses, each row a 500 USDC chunk from Acme Robotics](docs/demo-screens/r08-payments.png)
+
+Every screen of both apps, in demo order: [`docs/demo-flow.md`](docs/demo-flow.md) and [`docs/demo-screens`](docs/demo-screens).
+
+## Tests
+
+**809 tests, all passing** (`pnpm test`, 2026-09-26). Every privacy invariant in the PRD is a test in one of these packages.
+
+| Package | Tests | Skipped | Runner |
+| --- | --- | --- | --- |
+| `@soapay/sdk` | 313 | 18 fork and live tests, need `FORK_E2E=1` or keys | vitest |
+| `@soapay/recipient` | 140 | | vitest |
+| `@soapay/sender` | 132 | | vitest |
+| `@soapay/api` | 127 | | vitest |
+| `@soapay/mcp` | 54 | | vitest |
+| `@soapay/contracts` | 31 | 2 fork tests, need `BASE_RPC_URL` | forge |
+| `@soapay/cli` | 12 | | vitest |
+
+The skipped tests are the Base and Sepolia fork end-to-ends (a full payroll run, gasless 7702 spend, in-place swap, Privacy Pools exit). They pass with a fork RPC set; see [Getting started](#getting-started).
 
 ## Uniswap integration
 

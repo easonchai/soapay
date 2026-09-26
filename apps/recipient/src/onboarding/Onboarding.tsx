@@ -789,7 +789,25 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function NameStep({ dispatch, headingRef }: Omit<StepProps, "state">) {
+/**
+ * Claim a pay name after onboarding skipped it (Name settings). The same Name → Recovery steps as onboarding;
+ * once the name is claimed the vault has `profile.name`, so the parent renders the name settings instead.
+ */
+export function ClaimNameLater() {
+  const [state, dispatch] = useReducer(reduce, { step: "name" } as OnboardingState);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  switch (state.step) {
+    case "name":
+      return <NameStep dispatch={dispatch} headingRef={headingRef} later />;
+    case "recovery":
+      return <RecoveryStep label={state.label} inviteCode={state.inviteCode} dispatch={dispatch} headingRef={headingRef} />;
+    default:
+      return null;
+  }
+}
+
+/** `later`: claiming from Name settings after skipping during onboarding, so no skip option. */
+function NameStep({ dispatch, headingRef, later = false }: { later?: boolean } & Omit<StepProps, "state">) {
   const vault = useVault();
   const svc = useServices();
   const keys = vault.keys!;
@@ -868,9 +886,11 @@ function NameStep({ dispatch, headingRef }: Omit<StepProps, "state">) {
         <Button type="submit" size="lg" className="w-full" disabled={!canClaim}>
           Continue
         </Button>
-        <Button variant="ghost" className="w-full" onClick={skip}>
-          Skip, I'll share my meta-address instead
-        </Button>
+        {!later && (
+          <Button variant="ghost" className="w-full" onClick={skip}>
+            Skip, I'll share my meta-address instead
+          </Button>
+        )}
       </form>
     </Frame>
   );
