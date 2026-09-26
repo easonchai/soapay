@@ -34,7 +34,36 @@ Payroll is the first use case because it is where public payments hurt most: one
 
 The SDK already treats these as one thing. [`packages/sdk/src/distribute.ts`](packages/sdk/src/distribute.ts) plans any distribution from a payer and a list of recipients, with presets for `payroll`, `dividend` (pro rata by largest remainder, so the allocations sum exactly to the total) and `grant` (checked against a budget), with `vesting` as a kind planned the same way. [`soapay distribute`](apps/cli) runs one from a CSV, dry run by default, and [`examples/dividend-run.ts`](examples/dividend-run.ts) and [`examples/grant-round.ts`](examples/grant-round.ts) show the same rail paying a cap table and a grant round.
 
-**Navigate:** [Pitch](pitch/README.md) · [PRD](PRD.md) · [Threat model](#threat-model) · [Privacy model](docs/privacy-model.md) · [How it works](#how-it-works) · [Uniswap](#uniswap-integration) · [StealthDisperse plan](contracts/PLAN.md) · [PRD analysis](docs/prd-analysis.md) · [Roadmap](#roadmap) · [Getting started](#getting-started) · [Repository](#repository)
+## Contents
+
+**The product**
+- [Who sees what you earn?](#who-sees-what-you-earn)
+- [Built for payroll. Ready for any payout.](#built-for-payroll-ready-for-any-payout)
+- [Screens](#screens)
+- [Compared with Fluidkey](#compared-with-fluidkey)
+
+**How it's built**
+- [What's here](#whats-here)
+- [Threat model](#threat-model)
+- [How it works](#how-it-works)
+- [Contracts](#contracts)
+- [Repository](#repository)
+
+**Integrations**
+- [Uniswap: convert salary in place](#uniswap-integration)
+- [ENSv2: names and key rotation](#ensv2-integration)
+- [Agents (MCP)](#agents-mcp)
+- [World ID: attested recovery](#world-id-integration)
+
+**Status**
+- [Tests](#tests)
+- [Roadmap](#roadmap)
+- [Known gaps](#known-gaps)
+- [Getting started](#getting-started)
+
+**Documents**
+- [Pitch](pitch/README.md) · [PRD](PRD.md) · [Design brief](DESIGN_BRIEF.md) · [Privacy model](docs/privacy-model.md) · [Demo flow with screenshots](docs/demo-flow.md)
+- [StealthDisperse plan](contracts/PLAN.md) · [MVP spec](docs/mvp-spec.md) · [PRD analysis](docs/prd-analysis.md) · [Decision log](docs/decision-log.md) · [Testnet deployment](docs/testnet-deployment.md)
 
 ## What's here
 
