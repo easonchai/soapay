@@ -173,7 +173,7 @@ export function nameRoutes(deps: AppDeps): Hono {
       deadline,
     });
 
-    // Optional World ID session (Selfie Check) created at enrollment, bound to label + registrant.
+    // Optional World ID session (Proof of Human) created at enrollment, bound to label + registrant.
     let session: VerifiedSession | undefined;
     if (body.worldIdSession !== undefined && body.worldIdSession !== null) {
       if (existing) {

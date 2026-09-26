@@ -30,9 +30,9 @@ Requirement text is quoted from the ETHGlobal Tokyo 2026 prize page (fetched 202
 | Requirement | How Soapay meets it | Status |
 | --- | --- | --- |
 | "Integrate IDKit in a functioning application … or onchain flow" | IDKit 4.3 in the employee app (`packages/worldid-react`), used on the Name screen and at the name step of onboarding | ✅ |
-| "Use at least one supported World ID credential" | Selfie Check, through a World ID **session** | ✅ |
+| "Use at least one supported World ID credential" | **Proof of Human**, through a World ID **session** (D-54) | ✅ |
 | "Verify the result on the server or onchain as appropriate" | `apps/api` checks nonce, session id, signal hash, credential, environment and replay, then verifies with the Developer Portal v4 endpoint; only then signs the EIP-712 `MetaRotation` attestation | ✅ |
-| "Clearly explain the specific product event requiring trust and why the chosen credential is the minimum sufficient assurance" | The event is **key rotation**: changing where future salary goes. It's a continuity question ("same person who set up this name?"), so a Selfie Check session is the weakest credential that ties the change to a person rather than a key; Proof of Human would add an Orb visit without answering it better ([docs/worldid.md](worldid.md)) | ✅ |
+| "Clearly explain the specific product event requiring trust and why the chosen credential is the minimum sufficient assurance" | The event is **account recovery**: replacing a leaked key, which changes where all future salary goes. A thief with the old key can rewrite the ENS record, but the payer's app only follows with a session proof from the same human. Proof of Human is proportionate: World calls Selfie Check medium-assurance, which is too weak for moving pay, and passport-level identity would collect data we don't need ([docs/worldid.md](worldid.md)) | ✅ |
 | "Demonstrate a successful verification" | Production mode is live (D-51). The run with a real World App is the last step | ⏳ owner runs it with the World App |
 | "…and one meaningful alternative path (cancellation, unavailable credential, rejection, ineligible user)" | No session, cancelled proof, a different person, expired or replayed proof: no attestation, so the company app **blocks** the line with "meta change unverified" until the employer approves by hand. A session added after onboarding also has a 72-hour wait | ✅ in code; ⏳ show it in the demo video |
 | "Integration debrief/feedback: time to first success, friction, missing capability or documentation, the one improvement with the greatest impact" | [docs/worldid.md → Integration debrief](worldid.md#integration-debrief) | ⏳ fill in "time to first success" after the live run |
@@ -87,12 +87,12 @@ node -e 'import("viem").then(async({createPublicClient,http})=>{const{sepolia}=a
 ## World ID (IDKit 4.x): partly live
 
 **What:** one trust moment, **key rotation**. Changing the meta-address behind a name redirects future salary.
-- At enrollment the employee may create a **Selfie Check session**.
+- At enrollment the employee may create a World ID **session** (Proof of Human).
 - A later rotation must prove the *same* session (`proveSession`).
 - The API verifies it server-side and signs an EIP-712 `MetaRotation` attestation.
 - The sender app **auto-accepts a changed pin only with that attestation** (checked against a pinned attester address). Otherwise the line is blocked ("possible salary redirect") until the employer approves it by hand.
 
-**Why this credential:** rotation asks "is this the same person who enrolled?", which is continuity, not uniqueness. Selfie Check sessions are World's recommended flow for repeat verification. Proof of Human would add an Orb requirement without answering that question better. There's deliberately **no** enrollment gate, since that would force an Orb visit on every employee. It's essential for pseudonymous DAO contributors, where the payer has no other way to confirm a change.
+**Why this credential:** see [docs/worldid.md](worldid.md#why-proof-of-human-is-the-proportionate-credential) (D-54): recovery moves future salary, so the strongest same-human proof (Proof of Human) is proportionate; Selfie Check is medium-assurance.
 
 **Where:**
 - `apps/api/src/humanVerifier/worldid.ts`, `routes/names.ts` (rotation, session attach, attestations), `routes/worldid.ts` (rp-context, config);
@@ -111,7 +111,7 @@ node -e 'import("viem").then(async({createPublicClient,http})=>{const{sepolia}=a
 - `GET /api/worldid/config` on the running API returns enabled, with credential `selfie`.
 - The sender's attestation gating was shown in mock mode (screenshots): attested → "Re-verified by World ID"; unattested → blocked.
 
-**Not yet live:** a real Selfie Check session created and proved by a human (simulator or World App) against the running API. This is the #1 item to run before judging.
+**Not yet live:** a real Proof of Human session created and proved by a human (simulator or World App) against the running API. This is the #1 item to run before judging.
 
 **Verify yourself:** `pnpm --filter @soapay/api test` (the World ID refusal paths) and `pnpm --filter @soapay/sender test` (attestation gating). The debrief is in `docs/worldid.md`.
 
@@ -155,6 +155,6 @@ node -e 'import("viem").then(async({createPublicClient,http})=>{const{sepolia}=a
 
 ## Before judging: run these live
 
-1. A World ID Selfie Check session create → rotate, with a human (simulator or World App).
+1. A World ID Proof of Human session create → rotate, with a human (simulator or World App).
 2. A Uniswap swap-in-place on Base Sepolia (done, on-chain quote); the Trading API path is proven with a live mainnet quote on a fork.
 3. One compliant exit leg (needs a faucet top-up).

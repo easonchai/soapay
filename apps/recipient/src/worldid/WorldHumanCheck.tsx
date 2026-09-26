@@ -14,7 +14,7 @@ export function HumanCheckFrame({ mode, onCancel, busy, onOpen }: Pick<HumanChec
           <ScanFace className="size-5 text-accent-foreground" aria-hidden />
         </div>
         <div className="space-y-1">
-          <p className="font-medium">{create ? "Selfie Check with World ID" : "Prove it's still you"}</p>
+          <p className="font-medium">{create ? "Proof of Human with World ID" : "Prove it's still you"}</p>
           <p className="text-sm text-muted-foreground">
             {create
               ? "Links a private World ID session to your name, so you can move it to new keys later without asking your employer."

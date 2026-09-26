@@ -1,6 +1,6 @@
 # World ID in Soapay
 
-Soapay uses World ID 4.0 (IDKit 4.3) at **one trust moment: key rotation**. A name's meta-address decides where future salary goes. When an employee changes it, World ID lets the payer's app accept the change automatically, because the same person who set up the name has confirmed it.
+Soapay uses World ID 4.0 (IDKit 4.3) at **one trust moment: account recovery (key rotation)**, with the **Proof of Human** credential in a World ID session. A name's meta-address decides where future salary goes. When an employee changes it, World ID lets the payer's app accept the change automatically, because the same person who set up the name has confirmed it.
 
 Spec: `docs/mvp-spec.md` §2.1 (rotation, formats) and §5 (World ID). Code: `apps/api/src/worldid/`, `apps/api/src/routes/rotation.ts`, `packages/sdk/src/rotation.ts`, `packages/worldid-react`.
 
@@ -15,15 +15,14 @@ A stolen registrant key (a phished seed, malware) can change the record. On its 
 
 There is **no enrollment gate**. Onboarding doesn't need World ID, and relayer abuse is handled with rate limits. The employee *may* create a World ID session when claiming the name, or attach one later.
 
-## Why Selfie Check is the minimum sufficient assurance
+## Why Proof of Human is the proportionate credential
 
-Rotation asks one question: *is this the same person who set up this name?* That is **continuity**, not **uniqueness**.
+The trust moment is **account recovery**: an employee's key leaked or their device is gone, and they move their name to new keys. That decides where **all future salary** goes, so it is the highest-stakes action in the product. The question it asks is *"is this the same person who set up this name?"*
 
-- **Sessions answer continuity.** A World ID session is created once, and later proofs show the same holder is back. The World docs recommend sessions for exactly this repeated-verification case, and Selfie Check is the credential they pair with it. We store the `session_id` per name and reject reused `session_nullifier`s. We never learn who the person is.
-- **Proof of Human would add an Orb visit without answering the question any better.** Its value is uniqueness ("one human, one action"). Rotation doesn't care whether someone has two accounts elsewhere, only whether the person rotating is the person who enrolled. Requiring the Orb would exclude most employees and contributors, and gain nothing for this check.
-- **Anything stronger (passport, identity attributes) would collect identity we don't need.** The employer already knows its employees, and a DAO's contributors may deliberately stay pseudonymous.
-
-Selfie Check is therefore the weakest credential that still ties rotation to a person rather than a key, and the strongest we can justify asking for.
+- **A session answers "same person".** The World ID session is created once, when the name is claimed (or attached later), and every rotation must prove that same session. A thief with the old key can rewrite the ENS record, but can't produce the session proof, so the payer's app won't follow the change.
+- **Proof of Human is the proportionate strength.** World describes Selfie Check as *"a medium-assurance signal"*. For an action that redirects someone's pay, "probably the same person" isn't enough; Proof of Human is World's strongest human credential. We tried Selfie Check first (the lightest option) and moved up because medium assurance doesn't match what's at stake (D-54).
+- **Nothing stronger is needed.** Passport or identity attributes would collect real-world identity the product doesn't need: the employer already knows its employees, and a DAO's contributors may deliberately stay pseudonymous. Proof of Human proves a unique, same human without revealing who they are.
+- **It's also the smoother flow.** No selfie capture at the moment of recovery; the World App confirms in a tap. The trade-off: the employee needs a World ID with Proof of Human. Without one, recovery still works, but the employer approves the key change by hand (the fallback below).
 
 ## Where it's essential: pseudonymous contributors
 

@@ -1,6 +1,6 @@
 /**
  * World ID seam (docs/mvp-spec.md §2.1, §5, docs/worldid.md). World ID is used at ONE trust moment:
- * self-service key rotation. At onboarding the user MAY create a Selfie Check session
+ * self-service key rotation. At onboarding the user MAY create a Proof of Human session
  * (`mode="create-session"`); a later rotation proves that same session (`mode="rotate"`).
  *
  * The props mirror `@soapay/worldid-react`'s `<HumanCheck>`; see ./index.ts for which implementation

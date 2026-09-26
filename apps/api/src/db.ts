@@ -89,7 +89,7 @@ const MIGRATIONS: string[] = [
     used_at       INTEGER
   );
 
-  -- The World ID session (Selfie Check) behind a name, if the registrant created one.
+  -- The World ID session (Proof of Human) behind a name, if the registrant created one.
   -- A name keeps its first session; a session backs one name.
   CREATE TABLE name_sessions (
     label         TEXT PRIMARY KEY,
