@@ -98,11 +98,15 @@ Suggested: **8**. Resolution needed no custom code, the factory plus `initialize
 **Additional feedback for the sponsor**
 
 ```text
-What went well: viem's default Sepolia Universal Resolver already routes to UniversalResolverV2, so resolving ENSv2 names took no custom client code. Setting records and roles inside PermissionedResolver.initialize through the VerifiableFactory lets a name land with its records atomically, before it is registered. The Enhanced Access Control bitmaps were clear once we read them, and ENSIP-26 keys were easy to add at issuance.
+Went well: viem's default Sepolia Universal Resolver already routes to UniversalResolverV2, so resolution needed no custom code. Setting records and roles inside PermissionedResolver.initialize through the VerifiableFactory lands a name with its records atomically. The EAC bitmaps were clear once read, and ENSIP-26 keys were easy to add at issuance.
 
-Friction: (1) PermissionedRegistry.register safe-mints an ERC-1155, so an owner that is an EIP-7702-delegated EOA without onERC1155Received reverts with no reason. Sepolia's public anvil keys are delegated, which cost us hours before we found it. A revert reason, or a note in the docs, would fix it. (2) Text-record roles are scoped per key across the whole resolver, not per name, so a name-per-employee model needs one resolver per name, two issuer transactions each. Worth stating up front in the Permissioned Resolver docs. (3) grantSetterRoles checks the caller's admin role during initialize, and the caller is the factory, so the factory needs a bootstrap ROLE_SET_TEXT_ADMIN that the last init call revokes. (4) It was not obvious which Sepolia deployment is live: the deployments page pins contracts-v2 at 71a3b73, and it took a getCode check per address to be sure that set was the live one.
+Friction:
+1. PermissionedRegistry.register safe-mints an ERC-1155, so an EIP-7702-delegated owner without onERC1155Received reverts with no reason. Cost hours.
+2. Text-record roles are scoped per key across the whole resolver, not per name, so a name-per-employee model needs one resolver per name: two issuer transactions each. Say so in the docs.
+3. grantSetterRoles checks the caller's admin role during initialize, and the caller is the factory, so the factory needs a bootstrap ROLE_SET_TEXT_ADMIN that the last init call revokes.
+4. Which Sepolia deployment is live was not obvious. We had to getCode each address to be sure.
 
-Missing: an ERC-1155 receiver check or revert reason on register; a one-line note that resolver roles are per resource across the resolver; and ENSIP-25 agent-registration records only verify once a live registry lists the agent, so we accept them but do not set them by default.
+Biggest fix: a revert reason or receiver check on register, and a one-line note that resolver roles are per resource across the resolver.
 ```
 
 ## Curvegrid ($3,000): Best Digital Asset Dashboard
