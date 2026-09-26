@@ -111,7 +111,7 @@ flowchart LR
 
 ### World ID (IDKit): changing where your salary goes needs proof it's still you
 
-- **What we built:** World ID 4.0 through IDKit with a **Proof of Human** credential in a **session**. The employee can attach a session when claiming their name, or later. Rotating keys proves it's the same human; the API verifies the proof and signs an EIP-712 `MetaRotation` attestation (D-13, D-16).
+- **What we built:** World ID 4.0 through IDKit with the **Proof of Human** credential, as one-time requests on the `soapay-recovery` action. The employee can link World ID when claiming their name, or later: the API stores the proof's nullifier. Rotating keys needs a proof with the same nullifier, i.e. the same human; the API verifies it and signs an EIP-712 `MetaRotation` attestation (D-13, D-16, D-58).
 - **In the product:** the company app (and the CLI) accepts a changed meta-address automatically only with that attestation, from the attester it pinned. Without it, the line is blocked and the employer re-approves by hand.
 - **Why it's central:** ENS decides where salaries go, so a stolen key that rewrites the record is the real risk. It matters most for pseudonymous contributors (a DAO paying a handle), where there's no phone number to call. Details: [docs/worldid.md](worldid.md).
 - **Code:** `packages/worldid-react`, `packages/sdk/src/rotation.ts`, `pins.ts`, `apps/api` World ID routes.
@@ -191,8 +191,8 @@ sequenceDiagram
   participant A as Soapay API
   participant N as ENS record
   participant E as Company app
-  R->>W: Proof of Human (same session)
-  W-->>R: proof
+  R->>W: Proof of Human (action soapay-recovery)
+  W-->>R: proof (same nullifier as at linking)
   R->>A: proof + new meta-address
   A-->>R: EIP-712 MetaRotation attestation
   R->>N: write new stealth record
@@ -274,9 +274,9 @@ The first time a name is paid, the company app stores `name → meta-address` lo
 
 | Piece | Contents | Why |
 | --- | --- | --- |
-| Session signal (link World ID) | `soapay:session:<label>:<registrant>` | Binds the World ID session to this exact name and key, so a proof can't be replayed for another name |
+| Link signal (link World ID) | `soapay:session:<label>:<registrant>` | Binds the linking proof to this exact name and key, so it can't be replayed for another name |
 | Rotation signal | `soapay:rotate:<label>:<new meta-address>:<deadline>` | Binds the proof to this exact change and a deadline |
-| What the API stores | per name: the `session_id`, when and how it was attached; globally: used session nullifiers and RP nonces | Continuity check and replay protection. **No identity data** is stored or seen |
+| What the API stores | per name: the World ID **nullifier** of the linking proof, when and how it was linked; globally: every RP nonce it signed, marked used once a proof consumed it | Continuity check (same nullifier = same human) and replay protection. The nullifier is scoped to our RP and action, so it can't be linked across apps. **No identity data** is stored or seen |
 | `MetaRotation` attestation (EIP-712, signed by the API's attester) | `label`, `oldMeta`, `newMeta`, `verifiedAt` | What the payer's app verifies before accepting a changed record. It covers one exact change, from one pinned attester |
 | `RotationClaim` (EIP-712, signed by the employee's registrant key) | `label`, `oldMeta`, `newMeta`, `deadline` | Proves the key holder asked for this change, alongside the World ID proof that it's the same person |
 
@@ -357,7 +357,7 @@ Beyond the qualification checklist in [docs/bounty-integrations.md](bounty-integ
 | Brief highlights | Soapay |
 | --- | --- |
 | A real trust moment | ✅ **Account recovery**: replacing a leaked key, which changes where future salary goes |
-| The proportionate credential, and why | ✅ **Proof of Human** in a **session**. Recovery redirects all future salary, the highest-stakes action in the product, and World calls Selfie Check "a medium-assurance signal", so Proof of Human is the proportionate strength. Passport or identity attributes would collect identity we don't need (D-54) |
+| The proportionate credential, and why | ✅ **Proof of Human**, one-time requests matched by nullifier (D-58). Recovery redirects all future salary, the highest-stakes action in the product, and World calls Selfie Check "a medium-assurance signal", so Proof of Human is the proportionate strength. Passport or identity attributes would collect identity we don't need (D-54) |
 | Selfie Check "now live with Sybil score" | ➖ Tried first, then replaced by Proof of Human: medium assurance doesn't match an action that moves someone's pay |
 | A workflow that becomes safer or simpler | ✅ Safer: a stolen key can't redirect pay. Simpler: no call to HR to approve a key change. Essential for pseudonymous contributors paid by a DAO |
 

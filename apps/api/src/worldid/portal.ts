@@ -16,6 +16,8 @@ export type PortalSuccess = {
  * POST {verifyBaseUrl}/api/v4/verify/{rp_id} with the IDKit result forwarded as-is.
  * Throws ApiError: 403 for a rejected proof, 503 when the portal is unreachable.
  * Checks the response's `environment` against WORLD_ENV (staging = the simulator).
+ * Staging verification needs `x-staging-verification-token` (WORLD_STAGING_VERIFY_TOKEN);
+ * production doesn't. The token is never logged.
  */
 export async function portalVerify(
   cfg: WorldIdConfig,
@@ -24,11 +26,13 @@ export async function portalVerify(
   result: unknown,
 ): Promise<PortalSuccess> {
   const url = `${cfg.verifyBaseUrl}/api/v4/verify/${cfg.rpId}`;
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (cfg.environment === "staging" && cfg.stagingVerifyToken) headers["x-staging-verification-token"] = cfg.stagingVerifyToken;
   let res: Response;
   try {
     res = await fetchFn(url, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers,
       body: JSON.stringify(result),
       signal: AbortSignal.timeout(15_000),
     });
