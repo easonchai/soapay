@@ -1,4 +1,4 @@
-# Soapay: one name, infinite addresses
+# Soapay: privacy infrastructure for payments on chain
 
 [![Base](https://img.shields.io/badge/Base-Mainnet%208453-0052ff)](https://basescan.org/address/0x55649E01B5Df198D18D95b5cc5051630cfD45564)
 [![ERC-5564](https://img.shields.io/badge/ERC--5564-Stealth%20Addresses-111111)](https://eips.ethereum.org/EIPS/eip-5564)
@@ -12,11 +12,63 @@
 
 **Live demo:** [soapay.up.railway.app](https://soapay.up.railway.app/) (company app) · [soapay.up.railway.app/app/](https://soapay.up.railway.app/app/) (employee app), on Base Sepolia.
 
-**Soapay lets you get paid on-chain without publishing your bank statement.** An employee shares one ENS name. Every salary payment lands on a fresh stealth address that only they can open and spend from, and a coworker reading the same payroll batch can't tell which line is theirs.
+**Soapay is privacy infrastructure for payments on chain**: every payment lands on a fresh address that only you can open, and you can spend it without it ever linking back to you. A recipient shares one ENS name. Each payment to it goes to a new ERC-5564 stealth address, so a coworker reading the same payroll batch sees a list of never-before-seen addresses and can't tell which line is theirs.
 
-Our first use case is **recurring payroll on Base**. Today one batch transaction shows every recipient and every amount next to each other. With Soapay, coworkers see a list of never-before-seen addresses.
+## Who sees what you earn?
 
-**Navigate:** [PRD](PRD.md) · [Threat model](#threat-model) · [Privacy model](docs/privacy-model.md) · [How it works](#how-it-works) · [Uniswap](#uniswap-integration) · [StealthDisperse plan](contracts/PLAN.md) · [PRD analysis](docs/prd-analysis.md) · [Roadmap](#roadmap) · [Getting started](#getting-started) · [Repository](#repository)
+On a public chain, everyone with a browser: one payroll batch on Base shows every recipient and every amount next to each other, readable forever. Your colleagues too: at Gitcoin DAO a contributor started from their own pay address and put names to fifteen salaries. So companies walk away, and the fixes built for them (Base Ledgers, Tempo Zones, Toku on Aleo) are private ledgers for enterprises: not for everyone, since you apply for access, and not fully private, since every payment goes through the company running them, which sees it and decides what you can withdraw. Everyone else still pays in public.
+
+Three apps on open standards, and nothing of ours holds money. The full argument, with sources, is in the [pitch deck](pitch/README.md).
+
+## Built for payroll. Ready for any payout.
+
+Payroll is the first use case because it is where public payments hurt most: one payer, many recipients who know each other, every month. But nothing in the rail is specific to salaries. Any payment that goes from one place to many names works the same way today: resolve the names, derive a fresh address per line, pay and announce in one transaction.
+
+- Dividends and revenue share
+- Token and equity allocations: vesting unlocks, stock and option settlements, investor distributions
+- Vendor and supplier payments
+- Grants and bounties
+- Prizes and airdrops
+- Tips, donations and creator payouts
+- Agents paying agents by name ([Agents](#agents-mcp))
+
+The SDK already treats these as one thing. [`packages/sdk/src/distribute.ts`](packages/sdk/src/distribute.ts) plans any distribution from a payer and a list of recipients, with presets for `payroll`, `dividend` (pro rata by largest remainder, so the allocations sum exactly to the total) and `grant` (checked against a budget), with `vesting` as a kind planned the same way. [`soapay distribute`](apps/cli) runs one from a CSV, dry run by default, and [`examples/dividend-run.ts`](examples/dividend-run.ts) and [`examples/grant-round.ts`](examples/grant-round.ts) show the same rail paying a cap table and a grant round.
+
+## Not another stealth wallet
+
+Fluidkey and Umbra use the same ERC-5564 and ERC-6538 standards, and both hide your wallet from strangers. They are wallets for an individual receiving payments: a server derives your addresses at name resolution and holds your viewing key, so it sees every payment you receive, and it never touches the batch, which is where a coworker reads your salary. Soapay is the rail for the payer side of the same standards. The sender's browser derives every address and throws the ephemeral key away, only you hold your viewing key, and nothing of ours sees more than public chain data. One transaction pays and announces every recipient, amounts are chunked and sorted so per-transaction totals never leak, a consolidation guard and a timing queue keep spends from linking your addresses, a compliant exit through Privacy Pools lets you cash out, and everything rebuilds from your seed with the public SDK. Row by row: [Compared with Fluidkey](#compared-with-fluidkey).
+
+## Contents
+
+**The product**
+- [Who sees what you earn?](#who-sees-what-you-earn)
+- [Built for payroll. Ready for any payout.](#built-for-payroll-ready-for-any-payout)
+- [Not another stealth wallet](#not-another-stealth-wallet)
+- [Screens](#screens)
+- [Compared with Fluidkey](#compared-with-fluidkey)
+
+**How it's built**
+- [What's here](#whats-here)
+- [Threat model](#threat-model)
+- [How it works](#how-it-works)
+- [Contracts](#contracts)
+- [Repository](#repository)
+
+**Integrations**
+- [Uniswap: convert salary in place](#uniswap-integration)
+- [ENSv2: names and key rotation](#ensv2-integration)
+- [Agents (MCP)](#agents-mcp)
+- [World ID: attested recovery](#world-id-integration)
+
+**Status**
+- [Tests](#tests)
+- [Roadmap](#roadmap)
+- [Known gaps](#known-gaps)
+- [Getting started](#getting-started)
+
+**Documents**
+- [Pitch](pitch/README.md) · [PRD](PRD.md) · [Design brief](DESIGN_BRIEF.md) · [Privacy model](docs/privacy-model.md) · [Demo flow with screenshots](docs/demo-flow.md)
+- [StealthDisperse plan](contracts/PLAN.md) · [MVP spec](docs/mvp-spec.md) · [PRD analysis](docs/prd-analysis.md) · [Decision log](docs/decision-log.md) · [Testnet deployment](docs/testnet-deployment.md)
 
 ## What's here
 
@@ -76,6 +128,32 @@ The employee app scans the Announcer, finds only its own lines, and shows live b
 ![Employee app: 7,951 USDC across 19 addresses, each row a 500 USDC chunk from Acme Robotics](docs/demo-screens/r08-payments.png)
 
 Every screen of both apps, in demo order: [`docs/demo-flow.md`](docs/demo-flow.md) and [`docs/demo-screens`](docs/demo-screens).
+
+## Compared with Fluidkey
+
+Both are built on ERC-5564 and ERC-6538, and both hide your wallet from strangers. The difference is the batch and the server. Fluidkey never touches the payroll batch, which is where a coworker reads your salary, and it has to see every payment you receive to work. Soapay hides the salary from the coworker, and nobody but you can see what you receive.
+
+| | [Fluidkey](https://docs.fluidkey.com/readme/frequently-asked-questions/) | Soapay |
+| --- | --- | --- |
+| Who it's for | Individuals receiving payments | Teams paying groups: payroll, contributors, grants |
+| Hides your wallet from strangers | Yes | Yes |
+| Hides your salary from a coworker in the same batch | No | Yes |
+| Who derives your stealth address | Fluidkey's server, at name resolution | The sender's browser; the ephemeral key is thrown away |
+| Who holds your viewing key | Fluidkey | Only you |
+| What the company's server can see | Every payment you receive | Nothing beyond public chain data |
+| What your employer learns | n/a | Name → stealth address → amount, never your main wallet |
+| Batch payments | No | One transaction, N recipients, pays and announces atomically |
+| Amounts in the batch | Visible per person | Split into identical chunks, sorted so per-tx totals never leak |
+| Spending | Stealth Safes with sponsored gas | Plain EOA, EIP-7702 on first spend, gas in USDC via the Circle Paymaster |
+| Receivable from any wallet by name | Yes | In the sender app; gateway mode for other wallets is on the roadmap |
+| Consolidation guard | No | Cluster graph, labels, block on identifiable destinations, timing queue |
+| Compliant exit | No | Privacy Pools via CCTP, screened by an association set |
+| Swap without linking | No | In place, inside the stealth address, placeholder quote |
+| Key rotation | Not documented | World ID attested; the employer's app accepts it automatically |
+| Recovery without the company | Addresses | Everything: addresses, ledger, pool secrets, from the seed and the public SDK |
+| Agents | No | MCP server, `.soapay.eth` names with ENSIP-26 records |
+| Chains | 7 mainnets plus a Near intents bridge | Base Sepolia today, Base first |
+| Fiat ramps | Yes | No |
 
 ## Tests
 
