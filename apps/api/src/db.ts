@@ -134,6 +134,20 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX invites_label ON invites(label, expires_at);
   `,
+  // Testnet welcome drop (POST /faucet, D-52): one claim per wallet, ever.
+  `
+  CREATE TABLE faucet_claims (
+    address       TEXT PRIMARY KEY,       -- checksummed wallet that opened the company app
+    status        TEXT NOT NULL,          -- pending | sent | failed
+    usdc_amount   TEXT NOT NULL,          -- base units, decimal string
+    usdc_tx       TEXT,
+    eth_wei       TEXT,                   -- decimal string; null when no ETH was sent
+    eth_tx        TEXT,
+    created_at    INTEGER NOT NULL,
+    updated_at    INTEGER NOT NULL
+  );
+  CREATE INDEX faucet_claims_created ON faucet_claims(created_at);
+  `,
 ];
 
 export function migrate(db: Db): void {
