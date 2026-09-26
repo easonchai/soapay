@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { j, makeTestApp } from "./helpers.js";
 
 const STEALTH = "0x1234567890123456789012345678901234567890";
+const PLACEHOLDER = "0x00000000000000000000000000000000000f1a7e";
 
 function upstream(status = 200, json: unknown = { requestId: "r1", quote: { ok: true } }) {
   return vi.fn(async (_url: string | URL | Request, _init?: RequestInit) => Response.json(json, { status }));
@@ -15,11 +16,11 @@ const post = (t: ReturnType<typeof makeTestApp>, path: string, body: unknown, he
   });
 
 describe("POST /uniswap/:endpoint (Trading API proxy)", () => {
-  it("forwards quote/swap/check_approval with the server's key, passing status and body through", async () => {
+  it("forwards quote with the server's key, passing status and body through", async () => {
     const f = upstream();
     const t = makeTestApp({ env: { UNISWAP_API_KEY: "secret-key" }, uniswapFetch: f as unknown as typeof fetch });
-    const body = { type: "EXACT_INPUT", swapper: STEALTH, recipient: STEALTH, amount: "1" };
-    for (const ep of ["quote", "swap", "check_approval"]) {
+    const body = { type: "EXACT_INPUT", swapper: PLACEHOLDER, amount: "1" };
+    for (const ep of ["quote"]) {
       const res = await post(t, `/uniswap/${ep}`, body, {
         "x-universal-router-version": "2.1.2",
         "x-agent-info": '{"decision_origin":"human_mediated"}',
@@ -29,11 +30,7 @@ describe("POST /uniswap/:endpoint (Trading API proxy)", () => {
       expect(res.status).toBe(200);
       expect(await j(res)).toEqual({ requestId: "r1", quote: { ok: true } });
     }
-    expect(f.mock.calls.map((c) => c[0])).toEqual([
-      "https://trade-api.gateway.uniswap.org/v1/quote",
-      "https://trade-api.gateway.uniswap.org/v1/swap",
-      "https://trade-api.gateway.uniswap.org/v1/check_approval",
-    ]);
+    expect(f.mock.calls.map((c) => c[0])).toEqual(["https://trade-api.gateway.uniswap.org/v1/quote"]);
     const init = f.mock.calls[0]![1]!;
     expect(init.headers).toEqual({
       "content-type": "application/json",
@@ -61,10 +58,12 @@ describe("POST /uniswap/:endpoint (Trading API proxy)", () => {
     expect(f).not.toHaveBeenCalled();
   });
 
-  it("allows only the three endpoints, JSON bodies and a capped size", async () => {
+  it("allows only /quote (D-27: /swap and /check_approval would name the payer), JSON bodies and a capped size", async () => {
     const f = upstream();
     const t = makeTestApp({ env: { UNISWAP_API_KEY: "k", UNISWAP_BODY_LIMIT_BYTES: "512" }, uniswapFetch: f as unknown as typeof fetch });
     expect((await post(t, "/uniswap/order", {})).status).toBe(404);
+    expect((await post(t, "/uniswap/swap", {})).status).toBe(404);
+    expect((await post(t, "/uniswap/check_approval", {})).status).toBe(404);
     expect((await post(t, "/uniswap/..%2Fquote", {})).status).toBe(404);
     expect((await t.app.request("/uniswap/quote")).status).toBe(404);
     expect((await post(t, "/uniswap/quote", "not json")).status).toBe(400);
@@ -86,7 +85,7 @@ describe("POST /uniswap/:endpoint (Trading API proxy)", () => {
       env: { UNISWAP_API_KEY: "secret-key" },
       uniswapFetch: (async () => Promise.reject(new Error("ECONNRESET"))) as unknown as typeof fetch,
     });
-    const res = await post(t, "/uniswap/swap", { swapper: STEALTH });
+    const res = await post(t, "/uniswap/quote", { swapper: STEALTH });
     expect(res.status).toBe(502);
     const logged = JSON.stringify(t.logs);
     expect(logged).not.toContain(STEALTH.slice(2));

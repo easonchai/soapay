@@ -68,22 +68,41 @@ describe("createSdkSwapService", () => {
     expect(s.ready).toBe(false);
   });
 
-  it("quotes through the API proxy (no key in the request) when one is configured", async () => {
-    const calls: { url: string; headers: Record<string, string> }[] = [];
+  it("on Base mainnet, quotes through the API proxy (no key, no stealth address in the request)", async () => {
+    const calls: { url: string; headers: Record<string, string>; body: string }[] = [];
     const s = createSdkSwapService({
-      chainId: CHAIN,
+      chainId: 8453,
       bundlerUrl: "http://bundler",
       publicClient: {} as never,
       proxyUrl: "https://api.soapay.test/uniswap/",
       fetch: async (url, init) => {
-        calls.push({ url, headers: init.headers });
+        calls.push({ url, headers: init.headers, body: init.body });
         return { ok: false, status: 503, json: async () => ({}), text: async () => "proxy down" };
       },
     });
     expect(s.route).toMatch(/Trading API/);
-    await expect(s.quote({ stealthKey: generatePrivateKey(), tokenOut: NATIVE_ETH, amountIn: 1_000_000n, slippageBps: 50 })).rejects.toThrow();
+    const stealthKey = generatePrivateKey();
+    await expect(s.quote({ stealthKey, tokenOut: NATIVE_ETH, amountIn: 1_000_000n, slippageBps: 50 })).rejects.toThrow();
     expect(calls[0]?.url).toBe("https://api.soapay.test/uniswap/quote");
     expect(calls[0]?.headers["x-api-key"]).toBeUndefined();
+    expect(calls[0]?.body.toLowerCase()).not.toContain(privateKeyToAccount(stealthKey).address.slice(2).toLowerCase());
+  });
+
+  it("on Base Sepolia, never calls the proxy: the quote is on-chain", async () => {
+    const calls: string[] = [];
+    const s = createSdkSwapService({
+      chainId: CHAIN,
+      bundlerUrl: "http://bundler",
+      publicClient: {} as never,
+      proxyUrl: "https://api.soapay.test/uniswap",
+      fetch: async (url) => {
+        calls.push(url);
+        return { ok: false, status: 500, json: async () => ({}), text: async () => "" };
+      },
+    });
+    expect(s.route).toMatch(/on-chain/);
+    await expect(s.quote({ stealthKey: generatePrivateKey(), tokenOut: NATIVE_ETH, amountIn: 1_000_000n, slippageBps: 50 })).rejects.toThrow();
+    expect(calls).toEqual([]);
   });
 
   it("falls back to the Universal Router without a proxy", () => {

@@ -4,19 +4,23 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { AppDeps } from "../app.js";
 import { ApiError, enforceRateLimits, errorBody } from "../util.js";
 
-/** The only Trading API endpoints the recipient app needs (packages/sdk/src/swap.ts). */
-const ENDPOINTS = new Set(["quote", "swap", "check_approval"]);
+/**
+ * The only Trading API endpoint the SDK uses (packages/sdk/src/swap.ts). `/swap` and
+ * `/check_approval` are closed: their bodies would name the paying address (D-27).
+ */
+const ENDPOINTS = new Set(["quote"]);
 /** Request headers passed upstream; everything else (cookies, origin, x-api-key…) is dropped. */
 const FORWARD_HEADERS = ["x-universal-router-version", "x-agent-info", "x-permit2-disabled"];
 const UPSTREAM_TIMEOUT_MS = 15_000;
 
 /**
- * Uniswap Trading API proxy: POST /uniswap/{quote|swap|check_approval} → {UNISWAP_API_URL}/{endpoint}
- * with `x-api-key: UNISWAP_API_KEY`. The key never ships in a client bundle, and the browser
- * avoids the Trading API's CORS rules. The SDK uses it as `apiUrl: "<api>/uniswap"`.
+ * Uniswap Trading API proxy: POST /uniswap/quote → {UNISWAP_API_URL}/quote with
+ * `x-api-key: UNISWAP_API_KEY`. The key never ships in a client bundle, and the browser avoids the
+ * Trading API's CORS rules. The SDK uses it as `apiUrl: "<api>/uniswap"`.
  *
- * Bodies carry the stealth address (swapper and recipient), so they are never logged.
- * Without a key it answers 503 `uniswap_disabled`, and the SDK falls back to the Universal Router.
+ * The SDK quotes for a random placeholder swapper and refuses to send the stealth address
+ * (`assertNoStealthAddress`), so this proxy never sees one. Bodies are still never logged.
+ * Without a key it answers 503 `uniswap_disabled`, and the SDK falls back to the on-chain path.
  */
 export function uniswapRoutes(deps: AppDeps): Hono {
   const r = new Hono();

@@ -117,8 +117,8 @@ export function Settings() {
           <Checkbox
             checked={draft.swapViaApi}
             onChange={(v) => setDraft({ ...draft, swapViaApi: v })}
-            label="Convert through the Soapay API's Uniswap proxy"
-            description="Better routes via the Uniswap Trading API. Off = quote directly from the Universal Router."
+            label="Use Uniswap Trading API quotes (Base mainnet)"
+            description="Better routes. The quote uses a random stand-in address, never yours, and the swap is built on this device. Off, or on testnet = quote on-chain."
           />
           <div className="actions">
             <Button type="submit">{saved ? "Saved" : "Save"}</Button>

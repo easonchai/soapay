@@ -155,7 +155,7 @@ export function createServer(ctx: Ctx): McpServer {
     {
       title: "Swap in place",
       description:
-        "Swap received USDC in one stealth address into ETH or a token that stays in the same address (Uniswap via the Soapay API). " +
+        "Swap received USDC in one stealth address into ETH or a token that stays in the same address (Uniswap; neither Soapay nor Uniswap sees the stealth address). " +
         "Dry run first, then { confirm: planId }; the confirm refuses to go below the dry run's minimum output.",
       inputSchema: {
         tokenOut: z.string().min(3).max(42).optional().describe('"ETH" or a token address'),
