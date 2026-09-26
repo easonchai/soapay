@@ -18,6 +18,7 @@ import {
   type RunStatus,
 } from "../lib/run.js";
 import { wagmiRecheckDeps } from "../lib/wallet.js";
+import { demoRecheckDeps } from "../lib/demoChain.js";
 import { reverifyEmployees } from "./usePayRun.js";
 import { useStore } from "./store.js";
 
@@ -73,9 +74,9 @@ export function useRunActions(runId: string | null): RunActions {
     () =>
       guard(async () => {
         if (!run) return;
-        await upsertRun(await recheckRun(run, wagmiRecheckDeps(config, run.chainId)));
+        await upsertRun(await recheckRun(run, app.demo ? demoRecheckDeps() : wagmiRecheckDeps(config, run.chainId)));
       }),
-    [config, guard, run, upsertRun],
+    [app.demo, config, guard, run, upsertRun],
   );
 
   const confirmNotSent = useCallback(

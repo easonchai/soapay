@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import { Bloom, Collapse, CountUp, ErrorLine, NavyPanel, PageHead, Presence, Reveal, Stagger, StaggerItem, Toggle, toast } from "@soapay/ui";
 import { smallTeamWarning } from "@soapay/sdk";
@@ -29,6 +29,8 @@ export type PayRunPageProps = {
   /** Testnet: small example amounts (D-47). */
   testnet?: boolean;
   onOpenSettings?(): void;
+  /** Test-USDC affordance (pages/Faucet.tsx), shown under the total; nothing on mainnet. */
+  faucet?: ReactNode;
 };
 
 const trimZeros = (s: string) => (s.includes(".") ? s.replace(/\.?0+$/, "") : s);
@@ -40,7 +42,7 @@ const COLS = "32px 1.5fr 1fr 70px 1.6fr";
  * salaries; "Resolve names" re-verifies every pin (usePayRun.verify); "Paste rows" imports
  * `name, amount[, label]` into the roster (useRoster.importCsv).
  */
-export function PayRunPage({ run, roster, wallet, payPath, chainName, onReview, onOpenRecipients, chunk: chunkProp, testnet = false, onOpenSettings }: PayRunPageProps) {
+export function PayRunPage({ run, roster, wallet, payPath, chainName, onReview, onOpenRecipients, chunk: chunkProp, testnet = false, onOpenSettings, faucet }: PayRunPageProps) {
   const chunk = chunkProp ?? (testnet ? TESTNET_CHUNK_USDC : DEFAULT_CHUNK_USDC);
   const [exA, exB] = exampleSalaries(testnet);
   // Per run and ON by default (D-31); turning it off is never remembered for the next run.
@@ -371,6 +373,7 @@ export function PayRunPage({ run, roster, wallet, payPath, chainName, onReview, 
               </div>
             </div>
           </NavyPanel>
+          {faucet}
           {!enough && <Notice tone="warn">Wallet USDC is below the total. A Safe export pays from the Safe instead.</Notice>}
           {smallTeam && <Notice tone="warn">{smallTeam}</Notice>}
 

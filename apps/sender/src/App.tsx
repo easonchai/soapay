@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Fade, Presence, TopBar } from "@soapay/ui";
 import { CHAINS, PARENT_NAME, isTestnetChain } from "@soapay/sdk";
-import { getChunkSize, getOrgName, setChunkSize, setOrgName, txUrl } from "./config.js";
+import { getChunkSize, getOrgName, setChunkSize, setDemoFlag, setOrgName, txUrl } from "./config.js";
 import { useStore } from "./hooks/store.js";
 import { usePayPath, useWallet } from "./hooks/usePayPath.js";
 import { usePayRun } from "./hooks/usePayRun.js";
@@ -15,11 +15,13 @@ import { useRunOnChain } from "./hooks/useRunOnChain.js";
 import { useSettings } from "./hooks/useSettings.js";
 import { useWalletBalances } from "./hooks/useWalletBalances.js";
 import { formatUsdc } from "./lib/amount.js";
+import { demoLedger } from "./lib/demoChain.js";
 import { MIN_PASSPHRASE_LENGTH, type VaultMode } from "./lib/vault.js";
 import { employeeWallets, historyCsv } from "./lib/wallets.js";
 import type { Denomination } from "./lib/run.js";
 import { HistoryPage } from "./pages/HistoryPage.js";
 import { InvitesPanel } from "./pages/InvitesPanel.js";
+import { Faucet } from "./pages/Faucet.js";
 import { Landing } from "./pages/Landing.js";
 import { PayRunPage } from "./pages/PayRunPage.js";
 import { RecipientsPage } from "./pages/RecipientsPage.js";
@@ -53,6 +55,17 @@ const session = {
   },
 };
 
+/** Testnet-sized copy and confirmations (D-47) apply to a real testnet, not to demo mode's mainnet-sized sample data. */
+function realTestnet(app: { chainId: number; demo: boolean }): boolean {
+  return isTestnetChain(app.chainId) && !app.demo;
+}
+
+/** Test-USDC affordance for the current chain (demo button, testnet faucet links, nothing on mainnet). */
+function FaucetSlot({ usdcBalance }: { usdcBalance: bigint | null }) {
+  const { app } = useStore();
+  return <Faucet chainId={app.chainId} demo={app.demo} usdcBalance={usdcBalance} onFaucet={() => demoLedger.faucet()} />;
+}
+
 function RecipientsContainer({ go, org }: { go(r: Route): void; org: string }) {
   const { runs, app, updateEmployees } = useStore();
   const roster = useRoster();
@@ -78,7 +91,7 @@ function RecipientsContainer({ go, org }: { go(r: Route): void; org: string }) {
         )
       }
       onPay={() => go({ page: "pay" })}
-      invitesPanel={<InvitesPanel {...invites} parentName={PARENT_NAME} defaultOrg={org} testnet={isTestnetChain(app.chainId)} />}
+      invitesPanel={<InvitesPanel {...invites} parentName={PARENT_NAME} defaultOrg={org} testnet={realTestnet(app)} />}
     />
   );
 }
@@ -107,7 +120,7 @@ function PayRunContainer({ go, chunk }: { go(r: Route): void; chunk: string }) {
     return <SafeExportPage chunks={run.safeChunks} onDownload={run.downloadSafeChunk} onOpenRun={() => go({ page: "run", id })} onNewRun={run.reset} />;
   }
   if (run.plan && run.stage === "planned" && !editing) {
-    return <ReviewPage run={run} plan={run.plan} wallet={wallet} payPath={payPath} chainName={app.chain.name} testnet={isTestnetChain(app.chainId)} onBack={() => setEditing(true)} />;
+    return <ReviewPage run={run} plan={run.plan} wallet={wallet} payPath={payPath} chainName={app.chain.name} testnet={realTestnet(app)} onBack={() => setEditing(true)} />;
   }
   return (
     <PayRunPage
@@ -118,8 +131,9 @@ function PayRunContainer({ go, chunk }: { go(r: Route): void; chunk: string }) {
       chainName={app.chain.name}
       onOpenRecipients={() => go({ page: "roster" })}
       chunk={chunk}
-      testnet={isTestnetChain(app.chainId)}
+      testnet={realTestnet(app)}
       onOpenSettings={() => go({ page: "settings" })}
+      faucet={<FaucetSlot usdcBalance={payPath.funding?.usdcBalance ?? null} />}
       onReview={(d: Denomination | null) => {
         setEditing(false);
         // Re-plans with fresh addresses every time; a plan is never reused.
@@ -169,8 +183,10 @@ function SettingsContainer({
 }) {
   const s = useSettings();
   const { app, vaultMode, lock, destroyVault, employees, invites, runs } = useStore();
+  const payPath = usePayPath();
   return (
     <SettingsPage
+      faucet={<FaucetSlot usdcBalance={payPath.funding?.usdcBalance ?? null} />}
       {...s}
       app={app}
       chainName={chainName}
@@ -206,6 +222,13 @@ function VaultContainer() {
   );
 }
 
+/** Clears the session flag and reloads at `/` without `?demo` (wagmi, services and the store are built once per page load). */
+function exitDemo() {
+  setDemoFlag(false);
+  demoLedger.reset();
+  location.assign(location.pathname);
+}
+
 function Banners() {
   const { app } = useStore();
   const wallet = useWallet();
@@ -218,7 +241,17 @@ function Banners() {
       </Notice>,
     );
   }
-  if (app.mockEns) {
+  if (app.demo) {
+    items.push(
+      <Notice key="demo" tone="info">
+        <b>Demo mode</b> · sample data, nothing is sent on-chain. Balances reset when you close the tab.{" "}
+        <button className="btn-text" onClick={exitDemo}>
+          Exit demo
+        </button>
+      </Notice>,
+    );
+  }
+  if (app.mockEns && !app.demo) {
     items.push(
       <Notice key="mock" tone="info">
         Dev mock mode: names resolve to generated demo keys; the demo wallet can&apos;t sign. Invites are signed by a throwaway key and flip to

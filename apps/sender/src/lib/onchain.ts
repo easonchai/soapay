@@ -50,3 +50,39 @@ export function plannedRows(run: RunRecord): Omit<OnChainRow, "txHash" | "line">
     .map((l) => ({ stealthAddress: l.stealthAddress, amount: l.amount, name: l.name }))
     .sort((a, b) => (BigInt(a.stealthAddress) < BigInt(b.stealthAddress) ? -1 : 1));
 }
+
+/**
+ * Demo mode: the batches a receipt would have yielded, rebuilt from the record's landed chunks (one
+ * "transaction" per landed chunk, lines sorted by address as StealthDisperse emits them). Same shape
+ * as `payRunBatchFromReceipt`, with no log positions or ephemeral keys (nothing was mined).
+ */
+export function demoBatches(run: RunRecord): PayRunBatch[] {
+  const caller = run.stealthDisperse ?? run.payer ?? "0x0000000000000000000000000000000000000000";
+  const out: PayRunBatch[] = [];
+  for (const a of run.attempts) {
+    for (const c of a.chunks) {
+      if (c.status !== "landed" || !c.txHash) continue;
+      const lines = [...c.lines].sort((x, y) => (BigInt(x.stealthAddress) < BigInt(y.stealthAddress) ? -1 : 1));
+      out.push({
+        txHash: c.txHash,
+        blockNumber: 0n,
+        from: run.payer ?? caller,
+        to: run.stealthDisperse ?? null,
+        token: run.token,
+        lines: lines.map((l, i) => ({
+          index: i,
+          stealthAddress: l.stealthAddress,
+          amount: l.amount,
+          payer: run.payer ?? null,
+          caller,
+          ephemeralPubKey: "0x",
+          metadata: "0x",
+          logIndex: i,
+        })),
+        total: c.amount,
+        unfunded: 0,
+      });
+    }
+  }
+  return out;
+}

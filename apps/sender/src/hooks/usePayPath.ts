@@ -1,8 +1,10 @@
 // The connected wallet, how it pays (paypath.ts) and whether it can fund a run.
 // UI-agnostic: returns data and actions only.
+import { useSyncExternalStore } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAccount, useConfig, useConnect, useDisconnect } from "wagmi";
 import type { Address } from "viem";
+import { demoFunding, demoLedger, demoProbe } from "../lib/demoChain.js";
 import { probeAccount, readFunding, type AccountProbe, type Funding } from "../lib/wallet.js";
 import { useStore } from "./store.js";
 
@@ -48,7 +50,9 @@ export function usePayPath(): PayPathState {
   const { app } = useStore();
   const config = useConfig();
   const { address } = useAccount();
-  const enabled = !!address;
+  const enabled = !!address && !app.demo;
+  // Demo: a plain account paying through StealthDisperse, funded from the in-memory ledger.
+  const ledger = useSyncExternalStore(demoLedger.subscribe, demoLedger.get);
   const probe = useQuery({
     queryKey: ["probe", app.chainId, address, app.stealthDisperse],
     queryFn: () => probeAccount(config, app, address!),
@@ -62,6 +66,16 @@ export function usePayPath(): PayPathState {
     staleTime: 15_000,
   });
   const err = probe.error ?? funding.error;
+  if (app.demo) {
+    return {
+      probe: address ? demoProbe(app) : null,
+      funding: address ? demoFunding(ledger) : null,
+      loading: false,
+      error: null,
+      disperseConfigured: true,
+      refresh: () => undefined,
+    };
+  }
   return {
     probe: probe.data ?? null,
     funding: funding.data ?? null,
