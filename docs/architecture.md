@@ -365,6 +365,30 @@ We don't enter "World ID for Agents". Our agents are payees, and no agent action
 
 **Uniswap: "Best Uniswap Stack Contribution".** No longer targeted (owner, 09-26; D-53): the employee app's Convert screen is gone. The SDK still uses the **Uniswap API** for quotes and executes on **v2/v3 pools** through the Universal Router and Permit2 (MCP `swap_in_place`), and `FEEDBACK.md` keeps the live findings.
 
+## FAQ
+
+**How is the company app different from `soapay distribute` (CLI)?** Same SDK, same on-chain path (StealthDisperse, announcements, pins, the World ID rule). The **company app** is for a payroll team: wallet login, invites, a roster that's resolved and pinned with visible alerts, a review screen, smart-wallet and Safe paths, history. The **CLI** is for scripts: a CSV in, presets (`payroll`, `dividend`, `grant`, `vesting`), a key from the environment, pins in `.soapay/pins.json`, and exit code 3 when a name changed without World ID.
+
+**Is the MCP server only for payees?** No. Its tools cover both sides: `create_agent_identity`, `scan`, `balance`, `spend` (receive and spend) and `resolve_name`, `pay` (pay others by name), plus `get_test_funds`. The demo shows an agent as a payee because that's the story; an agent can also pay.
+
+**What does the company app's Settings do?** Mostly advanced: company name, network and RPCs, a StealthDisperse override, and a read-out of what this build uses (the test USDC, the StealthDisperse contract, the **pinned attester** (the World ID attester whose attestations the app trusts), the API, the invite-link base). You don't need it for the demo.
+
+**What is ERC-6538 for?** The standard on-chain registry that maps an account (our throwaway registrant) to a stealth meta-address, on Base. ENS is the human-readable, employee-controlled pointer on Sepolia; ERC-6538 is the chain-local canonical copy that stealth tooling reads. The payer cross-checks the two before pinning, so tampering with either one is caught. It also lets someone pay a registrant without ENS.
+
+**What does the per-employee Permissioned Resolver do?** It holds that one name's records. ENSv2 permissions are per resolver, so a resolver of its own is what lets us say "only this employee's key can write `stealth`", without anyone being able to overwrite someone else's record.
+
+**How does StealthDisperse work?** One call pays every line: for each line it `transferFrom`s the employer to the stealth address and calls the canonical ERC-5564 Announcer with the one-time public key and metadata. Lines must be strictly ascending by address (no duplicates; the order says nothing about names). It holds no funds and no state, packs each line into 64 bytes, and runs up to 350 lines per transaction. `payWithPermit` does the approval in the same transaction.
+
+**What can the 7702 spend flow do?** Any list of calls from the stealth address, executed as a smart account in one userOp: transfers, approvals, a swap, a Privacy Pools deposit. Gas is sponsored on testnet, or paid in USDC by the Circle paymaster on mainnet. The app uses it for Send (and for the exit's legs on mainnet).
+
+**How does the shielded exit work?** (Mainnet design; hidden on the testnet demo; ran live once on 2026-09-26.) Each stealth address exits on its own: USDC is bridged with CCTP to the same address on Ethereum, deposited into Privacy Pools, screened by the pool's association set provider, then withdrawn to your wallet through a relayer or directly. The withdrawal proves it comes from an approved deposit without saying which one, so your main wallet isn't linked to your salary lines.
+
+**What kind of recovery does World ID protect?** Key rotation: replacing a leaked or lost key (new keys from the recovery phrase, or a fresh account) and getting the employer's app to follow automatically. World ID proves it's the same person; without it, the employer approves by hand.
+
+**Is the recovery kit the same as the recovery phrase?** Yes. The kit is a small file with the 12-word phrase plus restore instructions: the same secret, just easier to save. It recovers every payment ever received, even if Soapay disappears.
+
+**How are funds already received protected?** Only by keeping the recovery kit (the phrase) secret. World ID protects **future** pay: a thief with the phrase can rewrite the ENS record, but the employer's app won't follow. A thief with the phrase can still spend what's already in the stealth addresses, so after a leak, rotate and move funds promptly.
+
 ## Who sees what
 
 | Party | Sees | Can't see |
