@@ -1,3 +1,6 @@
+// Moved from apps/sender (was lib/paypath.ts). Order: Safe export for Safes, else EIP-5792 atomic
+// batch > StealthDisperse. There is deliberately no non-atomic "sequential" mode: CK's M1 fallback
+// (announce, then transfer, one tx each) is dropped per PRD invariant 3 and decision-ck-integration.
 // Picks how this employer's wallet pays a run (CLAUDE.md design decisions):
 // - atomic batching (smart account, or an EOA the wallet upgrades with EIP-7702)
 //   → one EIP-5792 `wallet_sendCalls` per chunk: [USDC.transfer, Announcer.announce] × N;

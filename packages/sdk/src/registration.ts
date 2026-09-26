@@ -9,9 +9,11 @@ import {
   isAddress,
   isAddressEqual,
   parseAbi,
+  parseAbiItem,
   recoverTypedDataAddress,
   type Address,
   type Hex,
+  type PublicClient,
   type TypedDataDomain,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -239,4 +241,42 @@ export async function verifyNameClaim(
     // malformed signature
   }
   return { valid: false, reason: "bad-signature" };
+}
+
+// ---------------------------------------------------------------------------
+// Registration block recovery (ported from CK's M1 register.ts)
+// ---------------------------------------------------------------------------
+
+/** ERC-6538 `StealthMetaAddressSet(address indexed registrant, uint256 indexed schemeId, bytes stealthMetaAddress)`. */
+export const stealthMetaAddressSetEvent = parseAbiItem(
+  "event StealthMetaAddressSet(address indexed registrant, uint256 indexed schemeId, bytes stealthMetaAddress)",
+);
+
+/** Minimal client surface (any viem PublicClient fits). */
+export type RegistrationLogsClient = Pick<PublicClient, "getLogs" | "getBlockNumber">;
+
+/**
+ * First block in which `registrant` set a scheme-1 meta-address, for an account registered in another
+ * browser: the scanner starts there instead of the Announcer deployment block. One indexed log query;
+ * null when there is no such event; throws when the RPC refuses the range (the UI then asks for a block).
+ */
+export async function findRegistrationBlock(
+  client: RegistrationLogsClient,
+  registrant: Address,
+  fromBlock: bigint,
+  registry: Address = ERC6538_REGISTRY,
+): Promise<bigint | null> {
+  const toBlock = await client.getBlockNumber();
+  const logs = await client.getLogs({
+    address: registry,
+    event: stealthMetaAddressSetEvent,
+    args: { registrant, schemeId: SCHEME_ID_1 },
+    fromBlock,
+    toBlock,
+  });
+  let min: bigint | null = null;
+  for (const l of logs) {
+    if (l.blockNumber !== null && (min === null || l.blockNumber < min)) min = l.blockNumber;
+  }
+  return min;
 }

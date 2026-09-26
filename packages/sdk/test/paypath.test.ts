@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { atomicSupport, classifyAccountCode, selectPayPath, type PayPathInput } from "../src/lib/paypath.js";
+import { atomicSupport, classifyAccountCode, selectPayPath, type PayPathInput } from "../src/paypath.js";
 
 const DISPERSE = "0x1111111111111111111111111111111111111111" as const;
 const base: PayPathInput = {

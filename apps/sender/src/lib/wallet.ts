@@ -17,7 +17,7 @@ import {
 import type { Config } from "wagmi";
 import { erc20Abi, parseAbi, type Address, type Hash } from "viem";
 import type { BatchOutcome, ExecDeps, RecheckDeps } from "./execute.js";
-import { classifyAccountCode, selectPayPath, type AccountKind, type PayPath } from "./paypath.js";
+import { classifyAccountCode, selectPayPath, type AccountKind, type PayPath } from "@soapay/sdk";
 import type { AppConfig } from "../config.js";
 import type { InviteSigner } from "@soapay/sdk";
 
