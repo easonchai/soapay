@@ -230,6 +230,7 @@ export function App() {
     return (
       <Landing
         wallet={wallet}
+        employeeUrl={app.otherAppUrl}
         onLogin={() => {
           session.set(false);
           setLoggedOut(false);

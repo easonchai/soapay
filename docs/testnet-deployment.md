@@ -2,7 +2,7 @@
 
 ## Public demo (Railway, Aqua0 workspace, project `soapay`)
 
-- **Web:** https://soapay.up.railway.app (recipient app at `/`, sender app at `/sender/`, API proxied at `/api`)
+- **Web:** https://soapay.up.railway.app (landing + company app at `/`, employee app at `/app/`, API proxied at `/api`; the old `/sender/` and `/#/join` links redirect)
 - Services: `web` (`scripts/web.Dockerfile`, public origin baked in at build time) and `api` (`apps/api/Dockerfile`, volume at `/data`, reached privately at `api.railway.internal:8787`, no public domain).
 - The API secrets are Railway service variables (set from the local `.env`, never committed). The public API runs the strict default rate limits.
 - Redeploy after a merge: `railway up --service web` / `--service api` from the repo root (the project is linked), or use the Railway MCP `deploy`.

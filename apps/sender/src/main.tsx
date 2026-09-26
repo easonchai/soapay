@@ -13,6 +13,11 @@ import "./app.css";
 
 // Built once per page load; Settings reloads the page after saving.
 const app = resolveConfig();
+
+// Invite links from before the employee app moved to /app/ pointed at /#/join?…: forward them.
+if (typeof location !== "undefined" && location.hash.startsWith("#/join")) {
+  location.replace(app.recipientUrl.replace(/\/?$/, "/") + location.hash);
+}
 const wagmiConfig = createWagmiConfig(app);
 const services = createServices(app);
 const queryClient = new QueryClient();

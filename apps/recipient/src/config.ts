@@ -48,8 +48,8 @@ export function readEnv(env: Record<string, string | boolean | undefined> = impo
     mockApi: str("VITE_MOCK_API") === "1" || str("VITE_MOCK_API") === "true",
     l1RpcUrl: str("VITE_L1_RPC_URL"),
     swapViaApi: str("VITE_SWAP_VIA_API") !== "0" && str("VITE_SWAP_VIA_API") !== "false",
-    // Dev: the sender's dev server. Build: scripts/build-demo.sh serves the sender at /sender/.
-    otherAppUrl: str("VITE_OTHER_APP_URL") || (dev ? "http://localhost:5174" : "/sender/"),
+    // Dev: the sender's dev server. Build: scripts/build-demo.sh serves the company app (and landing) at /.
+    otherAppUrl: str("VITE_OTHER_APP_URL") || (dev ? "http://localhost:5174" : "/"),
   };
 }
 

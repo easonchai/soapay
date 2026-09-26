@@ -8,10 +8,12 @@ export type LandingProps = {
   wallet: Pick<WalletState, "isConnected" | "connectors" | "connecting" | "connectError">;
   /** Called on Login: clears a previous logout, then (if needed) the user picks a wallet. */
   onLogin(): void;
+  /** The employee app, for people who were invited (or already have an account). */
+  employeeUrl: string;
 };
 
 /** CK's hero-only landing (Marketing 5a). Login connects a wallet; App then shows the vault gate. */
-export function Landing({ wallet, onLogin }: LandingProps) {
+export function Landing({ wallet, onLogin, employeeUrl }: LandingProps) {
   const [choosing, setChoosing] = useState(false);
   const one = wallet.connectors.length === 1 ? wallet.connectors[0] : undefined;
 
@@ -76,7 +78,14 @@ export function Landing({ wallet, onLogin }: LandingProps) {
             ))}
           </div>
         )}
-        <p className="hint">{wallet.connectError ?? "Your wallet is your login. Nothing to sign up for."}</p>
+        <p className="hint">{wallet.connectError ?? "For companies: your wallet is your login. Nothing to sign up for."}</p>
+        <p className="hint" data-testid="employee-door">
+          Getting paid with Soapay?{" "}
+          <a href={employeeUrl} style={{ fontWeight: 500, textDecoration: "underline" }}>
+            Open your payments
+          </a>
+          . An invite link from your employer takes you straight there.
+        </p>
       </section>
       <div className="land-foot">
         <span>© 2026 Soapay</span>
