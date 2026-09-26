@@ -12,6 +12,7 @@
     "demo:setup-recovery": "pnpm --filter @soapay/examples exec tsx ../scripts/demo-setup-recovery.ts",
     "demo:seed-company": "pnpm --filter @soapay/examples exec tsx ../scripts/demo-seed-company.ts",
     "demo:attacker": "pnpm --filter @soapay/examples exec tsx ../scripts/demo-attacker.ts",
+    "demo:attacker-worldid": "pnpm --filter @soapay/examples exec tsx ../scripts/demo-attacker-worldid.ts",
     "demo:agent": "pnpm --filter @soapay/examples exec tsx ../scripts/demo-agent.ts",
     "demo:agent-live": "pnpm --filter @soapay/examples exec tsx ../scripts/demo-agent-live.ts",
     "demo:recovery-check": "pnpm --filter @soapay/examples exec tsx ../scripts/demo-recovery-check.ts",

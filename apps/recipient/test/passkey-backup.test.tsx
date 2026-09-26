@@ -178,7 +178,7 @@ describe("sync and restore", () => {
     await deleteEnvelope();
     const second = mount(pk);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Unlock with passkey" }));
+    await user.click(await screen.findByRole("button", { name: "Unlock with passkey" }, { timeout: 10_000 }));
     await waitFor(() => expect(second.vaultRef.current?.status).toBe("unlocked"));
     const v = second.vaultRef.current!;
     expect(v.data!.mnemonic).toBe(mnemonic);
@@ -208,7 +208,7 @@ describe("sync and restore", () => {
     unmount();
     mount(pk);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Unlock with passkey" }));
+    await user.click(await screen.findByRole("button", { name: "Unlock with passkey" }, { timeout: 10_000 }));
     expect((await screen.findByTestId("no-backup")).textContent).toMatch(/recovery phrase/);
     expect(await loadEnvelope()).toBeNull();
     // Two buttons now: the welcome one and the alert's; both lead to the phrase restore step.

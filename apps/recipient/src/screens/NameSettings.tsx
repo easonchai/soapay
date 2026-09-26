@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { KeyRound, ShieldCheck } from "lucide-react";
+import { KeyRound, ShieldCheck, ShieldX } from "lucide-react";
+import type { RotationRefusal } from "../features/rotation/refusal.js";
 import { Collapse, Copy, Fade, LogoLoader, Presence, toast } from "@soapay/ui";
 import { useRotation } from "../hooks/useRotation.js";
 import { useSessionRestore } from "../hooks/useSessionRestore.js";
@@ -310,8 +311,17 @@ export function NameSettings() {
                   </div>
                 )}
                 {s.step === "human" && (
-                  <HumanCheck mode="rotate" apiUrl={svc.settings.apiUrl} {...(r.sessionId ? { sessionId: r.sessionId } : {})} signal={s.draft.signal} onResult={(res) => void r.onHuman(res)} onCancel={r.cancel} />
+                  <HumanCheck
+                    mode="rotate"
+                    apiUrl={svc.settings.apiUrl}
+                    {...(r.sessionId ? { sessionId: r.sessionId } : {})}
+                    signal={s.draft.signal}
+                    onResult={(res) => void r.onHuman(res)}
+                    onError={r.onHumanError}
+                    onCancel={r.cancel}
+                  />
                 )}
+                {s.step === "refused" && <RotationRefused refusal={s.refusal} name={r.name.name} currentMeta={r.currentMeta} onBack={r.cancel} />}
                 {s.step === "working" && <RotationProgress stage={s.stage} />}
                 {s.step === "done" && (
                   <Alert variant="success" title="Keys rotated">
@@ -354,6 +364,43 @@ export function NameSettings() {
         )}
       </div>
     </>
+  );
+}
+
+const shortMeta = (m: string) => (m.length > 34 ? `${m.slice(0, 17)}…${m.slice(-8)}` : m);
+
+/**
+ * The World ID step refused a key change (docs/worldid.md, "Failure path"). Prominent on purpose: this
+ * is what someone holding a stolen recovery phrase sees when their own World ID isn't the linked one.
+ */
+export function RotationRefused({ refusal, name, currentMeta, onBack }: { refusal: RotationRefusal; name: string; currentMeta: string; onBack: () => void }) {
+  const unavailable = refusal.kind === "unavailable";
+  return (
+    <div className="space-y-3" data-testid="rotation-refused" data-code={refusal.code} data-kind={refusal.kind}>
+      <Alert
+        variant={unavailable ? "warning" : "destructive"}
+        title={
+          <span className="flex items-center gap-2">
+            <ShieldX className="size-4 shrink-0" aria-hidden /> {refusal.title}
+          </span>
+        }
+      >
+        <p>{refusal.reason}</p>
+        <p className="mt-2">
+          <strong>Nothing changed.</strong> {name} still points at the current keys (
+          <span className="font-mono text-xs" data-testid="refused-current-meta">
+            {shortMeta(currentMeta)}
+          </span>
+          ). No attestation was signed and no new keys were saved, so the employer's app keeps paying the pinned keys.
+        </p>
+        <p className="mt-2 text-xs opacity-80">
+          {refusal.source === "api" ? "Soapay API" : "World ID app"} answered: <span className="font-mono">{refusal.code}</span>
+        </p>
+      </Alert>
+      <Button variant="outline" onClick={onBack}>
+        Back
+      </Button>
+    </div>
   );
 }
 

@@ -70,6 +70,32 @@ Nothing in Soapay depends on World ID being available. It only decides whether a
 
 What it shows, and what it doesn't: World ID protects **future** salary, because the payer follows a record change only with the same person's session proof. A stolen phrase still controls funds already received; the recovery kit's safety (keep the phrase offline, move funds and rotate on any suspicion) covers that.
 
+## Failure path
+
+The scenario: a thief has the employee's recovery phrase, restores the account in their own browser (the app reads the name's session id back, D-64) and tries **Rotate to new keys**, confirming with **their own** World ID.
+
+**What is where.** The name's `stealth` record is **on-chain** (ENSv2 on Sepolia; the registrant key, and so the stolen phrase, can rewrite it). The **name → World ID session binding is off-chain**: Soapay's API/attester holds it in `name_sessions`; it is not on-chain, and World ID sees no name. What carries it to payers is the **EIP-712 `MetaRotation` attestation** the attester signs after a proof of the linked session. The payer's app (and `soapay distribute`) follows a changed record only with a valid attestation from the pinned attester; that is the enforcement point.
+
+**What refuses it, and what the screen says.**
+
+| Where | Answer | Employee app (Name settings → Rotate keys) |
+| --- | --- | --- |
+| API, another person's World ID session | `403 session_mismatch` | **Refused: this World ID isn't the person linked to `<name>`**, then "Nothing changed. `<name>` still points at the current keys (…). No attestation was signed and no new keys were saved…" and the code |
+| API, a replayed proof or request | `403 session_replayed` / `request_used` | **Refused: this World ID proof was already used** |
+| API, name without a session | `409 no_session` | **Refused: `<name>` has no World ID link** |
+| World ID app can't prove the linked session (it answers an error, no proof reaches Soapay) | IDKit code, e.g. `verification_rejected`, `generic_error` | **Refused: World ID didn't confirm the person linked to `<name>`** (a cancel just goes back) |
+
+Every other World ID code from the rotation route has its own plain-words line (`apps/recipient/src/features/rotation/refusal.ts`; tests in `apps/recipient/test/rotation-refused.test.tsx`). A refusal leaves nothing half-done: the app saves the pending rotation only after the API attests, so there is no "A rotation is half done" banner, no new key generation, and the API's record and attestation feed are unchanged (`apps/api/test/worldid.test.ts`, "refusals").
+
+**Company app.** After the refused attempt the name still resolves to the pinned keys, so **Resolve names** shows it **Verified**. If the thief instead rewrites the ENS record directly with the stolen key (`pnpm demo:attacker`), the row shows **Blocked · record changed**; hovering it says "Record changed without a World ID proof from the linked person…". The detail view shows the same reason and offers the employer's manual re-approval.
+
+**Scripted version (rehearsal and fallback): `pnpm demo:attacker-worldid [label]`** (default `sam-demo`; phrase from the git-ignored `scripts/.demo-recipients.local.json`, never printed). It prints six steps: (1) the thief has the phrase; (2) signs a `RotationClaim` and ERC-6538 update to fresh keys held only in memory; (3) presents a World ID proof that isn't the victim's; (4) the API's refusal verbatim plus a plain-English line; (5) reads back the ENS record, the attestation feed and the SDK pin check (`checkMetaPin`, the same check as Resolve names): "name unchanged"; (6) tells the presenter to click **Resolve names** (still **Verified**). It writes nothing on-chain.
+
+- **Default:** a proof-shaped World ID 4.0 session result for a *different* session, answering a real RP request the API issued for this exact change → `403 session_mismatch`. **Simulated:** the proof itself (no second human is available, so it isn't a genuine zero-knowledge proof). The API compares the session id with the linked one before it contacts World's Developer Portal, which is the same check a genuine proof from another person's World ID fails. The script says so on screen.
+- **`--replay`:** replays the victim's own **genuine** proof, captured when the name was linked → `403 session_replayed`. Only "the thief captured it" is simulated.
+- **`--setup`** (rehearsal, once): the victim's name needs a World ID link for either beat (without one the API answers `409 no_session`, also shown honestly). This links it to the presenter's real World ID (QR in the terminal, `POST /names/:label/session`) and keeps the spent linking proof in the demo file for `--replay`. On the testnet API the attach wait is 0 (`attach_cooldown_seconds`), so it works at once.
+- `DEMO_DRY=1` builds everything and sends nothing. Pure logic and its tests: `examples/demo/worldid-attack.ts`, `worldid-attack.test.ts`.
+
 ## Restoring from the recovery phrase (D-64)
 
 The recovery phrase recreates every key, including the registrant key, but not the vault, and the vault is where the app kept the World ID `sessionId`. `IDKit.proveSession` needs that id, so before D-64 a restored account silently lost World ID recovery: its rotations fell back to the employer's manual approval, and linking again was refused (`409 session_exists`, a name keeps its first session).
