@@ -199,7 +199,7 @@ cd contracts && pnpm derive --demo 5     # sorted Payment lines + a cast tuple
 ```
 
 > [!NOTE]
-> `@scopelift/stealth-address-sdk` can't be loaded by plain Node. The apps bundle it with Vite, the tests inline it in Vitest, the gateway bundles it with esbuild, and `derive.ts` runs under tsx.
+> `@scopelift/stealth-address-sdk` can't be loaded by plain Node. The apps bundle it with Vite, the tests inline it in Vitest, the MCP server bundles it with esbuild, and `derive.ts` runs under tsx.
 
 ## Contracts
 

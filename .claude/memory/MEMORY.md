@@ -10,3 +10,4 @@
 - [Bounties](decision-bounties.md) — ENSv2 + World IDKit + Uniswap API; Intercepta rejected (needs agents)
 - [CK's UI](team-ui-ck.md) — teammate CK builds a separate UI; keep ours simple with logic in hooks for a later merge/compare
 - [CK integration](decision-ck-integration.md) — CK's UI + our engine; keys, spend, sender-mode, backend and names decisions for the merge
+- [Frontend M1](decision-frontend-m1.md) — CK's M1 as built (signature keys, gateway relayer, 3 sender modes); superseded by CK integration where they differ

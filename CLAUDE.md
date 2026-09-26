@@ -7,16 +7,19 @@ Stealth-address payroll on Base. Product spec: `PRD.md`. PRD review: `docs/prd-a
 | Path | What |
 | --- | --- |
 | `packages/sdk` | `@soapay/sdk`: the only home for derivation, registry, announce, scan and spend logic |
-| `apps/recipient` | Vite + React SPA: keys, onboarding, scanner, ledger, spend |
-| `apps/sender` | Vite + React SPA: pay runs through StealthDisperse (EOAs) or an EIP-5792 batch (smart accounts) |
-| `apps/api` | Hono on Node: registration relayer, ENSv2 subname issuer, World ID verification, announcement indexer (docs/mvp-spec.md §4). Gateway *derivation* mode is out of scope (proposed cut) |
+| `apps/recipient` | Vite + React SPA on CK's Direction A Ledger design: keys (recovery phrase, or a wallet signature for plain EOAs), onboarding, scanner, ledger, guarded Send, Exit, Convert, rotation |
+| `apps/sender` | Vite + React SPA, the company app on the Direction A Ledger design: hero landing with wallet Login, then Pay run (denominated payouts), Review & sign, History, Recipients, Settings. Pays through StealthDisperse (EOAs) or an EIP-5792 batch (smart accounts) |
+| `apps/api` | Hono on Node: registration relayer (`POST /register`, and `POST /relay` for CK's request shape), ENSv2 subname issuer, World ID verification, announcement indexer (docs/mvp-spec.md §4). Gateway *derivation* mode is out of scope (proposed cut) |
 | `apps/mcp` | `@soapay/mcp`: stdio MCP server (spec §8), so agents get `<label>.soapay.eth` identities with ENSIP-26 records and can pay, scan and spend. Bundled with esbuild |
+| `packages/ui` | `@soapay/ui`: Direction A Ledger tokens (light, navy #1E3A5F, IBM Plex, 2px), `TopBar`, `PageHead`, `Dots`, `NavyPanel`, `Toggle`, `FreshMark`, `Pill`, `Copy`, `ErrorLine`, `Shell`/`Steps`. Source-only, no build |
 | `contracts` | `@soapay/contracts`: Foundry, `StealthDisperse`, plus `tools/derive.ts` for test vectors |
 
 ## Commands
 
 - `git submodule update --init --recursive` once, for the Foundry libraries.
 - `pnpm install` · `pnpm build` · `pnpm test` · `pnpm typecheck` · `pnpm dev`, all run through turbo. `pnpm test` includes `forge test`.
+- Dev ports: recipient 5173, sender 5174, api 8787. Copy each app's `.env.example` to `.env.local` (Base Sepolia); the api needs `RELAYER_PRIVATE_KEY` for registration (`POST /register`, `POST /relay`).
+- Frontend M1 design and task record: `docs/frontend-m1-design.md`, `docs/frontend-m1-plan.md`.
 - One package: `pnpm --filter @soapay/sdk test`, `pnpm --filter @soapay/contracts test`.
 - Contract fork tests run when `BASE_RPC_URL` is set.
 
@@ -47,7 +50,7 @@ Stealth-address payroll on Base. Product spec: `PRD.md`. PRD review: `docs/prd-a
 
 ## Engineering rules
 
-- Apps and the gateway import protocol logic only from `@soapay/sdk`. No private code paths (PRD P0).
+- Apps and the api import protocol logic only from `@soapay/sdk`. No private code paths (PRD P0).
 - Spending keys never leave the client.
 - `StealthDisperse` is the only custom contract, and no custom contract may hold funds or keep state.
 - Every privacy invariant becomes a CI test when its code lands.
