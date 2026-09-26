@@ -103,6 +103,10 @@ The team's agreed model. Where it differs from the PRD, this model wins ([`CLAUD
 
 The full picture, with every flow and where ENS, World ID and Uniswap come in, is in [docs/architecture.md](docs/architecture.md).
 
+![Soapay on chain: names on Ethereum Sepolia, people and keys off chain, payments on Base Sepolia, five numbered steps](docs/diagrams/soapay-system-overview.png)
+
+*Three lanes, five steps. Names live on Ethereum Sepolia, keys never leave the payee, and every payment, scan and spend happens on Base Sepolia. The numbered badges sit on the arrows: name, pay, find, spend, exit. Editable source: [docs/diagrams/soapay-system-overview.excalidraw](docs/diagrams/soapay-system-overview.excalidraw).*
+
 ```mermaid
 flowchart LR
   RA["Recipient app: keys, scanner, spend"] -->|"register meta-address"| REG["ERC-6538 Registry"]
