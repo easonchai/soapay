@@ -186,3 +186,8 @@ metadata:
   - Deployed from `yudhishthra`; redeploy after the CK merge.
   - Drift audit in docs/drift-audit.md.
   - Shielded rail: the PRD names Railgun or **Privacy Pools v2** (after M5). Fhenix would break "nothing custom holds funds", so the recommendation is to request 0xbow PP v2 SDK early access (awaiting the owner).
+- Checkpoint 21 (2026-09-26):
+  - PP v2 context saved in docs/privacy-pools-v2.md. Stealth withdrawals use OUR scheme (ERC-5564 scheme 1 plus the canonical Announcer), so the existing scanner finds them; there are group payouts, a 0xbow Payroll PoC, and USDC on Sepolia.
+  - Blockers: the SDK is early-access (ask @0xbowio), and the Sepolia V9 relay lacks relayAndAnnounce.
+  - CK INTEGRATION DONE on branch `integrate-ck` (8 commits, all green: SDK 252, API 127, recipient 86, sender 119, mcp 54, contracts 31). Screens are in /mnt/storage/tmp/soapay-screens.
+  - Two open clashes: (1) rotation for signature-derived accounts (the agent recommends requiring a move to a phrase account); (2) the sender's pasted list vs a pinned roster (the agent recommends roster only).
