@@ -33,13 +33,13 @@ World ID is how you recover your pay if your recovery phrase leaks, and why a th
 - **Say:** "Same session, same human, so Soapay signs an attestation and the company app follows the new keys by itself. No HR ticket."
 - **Fallback:** `alex-demo`'s **Re-verified by World ID** pill from rehearsal.
 
-## 3. The thief tries their own World ID (1:05–1:35)
+## 3. The thief tries a World ID that isn't sam's (1:05–1:35)
 
-- **Do (thief, a Chrome Guest window):** employee app → **Restore from recovery phrase** → paste Alex's phrase → **Name → Rotate to new keys → Continue to World ID → Confirm with World ID** → scan with the **second** World ID (a teammate's phone).
-- **Result:** refused. Different person, different session (the API answers `session_mismatch`). No attestation, and the name's record is unchanged.
-- **Do (Employer):** **Re-verify all** → `alex-meridian` is still **Verified** on Alex's keys.
-- **Say:** "The thief has the phrase, and a World ID of their own. But it's not the World ID that set up this name, so Soapay won't sign."
-- **Fallback:** `pnpm demo:attacker-worldid alex-meridian` (scripted refusal: it shows the same `session_mismatch`).
+- **Do (thief terminal):** `pnpm demo:attacker-worldid sam-demo`. It prints six steps: the thief has sam's phrase → signs a key change to keys the thief controls → presents a World ID answer that isn't sam's → **the API's refusal, verbatim** (`403 session_mismatch`) → reads ENS and the attestation feed back: **name unchanged, no attestation**.
+- **Do (Employer):** **Re-verify all** → `sam-demo` is still **Verified**.
+- **Say:** "The stolen phrase, the signed key change and Soapay's refusal are real, against the live API. The only simulated part is the thief's World ID answer: it's for a different World ID session, and Soapay checks which session is answering before it even calls World. That's exactly where a real stranger's proof fails."
+- **Optional (10 s):** `pnpm demo:attacker-worldid sam-demo --replay` replays sam's *own genuine* proof from sign-up → refused again (`session_replayed`): a proof works only once.
+- **Live alternative (only if you have a second person's World App):** restore sam's phrase in a Chrome Guest window → **Name → Rotate to new keys → Continue to World ID → Confirm it's you with World ID** → scan with the second World App → the red **Refused** box.
 
 ## 4. The thief rewrites ENS directly (1:35–1:55)
 

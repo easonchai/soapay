@@ -19,9 +19,9 @@ Links: company app https://soapay.up.railway.app/ · employee app https://soapay
 3. **Employer profile** (browser, MetaMask): log in to the company app, decline MetaMask's smart-account switch, create the vault with **Wallet signature**, **Pay run → Import CSV** (the roster file the bootstrap printed), **Settings → Chunk size 500**, then **Back up now**.
 4. **Employee profile:** a fresh browser profile with no Soapay data, and Touch ID. Used for the live sign-up.
 5. **Coworker profile:** employee app → **Restore from recovery phrase** → open `scripts/maya-ml.recovery-kit.local.txt` → set a passkey.
-6. **Phone:** World App open and verified (Proof of Human). A **second World ID** (a teammate's phone) for the thief in [worldid.md](worldid.md), or use its scripted fallback.
+6. **Phone:** World App open and verified (Proof of Human). The thief beat uses the script, no second phone.
 7. **Agent terminal:** `pnpm demo:agent init` once (makes the agent's phrase, never shown), then check `pnpm demo:agent status` answers. The live agent (`pnpm demo:agent-live`) runs on this laptop's logged-in `claude` CLI: no API key needed; check `claude -p "hi"` answers.
-8. **Thief terminal:** `pnpm demo:setup-recovery` once (sets up `sam-demo`). Type `pnpm demo:attacker sam-demo`; don't run it yet.
+8. **Thief terminal:** once, `pnpm demo:setup-recovery` (sets up `sam-demo`), then `pnpm demo:attacker-worldid sam-demo --setup` and scan its QR with your World App (links sam-demo to a World ID, so the refusal is "a different person"). Type `pnpm demo:attacker-worldid sam-demo`; don't run it yet.
 9. **Fresh labels:** the live beats claim new names, so they must be unclaimed: `billing-agent` (the agent) and `alex-meridian` (the World ID sign-up). The bootstrap checks them; or `curl https://soapay.up.railway.app/api/names/<label>` → `not_found`. Once used, pick a new label (`billing-agent2`, `alex-meridian2`).
 10. **Tabs warm:** Basescan and Sepolia Etherscan (pass their Cloudflare check by hand). Do Not Disturb on.
 11. **Merge freeze:** no merges to `main` an hour before. Every merge redeploys the live API.
