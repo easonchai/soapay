@@ -12,7 +12,7 @@ import { canonicalMeta } from "../features/rotation/claim.js";
 import { useServices } from "../services/ServicesProvider.js";
 import { errorMessage } from "../ui/kit.js";
 import { useUnlocked } from "../vault/VaultProvider.js";
-import type { PendingRotation, Profile } from "../vault/types.js";
+import { hasRecoveryPhrase, type PendingRotation, type Profile } from "../vault/types.js";
 import type { HumanCheckResult } from "../worldid/types.js";
 import { useKeyRing } from "./useChain.js";
 
@@ -64,6 +64,16 @@ export function useRotation() {
   const start = useCallback(() => {
     if (!name) return setState({ step: "idle", error: "Claim a name first: rotation moves a name to new keys." });
     if (profile.pendingRotation) return setState({ step: "idle", error: "Finish the pending rotation first." });
+    // TODO(clash): rotation derives key generation n from the recovery phrase (BIP-39 passphrase
+    // `soapay:rotation:<n>`). CK's wallet-signature keys have no phrase, and no recorded decision says how a
+    // signature-derived account gets generation n (e.g. sign "…v1 generation n", or a fresh phrase). Until the
+    // owner decides, wallet-signature accounts can't rotate; they can still Exit and re-onboard with a phrase.
+    if (!hasRecoveryPhrase(v.data)) {
+      return setState({
+        step: "idle",
+        error: "Key rotation needs recovery-phrase keys. This account's keys come from a wallet signature, which can't produce new keys yet.",
+      });
+    }
     const draft = prepareRotation({
       mnemonic: v.data.mnemonic,
       label: name.label,
@@ -71,7 +81,7 @@ export function useRotation() {
       oldMeta: ring.current.metaAddressURI,
     });
     setState({ step: "confirm", draft, path });
-  }, [name, profile.pendingRotation, profile.keyGeneration, v.data.mnemonic, ring, path]);
+  }, [name, profile.pendingRotation, profile.keyGeneration, v.data, ring, path]);
 
   /** Sends the registrant's setText and records the rotation as complete. */
   const complete = useCallback(
@@ -224,6 +234,8 @@ export function useRotation() {
     name,
     currentMeta: canonicalMeta(ring.current.metaAddressURI),
     generation: profile.keyGeneration ?? 0,
+    /** False for wallet-signature keys (see the TODO(clash) in `start`). */
+    canRotate: hasRecoveryPhrase(v.data),
     rotations: profile.rotations ?? [],
     pending: profile.pendingRotation ?? null,
     recovery: profile.recovery ?? null,

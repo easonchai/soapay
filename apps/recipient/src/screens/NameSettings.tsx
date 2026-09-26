@@ -25,7 +25,7 @@ export function NameSettings() {
   if (!r.name) {
     return (
       <>
-        <PageHeader title="Name" />
+        <PageHeader eyebrow="Name" title="Name" />
         <Card>
           <EmptyState icon={UserRound} title="No name yet">
             You're sharing your raw meta-address. A name lets you change keys later without re-sending anything to your employer.
@@ -37,7 +37,7 @@ export function NameSettings() {
 
   return (
     <>
-      <PageHeader title={r.name.name} description="Your employer pays this name. It points to your current meta-address." action={<CopyButton value={r.name.name} />} />
+      <PageHeader eyebrow="Name settings" title={r.name.name} description="Your employer pays this name. It points to your current meta-address." action={<CopyButton value={r.name.name} />} />
       <div className="space-y-4">
         <Card>
           <CardHeader title="Current keys" description={`Generation ${r.generation}. Older generations are still scanned and spendable.`} />
@@ -106,7 +106,13 @@ export function NameSettings() {
             {s.step === "idle" && (
               <>
                 {s.error && <Alert variant="destructive">{s.error}</Alert>}
-                <Button onClick={r.start} disabled={!!r.pending}>
+                {!r.canRotate && (
+                  <Alert variant="warning" title="Not available for wallet-signature keys">
+                    Rotation derives new keys from a recovery phrase. This account's keys come from a wallet signature, so it can't rotate yet.
+                    To move to new keys, Exit your funds and set up a new account with a recovery phrase.
+                  </Alert>
+                )}
+                <Button onClick={r.start} disabled={!!r.pending || !r.canRotate}>
                   <KeyRound className="size-4" aria-hidden /> Rotate to new keys
                 </Button>
               </>

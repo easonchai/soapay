@@ -1,16 +1,20 @@
 import { useEffect, useMemo, useReducer, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { generateMnemonic, validateMnemonic } from "@soapay/sdk";
-import { ArrowLeft, CheckCircle2, Eye, KeyRound, Loader2, ShieldAlert, Sparkles } from "lucide-react";
+import { REGISTRY_ADDRESS, generateMnemonic, getChainConfig, validateMnemonic } from "@soapay/sdk";
+import { Lockup, Steps, TopBar } from "@soapay/ui";
+import { CheckCircle2, Eye, Loader2, ShieldAlert } from "lucide-react";
+import { createPublicClient, http } from "viem";
+import { chainName } from "../config.js";
+import { demoEoaWallet, demoSmartWallet, deriveWalletKeys, injectedKeyWallet, injectedProvider, type KeyWallet } from "./walletKeys.js";
 import { useServices } from "../services/ServicesProvider.js";
 import { useVault } from "../vault/VaultProvider.js";
 import { MIN_PASSPHRASE_LENGTH } from "../vault/crypto.js";
-import { Alert, Button, Card, Checkbox, CopyButton, Field, Input, Textarea, cn, errorMessage } from "../ui/kit.js";
+import { Alert, Badge, Button, Card, Checkbox, CopyButton, Field, Input, Textarea, cn, errorMessage } from "../ui/kit.js";
 import { HumanCheck, sessionIdOf, sessionSignal, type HumanCheckResult } from "../worldid/index.js";
 import { claimName, fullName, registerMetaAddress } from "./actions.js";
 import { initialState, pickChallenge, progressOf, reduce, resumeState, words, type OnboardingState } from "./machine.js";
 import { useLabelAvailability } from "./useLabelAvailability.js";
 import { useInvite } from "../hooks/useInvite.js";
-import { settingsOf } from "../vault/types.js";
+import { settingsOf, type KeySecret } from "../vault/types.js";
 import { withInvitePayer } from "./invite.js";
 
 /** "Invited by <org>", or why the invite can't be used. Renders nothing without an invite link. */
@@ -50,6 +54,7 @@ export function Onboarding({ claimInvite = false }: { claimInvite?: boolean } = 
   );
   const [cur, total] = progressOf(state);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const svc = useServices();
 
   // Move focus to the new step's heading so screen readers announce it.
   useEffect(() => {
@@ -57,33 +62,54 @@ export function Onboarding({ claimInvite = false }: { claimInvite?: boolean } = 
   }, [state.step]);
 
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-xl flex-col px-4 py-8 sm:py-14">
-      <div className="mb-8 flex items-center justify-between gap-4">
-        <Logo />
-        {state.step !== "welcome" && (
-          <div className="flex items-center gap-3" aria-label={`Step ${cur} of ${total}`}>
-            <span className="text-xs text-muted-foreground tabular-nums">
-              {cur}/{total}
+    <div className="page">
+      <TopBar
+        tabs={[]}
+        right={
+          <>
+            <span className="chip">
+              <span className="dot" />
+              {chainName(svc.settings.chainId)}
             </span>
-            <div className="h-1.5 w-24 overflow-hidden rounded-full bg-muted" aria-hidden>
-              <div className="h-full rounded-full bg-primary transition-[width] duration-300" style={{ width: `${(cur / total) * 100}%` }} />
+            {svc.mock && <Badge tone="warning">Mock</Badge>}
+          </>
+        }
+      />
+      <main className="app-main">
+        <div className="onb mx-auto">
+          {state.step !== "welcome" && (
+            <div aria-label={`Step ${cur} of ${total}`}>
+              <Steps current={STEP_OF[state.step]} labels={STEP_LABELS} />
             </div>
-          </div>
-        )}
-      </div>
-      <Step state={state} dispatch={dispatch} headingRef={headingRef} />
+          )}
+          <Step state={state} dispatch={dispatch} headingRef={headingRef} />
+        </div>
+      </main>
     </div>
   );
 }
 
+/** CK's wizard steps, mapped onto our onboarding machine's states. */
+const STEP_LABELS = ["Keys", "Lock", "Register", "Name", "Recovery", "Share"];
+const STEP_OF: Record<OnboardingState["step"], number> = {
+  welcome: 1,
+  backup: 1,
+  confirm: 1,
+  restore: 1,
+  wallet: 1,
+  passphrase: 2,
+  register: 3,
+  name: 4,
+  recovery: 5,
+  share: 6,
+  done: 6,
+};
+
 export function Logo() {
   return (
-    <div className="flex items-center gap-2 font-semibold tracking-tight">
-      <span className="grid size-7 place-items-center rounded-md bg-primary text-sm text-primary-foreground" aria-hidden>
-        S
-      </span>
-      Soapay
-    </div>
+    <span className="brand">
+      <Lockup height={18} />
+    </span>
   );
 }
 
@@ -107,20 +133,22 @@ function Frame({
   onBack?: () => void;
 }) {
   return (
-    <main className="space-y-6">
+    <section className="stack">
       {onBack && (
-        <Button variant="ghost" size="sm" onClick={onBack} className="-ml-3">
-          <ArrowLeft className="size-4" aria-hidden /> Back
-        </Button>
+        <div>
+          <Button variant="ghost" size="sm" onClick={onBack}>
+            ← Back
+          </Button>
+        </div>
       )}
-      <div className="space-y-2">
-        <h1 ref={headingRef} tabIndex={-1} className="text-2xl font-semibold tracking-tight outline-none sm:text-3xl">
+      <div>
+        <h1 ref={headingRef} tabIndex={-1} className="outline-none">
           {title}
         </h1>
-        {lead && <p className="text-muted-foreground">{lead}</p>}
+        {lead && <p className="lead">{lead}</p>}
       </div>
       {children}
-    </main>
+    </section>
   );
 }
 
@@ -134,17 +162,30 @@ function Step({ state, dispatch, headingRef }: StepProps) {
           lead="Your employer pays a fresh address every time. Only you can find and spend those payments, from this device, with one recovery phrase."
         >
           <InviteBanner />
-          <div className="grid gap-3">
+          <div className="actions">
             <Button size="lg" onClick={() => dispatch({ type: "CREATE", mnemonic: generateMnemonic() })}>
-              <Sparkles className="size-4" aria-hidden /> Create a new account
+              Create a new account
             </Button>
             <Button size="lg" variant="outline" onClick={() => dispatch({ type: "RESTORE" })}>
-              <KeyRound className="size-4" aria-hidden /> Restore from recovery phrase
+              Restore from recovery phrase
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Keys are created and stored in this browser, encrypted with your passphrase. Nothing secret is ever sent anywhere.
+          <p className="hint">
+            Keys are created and stored in this browser, encrypted with your passphrase. Nothing secret is ever sent anywhere. A recovery
+            phrase is the default and the safest backup.
           </p>
+          <hr />
+          <div className="stack-sm">
+            <p className="muted">
+              Or derive your keys from a wallet signature instead of a phrase. Plain EOA wallets only (MetaMask, Rabby, a hardware wallet);
+              recovery is signing again with the same wallet.
+            </p>
+            <div>
+              <Button variant="ghost" onClick={() => dispatch({ type: "USE_WALLET" })} data-testid="use-wallet">
+                Use a wallet signature (plain EOA wallets only)
+              </Button>
+            </div>
+          </div>
         </Frame>
       );
     case "backup":
@@ -153,8 +194,10 @@ function Step({ state, dispatch, headingRef }: StepProps) {
       return <ConfirmStep state={state} dispatch={dispatch} headingRef={headingRef} />;
     case "restore":
       return <RestoreStep error={state.error} dispatch={dispatch} headingRef={headingRef} />;
+    case "wallet":
+      return <WalletStep error={state.error} dispatch={dispatch} headingRef={headingRef} />;
     case "passphrase":
-      return <PassphraseStep mnemonic={state.mnemonic} dispatch={dispatch} headingRef={headingRef} />;
+      return <PassphraseStep secret={state.wallet ?? state.mnemonic} dispatch={dispatch} headingRef={headingRef} />;
     case "register":
       return <RegisterStep dispatch={dispatch} headingRef={headingRef} />;
     case "name":
@@ -308,7 +351,81 @@ function RestoreStep({ error, dispatch, headingRef }: { error: string | null } &
   );
 }
 
-function PassphraseStep({ mnemonic, dispatch, headingRef }: { mnemonic: string } & Omit<StepProps, "state">) {
+/**
+ * The wallet-signature key option (plain EOAs only). The account's code is checked before any signature is
+ * requested; then the wallet signs the Soapay message twice (it must sign identically). Mock mode offers a
+ * throwaway demo EOA and a demo smart wallet (refused), so both outcomes can be clicked through.
+ */
+function WalletStep({ error, dispatch, headingRef }: { error: string | null } & Omit<StepProps, "state">) {
+  const svc = useServices();
+  const [stage, setStage] = useState<string | null>(null);
+  const injected = injectedProvider();
+  const payrollCode = useMemo(() => {
+    if (svc.mock) return undefined;
+    const client = createPublicClient({ chain: getChainConfig(svc.settings.chainId).chain, transport: http(svc.settings.rpcUrl || undefined) });
+    return (address: `0x${string}`) => client.getCode({ address });
+  }, [svc.mock, svc.settings.chainId, svc.settings.rpcUrl]);
+
+  const run = async (wallet: KeyWallet) => {
+    try {
+      const { secret } = await deriveWalletKeys(wallet, (s) =>
+        setStage(
+          s === "connect"
+            ? "Connecting…"
+            : s === "check"
+              ? "Checking this is a plain EOA…"
+              : s === "sign1"
+                ? "Sign the Soapay message in your wallet (1 of 2)…"
+                : "Sign it once more, so we know your wallet always signs the same way (2 of 2)…",
+        ),
+      );
+      dispatch({ type: "WALLET_SIGNED", wallet: secret });
+    } catch (e) {
+      dispatch({ type: "WALLET_FAILED", error: errorMessage(e).split("\n")[0] ?? "The wallet refused." });
+    } finally {
+      setStage(null);
+    }
+  };
+
+  return (
+    <Frame
+      headingRef={headingRef}
+      title="Create keys from a wallet signature"
+      lead="Your wallet signs one fixed message. The keys come from that signature and are stored in this browser, encrypted with your passphrase. Nothing goes on-chain."
+      onBack={() => dispatch({ type: "BACK" })}
+    >
+      <Alert variant="warning" title="Plain EOA wallets only">
+        Smart-account and passkey wallets (Coinbase Smart Wallet, Safe, 7702-delegated accounts) can't derive stable keys from a signature and
+        are refused. If you lose this wallet, the payments are gone: there's no phrase to fall back on.
+      </Alert>
+      {error && (
+        <Alert variant="destructive" title="Can't use this wallet">
+          <span data-testid="wallet-error">{error}</span>
+        </Alert>
+      )}
+      <div className="actions">
+        {svc.mock ? (
+          <>
+            <Button size="lg" onClick={() => void run(demoEoaWallet())} loading={stage !== null}>
+              Sign with the demo EOA
+            </Button>
+            <Button variant="outline" onClick={() => void run(demoSmartWallet())} disabled={stage !== null}>
+              Try a demo smart wallet
+            </Button>
+          </>
+        ) : (
+          <Button size="lg" onClick={() => injected && void run(injectedKeyWallet(injected, payrollCode))} loading={stage !== null} disabled={!injected}>
+            {injected ? "Connect wallet and sign" : "No wallet extension found"}
+          </Button>
+        )}
+        {stage && <span className="status">{stage}</span>}
+      </div>
+      <p className="hint">Changed your mind? Go back and create a recovery phrase instead: it's the default for a reason.</p>
+    </Frame>
+  );
+}
+
+function PassphraseStep({ secret, dispatch, headingRef }: { secret: KeySecret } & Omit<StepProps, "state">) {
   const vault = useVault();
   const [pass, setPass] = useState("");
   const [again, setAgain] = useState("");
@@ -325,7 +442,7 @@ function PassphraseStep({ mnemonic, dispatch, headingRef }: { mnemonic: string }
     setBusy(true);
     setError(null);
     try {
-      await vault.create(mnemonic, pass);
+      await vault.create(secret, pass);
       dispatch({ type: "VAULT_CREATED" });
     } catch (err) {
       setError(errorMessage(err));
@@ -380,7 +497,9 @@ function PassphraseStep({ mnemonic, dispatch, headingRef }: { mnemonic: string }
           {busy ? "Encrypting…" : "Encrypt and continue"}
         </Button>
         <p className="text-xs text-muted-foreground">
-          The passphrase only protects this device. Your recovery phrase is still the only backup.
+          {typeof secret === "string"
+            ? "The passphrase only protects this device. Your recovery phrase is still the only backup."
+            : "The passphrase only protects this device. Signing again with the same wallet is your backup."}
         </p>
       </form>
     </Frame>
@@ -487,17 +606,23 @@ function RegisterStep({ dispatch, headingRef }: Omit<StepProps, "state">) {
       title="Publish your payment address"
       lead="We register your stealth meta-address on the public ERC-6538 registry. It lets employers derive a fresh address for every payment. We pay the gas."
     >
-      <Card className="space-y-3 p-4">
-        <Row label="Registered by">
-          <span className="font-mono text-xs break-all">{keys.registrantAddress}</span>
-        </Row>
-        <p className="text-xs text-muted-foreground">
-          A throwaway address derived from your phrase. It holds no funds and your main wallet never signs.
-        </p>
-        <Row label="Meta-address">
-          <span className="font-mono text-xs break-all">{keys.metaAddressURI}</span>
-        </Row>
-      </Card>
+      <div className="card">
+        <dl className="facts">
+          <dt>Registered by</dt>
+          <dd>
+            <code>{keys.registrantAddress}</code>
+            <span className="note">A throwaway address derived from your keys. It holds no funds and your main wallet never signs.</span>
+          </dd>
+          <dt>Meta-address</dt>
+          <dd>
+            <code>{keys.metaAddressURI}</code>
+          </dd>
+          <dt>Registry</dt>
+          <dd>
+            <code>{REGISTRY_ADDRESS}</code>
+          </dd>
+        </dl>
+      </div>
       {error && (
         <Alert variant="destructive" title="Registration didn't go through">
           {error}
@@ -616,13 +741,27 @@ function ShareStep({ dispatch, headingRef }: Omit<StepProps, "state">) {
   };
   return (
     <Frame headingRef={headingRef} title="Share this one string with your employer" lead="That's all they need to pay you. Each payday lands at a new address only you can link.">
-      <Card className="space-y-4 p-5 text-center">
-        <CheckCircle2 className="mx-auto size-8 text-success" aria-hidden />
-        <p className={cn("font-mono break-all", profile.name ? "text-2xl font-semibold" : "text-sm")} data-testid="share-string">
+      <div className="share">
+        <div className="label">{profile.name ? "Your pay name" : "Your meta-address"}</div>
+        <div className={cn("value", profile.name && "text-2xl font-semibold")} data-testid="share-string">
           {value}
-        </p>
-        <CopyButton value={value} label="Copy" className="mx-auto" />
-      </Card>
+        </div>
+        <CopyButton value={value} label="Copy" />
+      </div>
+      {profile.name && (
+        <div className="card">
+          <dl className="facts">
+            <dt>Meta-address</dt>
+            <dd>
+              <code>{vault.keys!.metaAddressURI}</code>
+            </dd>
+            <dt>Registrant</dt>
+            <dd>
+              <code>{vault.keys!.registrantAddress}</code>
+            </dd>
+          </dl>
+        </div>
+      )}
       <Alert variant="info" title="Don't send them a wallet address.">
         A normal wallet address shows everyone your whole salary history. This string doesn't.
       </Alert>

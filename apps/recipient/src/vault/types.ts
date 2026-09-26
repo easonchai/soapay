@@ -1,5 +1,6 @@
 import type { AnnouncementRecord, ClusterGraphJSON, MetadataHints, ScanMatch } from "@soapay/sdk";
 import type { Address, Hex } from "viem";
+import { keysFromMnemonic, keysFromSignature, type SoapayKeys } from "@soapay/sdk";
 import { ENV } from "../config.js";
 import type { ExitRecord } from "../features/exit/types.js";
 
@@ -119,10 +120,25 @@ export type PendingRotation = Omit<RotationRecord, "at" | "setTextTx"> & {
   registered?: boolean;
 };
 
+/**
+ * SECRET. The wallet-signature key option (plain EOAs only, SDK `keysFromWalletSignature`): the
+ * signature over SDK `SIGN_MESSAGE` IS the key material, so it is stored here, encrypted like the seed.
+ * Recovery on another device = sign the same message with the same wallet again.
+ */
+export type WalletKeySecret = { kind: "wallet-signature"; signature: Hex; wallet: Address };
+
+/** What the vault derives keys from: a recovery phrase (default) or a wallet signature. */
+export type KeySecret = string | WalletKeySecret;
+
 export type VaultData = {
   version: 1;
-  /** SECRET. The one thing the user backs up; every key is derived from it on unlock. */
+  /**
+   * SECRET. The one thing the user backs up; every key is derived from it on unlock.
+   * "" when the keys come from a wallet signature (`walletKeys`).
+   */
   mnemonic: string;
+  /** Set instead of `mnemonic` for wallet-signature keys. */
+  walletKeys?: WalletKeySecret;
   createdAt: number;
   settings: Settings;
   profile: Profile;
@@ -153,16 +169,24 @@ export function emptyChainState(): ChainState {
   return { lastScannedBlock: null, matches: [], balances: [], balancesAt: null, graph: null };
 }
 
-export function newVaultData(mnemonic: string): VaultData {
+export function newVaultData(secret: KeySecret): VaultData {
   return {
     version: 1,
-    mnemonic,
+    ...(typeof secret === "string" ? { mnemonic: secret } : { mnemonic: "", walletKeys: secret }),
     createdAt: Date.now(),
     settings: defaultSettings(),
     profile: {},
     chains: {},
   };
 }
+
+/** Generation-0 keys from whatever the vault holds (recovery phrase, or a wallet signature). */
+export function vaultKeys(data: Pick<VaultData, "mnemonic" | "walletKeys">): SoapayKeys {
+  return data.walletKeys ? keysFromSignature(data.walletKeys.signature) : keysFromMnemonic(data.mnemonic);
+}
+
+/** Recovery-phrase vaults can rotate keys (features/rotation/keys.ts); wallet-signature ones can't yet. */
+export const hasRecoveryPhrase = (data: Pick<VaultData, "walletKeys">): boolean => !data.walletKeys;
 
 export function chainState(data: VaultData, chainId = data.settings.chainId): ChainState {
   return data.chains[String(chainId)] ?? emptyChainState();

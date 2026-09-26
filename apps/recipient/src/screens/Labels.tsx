@@ -24,6 +24,7 @@ export function Labels() {
   return (
     <>
       <PageHeader
+        eyebrow="Labels"
         title="Labels"
         description="Tell the privacy guard which addresses identify you. Sending to them, or linking them to your payments, gets flagged or blocked."
       />

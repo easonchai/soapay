@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import { offersExit, type ExitPrefill } from "../features/exit/entry.js";
 import { useExit } from "../hooks/useExit.js";
 import { useSpendFlow } from "../hooks/useSpendFlow.js";
@@ -18,7 +18,9 @@ export function Spend() {
   const exit = useExit();
   const navigate = useNavigate();
   const [to, setTo] = useState("");
-  const [amount, setAmount] = useState("");
+  // The dashboard's per-row Send prefills that address's balance; the guard still picks the sources.
+  const location = useLocation();
+  const [amount, setAmount] = useState(() => (location.state as { amount?: string } | null)?.amount ?? "");
   const s = flow.state;
 
   const submit = (e: FormEvent) => {
@@ -29,6 +31,7 @@ export function Spend() {
   return (
     <>
       <PageHeader
+        eyebrow="Send"
         title="Send"
         description="Each source address sends in its own transaction, at random intervals, with gas paid in USDC. The guard keeps your addresses from being linked."
       />

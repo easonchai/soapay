@@ -1,8 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { keysFromMnemonic, type SoapayKeys } from "@soapay/sdk";
+import type { SoapayKeys } from "@soapay/sdk";
 import { createVault, openVault, sealWithKey, type VaultEnvelope } from "./crypto.js";
 import { deleteEnvelope, loadEnvelope, saveEnvelope } from "./idb.js";
-import { newVaultData, type VaultData } from "./types.js";
+import { newVaultData, vaultKeys, type KeySecret, type VaultData } from "./types.js";
 
 export type VaultStatus = "loading" | "empty" | "locked" | "unlocked" | "error";
 
@@ -14,7 +14,8 @@ export type VaultApi = {
   data: VaultData | null;
   /** Derived in memory on unlock; never persisted. */
   keys: SoapayKeys | null;
-  create(mnemonic: string, passphrase: string): Promise<void>;
+  /** `secret`: a recovery phrase (default) or a wallet-signature key secret (plain EOAs only). */
+  create(secret: KeySecret, passphrase: string): Promise<void>;
   unlock(passphrase: string): Promise<void>;
   lock(): void;
   /** Applies `fn` to the latest data and persists it encrypted. Writes are serialised. */
@@ -55,9 +56,10 @@ export function VaultProvider({ children, idleLockMs = IDLE_LOCK_MS }: { childre
     };
   }, []);
 
-  const create = useCallback(async (mnemonic: string, passphrase: string) => {
-    const keys = keysFromMnemonic(mnemonic);
-    const data = newVaultData(mnemonic);
+  const create = useCallback(async (secret: KeySecret, passphrase: string) => {
+    const data = newVaultData(secret);
+    const keys = vaultKeys(data);
+
     const v = await createVault(data, passphrase);
     await saveEnvelope(v.envelope);
     setLive({ data, keys, key: v.key, kdf: v.kdf });
@@ -71,7 +73,7 @@ export function VaultProvider({ children, idleLockMs = IDLE_LOCK_MS }: { childre
       throw new Error("No vault on this device.");
     }
     const v = await openVault<VaultData>(env, passphrase);
-    const keys = keysFromMnemonic(v.data.mnemonic);
+    const keys = vaultKeys(v.data);
     setLive({ data: v.data, keys, key: v.key, kdf: v.kdf });
     setStatus("unlocked");
   }, []);

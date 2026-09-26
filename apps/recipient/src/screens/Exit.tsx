@@ -20,6 +20,7 @@ export function Exit() {
   return (
     <>
       <PageHeader
+        eyebrow="Compliant exit · Privacy Pools"
         title="Exit through Privacy Pools"
         description="Move salary to a wallet people know is yours without revealing which payroll lines it came from."
       />

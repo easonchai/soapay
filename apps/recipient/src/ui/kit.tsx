@@ -1,21 +1,24 @@
+/**
+ * Props-only building blocks, rendered with CK's Direction A · Ledger classes from @soapay/ui
+ * (`btn`, `btn-primary`, `notice-*`, `pill-*`, `facts`, `share`…). Same API as before the reskin, so
+ * every screen and hook is unchanged; only the look moved to the Ledger system.
+ */
 import {
   forwardRef,
   useId,
-  useState,
+
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
   type ReactNode,
   type TextareaHTMLAttributes,
 } from "react";
-import { AlertTriangle, Check, CheckCircle2, Copy, Info, Loader2, OctagonAlert } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import { Copy as LedgerCopy, Dots, Pill, type Tone } from "@soapay/ui";
 import { shortAddr } from "./format.js";
 
 export function cn(...parts: (string | false | null | undefined)[]): string {
   return parts.filter(Boolean).join(" ");
 }
-
-const focusRing =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "secondary" | "ghost" | "destructive" | "outline";
@@ -31,18 +34,12 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       disabled={disabled || loading}
       aria-busy={loading || undefined}
       className={cn(
-        "inline-flex select-none items-center justify-center gap-2 rounded-md font-medium whitespace-nowrap",
-        "transition-[background-color,color,box-shadow,transform] duration-150 active:scale-[0.98]",
-        "disabled:pointer-events-none disabled:opacity-50",
-        focusRing,
-        size === "sm" && "h-9 px-3 text-sm",
-        size === "md" && "h-10 px-4 text-sm",
-        size === "lg" && "h-12 px-5 text-base",
-        variant === "primary" && "bg-primary text-primary-foreground hover:bg-primary/90",
-        variant === "secondary" && "bg-secondary text-secondary-foreground hover:bg-secondary/70",
-        variant === "outline" && "border border-input bg-card hover:bg-muted",
-        variant === "ghost" && "hover:bg-muted",
-        variant === "destructive" && "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+        "btn",
+        variant === "primary" && "btn-primary",
+        variant === "ghost" && "btn-text",
+        variant === "destructive" && "btn-destructive",
+        size === "sm" && "btn-sm",
+        size === "lg" && "btn-lg",
         className,
       )}
       {...props}
@@ -55,36 +52,16 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 Button.displayName = "Button";
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(({ className, ...props }, ref) => (
-  <input
-    ref={ref}
-    className={cn(
-      "h-10 w-full rounded-md border border-input bg-card px-3 text-sm placeholder:text-muted-foreground/80",
-      "aria-[invalid=true]:border-destructive disabled:opacity-60",
-      focusRing,
-      className,
-    )}
-    {...props}
-  />
+  <input ref={ref} className={cn("w-full", className)} {...props} />
 ));
 Input.displayName = "Input";
 
-export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(
-  ({ className, ...props }, ref) => (
-    <textarea
-      ref={ref}
-      className={cn(
-        "min-h-24 w-full rounded-md border border-input bg-card px-3 py-2 text-sm placeholder:text-muted-foreground/80",
-        "aria-[invalid=true]:border-destructive",
-        focusRing,
-        className,
-      )}
-      {...props}
-    />
-  ),
-);
+export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(({ className, ...props }, ref) => (
+  <textarea ref={ref} className={cn("w-full", className)} {...props} />
+));
 Textarea.displayName = "Textarea";
 
-/** Label + control + hint + inline error, with ids wired for screen readers. */
+/** Label + control + hint + inline error, with ids wired for screen readers (Ledger `label.field` look). */
 export function Field({
   label,
   hint,
@@ -105,10 +82,10 @@ export function Field({
   const errId = error ? `${id}-err` : undefined;
   const describedBy = [hintId, errId].filter(Boolean).join(" ") || undefined;
   return (
-    <div className={cn("space-y-1.5", className)}>
-      <label htmlFor={id} className="block text-sm font-medium">
+    <div className={cn("flex flex-col gap-1", className)}>
+      <label htmlFor={id} className="text-xs text-muted-foreground">
         {label}
-        {required && <span className="text-muted-foreground"> (required)</span>}
+        {required && <span> (required)</span>}
       </label>
       {children({ id, describedBy, invalid: Boolean(error) })}
       {hint && (
@@ -125,9 +102,10 @@ export function Field({
   );
 }
 
+/** Ledger panel: 1px line, white surface, 2px corners. Padding comes from `className` or CardHeader. */
 export function Card({ className, children, as: As = "section", ...rest }: { className?: string; children: ReactNode; as?: "section" | "div" | "article"; "aria-labelledby"?: string }) {
   return (
-    <As className={cn("rounded-lg border bg-card text-card-foreground", className)} {...rest}>
+    <As className={cn("panel", className)} {...rest}>
       {children}
     </As>
   );
@@ -135,12 +113,10 @@ export function Card({ className, children, as: As = "section", ...rest }: { cla
 
 export function CardHeader({ title, description, action, id }: { title: ReactNode; description?: ReactNode; action?: ReactNode; id?: string }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3 border-b px-4 py-3 sm:px-5">
+    <div className="flex flex-wrap items-start justify-between gap-3 border-b px-5 py-3">
       <div className="min-w-0 space-y-0.5">
-        <h2 id={id} className="text-base font-semibold">
-          {title}
-        </h2>
-        {description && <p className="text-sm text-muted-foreground">{description}</p>}
+        <h2 id={id}>{title}</h2>
+        {description && <p className="lead" style={{ marginTop: 2 }}>{description}</p>}
       </div>
       {action}
     </div>
@@ -148,8 +124,14 @@ export function CardHeader({ title, description, action, id }: { title: ReactNod
 }
 
 type AlertVariant = "info" | "warning" | "destructive" | "success";
-const alertIcon = { info: Info, warning: AlertTriangle, destructive: OctagonAlert, success: CheckCircle2 };
+const noticeClass: Record<AlertVariant, string> = {
+  info: "notice-info",
+  warning: "notice-warn",
+  destructive: "notice-danger",
+  success: "notice-ok",
+};
 
+/** Ledger notice: a flat tinted block, no icon. */
 export function Alert({
   variant = "info",
   title,
@@ -165,52 +147,30 @@ export function Alert({
   className?: string;
   role?: "alert" | "status";
 }) {
-  const Icon = alertIcon[variant];
   return (
-    <div
-      role={role ?? (variant === "destructive" ? "alert" : "status")}
-      className={cn(
-        "flex gap-3 rounded-lg border p-3 text-sm sm:p-4",
-        variant === "info" && "border-border bg-muted/60",
-        variant === "warning" && "border-warning/40 bg-warning-bg",
-        variant === "destructive" && "border-destructive/40 bg-destructive/10",
-        variant === "success" && "border-success/40 bg-success/10",
-        className,
-      )}
-    >
-      <Icon
-        aria-hidden
-        className={cn(
-          "mt-0.5 size-4 shrink-0",
-          variant === "info" && "text-muted-foreground",
-          variant === "warning" && "text-warning",
-          variant === "destructive" && "text-destructive",
-          variant === "success" && "text-success",
-        )}
-      />
+    <div role={role ?? (variant === "destructive" ? "alert" : "status")} className={cn("notice", noticeClass[variant], className)}>
       <div className="min-w-0 flex-1 space-y-1">
-        {title && <p className="font-medium">{title}</p>}
-        {children && <div className="text-foreground/90">{children}</div>}
+        {title && <p className="notice-title">{title}</p>}
+        {children && <div className="notice-body">{children}</div>}
         {action && <div className="pt-2">{action}</div>}
       </div>
     </div>
   );
 }
 
+const badgeTone: Record<"neutral" | "warning" | "destructive" | "success" | "accent", Tone> = {
+  neutral: "muted",
+  warning: "warn",
+  destructive: "danger",
+  success: "ok",
+  accent: "accent",
+};
+
+/** Ledger status pill (used sparingly: amber for "not yet real", red for errors). */
 export function Badge({ children, tone = "neutral", title }: { children: ReactNode; tone?: "neutral" | "warning" | "destructive" | "success" | "accent"; title?: string }) {
   return (
-    <span
-      title={title}
-      className={cn(
-        "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap",
-        tone === "neutral" && "bg-muted text-muted-foreground",
-        tone === "accent" && "border-transparent bg-accent text-accent-foreground",
-        tone === "warning" && "border-warning/40 bg-warning-bg text-warning",
-        tone === "destructive" && "border-destructive/40 bg-destructive/10 text-destructive",
-        tone === "success" && "border-success/40 bg-success/10 text-success",
-      )}
-    >
-      {children}
+    <span title={title} className="inline-flex">
+      <Pill tone={badgeTone[tone]}>{children}</Pill>
     </span>
   );
 }
@@ -236,15 +196,11 @@ export function Checkbox({
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className={cn(
-          "mt-0.5 size-5 shrink-0 rounded border-input",
-          tone === "destructive" ? "accent-destructive" : "accent-primary",
-          focusRing,
-        )}
+        className="mt-0.5 size-4 shrink-0"
         aria-describedby={description ? `${id}-d` : undefined}
       />
       <div className="space-y-0.5">
-        <label htmlFor={id} className={cn("text-sm font-medium", tone === "destructive" && "text-destructive")}>
+        <label htmlFor={id} className={cn("font-medium", tone === "destructive" && "text-destructive")}>
           {label}
         </label>
         {description && (
@@ -258,62 +214,48 @@ export function Checkbox({
 }
 
 export function Skeleton({ className }: { className?: string }) {
-  return <div aria-hidden className={cn("animate-pulse rounded-md bg-muted", className)} />;
+  return <div aria-hidden className={cn("skeleton", className)} />;
 }
 
+/** CK's Copy text button ("Copy" → "Copied"). `className` is accepted for API compatibility. */
 export function CopyButton({ value, label = "Copy", className }: { value: string; label?: string; className?: string }) {
-  const [copied, setCopied] = useState(false);
   return (
-    <Button
-      variant="outline"
-      size="sm"
-      className={className}
-      onClick={async () => {
-        try {
-          await navigator.clipboard.writeText(value);
-          setCopied(true);
-          setTimeout(() => setCopied(false), 1500);
-        } catch {
-          // Clipboard blocked: the value is visible and selectable anyway.
-        }
-      }}
-    >
-      {copied ? <Check className="size-4" aria-hidden /> : <Copy className="size-4" aria-hidden />}
-      <span aria-live="polite">{copied ? "Copied" : label}</span>
-    </Button>
+    <span className={className}>
+      <LedgerCopy value={value} label={label} />
+    </span>
   );
 }
 
 export function Addr({ address, chars = 4, className }: { address: string; chars?: number; className?: string }) {
   return (
-    <span className={cn("font-mono text-[0.8125rem] tabular-nums", className)} title={address}>
+    <code className={cn("tabular-nums", className)} title={address}>
       {shortAddr(address, chars)}
-    </span>
+    </code>
   );
 }
 
-export function PageHeader({ title, description, action }: { title: ReactNode; description?: ReactNode; action?: ReactNode }) {
+/** CK's PageHead (eyebrow, title, one line, dot texture, actions), without requiring an eyebrow. */
+export function PageHeader({ title, description, action, eyebrow }: { title: ReactNode; description?: ReactNode; action?: ReactNode; eyebrow?: ReactNode }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-        {description && <p className="max-w-prose text-sm text-muted-foreground">{description}</p>}
+    <div className="pagehead mb-6">
+      <div className="text">
+        {eyebrow && <span className="eyebrow">{eyebrow}</span>}
+        <h1>{title}</h1>
+        {description && <p className="lead">{description}</p>}
       </div>
-      {action}
+      <Dots mode="right" animate className="dots" />
+      {action && <div className="actions">{action}</div>}
     </div>
   );
 }
 
-export function EmptyState({ icon: Icon, title, children, action }: { icon: typeof Info; title: string; children?: ReactNode; action?: ReactNode }) {
+/** CK's `.empty` panel with the dot texture. `icon` is kept for API compatibility and not drawn. */
+export function EmptyState({ title, children, action }: { icon?: unknown; title: string; children?: ReactNode; action?: ReactNode }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 px-6 py-12 text-center">
-      <div className="rounded-full bg-muted p-3">
-        <Icon className="size-6 text-muted-foreground" aria-hidden />
-      </div>
-      <div className="max-w-sm space-y-1">
-        <p className="text-sm font-medium">{title}</p>
-        {children && <div className="text-sm text-muted-foreground">{children}</div>}
-      </div>
+    <div className="empty">
+      <Dots mode="field" className="dots" />
+      <h2>{title}</h2>
+      {children && <div className="lead">{children}</div>}
       {action}
     </div>
   );

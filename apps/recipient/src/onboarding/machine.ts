@@ -3,6 +3,7 @@
  * the challenge indices in), so every transition is unit-testable.
  *
  *   welcome ─create→ backup ─→ confirm ─ok→ passphrase ─vault→ register → name ─chosen→ recovery → share
+ *          └wallet→ wallet ─signed (plain EOA only)→ passphrase
  *          └restore→ restore ─valid→ passphrase ─┘                          └──skip name──────────┘
  *
  * `recovery` is OPTIONAL (docs/mvp-spec.md §5): a World ID Selfie Check session for self-service key
@@ -12,16 +13,18 @@
  * The mnemonic lives only in the pre-vault states; once the vault is created it is dropped from the
  * machine (the vault holds it, encrypted). The seed is shown exactly once, in `backup`.
  */
-import type { Profile } from "../vault/types.js";
+import type { Profile, WalletKeySecret } from "../vault/types.js";
 
-export type Origin = "create" | "restore";
+export type Origin = "create" | "restore" | "wallet";
 
 export type OnboardingState =
   | { step: "welcome" }
   | { step: "backup"; mnemonic: string }
   | { step: "confirm"; mnemonic: string; challenge: number[]; error: string | null; attempts: number }
   | { step: "restore"; error: string | null }
-  | { step: "passphrase"; mnemonic: string; origin: Origin }
+  | { step: "wallet"; error: string | null }
+  /** `wallet` is set (and `mnemonic` is "") for the wallet-signature key option. */
+  | { step: "passphrase"; mnemonic: string; origin: Origin; wallet?: WalletKeySecret }
   | { step: "register" }
   | { step: "name" }
   | { step: "recovery"; label: string; inviteCode?: `0x${string}` }
@@ -33,6 +36,9 @@ export type OnboardingEvent =
   | { type: "BACKED_UP"; challenge: number[] }
   | { type: "CONFIRM"; answers: string[] }
   | { type: "RESTORE" }
+  | { type: "USE_WALLET" }
+  | { type: "WALLET_SIGNED"; wallet: WalletKeySecret }
+  | { type: "WALLET_FAILED"; error: string }
   | { type: "RESTORE_SUBMIT"; mnemonic: string; valid: boolean }
   | { type: "BACK" }
   | { type: "VAULT_CREATED" }
@@ -73,6 +79,15 @@ export function reduce(state: OnboardingState, event: OnboardingEvent): Onboardi
     case "welcome":
       if (event.type === "CREATE") return { step: "backup", mnemonic: event.mnemonic };
       if (event.type === "RESTORE") return { step: "restore", error: null };
+      if (event.type === "USE_WALLET") return { step: "wallet", error: null };
+      return state;
+
+    // Wallet-signature keys (plain EOAs only). The screen checks the account and the signatures with the
+    // SDK (`assertPlainEoa`, `keysFromWalletSignature`) and reports the outcome here.
+    case "wallet":
+      if (event.type === "BACK") return { step: "welcome" };
+      if (event.type === "WALLET_FAILED") return { step: "wallet", error: event.error };
+      if (event.type === "WALLET_SIGNED") return { step: "passphrase", mnemonic: "", origin: "wallet", wallet: event.wallet };
       return state;
 
     case "backup":
@@ -109,7 +124,10 @@ export function reduce(state: OnboardingState, event: OnboardingEvent): Onboardi
 
     case "passphrase":
       if (event.type === "VAULT_CREATED") return { step: "register" };
-      if (event.type === "BACK") return state.origin === "create" ? { step: "backup", mnemonic: state.mnemonic } : { step: "restore", error: null };
+      if (event.type === "BACK") {
+        if (state.origin === "wallet") return { step: "wallet", error: null };
+        return state.origin === "create" ? { step: "backup", mnemonic: state.mnemonic } : { step: "restore", error: null };
+      }
       return state;
 
     case "register":
@@ -140,6 +158,6 @@ export function reduce(state: OnboardingState, event: OnboardingEvent): Onboardi
 /** Progress indicator: [current index, total], counting the steps a user sees. */
 export function progressOf(state: OnboardingState): [number, number] {
   const order = ["welcome", "backup", "confirm", "passphrase", "register", "name", "recovery", "share"];
-  const step = state.step === "restore" ? "backup" : state.step === "done" ? "share" : state.step;
+  const step = state.step === "restore" || state.step === "wallet" ? "backup" : state.step === "done" ? "share" : state.step;
   return [order.indexOf(step), order.length - 1];
 }
