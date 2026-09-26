@@ -1,6 +1,6 @@
 # ETHGlobal Tokyo 2026 submission
 
-Text for the project page. Each field is plain text on the form, so paste the block as is. Every claim below comes from `README.md`, `CLAUDE.md` and the pitch evidence digests in `pitch/evidence/`.
+Text for the project page. Each field is plain text on the form, so paste the block as is. Every claim below comes from `README.md`, `CLAUDE.md` and the pitch evidence digests in `pitch/EVIDENCE.md`.
 
 ## Short description
 

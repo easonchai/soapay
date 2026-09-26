@@ -147,7 +147,7 @@ metadata:
   - Fixed: the sender app now waits for the approval to be visible before `pay` (the same load-balanced RPC lag).
   - **Tailscale demo:** `scripts/build-demo.sh <origin>` + `node scripts/serve-demo.mjs` (:4300) + `tailscale serve --bg --https=9443 http://127.0.0.1:4300`, giving https://yudhishthra-eth.taila3275f.ts.net:9443/ (recipient), /sender/, /api. Ports 443, 8443 and 8445 belong to other services; don't touch them.
   - The API must run as `node --env-file=.env dist/index.js` in apps/api; local .env rate limits are relaxed for the demo.
-- Checkpoint 11 (2026-09-26): `main` has CK's frontend (#2, #3, #5): his own apps, `packages/ui`, duplicate SDK modules, wallet-signature keys, the old StealthDisperse ABI. A trial merge conflicts in about 20 files. The owner said to push and leave a divergence note (docs/DIVERGENCE.md) and a PR for CK instead of force-merging. Merge direction proposed: our SDK/API as the base plus CK's visual layer.
+- Checkpoint 11 (2026-09-26): `main` has CK's frontend (#2, #3, #5): his own apps, `packages/ui`, duplicate SDK modules, wallet-signature keys, the old StealthDisperse ABI. A trial merge conflicts in about 20 files. The owner said to push and leave a divergence note (the CK divergence note (removed 2026-09-27)) and a PR for CK instead of force-merging. Merge direction proposed: our SDK/API as the base plus CK's visual layer.
 - Checkpoint 12 (2026-09-26): MCP server (spec §8) started in parallel to the CK merge (no file overlap). Agents get *.soapay.eth names with ENSIP-25/26 records; guardrails include caps, dry-run then confirm, and guard enforcement.
 - Checkpoint 13 (2026-09-26): MCP server MERGED (`apps/mcp`, 54 tests).
   - Live: an agent created `mcp-agent-7c1e.soapay.eth` with ENSIP-26 `agent-context` / `agent-endpoint[web]`, received 0.3 USDC, scanned it and spent 0.1 USDC by name; a guard `block` was confirmed.
@@ -184,10 +184,10 @@ metadata:
 - Checkpoint 20 (2026-09-26): **PUBLIC DEMO LIVE on Railway**: https://web-production-9b930.up.railway.app (Aqua0 workspace, project `soapay` e8c49139…; services `web` + `api` with a /data volume; the api is private-network only).
   - Verified: both apps 200, /api/health, /api/worldid/config, and a /api/uniswap quote.
   - Deployed from `yudhishthra`; redeploy after the CK merge.
-  - Drift audit in docs/drift-audit.md.
+  - Drift audit in the drift audit (removed 2026-09-27; outcomes in docs/decision-log.md).
   - Shielded rail: the PRD names Railgun or **Privacy Pools v2** (after M5). Fhenix would break "nothing custom holds funds", so the recommendation is to request 0xbow PP v2 SDK early access (awaiting the owner).
 - Checkpoint 21 (2026-09-26):
-  - PP v2 context saved in docs/privacy-pools-v2.md. Stealth withdrawals use OUR scheme (ERC-5564 scheme 1 plus the canonical Announcer), so the existing scanner finds them; there are group payouts, a 0xbow Payroll PoC, and USDC on Sepolia.
+  - PP v2 context saved in docs/shielded-rail-research.md, Part C. Stealth withdrawals use OUR scheme (ERC-5564 scheme 1 plus the canonical Announcer), so the existing scanner finds them; there are group payouts, a 0xbow Payroll PoC, and USDC on Sepolia.
   - Blockers: the SDK is early-access (ask @0xbowio), and the Sepolia V9 relay lacks relayAndAnnounce.
   - CK INTEGRATION DONE on branch `integrate-ck` (8 commits, all green: SDK 252, API 127, recipient 86, sender 119, mcp 54, contracts 31). Screens are in /mnt/storage/tmp/soapay-screens.
   - Two open clashes: (1) rotation for signature-derived accounts (the agent recommends requiring a move to a phrase account); (2) the sender's pasted list vs a pinned roster (the agent recommends roster only).

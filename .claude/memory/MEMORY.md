@@ -8,8 +8,6 @@
 - [ScopeLift ESM quirk](scopelift-sdk-esm-quirk.md) — bundle/inline/tsx the SDK; plain Node can't load it
 - [Open questions](prd-open-questions.md) — items not already tracked in CLAUDE.md or contracts/PLAN.md
 - [Bounties](decision-bounties.md) — ENSv2 + World IDKit (Uniswap dropped 09-26, D-53); Intercepta rejected
-- [CK's UI](team-ui-ck.md) — teammate CK builds a separate UI; keep ours simple with logic in hooks for a later merge/compare
 - [CK integration](decision-ck-integration.md) — CK's UI + our engine; keys, spend, sender-mode, backend and names decisions for the merge
 - [Privacy roadmap](decision-privacy-roadmap.md) — timing fix + swap-proxy fix; shielded rail post-hackathon (D-31); IDKit only; pre-submission order
 - [Decision log](../../docs/decision-log.md) — D-xx entries with PRD ref, decider, why, commits; trace mistakes here first
-- [Frontend M1](decision-frontend-m1.md) — CK's M1 as built (signature keys, gateway relayer, 3 sender modes); superseded by CK integration where they differ
