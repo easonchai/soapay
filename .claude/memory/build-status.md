@@ -191,3 +191,9 @@ metadata:
   - Blockers: the SDK is early-access (ask @0xbowio), and the Sepolia V9 relay lacks relayAndAnnounce.
   - CK INTEGRATION DONE on branch `integrate-ck` (8 commits, all green: SDK 252, API 127, recipient 86, sender 119, mcp 54, contracts 31). Screens are in /mnt/storage/tmp/soapay-screens.
   - Two open clashes: (1) rotation for signature-derived accounts (the agent recommends requiring a move to a phrase account); (2) the sender's pasted list vs a pinned roster (the agent recommends roster only).
+
+**Checkpoint 22 (2026-09-26): traceability.**
+- `docs/decision-log.md` created: D-01…D-30, each with the PRD ref, type, decider, why, commits and status (superseded chain: D-03→D-06, D-04→D-17, D-10→D-12, D-15→D-16), plus a "mistakes caught and corrected" table.
+- **Agent decisions awaiting owner confirmation:** D-19 (the exit mints to the same stealth address).
+- **From now on every checkpoint cites decision IDs + commits** (rule added to CLAUDE.md).
+- Open: the CK clash fixes are in flight on `integrate-ck` (D-24, D-25); then merge, push and redeploy Railway (D-30).

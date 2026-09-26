@@ -1,0 +1,57 @@
+# Decision log
+
+Every product or architecture decision gets an entry here, with the PRD section it touches, who made it, why, and the commit(s) that implemented it. If something looks wrong or off-PRD, find the entry, check its reasoning and evidence, and fix it forward with a new entry that **supersedes** the old one. Never edit history.
+
+**Types:** `aligned` (implements the PRD as written) · `deviation` (differs from the PRD, with a reason) · `addition` (not in the PRD) · `deferral` · `correction` (a mistake that was caught and fixed).
+**Decided by:** `owner` (Yudhishthra) · `team` (agreed with teammates) · `agent` (made during implementation and not yet confirmed by the owner, so review these first when tracing a problem).
+
+| ID | Date | Decision | PRD ref | Type | By | Why | Commits | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| D-01 | 09-25 | Monorepo: pnpm + turbo, Vite React SPAs, Hono API, SDK-only protocol code | Components; SDK P0 | aligned | owner | Key-holding apps shouldn't depend on a server | 5fed43e | active |
+| D-02 | 09-25 | Names don't set `addr` to the registrant | Flow 1 step 4 | deviation | owner | Following the PRD literally makes plain wallets pay one static, linkable address | 22d91f8 | active |
+| D-03 | 09-25 | Pay run: EIP-5792 batch only, no Disperse | Flow 2 | deviation | owner | Disperse behind a multicall can't pull from an EOA | 22d91f8 | **superseded by D-06** |
+| D-04 | 09-25 | Gateway announces at resolve (as the PRD says) | Flow 3 | aligned | owner | Keeps invariant 3 | 22d91f8 | **superseded by D-17** |
+| D-05 | 09-25 | Threat model: the coworker is the only adversary; the employer is trusted; ENS is a reference and the meta-address is pinned | Users & threat model | deviation | team (teammate) | Narrower v1 scope | 752c2e1 (main) | active: **the PRD still claims chain-analyst protection, see docs/drift-audit.md §E4** |
+| D-06 | 09-25 | One custom contract, `StealthDisperse` (no funds, no state), for plain EOAs; smart accounts use an EIP-5792 batch | Flow 2; "nothing custom holds funds" | deviation | team | Makes D-03 work for EOAs; the no-custody rule still holds | d6253d3 (main), 2e62d40 | active |
+| D-07 | 09-25 | Pack StealthDisperse calldata to 64 B/line | Performance (100-recipient batch) | aligned | owner | Reduces the L1 data fee on Base | 8aa3f4d | active |
+| D-08 | 09-25 | Token restriction and payer filtering only in clients; the contract stays stateless | Security | aligned | owner | Keeps the contract ownerless | 22d91f8 | active |
+| D-09 | 09-25 | v1 = USDC on Base only | Goals; paymaster | aligned | owner | Matches the paymaster and the wedge | 22d91f8 | active |
+| D-10 | 09-25 | Names: ENSv1 off-chain CCIP subnames | Flow 1 | deviation | owner | Avoids the L1 gas problem | 22d91f8 | **superseded by D-12** |
+| D-11 | 09-25 | Bounty targets: ENSv2, World IDKit, Uniswap API; Intercepta rejected (it needs an agent payment flow, which is M5) | n/a | addition | owner | Each sits on an existing PRD step | 95c2768 | active |
+| D-12 | 09-25 | Names: ENSv2 on-chain subnames with a per-employee Permissioned Resolver; EAC lets only the registrant write `stealth`; non-transferable and revocable | Flow 1; ENS row | deviation (upgrade) | owner | Salary-redirect protection is enforceable on-chain; the ENS prize | 95c2768, 9201bc1 | active |
+| D-13 | 09-25 | Key rotation "option A": the registrant writes `stealth`; the API issues an EIP-712 attestation after World ID; the sender auto-accepts a changed pin only with it | Risks (ENS controls where salary goes) | addition | owner | World ID can't be verified on-chain on Sepolia; keeps the registrant as sole writer | 67b3396, 576bd60, 4f6e97e | active |
+| D-14 | 09-25 | Rotation also relays the ERC-6538 re-registration | Invariant 4 | correction | agent (two agents flagged it) | Otherwise the resolve cross-check fails after a rotation | 593ff5b | active |
+| D-15 | 09-25 | World ID: an enrollment uniqueness gate (Proof of Human) plus rotation | n/a | addition | agent proposal | "Two trust moments" | e86cb3b | **superseded by D-16** |
+| D-16 | 09-25 | World ID: ONE trust moment (rotation) with an optional **Selfie Check session**; no enrollment gate, no Orb | n/a | correction | owner | The gate was a cosmetic add-on and forced an Orb visit; rotation is a continuity question | 790de54, 1e9cba1 | active |
+| D-17 | 09-25 | Gateway derivation mode **deferred** (tier 2), not cut | Flow 3; M3 | deferral | owner | The PRD itself puts it in tier 2; it conflicts with the D-12 design | 826da38 | active |
+| D-18 | 09-25 | The compliant exit (Privacy Pools v1 via CCTP) is back IN v1 | Goal 5; Flow 4 | aligned | owner | A coworker knows your main wallet, so without an exit you can't cash out | 826da38, a49c65c, bce9c6d | active |
+| D-19 | 09-25 | The exit mints back to the **same** stealth address (not a fresh address) | Flow 4 | deviation | agent (research) | The CCTP message names the recipient anyway; no ETH is needed | bce9c6d | active: **agent decision, confirm** |
+| D-20 | 09-25 | Uniswap: swap *in place* inside the stealth address (employee side only) | Flow 4 spending | addition | owner | Privacy-neutral conversion | 593ff5b | active |
+| D-21 | 09-25 | Invite links reserve a label for the employee | Flow 1 | addition | owner | Easier onboarding | c03bf8e, e16532e | active |
+| D-22 | 09-25 | MCP server; agents get `*.soapay.eth` with ENSIP-26 records | M5; SDK P2 | aligned (pulled forward) | owner | ENSv2 "agents as namespaces" | 91d31b4, 494c5de | active |
+| D-23 | 09-26 | Keys: recovery phrase by default, plus wallet signature for EOAs only | Flow 1 step 1 ("single seed") | aligned + option | owner | CK shipped signature-only; smart wallets' signatures aren't deterministic | 3aef595 | active |
+| D-24 | 09-26 | Merging with CK: CK's UI on our engine; gasless spend replaces "reveal key"; sequential mode dropped; his gateway `/relay` folded into `apps/api` | Goals 3, 7; invariant 3 | correction (of CK drift) | owner | Precedence: PRD, then recorded decisions, then implementation | 15449da, integrate-ck | active |
+| D-25 | 09-26 | Rotation for signature accounts means moving to a phrase account; the pay run is roster-only | Flow 1; Flow 2 | aligned | owner | One rotation model; every payee is a verified name | 8f8162d | active |
+| D-26 | 09-26 | Shielded rail = **Privacy Pools v2** (request SDK access); **not** Fhenix | Amount privacy; roadmap | aligned | owner | The PRD names Railgun or PP v2; Fhenix breaks "nothing custom holds funds" | ea8f451, 59225b6 | active (blocked on access) |
+| D-27 | 09-26 | Swap default = platform-free route; the Trading API quotes with a placeholder swapper | Trust claims | correction | owner | The proxy leaked stealth addresses to our platform | 0f8ddc3 | queued |
+| D-28 | 09-26 | Timing fix: a client-side randomized spend queue across sessions | Goal 2 | addition | owner | Pre-signed userOps can't carry time windows in our stack | 0f8ddc3, beceb9b | queued |
+| D-29 | 09-26 | Next after the merge: a platform-agnostic SDK refactor | SDK goals | addition | owner | Reuse for dividends and grants | d9a8fe8 | queued |
+| D-30 | 09-26 | Public demo on Railway (Aqua0 workspace), default URLs | Submission | n/a | owner | The prize needs a live demo link | 4a0d08b | active |
+
+## Mistakes caught and corrected (for tracing)
+
+| Where | The mistake | How it was caught | The fix |
+| --- | --- | --- | --- |
+| Spec §3 (Safe) | Told the agent the outer Safe op was `CALL` (0); it must `DELEGATECALL` MultiSendCallOnly | The implementing agent | 95c2768 (spec updated) |
+| CLAUDE.md permit note | "7702 permits fail", but they validate for Simple7702Account | Base fork E2E | 67b3396 |
+| World ID (D-15) | Planned two actions for "same human"; nullifiers are per action, so that can't work | Reading the docs | e86cb3b → D-16 |
+| World ID (D-15) | The enrollment gate was cosmetic and added Orb friction | Owner challenge ("is it really needed?") | 790de54 |
+| FEEDBACK.md | Claimed Uniswap's skill was out of date about the `/swap` body | Live re-test: the skill was right | 346870b |
+| API `/names` | `meta_mismatch` right after `/register` (RPC read-after-write lag) | Live testnet run | eddbd5b |
+| Sender approve → pay | `pay` failed with "exceeds allowance" (the same lag) | Live testnet run | 6ced8aa |
+| Exit planner | The leg minimum was underestimated (12.6 → about 16.5 USDC); the runner doesn't persist before sending | SDK agent review | open (see checkpoint 17) |
+| Uniswap proxy | The platform sees stealth addresses | Owner's trust question | queued (D-27) |
+
+## How to add an entry
+
+The next ID, the date, the PRD section (quote it if it's ambiguous), the type, who decided, a one-line why, and the commits. If it replaces an entry, mark the old one **superseded by D-xx**. `agent` decisions must be confirmed by the owner before they're relied on.

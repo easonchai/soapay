@@ -68,4 +68,6 @@ Work on personal branches (`yudhishthra`, …) and merge to `main` by PR.
 
 Project memory is committed in `.claude/memory/` and shared by everyone on the team. Store project facts only: decisions, constraints, external references. No personal preferences, secrets, or keys. One fact per file with frontmatter, plus a one-line pointer in the index. Update an existing file rather than adding a duplicate. When memory conflicts with this file, this file wins.
 
+**Traceability:** every product or architecture decision gets an entry in `docs/decision-log.md` (ID, PRD section, type, who decided, why, commits; superseded entries stay, marked). Every checkpoint in `.claude/memory/build-status.md` cites the decision IDs and commit hashes it covers, and flags any `agent` decision that still needs owner confirmation.
+
 @.claude/memory/MEMORY.md
