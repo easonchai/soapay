@@ -146,6 +146,28 @@ EXIT_LIVE=1 EMPLOYER_KEY=$DEPLOYER_PRIVATE_KEY PAY_AMOUNT=18000000 EXIT_LIVE_MIN
 | ASP approval | approved |
 | **Direct** withdrawal (Ethereum Sepolia) to a fresh wallet funded only from a public faucet: 9.95 USDC arrived | [0xed92…c672](https://sepolia.etherscan.io/tx/0xed9235c87f7643bde048cd9e29c8abebe989a64016a628c85faa7ed5724fc672) |
 
+## Recovery beat: stolen phrase vs pin check (World ID account recovery)
+
+**Run 2026-09-26** with `pnpm demo:recovery-check sam-demo` (D-55): 10/10 checks passed against the live API (`https://soapay.up.railway.app/api`, pinned attester `0x6237…2574`).
+
+- `sam-demo.soapay.eth`: registrant `0x897BeA8D61cc3C4c4F915ef4C73F31089242b2C8`, resolver `0xF8A169c2b178A3B36A695F93cf2de4F85950Ca3D`, claimed by `pnpm demo:setup-recovery` (ERC-6538 [0xb807…8065](https://sepolia.basescan.org/tx/0xb8072c287cdb65139f607e8d0e8260fa60a6ae7e773d5838dbe0bc7bf9268065), name [0xffd3…c29d](https://sepolia.etherscan.io/tx/0xffd310b3bb82b1d6ce39a216e73f1e8a96bfac99966c99f36f2fb0df67b7c29d)). The first claim attempt got a bare proxy 502 while the name was issued on-chain but not stored by the API; the `soapay.eth` owner unregistered it ([0x3e9a…c52e](https://sepolia.etherscan.io/tx/0x3e9ae13fdcf6881eff9428f99bd4a3736191c210e455aa54e8ff3cc1e210c52e)) and the claim was re-run. `examples/demo/claim.ts` now waits for the row after a bare 5xx.
+
+| Step | Result | Tx |
+| --- | --- | --- |
+| Pin (SDK `checkMetaPin`, then `soapay distribute` dry run) | `new` → `ok`; CLI exit 0 | — |
+| Gas top-up to the stolen registrant (Sepolia, from the `soapay.eth` owner) | | [0x1eb7…dce5](https://sepolia.etherscan.io/tx/0x1eb79e84d2c965db30bd2e35ea95811740b32abddefc3bdfb877cab6af40dce5) |
+| **Attack:** ENS `setText(stealth)` → attacker meta, from the stolen registrant key | success | [0xc156…7646](https://sepolia.etherscan.io/tx/0xc1566a093999556cfa5e8624a51397d0d80ff9b209608e276232cbc99e577646) |
+| **Attack:** ERC-6538 `registerKeys` → attacker meta (Base Sepolia) | success | [0x14e2…dac2](https://sepolia.basescan.org/tx/0x14e212ca212570e4c61b7a7b3f80eef31580e1207bde6416563d1ac34e92dac2) |
+| `POST /names/sam-demo/rotation` (valid RotationClaim, no World ID proof) | **409 `no_session`**, no attestation | — |
+| Re-check | SDK **`blocked`**, attestation `missing` ("No World ID re-verification on record for this change"); CLI **exit 3** (ALERT, nothing sent) | — |
+| **Restore:** ENS `setText(stealth)` → victim meta | success | [0x43be…3431](https://sepolia.etherscan.io/tx/0x43be4fadc4f44ddc4006413c079e5d4640a56f7057646170790c30dc35593431) |
+| **Restore:** ERC-6538 `registerKeys` → victim meta | success | [0x373f…dc0d](https://sepolia.basescan.org/tx/0x373f79fe194e321ffbe906b9ea97af84d85447a63faedec997c27388113bdc0d) |
+| Re-check after restore | SDK `ok`; CLI exit 0 | — |
+
+Earlier runs the same day (same outcome) also rewrote and restored the record: attack [0x0a33…64be](https://sepolia.etherscan.io/tx/0x0a336568103d6ad9772b45aa307a1e6af03dbbebc78047ff21a6f1c8c81d64be) / [0xe666…90a4](https://sepolia.basescan.org/tx/0xe6665cc98ccd09399d4baae8d9a2fc0f537fe3c5b71eb159cf98be74dd3290a4), restore [0x8e7a…2f3d](https://sepolia.etherscan.io/tx/0x8e7ac0b41839c844406f381f71b154a81f3f9626dd2025292f760b802f252f3d) / [0xd4bc…c45b](https://sepolia.basescan.org/tx/0xd4bcc13c455f6fcb9b2575dcce7ba7428be9484641bf85657a8dcdfaf326c45b); attack [0xd184…bbaa](https://sepolia.etherscan.io/tx/0xd1845f5e6eb2900ead79eae6db999e2e466825a1c07a61c1bd1c40338f38bbaa) / [0x4122…4f33](https://sepolia.basescan.org/tx/0x4122d8ca3439bb9fcd239c5c50188612931413f056e0466b407d5ce0a57a4f33), restore [0x7af9…05e6](https://sepolia.etherscan.io/tx/0x7af9173297d7acc1a7655a4471f90d36d378d97601941bcb3be43f92546105e6) / [0x9c57…bebe](https://sepolia.basescan.org/tx/0x9c573798510ec8a69c57d169dff859f7113c514def473482726cf8fae920bebe).
+
+Not verified here: the company app's UI pill (it runs the same SDK `checkMetaPin` and attestation lookup, but no browser was driven) and the accepted path (alex-demo rotating with a real World App).
+
 ## Not yet run live
 
 - A full pay run → scan → sponsored spend through the apps with the mock token (the pieces ran live separately: the welcome drop and two sponsored spends above; StealthDisperse is token-agnostic and its mock-token permit path is covered by `contracts/test/MockUSDC.t.sol`). The deployer now holds 1,000,000 mock USDC for it.
