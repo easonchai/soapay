@@ -1,8 +1,14 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { VaultGate } from "../src/pages/VaultGate.js";
 
-afterEach(cleanup);
+beforeEach(() => vi.useFakeTimers());
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
+/** The gate lets its halo flow out for ~420 ms before handing over. */
+const settle = () => vi.advanceTimersByTime(600);
 
 describe("VaultGate", () => {
   it("locked with a device key: one pulsing primary button, and it unlocks", () => {
@@ -12,6 +18,8 @@ describe("VaultGate", () => {
     expect(btn.className).toContain("pulse");
     expect(screen.queryByLabelText(/passphrase/i)).toBeNull();
     fireEvent.click(btn);
+    expect(onUnlock).not.toHaveBeenCalled();
+    settle();
     expect(onUnlock).toHaveBeenCalledWith();
   });
 
@@ -21,6 +29,7 @@ describe("VaultGate", () => {
     const field = screen.getByLabelText(/^passphrase$/i);
     fireEvent.change(field, { target: { value: "correct horse battery" } });
     fireEvent.click(screen.getByRole("button", { name: /^unlock$/i }));
+    settle();
     expect(onUnlock).toHaveBeenCalledWith("correct horse battery");
   });
 
@@ -30,15 +39,21 @@ describe("VaultGate", () => {
     const create = screen.getByRole("button", { name: /create vault/i });
     expect(create).not.toBeDisabled();
     fireEvent.click(create);
+    settle();
     expect(onCreate).toHaveBeenCalledWith("device", undefined);
+    cleanup();
+    // a fresh gate for the passphrase path (the first one is now leaving)
+    render(<VaultGate phase="new" vaultMode={null} minPassphrase={10} error={null} onCreate={onCreate} onUnlock={() => {}} />);
+    const create2 = screen.getByRole("button", { name: /create vault/i });
 
     fireEvent.click(screen.getByRole("radio", { name: /passphrase/i }));
-    expect(create).toBeDisabled();
+    expect(create2).toBeDisabled();
     fireEvent.change(screen.getByLabelText(/new passphrase/i), { target: { value: "short" } });
-    expect(create).toBeDisabled();
+    expect(create2).toBeDisabled();
     fireEvent.change(screen.getByLabelText(/new passphrase/i), { target: { value: "long enough passphrase" } });
-    expect(create).not.toBeDisabled();
-    fireEvent.click(create);
+    expect(create2).not.toBeDisabled();
+    fireEvent.click(create2);
+    settle();
     expect(onCreate).toHaveBeenLastCalledWith("passphrase", "long enough passphrase");
   });
 });

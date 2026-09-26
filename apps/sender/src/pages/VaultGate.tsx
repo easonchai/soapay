@@ -1,5 +1,33 @@
 import { useEffect, useRef, useState } from "react";
-import { Dots, ErrorLine, Loading } from "@soapay/ui";
+import { motion } from "framer-motion";
+import { Dots, ErrorLine, Loading, motionOff } from "@soapay/ui";
+
+/** The diamond behind the gate: blooms in on arrival, flows outward when the user proceeds. */
+function Halo({ leaving }: { leaving: boolean }) {
+  if (motionOff()) return <div className="halo" aria-hidden><Dots mode="diamond" className="dots" /></div>;
+  return (
+    <motion.div
+      className="halo"
+      aria-hidden
+      initial={{ scale: 0.6, opacity: 0 }}
+      animate={leaving ? { scale: 1.35, opacity: 0 } : { scale: 1, opacity: 0.55 }}
+      transition={leaving ? { duration: 0.45, ease: [0.4, 0, 1, 1] } : { duration: 1.1, ease: [0.22, 1, 0.36, 1] }}
+    >
+      <Dots mode="diamond" animate className="dots" />
+    </motion.div>
+  );
+}
+
+/** Copy and card rise in a beat after the halo starts. */
+function Rise({ children, delay = 0, className }: { children: React.ReactNode; delay?: number; className?: string }) {
+  if (motionOff()) return <div {...(className ? { className } : {})}>{children}</div>;
+  return (
+    <motion.div {...(className ? { className } : {})} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay, ease: [0.22, 1, 0.36, 1] }}>
+      {children}
+    </motion.div>
+  );
+}
+const LEAVE_MS = 420;
 import type { VaultPhase } from "../hooks/store.js";
 import type { VaultMode } from "../lib/vault.js";
 
@@ -19,10 +47,18 @@ export function VaultGate(p: VaultGateProps) {
   const [pass, setPass] = useState("");
   const [show, setShow] = useState(false);
   const [mode, setMode] = useState<VaultMode>("device");
+  const [leaving, setLeaving] = useState(false);
   const primary = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     primary.current?.focus();
   }, [p.phase, p.vaultMode]);
+  /** Let the halo flow out, then hand over. Instant when motion is off. */
+  function proceed(fn: () => void) {
+    if (leaving) return;
+    if (motionOff()) return fn();
+    setLeaving(true);
+    window.setTimeout(fn, LEAVE_MS);
+  }
 
   if (p.phase === "loading") return <Loading label="Opening your vault…" />;
 
@@ -49,17 +85,17 @@ export function VaultGate(p: VaultGateProps) {
     const device = p.vaultMode !== "passphrase";
     return (
       <div className="gate-wrap">
-        <Dots mode="diamond" animate className="dots" />
         <div className="gate">
-          <div>
+          <Halo leaving={leaving} />
+          <Rise delay={0.15}>
             <span className="eyebrow">Payroll vault · locked</span>
             <h1 style={{ marginTop: 8 }}>Unlock your payroll</h1>
             <p className="lead">Your roster and run history are encrypted in this browser.</p>
-          </div>
-          <div className="card">
+          </Rise>
+          <Rise delay={0.25} className="card">
             {device ? (
               <>
-                <button ref={primary} className="btn-primary btn-xl full pulse" onClick={() => p.onUnlock()}>
+                <button ref={primary} className={`btn-primary btn-xl full${leaving ? "" : " pulse"}`} disabled={leaving} onClick={() => proceed(() => p.onUnlock())}>
                   Unlock on this device
                 </button>
                 <p className="foot">Uses a key stored in this browser. Nothing leaves your device.</p>
@@ -69,7 +105,7 @@ export function VaultGate(p: VaultGateProps) {
                 className="stack-sm"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  p.onUnlock(pass);
+                  proceed(() => p.onUnlock(pass));
                 }}
               >
                 {passField("Passphrase", "Passphrase")}
@@ -79,8 +115,10 @@ export function VaultGate(p: VaultGateProps) {
               </form>
             )}
             <ErrorLine error={p.error} />
-          </div>
-          <p className="foot">{FOOT}</p>
+          </Rise>
+          <Rise delay={0.35}>
+            <p className="foot">{FOOT}</p>
+          </Rise>
         </div>
       </div>
     );
@@ -89,18 +127,19 @@ export function VaultGate(p: VaultGateProps) {
   const canCreate = mode === "device" || passOk;
   return (
     <div className="gate-wrap">
-      <Dots mode="diamond" animate className="dots" />
       <div className="gate">
-        <div>
+        <Halo leaving={leaving} />
+        <Rise delay={0.15}>
           <span className="eyebrow">Payroll vault · new</span>
           <h1 style={{ marginTop: 8 }}>Set up the payroll vault</h1>
           <p className="lead">Choose how this browser unlocks your roster and history.</p>
-        </div>
+        </Rise>
+        <Rise delay={0.25}>
         <form
           className="card"
           onSubmit={(e) => {
             e.preventDefault();
-            if (canCreate) p.onCreate(mode, mode === "passphrase" ? pass : undefined);
+            if (canCreate) proceed(() => p.onCreate(mode, mode === "passphrase" ? pass : undefined));
           }}
         >
           <div role="radiogroup" aria-label="Vault protection" className="stack-sm">
@@ -132,12 +171,15 @@ export function VaultGate(p: VaultGateProps) {
               </span>
             </div>
           )}
-          <button ref={primary} type="submit" className={`btn-primary btn-xl full${canCreate ? " pulse" : ""}`} disabled={!canCreate}>
+          <button ref={primary} type="submit" className={`btn-primary btn-xl full${canCreate && !leaving ? " pulse" : ""}`} disabled={!canCreate || leaving}>
             Create vault
           </button>
           <ErrorLine error={p.error} />
         </form>
-        <p className="foot">{FOOT}</p>
+        </Rise>
+        <Rise delay={0.35}>
+          <p className="foot">{FOOT}</p>
+        </Rise>
       </div>
     </div>
   );
