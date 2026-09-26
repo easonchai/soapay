@@ -28,6 +28,7 @@ export function ReviewPage({ run, plan, wallet, payPath, chainName, onBack }: Re
   const chunk = plan.denomination?.chunkSize;
   const chunkLabel = chunk ? trim(usdc(chunk)) : undefined;
   const txs = plan.estimate.txCount;
+  const remainders = chunk ? plan.lines.filter((l) => l.amount !== chunk).length : 0;
 
   const people = useMemo(() => {
     const m = new Map<string, { id: string; name: string; amount: bigint; amounts: bigint[]; first: `0x${string}` }>();
@@ -44,7 +45,7 @@ export function ReviewPage({ run, plan, wallet, payPath, chainName, onBack }: Re
     if (!chunk || p.amounts.length === 1) return String(p.amounts.length);
     const full = p.amounts.filter((a) => a === chunk).length;
     const rest = p.amounts.filter((a) => a !== chunk);
-    return `${full} × ${chunkLabel}${rest.length ? ` (+${rest.map((a) => trim(usdc(a))).join(", ")})` : ""}`;
+    return `${full} × ${chunkLabel}${rest.length ? ` + ${rest.map((a) => trim(usdc(a))).join(", ")} remainder` : ""}`;
   };
 
   const modeCard = !wallet.isConnected
@@ -118,6 +119,15 @@ export function ReviewPage({ run, plan, wallet, payPath, chainName, onBack }: Re
           {modeCard.p && <p className="ink2 pretty" style={{ marginTop: 4 }}>{modeCard.p}</p>}
         </div>
         {plan.smallTeam && <Notice tone="warn">{plan.smallTeam}</Notice>}
+        {!chunk && (
+          <Notice tone="warn">Denominated payouts are off for this run: every line is someone&apos;s whole salary, readable by coworkers on chain.</Notice>
+        )}
+        {chunk && remainders > 0 && (
+          <Notice tone="warn">
+            {remainders === 1 ? "1 remainder line" : `${remainders} remainder lines`} (smaller than {chunkLabel} USDC) {remainders === 1 ? "is the only line" : "are the only lines"} that
+            stand{remainders === 1 ? "s" : ""} out. Each is paid in full, never carried over.
+          </Notice>
+        )}
         {plan.denomStats && plan.denomStats.uniqueAmountCount > 0 && (
           <Notice tone="warn">{plural(plan.denomStats.uniqueAmountCount, "line amount")} occur only once and can single someone out.</Notice>
         )}
@@ -181,7 +191,11 @@ export function ReviewPage({ run, plan, wallet, payPath, chainName, onBack }: Re
           <div className="foot">
             <span>
               {people.length > 12 ? `…and ${people.length - 12} more. ` : ""}
-              {chunk ? (plan.denomination?.mode === "carry" ? "Carry mode: every line is a whole chunk." : "Remainders are sent as one smaller final line.") : "One line per recipient."}
+              {chunk
+                ? plan.denomination?.mode === "carry"
+                  ? "Carry mode: every line is a whole chunk."
+                  : "A remainder is sent as one smaller final line: the only line that stands out."
+                : "One line per recipient."}
             </span>
           </div>
         </div>

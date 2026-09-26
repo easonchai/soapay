@@ -96,6 +96,30 @@ describe("Pay run screen (CK design on our hooks)", () => {
     expect(await screen.findByText(/Every payee is a pinned, verified ENS name/)).toBeInTheDocument();
   });
 
+  it("denominates by default with the company chunk; off is per run and warned", () => {
+    const onReview = vi.fn();
+    const alice = emp("alice");
+    const r = run({ stage: "verified", rows: [{ employee: alice, check: undefined, payability: { payable: true } }] });
+    const { unmount } = render(
+      <PayRunPage run={r} roster={roster([alice])} wallet={wallet} payPath={payPath} chainName="Base Sepolia" onReview={onReview} onOpenRecipients={() => undefined} chunk="250" />,
+    );
+    expect(screen.getByText("250 USDC")).toBeInTheDocument();
+    expect(screen.getByText(/one smaller final line, exact wage/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^Review/ }));
+    expect(onReview).toHaveBeenLastCalledWith({ chunkSize: 250_000_000n, mode: "exact" });
+
+    fireEvent.click(screen.getByRole("switch", { name: "Denominated payouts" }));
+    expect(screen.getByText(/Off for this run/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^Review/ }));
+    expect(onReview).toHaveBeenLastCalledWith(null);
+    unmount();
+
+    // A new run starts ON again: turning it off is never remembered.
+    render(<PayRunPage run={r} roster={roster([alice])} wallet={wallet} payPath={payPath} chainName="Base Sepolia" onReview={onReview} onOpenRecipients={() => undefined} />);
+    expect(screen.getByText("500 USDC")).toBeInTheDocument();
+    expect(screen.queryByText(/Off for this run/)).toBeNull();
+  });
+
   it("needs a Resolve before Review", () => {
     render(<PayRunPage run={run()} roster={roster([emp("alice")])} wallet={wallet} payPath={payPath} chainName="Base Sepolia" onReview={() => undefined} onOpenRecipients={() => undefined} />);
     expect(screen.getByRole("button", { name: /Review — resolve names first/ })).toBeDisabled();

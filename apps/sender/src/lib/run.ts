@@ -21,8 +21,22 @@ import {
   type PayRunEstimate,
   type PayRunLine,
 } from "@soapay/sdk";
+import { tryParseUsdc } from "./amount.js";
 
 export type Denomination = { chunkSize: bigint; mode: "exact" | "carry" };
+
+/**
+ * The pay run's denomination (D-31): ON by default, with the ONE company-wide chunk size from
+ * Settings applied to every employee, in exact mode (whole chunks plus one smaller final line; never
+ * carried over, so every run pays the exact wage). `on = false` is the per-run opt-out: one line per
+ * employee. Throws on a bad chunk size.
+ */
+export function companyDenomination(on: boolean, chunk: string): Denomination | null {
+  if (!on) return null;
+  const c = tryParseUsdc(chunk);
+  if (!c.ok || c.value <= 0n) throw new Error("The company chunk size (Settings) must be a positive USDC amount");
+  return { chunkSize: c.value, mode: "exact" };
+}
 
 export type PlanRecipient = {
   employeeId: string;

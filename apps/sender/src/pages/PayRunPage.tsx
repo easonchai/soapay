@@ -1,15 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Collapse, CountUp, Dots, ErrorLine, NavyPanel, PageHead, Presence, Stagger, StaggerItem, Toggle, toast } from "@soapay/ui";
 import { smallTeamWarning } from "@soapay/sdk";
 import type { PayRunState } from "../hooks/usePayRun.js";
 import type { PayPathState, WalletState } from "../hooks/usePayPath.js";
 import type { ImportResult, RosterState } from "../hooks/useRoster.js";
-import { toInputUsdc, tryParseUsdc, USDC_DECIMALS } from "../lib/amount.js";
+import { DEFAULT_CHUNK_USDC } from "../config.js";
+import { toInputUsdc, USDC_DECIMALS } from "../lib/amount.js";
 import { CSV_TEMPLATE } from "../lib/csv.js";
 import { draftPreview } from "../lib/preview.js";
 import { displayName } from "../lib/roster.js";
-import { MAX_RUN_LABEL, type Denomination } from "../lib/run.js";
+import { companyDenomination, MAX_RUN_LABEL, type Denomination } from "../lib/run.js";
 import { Notice, plural, short, usdc } from "../ui/kit.js";
 import { AttestedBadge, RecordStatus } from "../ui/status.js";
 
@@ -22,29 +23,12 @@ export type PayRunPageProps = {
   /** Build the plan (fresh addresses) and open Review. */
   onReview(denomination: Denomination | null): void;
   onOpenRecipients(): void;
+  /** The company-wide chunk size (Settings), as typed. Defaults to 500 USDC. */
+  chunk?: string;
+  onOpenSettings?(): void;
 };
 
-type Draft = { denom: boolean; mode: "exact" | "carry"; chunk: string };
-const DRAFT_KEY = "soapay:payrun";
-
-function loadDraft(): Draft {
-  const d: Draft = { denom: true, mode: "exact", chunk: "500" };
-  try {
-    const raw = localStorage.getItem(DRAFT_KEY);
-    if (raw) return { ...d, ...(JSON.parse(raw) as Partial<Draft>) };
-  } catch {
-    /* ignore */
-  }
-  return d;
-}
-
-/** Denomination from the draft; null = one line per employee. Throws on a bad chunk size. */
-export function draftDenomination(d: Draft): Denomination | null {
-  if (!d.denom) return null;
-  const c = tryParseUsdc(d.chunk);
-  if (!c.ok || c.value <= 0n) throw new Error("Chunk size must be a positive USDC amount");
-  return { chunkSize: c.value, mode: d.mode };
-}
+const trimZeros = (s: string) => (s.includes(".") ? s.replace(/\.?0+$/, "") : s);
 
 const COLS = "32px 1.5fr 1fr 70px 1.6fr";
 
@@ -53,22 +37,15 @@ const COLS = "32px 1.5fr 1fr 70px 1.6fr";
  * salaries; "Resolve names" re-verifies every pin (usePayRun.verify); "Paste rows" imports
  * `name, amount[, label]` into the roster (useRoster.importCsv).
  */
-export function PayRunPage({ run, roster, wallet, payPath, chainName, onReview, onOpenRecipients }: PayRunPageProps) {
-  const [draft, setDraft] = useState<Draft>(loadDraft);
+export function PayRunPage({ run, roster, wallet, payPath, chainName, onReview, onOpenRecipients, chunk = DEFAULT_CHUNK_USDC, onOpenSettings }: PayRunPageProps) {
+  // Per run and ON by default (D-31); turning it off is never remembered for the next run.
+  const [denomOn, setDenomOn] = useState(true);
   const [showPaste, setShowPaste] = useState(false);
   const [paste, setPaste] = useState("");
   const [imported, setImported] = useState<ImportResult | null>(null);
   const [editing, setEditing] = useState<{ id: string; value: string } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
-    } catch {
-      /* ignore */
-    }
-  }, [draft]);
 
   // Before verification the table shows the roster; after it, the verified rows (fresh pins).
   const verified = new Map(run.rows.map((r) => [r.employee.id, r]));
@@ -83,7 +60,7 @@ export function PayRunPage({ run, roster, wallet, payPath, chainName, onReview, 
   let denomination: Denomination | null = null;
   let denomError: string | null = null;
   try {
-    denomination = draftDenomination(draft);
+    denomination = companyDenomination(denomOn, chunk);
   } catch (e) {
     denomError = (e as Error).message;
   }
@@ -124,7 +101,7 @@ export function PayRunPage({ run, roster, wallet, payPath, chainName, onReview, 
   if (rows.length === 0) reviewLabel = "Review — add recipients first";
   else if (!checked) reviewLabel = "Review — resolve names first";
   else if (payable.length === 0) reviewLabel = "Review — nobody is payable";
-  else if (denomError) reviewLabel = "Review — fix the chunk size";
+  else if (denomError) reviewLabel = "Review — fix the chunk size in Settings";
   const canReview = checked && payable.length > 0 && !denomError && !verifying;
 
   const summary = (() => {
@@ -320,27 +297,32 @@ export function PayRunPage({ run, roster, wallet, payPath, chainName, onReview, 
           <div className="panel panel-pad stack">
             <div className="between">
               <span style={{ fontWeight: 500 }}>Denominated payouts</span>
-              <Toggle on={draft.denom} onChange={(v) => setDraft({ ...draft, denom: v })} label="Denominated payouts" />
+              <Toggle on={denomOn} onChange={setDenomOn} label="Denominated payouts" />
             </div>
-            <p className="ink2 pretty">Splits each salary into equal chunks so amounts on chain don&apos;t identify people. Costs more gas.</p>
-            <label className="field">
-              <span>Chunk size</span>
-              <div className="addon">
-                <input className="mono-in" value={draft.chunk} onChange={(e) => setDraft({ ...draft, chunk: e.target.value.replace(/[^\d.]/g, "") })} disabled={!draft.denom} inputMode="decimal" />
-                <span className="suffix">USDC</span>
-              </div>
-            </label>
-            <label className="field">
-              <span>Remainder</span>
-              <select value={draft.mode} disabled={!draft.denom} onChange={(e) => setDraft({ ...draft, mode: e.target.value as Draft["mode"] })}>
-                <option value="exact">Exact: one smaller final line</option>
-                <option value="carry">Carry: round to chunks, settle next run</option>
-              </select>
-            </label>
-            {draft.denom && draft.mode === "carry" && (
-              <span className="hint">Carry mode pays up to half a chunk more or less each run. Check with payroll/legal before using it.</span>
+            <p className="ink2 pretty">Splits every salary into the same company-wide chunk, so amounts on chain don&apos;t identify people. Costs more gas.</p>
+            {!denomOn && (
+              <span className="st-warn">Off for this run: each line is someone&apos;s whole salary, which coworkers can read on chain.</span>
             )}
             <div style={{ borderTop: "1px solid var(--hairline)", paddingTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
+              <div className="between num" style={{ fontSize: 12 }}>
+                <span style={{ fontFamily: "var(--sans)" }} className="ink2">
+                  Chunk size (company-wide)
+                </span>
+                <span>
+                  {denomOn && !denomError ? `${trimZeros(chunk)} USDC` : "—"}
+                  {onOpenSettings && (
+                    <button className="btn-text" style={{ marginLeft: 6, fontSize: 12 }} onClick={onOpenSettings}>
+                      Change
+                    </button>
+                  )}
+                </span>
+              </div>
+              <div className="between num" style={{ fontSize: 12 }}>
+                <span style={{ fontFamily: "var(--sans)" }} className="ink2">
+                  Remainder
+                </span>
+                <span style={{ fontFamily: "var(--sans)" }}>{denomOn ? "one smaller final line, exact wage" : "—"}</span>
+              </div>
               <div className="between num" style={{ fontSize: 12 }}>
                 <span style={{ fontFamily: "var(--sans)" }} className="ink2">
                   Recipients
