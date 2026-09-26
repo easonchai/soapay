@@ -604,6 +604,8 @@ export type ExitContext = {
   prover?: ExitProver;
   /** Fee caps per chain id (USDC base units). Default 1 USDC source, 5 USDC destination. */
   maxFeeUsdc?: Record<number, bigint>;
+  /** Highest relayer fee accepted for a withdrawal, in bps. Default 500 (5%). */
+  maxRelayFeeBps?: bigint;
   /** Blocks to scan back for logs (mint, userOp events). Default 5000. */
   logLookbackBlocks?: bigint;
   /** Fallback when the Forwarding Service fails: submit `receiveMessage` some other way (e.g. apps/api). */
@@ -892,7 +894,8 @@ async function stepDeposit(ctx: ExitContext, leg: ExitLeg): Promise<void> {
     if (usable <= config.pool.minDeposit) throw new ExitError(need(config.pool.minDeposit - usable + 1n));
   }
   const estimate = ctx.estimate ?? estimateExecute;
-  const probe = guess > 0n ? guess : config.pool.minDeposit;
+  // Simulate at least the pool minimum: a smaller probe reverts (MinimumDepositAmount) and hides the real fee.
+  const probe = guess > config.pool.minDeposit ? guess : config.pool.minDeposit;
   const est = await estimate(client, {
     stealthKey: ctx.stealthKey,
     calls: buildDepositCalls(config, probe, precommitment),
@@ -1015,7 +1018,8 @@ async function relayWithdrawal(ctx: ExitContext, next: ExitLeg, opts: { amount?:
   );
   if (!isAddressEqual(recipient, next.destination)) throw new ExitFatalError("Soapay exit: relayer committed to a different recipient");
   if (relayFeeBps !== BigInt(quote.feeBPS)) throw new ExitError("Soapay exit: relayer fee commitment mismatch");
-  if (relayFeeBps > 500n) throw new ExitError(`Soapay exit: relayer fee ${relayFeeBps} bps is too high`);
+  const maxRelay = ctx.maxRelayFeeBps ?? 500n;
+  if (relayFeeBps > maxRelay) throw new ExitError(`Soapay exit: relayer fee ${relayFeeBps} bps is too high (cap ${maxRelay})`);
   void feeRecipient;
   const withdrawal = { processooor: getAddress(config.pool.entrypoint), data: quote.feeCommitment.withdrawalData };
 

@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { ErrorLine, PageHead, toast } from "@soapay/ui";
 import type { SettingsState } from "../hooks/useSettings.js";
-import { DEFAULT_CHUNK_USDC, type AppConfig } from "../config.js";
+import { isTestnetChain } from "@soapay/sdk";
+import { defaultChunkUsdc, type AppConfig } from "../config.js";
 import { tryParseUsdc } from "../lib/amount.js";
 import type { VaultMode } from "../lib/vault.js";
 import { Notice } from "../ui/kit.js";
@@ -23,8 +24,10 @@ export type SettingsPageProps = SettingsState & {
 /** CK's Settings (company name, network facts) plus ours: per-browser chain, StealthDisperse and RPCs, attester, vault. */
 export function SettingsPage(p: SettingsPageProps) {
   const [name, setName] = useState(p.org);
-  const [chunk, setChunk] = useState(p.chunk ?? DEFAULT_CHUNK_USDC);
   const { app } = p;
+  const testnet = isTestnetChain(app.chainId);
+  const defaultChunk = defaultChunkUsdc(app.chainId);
+  const [chunk, setChunk] = useState(p.chunk ?? defaultChunk);
   return (
     <div className="stack-lg" style={{ maxWidth: 760 }}>
       <PageHead eyebrow="Settings" title="Where this app points, and what it keeps" line="Network values can be overridden per browser. The roster and history stay encrypted here." />
@@ -56,16 +59,19 @@ export function SettingsPage(p: SettingsPageProps) {
             <button
               className="btn-primary"
               onClick={() => {
-                const c = tryParseUsdc(chunk || DEFAULT_CHUNK_USDC);
+                const c = tryParseUsdc(chunk || defaultChunk);
                 if (!c.ok || c.value <= 0n) return toast.error("Chunk size must be a positive USDC amount");
-                p.onChunkChange(chunk || DEFAULT_CHUNK_USDC);
+                p.onChunkChange(chunk || defaultChunk);
                 toast.success("Chunk size saved");
               }}
             >
               Save
             </button>
           </div>
-          <span className="hint">Every full line in a run is this amount; each salary&apos;s remainder is one smaller line. Default {DEFAULT_CHUNK_USDC} USDC.</span>
+          <span className="hint">Every full line in a run is this amount; each salary&apos;s remainder is one smaller line. Default {defaultChunk} USDC
+            {testnet
+              ? " on this testnet, where faucet USDC is scarce. A recipient's exit needs about 16.4 USDC on one address, so pay that line with denominations off or a larger chunk."
+              : "."}</span>
         </label>
       </div>
 

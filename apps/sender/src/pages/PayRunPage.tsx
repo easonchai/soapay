@@ -5,9 +5,10 @@ import { smallTeamWarning } from "@soapay/sdk";
 import type { PayRunState } from "../hooks/usePayRun.js";
 import type { PayPathState, WalletState } from "../hooks/usePayPath.js";
 import type { ImportResult, RosterState } from "../hooks/useRoster.js";
-import { DEFAULT_CHUNK_USDC } from "../config.js";
+import { DEFAULT_CHUNK_USDC, TESTNET_CHUNK_USDC } from "../config.js";
+import { exampleSalaries } from "../lib/testnet.js";
 import { toInputUsdc, USDC_DECIMALS } from "../lib/amount.js";
-import { CSV_TEMPLATE } from "../lib/csv.js";
+import { csvTemplate } from "../lib/csv.js";
 import { draftPreview } from "../lib/preview.js";
 import { displayName } from "../lib/roster.js";
 import { companyDenomination, MAX_RUN_LABEL, type Denomination } from "../lib/run.js";
@@ -23,8 +24,10 @@ export type PayRunPageProps = {
   /** Build the plan (fresh addresses) and open Review. */
   onReview(denomination: Denomination | null): void;
   onOpenRecipients(): void;
-  /** The company-wide chunk size (Settings), as typed. Defaults to 500 USDC. */
+  /** The company-wide chunk size (Settings), as typed. Defaults to 500 USDC (5 on a testnet). */
   chunk?: string;
+  /** Testnet: small example amounts (D-47). */
+  testnet?: boolean;
   onOpenSettings?(): void;
 };
 
@@ -37,7 +40,9 @@ const COLS = "32px 1.5fr 1fr 70px 1.6fr";
  * salaries; "Resolve names" re-verifies every pin (usePayRun.verify); "Paste rows" imports
  * `name, amount[, label]` into the roster (useRoster.importCsv).
  */
-export function PayRunPage({ run, roster, wallet, payPath, chainName, onReview, onOpenRecipients, chunk = DEFAULT_CHUNK_USDC, onOpenSettings }: PayRunPageProps) {
+export function PayRunPage({ run, roster, wallet, payPath, chainName, onReview, onOpenRecipients, chunk: chunkProp, testnet = false, onOpenSettings }: PayRunPageProps) {
+  const chunk = chunkProp ?? (testnet ? TESTNET_CHUNK_USDC : DEFAULT_CHUNK_USDC);
+  const [exA, exB] = exampleSalaries(testnet);
   // Per run and ON by default (D-31); turning it off is never remembered for the next run.
   const [denomOn, setDenomOn] = useState(true);
   const [showPaste, setShowPaste] = useState(false);
@@ -116,7 +121,7 @@ export function PayRunPage({ run, roster, wallet, payPath, chainName, onReview, 
     return parts.join(" ");
   })();
 
-  const templateHref = `data:text/csv;charset=utf-8,${encodeURIComponent(CSV_TEMPLATE)}`;
+  const templateHref = `data:text/csv;charset=utf-8,${encodeURIComponent(csvTemplate(testnet))}`;
   const openPaste = () => {
     setShowPaste(true);
     setTimeout(() => textRef.current?.focus(), 50);
@@ -164,7 +169,7 @@ export function PayRunPage({ run, roster, wallet, payPath, chainName, onReview, 
                   ref={textRef}
                   value={paste}
                   onChange={(e) => setPaste(e.target.value)}
-                  placeholder={"alice.soapay.eth, 4200\nbram.soapay.eth, 3850, Bram (design)\n\nOne person per line: name, amount in USDC, optional label."}
+                  placeholder={`alice.soapay.eth, ${exA}\nbram.soapay.eth, ${exB}, Bram (design)\n\nOne person per line: name, amount in USDC, optional label.`}
                   aria-label="Recipients and amounts"
                   style={{ minHeight: 96 }}
                 />
