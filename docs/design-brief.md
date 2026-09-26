@@ -6,7 +6,7 @@ Soapay: one name, infinite addresses. Get paid on-chain without publishing your 
 
 Every wallet address on Ethereum is a public bank statement. Soapay gives a person one static name (an ENS name) that lands every incoming payment on a fresh address only they can open. Nothing on-chain links one payment to the next or to the person. They spend from those addresses without topping up gas, and when money has to reach somewhere identifiable, Soapay routes it through a compliant privacy pool.
 
-First customers are groups paying groups: companies paying salaries and contractors, DAOs paying contributors and grants. Full PRD: https://github.com/easonchai/soapay/blob/main/PRD.md
+First customers are groups paying groups: companies paying salaries and contractors, DAOs paying contributors and grants. Full PRD: https://github.com/easonchai/soapay/blob/main/docs/PRD.md
 
 ## Who uses it
 
