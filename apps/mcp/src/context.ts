@@ -46,6 +46,16 @@ export interface Chain {
 
 export type NameRecord = { label: string; name: string; registrant: Address; metaAddress: string; txHash: Hex | null };
 
+export type InviteRecord = {
+  codeHash: Hex;
+  label: string;
+  employer: Address;
+  org?: string;
+  expiresAt: number;
+  status: "pending" | "claimed" | "expired";
+  name?: string;
+};
+
 export interface Api {
   register(body: { registrant: Address; metaAddress: string; signature: Hex }): Promise<{ txHash: Hex; status: string; idempotent?: boolean }>;
   claimName(body: {
@@ -55,9 +65,13 @@ export interface Api {
     deadline: string;
     signature: Hex;
     agent?: AgentMetadata;
+    /** The employer invite's code, when the label is reserved by an invite (docs/mvp-spec.md §7). */
+    inviteCode?: Hex;
   }): Promise<NameRecord>;
   /** null when free. */
   getName(label: string): Promise<NameRecord | null>;
+  /** GET /invites/:codeHash. null when the API doesn't know the invite. */
+  getInvite(codeHash: Hex): Promise<InviteRecord | null>;
   announcements(): Promise<AnnouncementRecord[]>;
   /** POST /faucet: the Base Sepolia welcome drop (once per address, D-52). */
   faucet(address: Address): Promise<FaucetResult>;

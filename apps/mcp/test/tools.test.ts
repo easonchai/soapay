@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { decodeFunctionData, getAddress, type Hex } from "viem";
-import { ClusterGraph, announcerAbi, erc20Abi, stealthDisperseAbi, decodeHead, keysFromMnemonic } from "@soapay/sdk";
+import { ClusterGraph, announcerAbi, buildInviteLink, erc20Abi, inviteCodeHash, stealthDisperseAbi, decodeHead, keysFromMnemonic } from "@soapay/sdk";
 import { ApiError } from "../src/context.js";
 import { createAgentIdentity, resolveName, whoami } from "../src/tools/identity.js";
 import { pay as payTool } from "../src/tools/pay.js";
@@ -110,6 +110,69 @@ describe("create_agent_identity", () => {
   it("needs AGENT_MNEMONIC and a valid label", async () => {
     expect((await err(createAgentIdentity(makeCtx({ keys: false }).ctx, { label: "bot" }))).code).toBe("not_configured");
     expect((await err(createAgentIdentity(makeCtx().ctx, { label: "-bad" }))).code).toBe("invalid_label");
+    expect((await err(createAgentIdentity(makeCtx().ctx, {}))).code).toBe("invalid_input");
+  });
+});
+
+describe("create_agent_identity with an employer invite", () => {
+  const CODE = `0x${"ab".repeat(32)}` as Hex;
+  const RECIPIENT_URL = "https://recipient.soapay.example";
+  const link = (label = "invoice-agent") => buildInviteLink({ recipientUrl: RECIPIENT_URL, code: CODE, label, org: "Meridian Labs" });
+
+  function withInvite(status: "pending" | "claimed" | "expired" = "pending", label = "invoice-agent") {
+    const c = makeCtx();
+    const codeHash = inviteCodeHash(CODE);
+    c.invites.set(codeHash, { codeHash, label, employer: EMPLOYER, org: "Meridian Labs", expiresAt: 2_000_000_000, status });
+    return { ...c, codeHash };
+  }
+
+  it("joins with the link the company app copies: label from the invite, code sent with the claim, invite flips to claimed", async () => {
+    const { ctx, api, invites, codeHash } = withInvite();
+    const out = await createAgentIdentity(ctx, { invite: link(), description: "Books invoices." });
+    expect(api.getInvite).toHaveBeenCalledWith(codeHash);
+    const claim = api.claimName.mock.calls[0]![0] as any;
+    expect(claim).toMatchObject({ label: "invoice-agent", inviteCode: CODE });
+    expect(out).toMatchObject({ name: "invoice-agent.soapay.eth", created: true, invite: { org: "Meridian Labs", codeHash } });
+    // What the sender's InvitePoller reads from GET /invites/:codeHash.
+    expect(invites.get(codeHash)).toMatchObject({ status: "claimed", name: "invoice-agent.soapay.eth" });
+    // The code is a bearer secret: it goes to the API, never back into tool output.
+    expect(JSON.stringify(out)).not.toContain(CODE.slice(2));
+  });
+
+  it("accepts a bare code and a matching explicit label", async () => {
+    const { ctx, api } = withInvite();
+    await createAgentIdentity(ctx, { invite: `  ${CODE.toUpperCase().replace("0X", "0x")}  `, label: "invoice-agent" });
+    expect((api.claimName.mock.calls[0]![0] as any).inviteCode).toBe(CODE);
+  });
+
+  it("refuses a label that differs from the one the invite reserves, before anything is registered", async () => {
+    const { ctx, api } = withInvite();
+    const e = await err(createAgentIdentity(ctx, { invite: link(), label: "ledger-bot" }));
+    expect(e.code).toBe("invite_label_mismatch");
+    expect(e.message).toContain("invoice-agent.soapay.eth");
+    expect(api.register).not.toHaveBeenCalled();
+    expect(api.claimName).not.toHaveBeenCalled();
+  });
+
+  it("trusts the API's reserved label over the link's label hint", async () => {
+    const { ctx, api } = withInvite();
+    await createAgentIdentity(ctx, { invite: link("something-else") });
+    expect((api.claimName.mock.calls[0]![0] as any).label).toBe("invoice-agent");
+  });
+
+  it("rejects malformed, unknown, used and expired invites clearly", async () => {
+    expect((await err(createAgentIdentity(withInvite().ctx, { invite: "https://recipient.soapay.example/#/join?label=x" }))).code).toBe("invalid_invite");
+    expect((await err(createAgentIdentity(makeCtx().ctx, { invite: link() }))).code).toBe("invite_not_found");
+    expect((await err(createAgentIdentity(withInvite("claimed").ctx, { invite: link() }))).code).toBe("invite_claimed");
+    expect((await err(createAgentIdentity(withInvite("expired").ctx, { invite: link() }))).code).toBe("invite_expired");
+  });
+
+  it("is idempotent: re-running after joining returns the name even though the invite is now claimed", async () => {
+    const { ctx, api } = withInvite();
+    await createAgentIdentity(ctx, { invite: link() });
+    const again = await createAgentIdentity(ctx, { invite: link() });
+    expect(again).toMatchObject({ name: "invoice-agent.soapay.eth", created: false });
+    expect(api.claimName).toHaveBeenCalledTimes(1);
   });
 });
 

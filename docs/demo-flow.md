@@ -1,159 +1,211 @@
-# Demo flow: 3 minutes, on CK's UI
+# Demo script: the 3-minute live demo
 
-A live script for the Soapay demo. It follows CK's screens in the order they present themselves: the sender app (landing → login → vault → Recipients → Pay run → Review → History), then the recipient app (invite → Keys → Lock → Register → Name → Recovery → Share → Payments → Send → Name). No step below needs a screen that doesn't exist, except the one visual proposed in "Beat 4".
+The demo slot is 4 minutes. A teammate pitches for the first minute (see [What the pitch minute covers](#what-the-pitch-minute-covers)); this is the **3-minute live demo** that follows. It tells one story, a company paying a person and an agent, and each bounty appears as a real product moment, not as a feature tour:
 
-**Since D-52/D-53 (2026-09-26):** on Base Sepolia the apps pay in Soapay's **mock USDC**, every wallet that opens the company app gets **1,000,000 test USDC once** (welcome drop), stealth spends are **gas-sponsored**, the **Exit** tab is hidden (the mock token can't bridge over CCTP), and the employee app has **no Convert** tab on any chain. Screenshots r12, r13 and r16–r18 predate this and show screens that are no longer in the testnet build.
+- **ENSv2:** the name *is* how the employer pays you. Sections 2, 3 and 4.
+- **World IDKit (Proof of Human):** it's what lets you recover your pay, and what stops a thief from redirecting it. Sections 2 and 7.
 
-Every screen and button label below was clicked through on 2026-09-26: both apps in mock mode (`VITE_MOCK_API=1` / `VITE_MOCK_ENS=1`), plus the live pages at https://soapay.up.railway.app (landing and company app at `/`, employee app at `/app/`). The screenshots are in [`demo-screens/`](demo-screens/) (`s*` = sender, `r*` = recipient, `live-*` = Railway); all of them were retaken the same day after the recovery-kit and passkey onboarding (D-44, D-45), at 1280×800 with `?motion=off`.
+Uniswap is no longer targeted (D-53), and the testnet has no exit (D-52), so neither appears. Everything runs live on **Base Sepolia with Soapay's mock USDC**, with ENSv2 names on Sepolia.
 
-**The story in one line:** a public payroll batch leaks everyone's salary to every coworker. Soapay gives each employee one name and pays a fresh address every time, so a coworker sees the batch but can't tell which line is whose.
+**Cast:** the laptop (company app, Claude Code, a terminal, mirrored to the screen) and one phone ("Alex", the employee app, mirrored too). The company is **Meridian Labs**.
 
-## Links to have open
+**Labels on screen are quoted exactly** as the code renders them on the `demo-script` branch (2026-09-26). Where the owner's wording differs from the app, the app's words are given.
+
+## Timing
+
+| # | Section | Time | Ends at | Bounty |
+| --- | --- | --- | --- | --- |
+| 1 | Employer invites a person and an agent | 0:20 | 0:20 | (sets up ENSv2) |
+| 2 | The person signs up (phone) | 0:35 | 0:55 | ENSv2, World ID |
+| 3 | What the name holds | 0:15 | 1:10 | ENSv2 |
+| 4 | The agent joins | 0:15 | 1:25 | ENSv2 (agent records) |
+| 5 | Disbursement, behind the scenes | 0:30 | 1:55 | (product claim) |
+| 6 | The agent spends | 0:30 | 2:25 | (product claim) |
+| 7 | Recovery: the real World ID moment | 0:30 | 2:55 | World ID |
+| 8 | Closing line | 0:05 | 3:00 | |
+
+There is no slack in the budget. If a live step stalls for more than **~8 s**, take its fallback and move on; don't wait on stage.
+
+## 1. Employer invites a person and an agent (0:00–0:20)
+
+- **Screen:** the company app (https://soapay.up.railway.app/), already logged in with the company wallet, on **Recipients**. The roster shows the prepared names (Before the demo, item 3). The welcome drop already arrived, so the wallet holds 1,000,000 mock USDC.
+- **Clicks:** under **Invite employee**: Name `alex-demo`, Salary per run `1.5`, Organisation `Meridian Labs` → **Sign and create link** → sign in the wallet → the QR code appears ("Link for **alex-demo.soapay.eth**"). Leave the QR on screen for Alex's phone. Then the same form: Name `billing-agent`, Salary per run `1`, **Sign and create link** → **Copy link**. Both rows show **Invited (pending)**.
+- **Say:** "Meridian Labs pays in USDC on Base. Paying a person or an agent starts the same way: we invite a name, not a wallet. Alex gets a QR code; our billing agent gets the same link, in chat."
+- **Bounty:** none yet (the name is reserved on the API; ENSv2 lands in section 2).
+- **Pre-staging:** company wallet logged in and vault unlocked; `alex-demo` and `billing-agent` not yet claimed (check with `curl https://soapay.up.railway.app/api/names/alex-demo`, which must say `not_found`).
+- **Fallback:** if signing an invite fails, use invites created the morning of the demo (a pending row has its own **Copy link**; the QR is only on the fresh card, so print the link as a QR beforehand).
+
+> **Agent label:** the owner's brief said `invoice-agent`, but `invoice-agent.soapay.eth` is **already taken** (claimed live on 2026-09-26 by the CLI demo's agent, D-43), so the invite form would refuse it. This script uses **`billing-agent`** (free on 2026-09-26). Any unclaimed label works; say the one you pick.
+
+## 2. The person signs up (0:20–0:55, phone)
+
+- **Screen:** Alex's phone, mirrored.
+- **Clicks:** scan the QR with the camera → the employee app opens on the invite: **Invited by Meridian Labs**, "Your pay name will be alex-demo.soapay.eth" ([r01](demo-screens/r01-invite-welcome.png)) → **Create a new account** → **Save your recovery kit**: **Copy phrase** (into the password manager; faster than downloading on a phone) → tick "I saved my recovery kit somewhere safe" → **Continue** ([r02](demo-screens/r02-onboard-phrase.png)) → **Lock this device** → **Use Face ID / fingerprint (passkey)** → Face ID ([r03b](demo-screens/r03b-onboard-lock.png)) → **Publish your payment address** ("Passkey saved on this device", [r03c](demo-screens/r03c-onboard-passkey-saved.png)) → **Register for free** ([r04](demo-screens/r04-onboard-register.png)) → **Your pay name**, "Set by your invite." → **Continue** ([r05](demo-screens/r05-onboard-name.png)) → **Enable self-service key recovery** → **Set up with World ID** → World App opens: approve **Proof of Human** → back in the browser the name is claimed with the session linked → **Share this one string with your employer**.
+- **On the laptop:** within ~5 s the `alex-demo` invite row disappears and `alex-demo.soapay.eth` appears in **All recipients** (the company app polls every 5 s and resolves and pins the name).
+- **Say (while tapping):** "Alex's keys are made on this phone and locked with Face ID. No wallet, no gas: we relay the registration. Alex gets `alex-demo.soapay.eth`." At the World ID step: "And one tap of World ID, Proof of Human. That's what lets Alex recover their pay later if a key leaks. You'll see why in a minute."
+- **Bounty:** ENSv2 (an on-chain subname issued at sign-up); World IDKit (a Proof of Human session linked at enrollment).
+- **Pre-staging:** the phone has the World App installed, verified and logged in; the recipient URL is warm in the phone browser; Face ID set up; the password manager unlocked. The World ID link **must happen during this sign-up**: a session attached later needs a 72 h wait before it can back a key change (`attach_cooldown_seconds: 259200` on `GET /api/worldid/config`).
+- **Fallback:** the sign-up is the slowest live step. If Register or the claim hangs past ~8 s (Sepolia read-after-write lag, the World App round trip), switch the mirror to the **backup phone profile** (`alex-backup`, fully onboarded the day before with World ID linked at sign-up, already in the roster) and say "here's one I made earlier". Last resort: the pre-recorded sign-up clip.
+
+## 3. What the name holds (0:55–1:10)
+
+- **Screen:** Alex's phone, **Name** tab. Header `alex-demo.soapay.eth`, "Your employer pays this name. It points to your current meta-address."; **Current keys** shows the `st:eth:0x…` meta-address; **Self-service recovery** shows the **World ID** badge: "A World ID Proof of Human session is linked to this name…" (that's the "linked" confirmation).
+- **Optional (laptop, 5 s):** a terminal with the one-liner from Before the demo, item 9, printing `stealth st:eth:0x…` and `addr null` for `alex-demo.soapay.eth`, then the name's own resolver on Sepolia Etherscan.
+- **Say:** "This is what the name holds: one `stealth` record, the key the employer pays to. It lives on Alex's own ENSv2 resolver, and only Alex's key can change it. There's no `addr` record, on purpose: nobody can pay Alex at a fixed address that coworkers could watch."
+- **Bounty:** ENSv2 (per-employee Permissioned Resolver, EAC on `stealth`, no `addr`).
+- **Pre-staging:** the terminal command typed and ready (it takes ~3 s).
+- **Fallback:** skip the terminal; the Name screen alone makes the point.
+
+## 4. The agent joins (1:10–1:25)
+
+- **Screen:** Claude Code on the laptop, with the Soapay MCP server installed (Before the demo, item 5).
+- **Clicks:** type "Join Meridian Labs payroll with this invite: " and paste the link copied in section 1 → Claude calls **`create_agent_identity`** with `invite` → it reports `billing-agent.soapay.eth`, `created: true`, the org `Meridian Labs`, and its records (`agent-context`, the ENSIP-26 entry point). Switch to the company app: the `billing-agent` row has flipped from **Invited (pending)** to a recipient (within ~5 s).
+- **Say:** "The agent got the same link. It registers its own keys, claims `billing-agent.soapay.eth` with an ENSIP-26 agent record next to its `stealth` record, and the company sees it join, exactly like Alex."
+- **Bounty:** ENSv2 (the same name, plus ENSIP-26 agent records set at issuance).
+- **Pre-staging:** the MCP server built from this branch (the `invite` parameter is new, D-56); a fresh agent mnemonic; Claude Code open in a clean session.
+- **Fallback:** a **pre-joined agent**: if the tool errors or the model dithers, say "it joined before we came on" and show a second agent label joined in rehearsal (already in the roster). The row flip is the point; don't debug on stage.
+
+## 5. Disbursement, behind the scenes (1:25–1:55)
+
+- **Screen:** company app.
+- **Clicks:** **Start pay run** → Run label `September payroll` → **Resolve names** (each row: "Verified · N fresh addresses"; alex-demo and billing-agent included, [s08](demo-screens/s08-sender-resolved.png)) → **Review** → the headline reads "*X USDC to N people, on M fresh addresses.*" with "On chain: M payments of about 0.50 USDC to M strangers." and the **First fresh address** column ([s09](demo-screens/s09-sender-review.png)) → **Sign and send** (smart wallet, one signature) → the run page → its Basescan link: one transaction, many unrelated addresses. Then Alex's phone: **Payments** → **Rescan** → **Pay runs** → **Two views** on the newest run: **Coworker view** (every line, owner unknown) → toggle **My view** (Alex's lines highlighted, "3 of M lines are yours").
+- **Say (read the headline):** "Ten people and an agent, M fresh addresses, one signature. On Basescan it's one transaction to M strangers." On the phone: "This is what a coworker sees: the whole batch, nobody's name. And this is Alex's view: the same transaction, only Alex's key lights up Alex's lines."
+- **Bounty:** none directly: this is the product claim. (ENSv2 underneath: every name is re-resolved and checked against its pin.)
+- **Pre-staging:** roster of 10 or more (item 3); Settings chunk `0.5`; a smart-wallet company account so the run is one prompt (with a plain EOA it's **Approve and send**: two prompts, approve then pay, and it needs a little Base Sepolia ETH); Basescan warm in a tab.
+- **Fallback:** if the wallet or RPC stalls past ~8 s: "here's the same run from rehearsal" → the rehearsal run's Basescan tab, and the phone's **Two views** on that earlier run. If the phone's receipt read stalls ("Reading the transaction's logs…"), the company app's run page shows the same list under **What coworkers see**.
+
+## 6. The agent spends (1:55–2:25)
+
+- **Screen:** Claude Code.
+- **Clicks:** "What was I paid? Then send 0.5 USDC to alex-demo.soapay.eth." → the agent calls **`scan`** ("the pay run has M lines; 2 are mine", real on-chain balances) → **`spend`** returns a plan (from one stealth address, to a fresh address for Alex, sponsored gas) → reply "yes, confirm" → **`spend`** with the planId → a Basescan link. Open the agent's source stealth address on Basescan: **0 ETH**; the userOp's gas was paid by the sponsoring paymaster.
+- **Say:** "The agent finds its two lines among everyone's, and pays Alex from one of them. Look at that address: zero ETH. It never needed gas; a paymaster sponsored it. On mainnet, Circle's paymaster takes the fee in USDC. And Alex receives it at yet another fresh address."
+- **Bounty:** none (product claim; ENSv2 again: the agent pays a *name*).
+- **Pre-staging:** the agent's salary is `1` with a `0.5` chunk, so it gets exactly 2 lines and 0.5 USDC is one line from one address (one userOp, no consolidation). Caps default to 5 USDC per call. The API indexer is healthy (`GET /api/health`).
+- **Fallback:** if the new run's announcements aren't indexed yet, the agent still holds its lines from the rehearsal run, so the scan still works; say "including last run's". If the bundler or paymaster stalls: the recorded gasless agent spend ([0x35172021…](https://sepolia.basescan.org/tx/0x3517202141e4f1ad9849aa40f04ec3d7e332bd8d38a72d991d64d1e4b4d3f3e2)). If the model errors, the pre-recorded clip.
+
+## 7. Recovery: the real World ID moment (2:25–2:55)
+
+- **Say (setup):** "Say Alex's recovery phrase leaked."
+- **Clicks (phone):** **Name** → **Rotate to new keys** → "You'll confirm with World ID. Your employer's app then accepts the change automatically." → **Continue to World ID** → **Prove it's still you** → **Confirm with World ID** → World App: Proof of Human → **Keys rotated**: "Your name points at the new keys, with a World ID attestation."
+- **Clicks (company app):** **Start pay run** → **Resolve names** (or **Recipients** → **Re-verify all**) → `alex-demo.soapay.eth`: **Verified** with the **Re-verified by World ID** pill (the owner's "new keys, verified by World ID ✓"); the run accepts it.
+- **Say:** "Same human, proven in the World App, so the company's app follows the new keys by itself. And a thief?"
+- **Clicks (terminal, then company app):** the terminal shows `pnpm demo:attacker sam-demo` (run live at the start of section 6 in a second terminal, ~15 s, or beforehand): "Record rewritten on-chain ✓. Attestation: refused (…). At the next pay run, the company app will block sam-demo's line." Back in the company app, **Resolve names** again → `sam-demo.soapay.eth`: **Blocked · record changed** ([s13](demo-screens/s13-sender-rotation-status.png) shows both pills).
+- **Say (close of the beat):** "The thief had sam's phrase, so they could rewrite sam's ENS record. But they're not sam, so there's no World ID proof, and the company's app refuses to pay the new keys. World ID protects future pay: a thief can rewrite the record, but the money doesn't follow."
+- **Bounty:** World IDKit (Proof of Human session, EIP-712 attestation enforced by the payer's app).
+- **Pre-staging:** alex's World ID session linked at sign-up (section 2), so no cooldown; the attacker command typed in a second terminal; one full rotation rehearsed on `alex-backup`; `sam-demo` in the roster and pinned **before** it is hijacked.
+- **Fallback:** World App flaky past ~8 s: cancel, switch to `alex-backup` (rotated in rehearsal) and show its **Re-verified by World ID** pill, or the recorded rotation clip. Attacker slow: it was also run in rehearsal, so show its Etherscan link and the company app's blocked pill ([s13](demo-screens/s13-sender-rotation-status.png) as a screenshot of last resort).
+
+**When to hijack sam.** If sam is hijacked before section 5, sam's line shows **Blocked · record changed** during the pay run and spoils the reveal (the run still goes ahead without sam). Best: start `pnpm demo:attacker sam-demo` in the second terminal as the pay run is signed (section 5) or as section 6 starts; it finishes in ~15 s, well before section 7. If you must run it beforehand, just don't comment on sam's line in section 5.
+
+## 8. Closing line (2:55–3:00)
+
+- **Say:** "One name, a fresh address every payday, for people and agents. Coworkers see the batch, not the salaries, and only the human can move the pay."
+
+## Before the demo
+
+The day before:
+
+1. **Company wallet:** a Coinbase Smart Wallet (one-signature pay run, gas-sponsored through the API's paymaster) logged in to the company app on the demo laptop; the vault created ("Use a device key (no passphrase)"). The **welcome drop** (1,000,000 mock USDC) arrives on first login. A plain EOA works too, but needs a little Base Sepolia ETH and two prompts.
+2. **Settings:** chunk `0.5` USDC, **Denominated payouts** on.
+3. **Roster of 10 or more names, pinned** (Recipients → Add by name → **Resolve and pin**), with salaries between 0.5 and 2 USDC. It must include **`sam-demo`** and, after the live sign-up, **`alex-demo`** and **`billing-agent`** join through their invites. Live names you can use: `sam-demo`, `dividend-ana`, `dividend-ben`, `dividend-cleo`, `pay392111`, `pay730021`, `invoice-agent`, `mcp-agent-7c1e`, plus the backups `alex-backup` and a pre-joined second agent. Run **Resolve names** once to check that every row is **Verified**. Ten or more people also keeps the small-team warning off the Review page.
+4. **sam-demo:** `pnpm demo:setup-recovery` (idempotent; claims `sam-demo.soapay.eth` through the live API; the phrase stays in the git-ignored `scripts/.demo-recipients.local.json`). Rehearse the whole hijack without a browser with `pnpm demo:recovery-check` (≈ 2 min, live txs, restores at the end). `DEMO_DRY=1 pnpm demo:attacker sam-demo` shows the plan without sending.
+5. **MCP in Claude Code**, built from this branch (the `invite` parameter, D-56): `pnpm install && pnpm build`, then
+
+   ```bash
+   claude mcp add soapay \
+     -e API_URL=https://soapay.up.railway.app/api \
+     -e RPC_URL=https://sepolia.base.org \
+     -e ENS_RPC_URL=https://ethereum-sepolia-rpc.publicnode.com \
+     -e AGENT_MNEMONIC="<fresh 12 words, never shown on screen>" \
+     -e AGENT_PAYER_PRIVATE_KEY=<fresh key> \
+     -e STATE_DIR=$HOME/.soapay-mcp-demo \
+     -- node /abs/path/apps/mcp/dist/index.js
+   ```
+
+   Use a **fresh** mnemonic (the one behind `invoice-agent` already owns a name). Ask the agent to call **`get_test_funds`** once, so its payer holds test USDC (it only needs it for `pay`; spends from stealth addresses are sponsored). Keep the env out of the mirrored screen.
+6. **Backups made the same way as the live flow:** `alex-backup` (phone profile 2) fully onboarded **with World ID linked at sign-up** and in the roster; a second agent joined through an invite with a second MCP config (the "pre-joined agent").
+7. **One full rehearsal on the live stack:** invite → sign-up (on `alex-backup`) → pay run → agent scan and spend → rotation with World ID → `pnpm demo:attacker sam-demo` → **Blocked** → `pnpm demo:attacker sam-demo --restore` → Resolve names shows sam **Verified** again. Record the rehearsal (clips for every fallback). The rehearsal run also leaves the agent and Alex with lines from an earlier run.
+8. **World ID:** the API runs `WORLD_ENV=production` with **Proof of Human** (D-51, D-54): `curl https://soapay.up.railway.app/api/worldid/config` shows `"credential":"proof_of_human"`. The World App on Alex's phone is verified. If the same human links sessions to `alex-backup` and `alex-demo`, check in rehearsal that the API accepts a new session for the second name (each name gets its own session; a reused one is refused with `session_taken`). If it doesn't, use a second verified World App for the backup.
+9. **Terminal one-liner for section 3** (from `packages/sdk`, where viem is installed):
+
+   ```bash
+   node -e 'import("viem").then(async({createPublicClient,http})=>{const{sepolia}=await import("viem/chains");const c=createPublicClient({chain:sepolia,transport:http("https://ethereum-sepolia-rpc.publicnode.com")});const n="alex-demo.soapay.eth";console.log("stealth",await c.getEnsText({name:n,key:"stealth"}));console.log("addr",await c.getEnsAddress({name:n}));console.log("resolver",await c.getEnsResolver({name:n}))})'
+   ```
+
+   Checked on `sam-demo.soapay.eth` (2026-09-26): prints the `st:eth:0x…` record, `addr null`, and the name's own resolver address, which opens on Sepolia Etherscan.
+
+Fifteen minutes before:
+
+- Phones charged, Do Not Disturb on, screen mirroring for the laptop **and** the phone tested on the venue's display.
+- Tabs open and warm: company app, Basescan (it has a Cloudflare check; pass it by hand), Sepolia Etherscan, the fallback clips.
+- `curl https://soapay.up.railway.app/api/health` answers; `alex-demo` and `billing-agent` are still `not_found`; the company wallet's welcome drop is visible.
+- The attacker command typed in the second terminal (not run, unless you chose to run it beforehand).
+- Claude Code open in a clean session with the Soapay MCP connected (`/mcp` lists `soapay`).
+- **No deploys during the demo.** Pushes to `main` deploy automatically (D-46); a restart of the API can interrupt a name claim mid-flight. Freeze merges to `main` an hour before.
+
+After the demo: `pnpm demo:attacker sam-demo --restore`. The agent pinned Alex's old keys in section 6, so a later agent payment to Alex fails with `pin_changed` until the operator removes the pin from `$STATE_DIR/state.json` (by design).
+
+## Risks and fallbacks
+
+| Risk | Likelihood | Fallback |
+| --- | --- | --- |
+| Live sign-up is slow (six steps on a phone, Sepolia lag after Register) | High | Switch the mirror to `alex-backup`; last resort the sign-up clip |
+| World App round trip flaky (sign-up or rotation) | Medium | `alex-backup` (World ID linked, rotated in rehearsal) or the recorded clip; never retry twice on stage |
+| Invite signing or the invite poller slow | Low | Invites created that morning; the row flips within one 5 s poll, so keep talking |
+| Agent errors (model asks questions, tool error, `label_taken`) | Medium | The pre-joined agent; for the spend, the recorded gasless spend tx; the clip |
+| Wallet prompt or Base Sepolia stalls on the pay run | Medium | The rehearsal run's Basescan tab and its **Two views** on the phone |
+| Basescan slow or Cloudflare-gated | Medium | Pre-warmed tabs; the company app's **What coworkers see** panel shows the same lines |
+| Paymaster or bundler down (agent spend) | Low | Recorded spend tx; `GET /api/health` beforehand |
+| Attacker script slow or RPC error | Low | Run it beforehand; show its Etherscan link and the **Blocked · record changed** pill |
+| An API deploy restarts mid-claim | Low if frozen | Merge freeze (D-46); re-run the tool (idempotent) |
+
+Keep a slide with screenshots in script order as the last-resort deck (see the screenshot list below).
+
+## What the pitch minute covers
+
+So the live demo doesn't have to:
+
+- **The problem:** a payroll batch on a public chain leaks every salary to every coworker; a wallet address is a public bank statement.
+- **The threat model:** the adversary is a coworker in the same batch who knows their own line and likely your main wallet. The employer is trusted. Out of scope for v1: chain analysts and RPC linkage.
+- **What Soapay is:** one ENS name per person or agent, a fresh stealth address per payment (ERC-5564 / ERC-6538), one custom contract that holds nothing.
+- **Pluggable:** everything in the apps comes from `@soapay/sdk`; the same rails run a CLI (`soapay distribute` for dividends, grants), the MCP server for agents, and the `examples/`. Mention the recorded CLI run (appendix) rather than showing it.
+- **Roadmap / mainnet:** the compliant exit through Privacy Pools (built and run end to end with Circle USDC on testnets, hidden on the mock-USDC demo), the Circle paymaster taking gas in USDC on Base mainnet, per-request (x402-style) agent payments as a cost-vs-privacy question.
+
+## Screenshots
+
+In [`demo-screens/`](demo-screens/). Referenced above only where they still match the current build (the names and amounts differ; the screens are the same): r01–r05, r03b, r03c, s08, s09, s13.
+
+**Need retaking** (not retaken here), at 1280×800 with `?motion=off`, ideally on the live stack with the demo's names:
+
+- **r06** (Recovery step): says "Selfie Check"; now "Proof of Human with World ID" (D-54).
+- **r08, r08a, r08b, r08c** (Payments, Pay runs, Two views): the nav still shows **Convert** and **Exit** (removed / hidden, D-52, D-53).
+- **r19, r20, r21, r22** (Name, rotation): Convert/Exit in the nav, and "Selfie Check" copy.
+- **s05** (invite link card): matches, but retake with `alex-demo` / Meridian Labs for the deck.
+- **s01** and **live-sender-landing**: check against the current landing copy before using.
+- New shots wanted: the agent joining in Claude Code (section 4), the agent's scan and spend (section 6), the section 3 terminal output, the attacker summary (section 7).
+
+**No longer used** (outdated beats): r09–r15 (web Send, guard, exit), r16–r18 (Convert), `beat4-pluggable-live.*` (kept as the CLI recording for the pitch).
+
+## Appendix: links and live references
 
 | What | Link |
 | --- | --- |
-| Landing + company (sender) app (live) | https://soapay.up.railway.app/ |
-| Employee (recipient) app (live) | https://soapay.up.railway.app/app/ ([live-recipient-home](demo-screens/live-recipient-home.png)) |
-| Live pay run (StealthDisperse → 2 stealth addresses, 3.0 + 2.5 USDC, 2 Announcements; checked by RPC) | https://sepolia.basescan.org/tx/0x24f23d610d1917905d3896e282243b07a038afb2bf266f94f11f31ea9e5b492d |
-| Live gasless 7702 spend, sponsored (mock USDC, D-52) | https://sepolia.basescan.org/tx/0x15ea6dcd7f489ff829365c6e9dfef0b86859aba4cdc97e0a010fa761e418265c |
-| Earlier gasless spend (Circle USDC, gas paid in USDC by the Circle paymaster) | https://sepolia.basescan.org/tx/0x1167b83dfab7476ac32b286b890fdcfdba396766d9389778568d949cbffc1bae |
-| `StealthDisperse` on Base Sepolia | https://sepolia.basescan.org/address/0x6B7a1cC570Af2DDd427DA694351438F0FE8039CA |
+| Company (sender) app + landing | https://soapay.up.railway.app/ |
+| Employee (recipient) app | https://soapay.up.railway.app/app/ |
+| API | https://soapay.up.railway.app/api (`/health`, `/names/:label`, `/worldid/config`) |
+| Mock USDC (Base Sepolia) | https://sepolia.basescan.org/address/0x028D969c20b740582428f5043954c380686214Bb |
+| `StealthDisperse` (Base Sepolia) | https://sepolia.basescan.org/address/0x6B7a1cC570Af2DDd427DA694351438F0FE8039CA |
 | Canonical ERC-5564 Announcer | https://sepolia.basescan.org/address/0x55649E01B5Df198D18D95b5cc5051630cfD45564 |
-| ENSv2 names paid live | `pay392111.soapay.eth`, `pay730021.soapay.eth` (resolve with the one-liner in `docs/bounty-integrations.md`) |
+| Live pay run (2 stealth addresses, 3.0 + 2.5 USDC) | https://sepolia.basescan.org/tx/0x24f23d610d1917905d3896e282243b07a038afb2bf266f94f11f31ea9e5b492d |
+| Live gasless 7702 spend, sponsored (mock USDC) | https://sepolia.basescan.org/tx/0x15ea6dcd7f489ff829365c6e9dfef0b86859aba4cdc97e0a010fa761e418265c |
+| CLI + agent run: 12 lines incl. the agent (D-43) | https://sepolia.basescan.org/tx/0xf7fb06dfa47313fbeab80fe6e01cc0d003d38d221819ad35d09bfcad9051ce0e |
+| The agent's gasless spend from that run | https://sepolia.basescan.org/tx/0x3517202141e4f1ad9849aa40f04ec3d7e332bd8d38a72d991d64d1e4b4d3f3e2 |
+| Agent name with ENSIP-26 records | `mcp-agent-7c1e.soapay.eth` (`agent-context`, `agent-endpoint[web]`) |
 
-Basescan is behind a Cloudflare check that a headless browser can't pass. Open these tabs by hand in the demo browser beforehand, and keep them logged in and warm.
+**CLI recording (pitch only):** `DEMO_REPLAY=1 scripts/demo-pluggable.sh` replays the recorded "plug it into anything" run ([`demo-screens/beat4-pluggable-live.txt`](demo-screens/beat4-pluggable-live.txt)); `DEMO_DRY=1` plans without sending.
 
-## Pre-demo setup (the day before, then 15 minutes before)
+**Exit (roadmap evidence, not shown on the testnet demo):** the 2026-09-26 live exit with Circle USDC: [pay](https://sepolia.basescan.org/tx/0xbd9d0001b4fe5fbee969003921b43a82608e7e3d0748a3fcd347f33244a3799b) → [burn](https://sepolia.basescan.org/tx/0x78fa2c713458f30879096a4d79a024f4fc0eab55aceffc8789111beaf19b6c89) → [mint](https://sepolia.etherscan.io/tx/0x5feec0c529b0b424b98c3b4c28f00191d20e7ca25b52b5d8d41627e7779436ab) → [deposit](https://sepolia.etherscan.io/tx/0xa7c6ff5f59c0c231b53df82859fca712798d398e9a907aefba778a5495d013e0) → [direct withdrawal](https://sepolia.etherscan.io/tx/0xed9235c87f7643bde048cd9e29c8abebe989a64016a628c85faa7ed5724fc672). Details: docs/testnet-deployment.md.
 
-**Test USDC is no longer scarce (D-52).** The pay token on Base Sepolia is Soapay's mock USDC: the employer wallet gets 1,000,000 of it automatically the first time it opens the company app (a "Welcome: 1,000,000 test USDC sent to your wallet" banner with a Basescan link), and `scripts/fund-usdc.sh <address>` mints more. Stealth spends are gas-sponsored, so recipients pay nothing. The apps still default to small testnet amounts (D-47: 5 USDC chunks, small example salaries) so runs stay readable; the Review confirmation now only appears above the 1,000,000 drop.
+**Recovery scripts (D-55):** `scripts/demo-setup-recovery.ts`, `scripts/demo-attacker.ts` (`--restore`, `DEMO_DRY=1`), `scripts/demo-recovery-check.ts`. Env: `API_URL` (default the Railway API), `ENS_RPC_URL`, `RPC_URL`, `SOAPAY_DEMO_FILE` (the phrase file), `SOAPAY_ENV_ROOT` (where the git-ignored `contracts/.env` and `apps/api/.env` live, for the stolen registrant's gas top-up). Nothing prints a phrase or a key. Honest line if asked: World ID protects **future** salary; a stolen phrase can still spend what sam already received, so move funds and rotate as soon as a leak is suspected.
 
-1. **Check the landing copy** (see Gaps, item 2): the live landing is fixed, but make sure the build you demo from has the fix too. Otherwise the first screen the judges read says something false.
-2. **Employer wallet:** a plain EOA on Base Sepolia. Its mock USDC arrives by itself on first login (or `scripts/fund-usdc.sh <address>`); it still needs a little Base Sepolia ETH for the approve + pay txs (the welcome drop's ETH drip is off pending an owner decision). A smart wallet (Coinbase Smart Wallet) needs no ETH: its EIP-5792 batch is gas-sponsored. The sender then takes the `StealthDisperse` path ("Approve the exact total, then 1 StealthDisperse payment"). The mock demo wallet can't sign, so the live pay run needs this real wallet.
-3. **Sender vault:** log in and create the vault ("Use a device key (no passphrase)"). Roster: at least 10 names. With fewer than 10 the Review page shows the small-team warning (correct, but it takes airtime). Keep **Denominated payouts** on. Give the roster small salaries (0.5–1.5 USDC each, about 8 USDC for ten people) and set Settings → chunk to `0.25`, so the run is a busy tx of about 40 equal lines on a testnet budget. (The testnet default chunk is 5 USDC; with sub-5 salaries every line would be a remainder.)
-4. **Two recipient profiles**, in two browser profiles:
-   - **"Me" (Jordan):** fully onboarded with a World ID Selfie Check session attached at enrollment (or attached 72 h earlier; the cooldown applies), labelled main wallet under Labels, and already paid by 2–3 earlier runs, so Payments shows several addresses from the Acme payer.
-   - **"New hire":** a fresh invite link opened and left on the first onboarding screen, or on the Recovery step (see Beat 2).
-5. **Pre-generated invite:** create it now under Recipients → Invite employee → **Sign and create link**. Keep the link and its QR.
-6. **Exit (not in the testnet build since D-52):** the Exit tab is hidden on Base Sepolia because the mock token can't bridge. To show it, use the recorded live run's links (Beat 5) or a build with `VITE_PAY_TOKEN=0x036CbD53842c5426634e7929541eC2318f3dCF7e` (Circle USDC, funded through Circle's faucet). The rest of this item describes that Circle-USDC setup. **Pre-approved exit leg:** on "Me", run one leg the day before under Exit (**Withdraw round amounts** on; **Wait a random delay after approval** off for the demo leg). Fees are roughly fixed per leg (D-48): bridge ≈ 1.8–2.2 USDC, Sepolia deposit gas ≈ 5.1–5.8, and the testnet relayer ≈ 21.5 USDC per withdrawal, which the pool only allows up to 30% of it. So a **relayed** leg needs at least **≈ 81.3 USDC** on one stealth address, and a **direct** withdrawal (tick **Withdraw directly**; the destination wallet pays ≈ 0.001 Sepolia ETH, funded from a faucet or an exchange, not from your own wallets) needs **≈ 18.6 USDC**. The planner shows the minimum, the full cost ("You receive ≈ X of Y (Z%)") and a warning above 15%. For the demo leg, pay 100 USDC to relay (≈ 69 arrives) or 20 USDC and withdraw directly (≈ 11 arrives). The scripted live run and its funding status are in docs/testnet-deployment.md, "Live exit": the 2026-09-26 run completed: 18 USDC paid → bridged (16.12 arrived) → deposited → approved → withdrawn **directly** (9.95 USDC to a fresh faucet-funded wallet), because the relayer's ≈ 21.5 USDC fee exceeded the amount in the pool. If the leg is still queued in its timing window, **Start now** on the leg starts it at once. The ASP approval can take hours, so it has to be approved before you go on stage. The Exit screen then lists it under **Finished exit** with its Basescan/Etherscan step links.
-7. **World ID:** the API runs `WORLD_ENV=staging` (the simulator). Open the simulator on a second device or tab and do one full rotate end to end beforehand (it hasn't been run live yet; see bounty-integrations "Before judging").
-8. **Fallback deck:** the screenshots in `demo-screens/` in slide order, plus a mock-mode build of both apps on localhost (the recipient's `pnpm --filter @soapay/recipient dev:mock` runs the whole flow offline, exit included, in about 35 s per leg).
-
-## The script
-
-Total 3:00. Time is the budget for each beat; the clicks are exactly CK's labels.
-
-### Beat 1: The problem (0:00–0:15) · sender landing
-
-- **Screen:** the landing at `/`, which is also the company app's front door ([s01](demo-screens/s01-sender-landing.png) in mock mode; live: [live-sender-landing](demo-screens/live-sender-landing.png)).
-- **Clicks:** none yet.
-- **Say:** "Pay your team in USDC on-chain and every coworker can read everyone's salary off the batch. A wallet address is a public bank statement."
-- **Bounty:** none (context).
-- **Fallback:** none needed.
-
-### Beat 2: One name, a fresh address per payment (0:15–0:50) · Recipients → invite → onboarding · ENSv2
-
-- **Clicks (sender):** **Login with wallet** → pick the wallet ([s02](demo-screens/s02-sender-login.png)) → **Unlock on this device** (first time: **Use a device key (no passphrase)**, [s03](demo-screens/s03-sender-vault.png)) → you land on **Recipients** ([s06](demo-screens/s06-sender-recipients.png); an empty vault looks like [s04](demo-screens/s04-sender-first.png)). Under **Invite employee**: Name `jordan`, Salary per run, Organisation → **Sign and create link** ([s05](demo-screens/s05-sender-invite-link.png)). Point at the row: **Invited (pending)**.
-- **Clicks (recipient, the "New hire" profile, pre-opened on the invite link):** "Invited by … Your pay name will be jordan.soapay.eth" ([r01](demo-screens/r01-invite-welcome.png)). Without an invite, the Welcome screen offers only **Create a new account** and **Restore from recovery phrase** ([r00](demo-screens/r00-welcome.png); no wallet-signature option since D-45). The stepper reads Keys · Lock · Register · Name · Recovery · Share. Don't do the recovery kit and lock live: Keys is **Save your recovery kit** (Download recovery kit / Copy phrase / Show words, then "I saved my recovery kit somewhere safe"; no word quiz since D-44, [r02](demo-screens/r02-onboard-phrase.png)); Lock is **Lock this device**, whose explainer says "Your device will ask to save a passkey… It's saved as jordan.soapay.eth in your password manager" → **Use Face ID / fingerprint (passkey)** ([r03b](demo-screens/r03b-onboard-lock.png)); the next screen confirms **Passkey saved on this device** ([r03c](demo-screens/r03c-onboard-passkey-saved.png)). Pre-stage the profile at **Register** and click **Register for free** ([r04](demo-screens/r04-onboard-register.png)) → **Continue** on the name ([r05](demo-screens/r05-onboard-name.png)) → on Recovery, **Skip and claim jordan.soapay.eth** (World ID is shown later) ([r06](demo-screens/r06-onboard-worldid.png)) → Share: "Share this one string with your employer" ([r07](demo-screens/r07-onboard-share.png)).
-- **Say:** "The employer invites a name, not a wallet. The employee's browser makes the keys, we pay the gas to publish them, and they get `jordan.soapay.eth`, an ENSv2 subname with its own resolver that only Jordan can repoint. There's no `addr` record, so nobody can pay a static address by mistake."
-- **Bounty:** ENSv2 (per-employee Permissioned Resolver, EAC on `stealth`, `addr` unset).
-- **Pre-staged:** the invite link, and the new-hire profile parked at Register.
-- **Fallback:** if Register or the name claim hangs on Sepolia (read-after-write lag), go to the pre-onboarded "Me" profile and show **Name** (jordan.soapay.eth plus its meta-address, [r19](demo-screens/r19-name.png)). The Recipients row flips to **Active** by itself once the claim lands (it polls every 5 s).
-
-### Beat 3: The pay run (0:50–1:20) · Pay run → Review & sign → History
-
-- **Clicks:** **Start pay run** (or the **Pay run** tab) ([s07](demo-screens/s07-sender-payrun.png)) → Run label `September payroll` → **Resolve names** (each row shows "Verified · N fresh addresses", [s08](demo-screens/s08-sender-resolved.png)) → **Review** ([s09](demo-screens/s09-sender-review.png)) → **Approve and send** → wallet: approve, then pay → the run page, then the **History** tab ([s11](demo-screens/s11-sender-history.png)).
-- **Say (read the Review headline aloud):** "*8 USDC to 10 people, on 40 fresh addresses. On chain this looks like 40 payments of about 0.25 USDC to 40 strangers.*" (the figures are the testnet roster from setup step 3; read whatever the headline says) "Each name is re-checked against the key we pinned, and it's one transaction that pays and announces every line."
-- **Bounty:** ENSv2 (resolve-and-pin on every run).
-- **Pre-staged:** a funded employer EOA; the roster already resolved once.
-- **Fallback:** Base Sepolia confirmations normally take a few seconds. If the wallet or the RPC stalls for more than about 10 s, say "here's the same run from earlier" and switch to the live pay-run tx tab. Don't wait on stage. If the approval fails, the run page shows "Not sent: the approval didn't go through" plus **Retry unpaid lines** ([s10](demo-screens/s10-sender-send-attempt.png)); retry once, then fall back.
-
-### Beat 4: What a coworker sees vs what I see (1:20–1:50) · the core moment
-
-- **Screen:** "Me" on **Payments** ([r08](demo-screens/r08-payments.png)), scrolled to **Pay runs** (D-41, [r08a](demo-screens/r08a-payruns.png)). One row per pay-run transaction that paid me: block, payer, how many of my lines are in it, and the tx.
-- **Clicks:** **Rescan** (so Beat 3's lines appear) → **Two views** on the newest run. It opens on **Coworker view** ([r08b](demo-screens/r08b-payrun-coworker-view.png)): every line of that transaction as the chain shows it (short stealth address, amount from the USDC Transfer log, owner "unknown"), under "This is everything anyone can see on-chain: 50 payments totalling … USDC from 0x… in one transaction". Flip the toggle to **My view** ([r08c](demo-screens/r08c-payrun-my-view.png)): the same list, my lines highlighted **You**, and the honest count, "6 of 50 lines are yours (2,750.00 USDC)". **View on Basescan ↗** opens the same tx (live only; mock mode has no explorer link).
-- **Say:** "This is my coworker's view: fifty payments to strangers, rebuilt from the transaction's own logs. They know their own lines, and that's all. Now my view: the same transaction, and only my viewing key lights up my six lines. Nothing else about the other forty-four changes."
-- **Bounty:** none directly. This is the product claim (PRD Goal 2).
-- **Pre-staged:** "Me" already paid by 2–3 runs from the Acme payer (mock mode fabricates three runs of 50 lines each, 44 of them coworkers' 500 USDC chunks: mock fixtures, not test USDC).
-- **Fallback:** if the RPC stalls reading the receipt ("Reading the transaction's logs…" for more than a few seconds), open the pre-warmed Basescan tab for the live pay run (2 lines: 3.0 and 2.5 USDC). The sender's run page shows the same list under **What coworkers see**, with names beside it only on the employer's screen.
-
-### Beat 4b: Plug it into anything (terminal, 10–20 s) · CLI + MCP, live on Base Sepolia
-
-- **Pitch line:** "Soapay doesn't care who gets paid: a person or an agent gets the same name, the same privacy, the same exit."
-- **What it shows:** Soapay is building blocks, not just an app. The rails are payer- and payee-agnostic: anyone (an employer, a company paying dividends, a DAO, an agent) pays anyone (a person or an agent) at a fresh address derived from their spending and viewing keys. Payroll is the first product; dividends and grants run on the same rails (`--preset dividend`, `--preset grant`).
-- **The clip** (one command, `scripts/demo-pluggable.sh`, about 35–40 s live; show steps 2 and 4, or play it back at 2x):
-  1. An AI agent claims `invoice-agent.soapay.eth` through the MCP server (ENSIP-26 `agent-context` written at issuance). Idempotent: after the first run it prints "already this agent's".
-  2. **One** revenue-share run pays three people (`dividend-ana|ben|cleo.soapay.eth`), a raw meta-address and the agent together:
-     ```bash
-     soapay distribute --preset dividend --csv examples/demo/holders.csv --asset usdc --total 0.5 --chunk 0.05 --execute
-     ```
-     Plan (with a `pins` line: the first run pins every name's meta-address in `examples/demo/.soapay/pins.json`; a later change stops the run unless World ID re-verified it, D-49) → preflight (payer, balances, "2 txs: 1 approval (exact total) + 1 pay (12 lines)") → Basescan links. On-chain it's 12 equal-looking lines to 12 strangers; the agent's lines are indistinguishable from the people's.
-  3. Ana scans with her phrase (`soapay scan --mnemonic-env SOAPAY_PHRASE --from <block> --known-payer <company>`): 4 lines, 0.2 USDC, real balances.
-  4. The agent scans over MCP ("the pay run has 12 lines; 2 are mine"), then spends 0.02 USDC to a name with no ETH: gas is sponsored on the testnet (7702 + paymaster; on Base the Circle paymaster takes it in USDC), the same path the recipient app uses.
-- **Say:** "Same SDK under the apps, a CLI and an agent. A dividend is one command. The agent is just another payee: same name, same privacy, same exit."
-- **Agent use cases to name:** revenue share, bounties, contractor invoices, agent-to-agent settlement. **"Why not x402?"** x402 pays the same public address on every call. Per-request stealth payments work on this same design; whether they fit is cost vs privacy (one announcement per payment is about 2x a transfer's gas on Base, scanning volume grows, and consolidating many small payments reveals totals), so they're on the roadmap, not ruled out.
-- **Pre-staged (once):** `pnpm build`, then `pnpm --filter @soapay/examples demo:setup` (claims the people's names through the API relayer and writes `examples/demo/holders.csv`; the recovery phrases stay in the git-ignored `scripts/.demo-recipients.local.json`). A funded Base Sepolia EOA as the payer: `PAYER_PRIVATE_KEY` in the environment, or `PAYER_ENV_FILE=apps/mcp/.env PAYER_ENV_VAR=AGENT_PAYER_PRIVATE_KEY`. Each run spends `DIVIDEND_TOTAL` (default 0.5 USDC) plus a little gas.
-- **Rehearse without sending:** `DEMO_DRY=1 scripts/demo-pluggable.sh` (plan only).
-- **Fallback:** `DEMO_REPLAY=1 scripts/demo-pluggable.sh` replays the recorded live run offline, in colour ([`demo-screens/beat4-pluggable-live.txt`](demo-screens/beat4-pluggable-live.txt), `.ansi` for colour). Live txs from that recording, 2026-09-26: pay run [0xf7fb06df…](https://sepolia.basescan.org/tx/0xf7fb06dfa47313fbeab80fe6e01cc0d003d38d221819ad35d09bfcad9051ce0e) (12 lines, 5 payees incl. the agent), the agent's gasless spend [0x35172021…](https://sepolia.basescan.org/tx/0x3517202141e4f1ad9849aa40f04ec3d7e332bd8d38a72d991d64d1e4b4d3f3e2).
-
-### Beat 5: Spend gaslessly, and the guard → compliant exit (1:50–2:25) · Send → Exit · (Privacy Pools)
-
-- **Clicks, gasless spend:** **Send** tab ([r09](demo-screens/r09-send-form.png)) → To = a fresh address, Amount `0.5` (live; the screenshots show `80` from mock mode) → **Review**: "No new links. This spend doesn't connect any of your stealth addresses to each other or to an identifiable wallet" ([r14](demo-screens/r14-send-review-ok.png)) → **Send now** → "Sent · 1 transaction confirmed" ([r15](demo-screens/r15-send-done.png)), with the navy **Gas proof** panel under it (D-41), read live: "0 ETH here. Gas was sponsored (testnet); on mainnet the Circle paymaster takes it in USDC." Rows: ETH balance now `0 ETH`; Account "Upgraded to a smart account via EIP-7702, delegate = Simple7702Account"; Nonce "1: used by the 7702 authorization; no transaction of its own"; the spend tx and userOp; Submitted by the bundler; Gas paid by "Sponsoring paymaster (testnet) 0x8888…2402"; Gas fee "None: sponsored on this testnet". Each links to Basescan (live only). The same panel is in the address's **Details** on Payments after it spent.
-- **Say:** "Zero ETH on this address. The chain shows who paid the gas: the bundler fronted it and a paymaster covered it. On this testnet that's sponsored; on mainnet Circle's paymaster takes the fee from this address in USDC. Every line here is a chain read." (Don't say "never received ETH": the panel deliberately doesn't claim it.)
-- **Clicks, guard:** Send again, To = my main wallet (labelled under **Labels** beforehand, [r10](demo-screens/r10-labels.png)), an amount larger than any one address holds (live: `2`; mock: `1200`) → **Review** (the guard blocks it, so nothing is sent) → "**Blocked by the privacy guard.** Spending from 3 unlinked clusters in one operation links them to each other. Sending here ties these funds to you" ([r11](demo-screens/r11-send-guard-block.png)). On the testnet build there's no **Exit through Privacy Pools** button (Exit is hidden with the mock token, D-52); the guard just blocks and explains why. For the exit, show the recorded live run's links below (or, on a Circle-USDC build, **Exit through Privacy Pools** → [r12](demo-screens/r12-exit-plan.png) / [r13](demo-screens/r13-exit-done.png)).
-- **Say:** "My coworkers know my main wallet, so the app refuses to link my salary to it. On mainnet the way out is a screened pool: each address deposits on its own, and the withdrawal to my wallet can't be matched to a deposit. Here's one we ran end to end with real Circle USDC."
-- **Bounty:** none of the three. This beat evidences PRD Goals 3 and 5: the gasless spend, the guard and the compliant exit.
-- **Pre-staged:** the main wallet labelled; the live exit's tx tabs open.
-- **Live exit tx links (2026-09-26):** [pay](https://sepolia.basescan.org/tx/0xbd9d0001b4fe5fbee969003921b43a82608e7e3d0748a3fcd347f33244a3799b) → [burn](https://sepolia.basescan.org/tx/0x78fa2c713458f30879096a4d79a024f4fc0eab55aceffc8789111beaf19b6c89) → [mint](https://sepolia.etherscan.io/tx/0x5feec0c529b0b424b98c3b4c28f00191d20e7ca25b52b5d8d41627e7779436ab) → [deposit](https://sepolia.etherscan.io/tx/0xa7c6ff5f59c0c231b53df82859fca712798d398e9a907aefba778a5495d013e0) → [direct withdrawal](https://sepolia.etherscan.io/tx/0xed9235c87f7643bde048cd9e29c8abebe989a64016a628c85faa7ed5724fc672). On stage, show the finished leg's links from the Exit screen.
-- **Fallback:** a bundler or paymaster stall past 10 s: show the live spend tx tab. If the API says gas sponsorship is off (no `PIMLICO_API_KEY` on the server), show the recorded sponsored spend instead.
-
-### Beat 6: removed (D-53)
-
-The Convert tab is gone from the employee app (the Uniswap bounty is no longer targeted). Its 15 s go to Beat 7. Swap in place still exists in the SDK and the MCP `swap_in_place` tool.
-
-### Beat 7: Key rotation protected by World ID (2:25–3:00) · Name · World ID
-
-- **Clicks (recipient "Me"):** **Name** tab ([r19](demo-screens/r19-name.png)) → **Rotate to new keys** ([r20](demo-screens/r20-rotate-confirm.png)) → **Continue to World ID** → "Prove it's still you" → **Confirm with World ID** ([r21](demo-screens/r21-rotate-worldid.png)) → Selfie Check in the simulator → "Keys rotated … with a World ID attestation" ([r22](demo-screens/r22-rotate-done.png)).
-- **Clicks (sender):** **Recipients** → **Re-verify all** → jordan shows **Re-verified by World ID**, and an unattested change shows **Blocked · record changed** ([s13](demo-screens/s13-sender-rotation-status.png)). A name's detail shows the pinned record and every fresh address paid ([s12](demo-screens/s12-sender-recipient-detail.png)).
-- **Say (close):** "The name decides where salary goes, so changing it takes the same human who enrolled. A stolen key alone gets blocked. One name, a fresh address every payday, and no coworker can tell which line is yours."
-- **Bounty:** World ID (IDKit Selfie Check session, EIP-712 attestation enforced by the sender).
-- **Pre-staged:** the session attached at enrollment (past the 72 h cooldown if it was attached later); the simulator open and logged in.
-- **Fallback:** if the simulator stalls past 10 s, cancel and show [s13](demo-screens/s13-sender-rotation-status.png) (the attested vs blocked pills), or run the sender's mock "Rotate keys (World ID attested)" on the localhost fallback.
-
-## Recovery beat: a stolen phrase can't redirect pay (World ID account recovery)
-
-Two employees, same company. **alex-demo** lost a device and recovers with World ID: the payer's app follows. **sam-demo**'s recovery phrase was stolen: the thief rewrites sam's ENS record on-chain, but the payer's app blocks the line. Code: `scripts/demo-attacker.ts`, `scripts/demo-setup-recovery.ts`, `scripts/demo-recovery-check.ts` (D-55). Phrases live only in the git-ignored `scripts/.demo-recipients.local.json`; nothing prints a phrase or key.
-
-**Before the demo** (from the repo root of the main checkout, after `pnpm install && pnpm build`):
-
-1. `pnpm demo:setup-recovery` claims `sam-demo.soapay.eth` through the live API (idempotent; prints names and addresses only).
-2. **alex-demo, manual:** in the employee app (https://soapay.up.railway.app/app/), create a new account, claim `alex-demo`, and on Recovery **link World ID with the World App at enrollment** (don't skip it). A session attached *later* can only back a rotation after the 72 h cooldown (`attach_cooldown_seconds` on `GET /api/worldid/config`), so a same-day demo needs the session at enrollment. The setup script doesn't create alex for this reason, and it can't fake the World App.
-3. In the company app, **Recipients** → add `sam-demo.soapay.eth` and `alex-demo.soapay.eth` (resolve and pin).
-4. Optional rehearsal, no browser: `pnpm demo:recovery-check` pins sam, runs the attacker, asserts **blocked (meta changed, no valid attestation)** with the SDK and `soapay distribute`, then restores (≈ 2 min, live txs).
-5. Hijack sam beforehand: `pnpm demo:attacker sam-demo` (~15 s: ENS `setText` on Sepolia + ERC-6538 on Base Sepolia, then the API refusal). Or keep it for the stage. `DEMO_DRY=1` shows the plan without sending.
-
-**On stage** (≈ 30 s):
-
-- **alex (employee app):** Name → **Rotate to new keys** → World ID in the World App → "Keys rotated … with a World ID attestation". **Company app:** Recipients → **Re-verify all** → alex shows **Re-verified by World ID**.
-- **sam (terminal, if not done beforehand):** `pnpm demo:attacker sam-demo`. Read the summary line: "Record rewritten on-chain ✓. Attestation: refused (no_session). At the next pay run, the company app will block sam-demo's line." Open the Etherscan link: the record really changed.
-- **Company app:** **Re-verify all** → sam shows **Blocked · record changed**. A pay run won't pay sam until the employer checks with sam by hand.
-- **Say:** "Same key, same power over the ENS record. The difference is the human: alex proved it in the World App, the thief can't. The payer follows only the human."
-- **Honest line (say it if asked):** World ID protects **future** salary. A stolen phrase can still spend what sam has already received; that's what the recovery kit's safety is for (keep the phrase offline; move funds and rotate as soon as a leak is suspected).
-
-**After:** `pnpm demo:attacker sam-demo --restore` puts sam's own keys back (same registrant key), so the beat can be re-run. Then Re-verify in the company app shows sam OK again (the pin never moved).
-
-Env for the scripts: `API_URL` (default the Railway API), `ENS_RPC_URL`, `RPC_URL`, `SOAPAY_DEMO_FILE` (phrase file), `SOAPAY_ENV_ROOT` (where the git-ignored `contracts/.env` and `apps/api/.env` live, for the gas top-ups; defaults to the checkout). The stolen registrant needs a little gas: the attacker tops it up with just the shortfall from the `soapay.eth` owner (Sepolia) and the deployer (Base Sepolia), printing addresses only. A real thief brings their own gas.
-
-## UI vs SDK
-
-The demo is UI-only: judges follow a person, not a library. The SDK appears in **at most one beat**, and only as a sentence plus one frame. Say "every screen you saw calls `@soapay/sdk`; so does this agent" over a 5-second terminal clip of the MCP server (`resolve_name` on `mcp-agent-7c1e.soapay.eth`, or `whoami`). That clip replaces the last 5 s of Beat 7 if there's time. Otherwise it goes on the closing slide, with the repo link. If the terminal beat (Beat 4b) runs, it *is* the SDK beat: skip this clip. Don't live-code, and don't show the SDK anywhere a screen already shows the same thing.
-
-## Gaps that weaken the story (recommendations; no app code changed)
-
-1. ~~**No coworker-view visual.**~~ Done (D-41): Payments → Pay runs → **Two views**, and the sender's run page **What coworkers see**.
-2. ~~**The landing overclaim is still live.**~~ Fixed on the live landing (checked 2026-09-26): "…so on a block explorer the payroll shows new addresses, not your team's wallets" ([live-sender-landing](demo-screens/live-sender-landing.png)). The fix isn't on this branch yet: `apps/sender/src/pages/Landing.tsx` here (and the mock-mode [s01](demo-screens/s01-sender-landing.png)) still say "…the payroll never shows up on a block explorer". Make sure the branch you demo from has it.
-3. **Onboarding is too long to show live.** Save the recovery kit, then lock with a passkey (the 3-word backup check is gone since D-44, so it is shorter than it was). Pre-stage it (Beat 2). Consider a "demo account" restore, or skipping straight to Register for a pre-made profile.
-4. **The mock wallet can't sign a pay run** ("Not sent: the approval didn't go through"), so the pay run is the one beat with no offline fallback that actually sends. Keep the live tx link ready.
-5. **The invite's org name doesn't match in mock mode.** The link carries `org=Acme Labs`, but onboarding shows "Invited by Acme Robotics" (the mock fixture). Check that the live path shows the employer's own org.
-6. **After an exit or a send, mock balances aren't refreshed.** An address that just sent 80 of its 100 USDC still shows 100 (rechecked 2026-09-26). Confirm it's mock-only.
-7. ~~**Guard copy exposes a raw pay-run tx hash.**~~ Done (D-41): hashes in guard copy render short (`0x681f…9e2a`) and link to Basescan outside mock mode.
-8. **Run pages and Basescan:** live runs already link each step's tx (Tx column), and the **What coworkers see** panel links each landed tx (D-41). Mock runs never send, so they show "—" and a labelled preview instead.
+**Offline fallback:** both apps in mock mode (`VITE_MOCK_API=1` / `VITE_MOCK_ENS=1`; `pnpm --filter @soapay/recipient dev:mock`). The mock company wallet can't sign a pay run, so the live pay run has no offline equivalent: use the recorded tx.
