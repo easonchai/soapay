@@ -1,4 +1,5 @@
-import { useCallback, useState } from "react";
+import type { Hex } from "viem";
+import { useCallback, useEffect, useState } from "react";
 import { attachSession } from "../features/recovery/attach.js";
 import {
   finishRotation,
@@ -18,6 +19,9 @@ import { useKeyRing } from "./useChain.js";
 
 export type RotationPath = "attested" | "manual";
 
+/** A real 32-byte tx hash (the relayer answers "0x" when nothing had to be sent). */
+const isTxHash = (h: unknown): h is Hex => typeof h === "string" && /^0x[0-9a-fA-F]{64}$/.test(h);
+
 export type RotationState =
   | { step: "idle"; error: string | null }
   /** Review what will happen; `path` depends on whether a World ID session is attached to the name. */
@@ -28,19 +32,33 @@ export type RotationState =
   | { step: "done"; path: RotationPath };
 
 /**
+ * When a late-linked session starts backing rotations (unix seconds), or undefined if it already
+ * does. The vault keeps the date the API gave at link time; `cooldownSeconds` is the API's current
+ * setting (`GET /worldid/config`), so a wait the API has since shortened (D-60) no longer blocks.
+ */
+function allowedFromOf(profile: Profile, cooldownSeconds?: number | null): number | undefined {
+  const r = profile.recovery;
+  const stored = r?.rotationAllowedFrom;
+  if (!stored) return undefined;
+  if (cooldownSeconds == null || !r?.at) return stored;
+  return Math.min(stored, Math.floor(r.at / 1000) + cooldownSeconds);
+}
+
+/**
  * Whether rotation can be attested by World ID: a session is attached to this name and, if it was
  * attached late, the API's cooldown has passed.
  */
-export function rotationPathOf(profile: Profile, nowMs = Date.now()): RotationPath {
+export function rotationPathOf(profile: Profile, nowMs = Date.now(), cooldownSeconds?: number | null): RotationPath {
   const r = profile.recovery;
   if (!r?.sessionId || !profile.name || r.attachedTo !== profile.name.label) return "manual";
-  if (r.rotationAllowedFrom && nowMs < r.rotationAllowedFrom * 1000) return "manual";
+  const from = allowedFromOf(profile, cooldownSeconds);
+  if (from && nowMs < from * 1000) return "manual";
   return "attested";
 }
 
 /** When a late-attached session starts backing rotations (ms), or null if it already does / none. */
-export function sessionCooldownUntil(profile: Profile, nowMs = Date.now()): number | null {
-  const from = profile.recovery?.rotationAllowedFrom;
+export function sessionCooldownUntil(profile: Profile, nowMs = Date.now(), cooldownSeconds?: number | null): number | null {
+  const from = allowedFromOf(profile, cooldownSeconds);
   return from && nowMs < from * 1000 ? from * 1000 : null;
 }
 
@@ -56,7 +74,15 @@ export function useRotation() {
   const name = profile.name;
   const [state, setState] = useState<RotationState>({ step: "idle", error: null });
   const [attachError, setAttachError] = useState<string | null>(null);
-  const path = rotationPathOf(profile);
+  const [cooldownSeconds, setCooldownSeconds] = useState<number | null>(null);
+  useEffect(() => {
+    let live = true;
+    svc.api.getAttachCooldownSeconds().then((c) => live && setCooldownSeconds(c)).catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [svc.api]);
+  const path = rotationPathOf(profile, Date.now(), cooldownSeconds);
   const chainId = svc.settings.chainId;
 
   const fail = (e: unknown) => setState({ step: "idle", error: errorMessage(e) });
@@ -92,6 +118,10 @@ export function useRotation() {
         name: name.name,
         newMeta: pending.newMeta,
         registrantKey: ring.current.registrantKey,
+        requestGas: async () => {
+          const { topup } = await svc.api.rotationGas(name.label);
+          return topup.status === "sent" && topup.txHash ? topup.txHash : null;
+        },
       });
       await v.update((d) => {
         const { pendingRotation: _p, ...rest } = d.profile;
@@ -109,6 +139,7 @@ export function useRotation() {
                 newMeta: pending.newMeta,
                 at: Date.now(),
                 setTextTx,
+                ...(pending.registryTx ? { registryTx: pending.registryTx } : {}),
                 ...(pending.attestation !== undefined ? { attestation: pending.attestation } : {}),
               },
             ],
@@ -127,8 +158,8 @@ export function useRotation() {
     async (pending: PendingRotation) => {
       if (!pending.registered) {
         setState({ step: "working", stage: "register", path: "manual" });
-        await registerRotatedMeta({ api: svc.api, registry: svc.client, chainId, registrant: ring.current, newMeta: pending.newMeta });
-        pending = { ...pending, registered: true };
+        const reg = await registerRotatedMeta({ api: svc.api, registry: svc.client, chainId, registrant: ring.current, newMeta: pending.newMeta });
+        pending = { ...pending, registered: true, ...(isTxHash(reg.txHash) ? { registryTx: reg.txHash } : {}) };
         await savePending(pending);
       }
       await complete(pending);
@@ -180,6 +211,9 @@ export function useRotation() {
           postedAt: Date.now(),
           path: "attested",
           ...(res.attestation ? { attestation: res.attestation } : {}),
+          ...(isTxHash((res.registry as { txHash?: unknown } | undefined)?.txHash)
+            ? { registryTx: (res.registry as { txHash: Hex }).txHash }
+            : {}),
         };
         await savePending(pending);
         await complete(pending);
@@ -256,7 +290,7 @@ export function useRotation() {
     pending: profile.pendingRotation ?? null,
     recovery: profile.recovery ?? null,
     /** A late-attached session is still in the API's cooldown until this time (ms). */
-    cooldownUntil: sessionCooldownUntil(profile),
+    cooldownUntil: sessionCooldownUntil(profile, Date.now(), cooldownSeconds),
     sessionId: path === "attested" ? profile.recovery?.sessionId : undefined,
     ensReady: svc.ens.ready,
     ensUnavailableReason: svc.ens.unavailableReason,

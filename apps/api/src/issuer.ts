@@ -31,10 +31,12 @@ export function makeNameIssuer(config: Config, logger: Logger): NameIssuer {
     logger.warn("ISSUER_PRIVATE_KEY or L1_RPC_URL not set: names are stored only, no ENSv2 subnames are issued");
     return new NoopNameIssuer();
   }
-  const transport = http(config.l1RpcUrl, { retryCount: 2, timeout: 30_000 });
+  // Short per-request timeout with retries, and 1 s receipt polling: a single hung Sepolia RPC call
+  // used to hold the claim for its whole 30 s timeout after the txs were already mined.
+  const transport = http(config.l1RpcUrl, { retryCount: 3, timeout: 20_000 });
   const account = privateKeyToAccount(config.issuerPrivateKey);
-  const publicClient = createPublicClient({ chain: sepolia, transport });
-  const walletClient = createWalletClient({ chain: sepolia, transport, account });
+  const publicClient = createPublicClient({ chain: sepolia, transport, pollingInterval: 1_000 });
+  const walletClient = createWalletClient({ chain: sepolia, transport, account, pollingInterval: 1_000 });
   logger.info("ENSv2 name issuer enabled", {
     issuer: account.address,
     parent: config.parentName,

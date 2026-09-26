@@ -31,6 +31,9 @@ Unknown routes return 404 `not_found`, oversized bodies return 413 `payload_too_
 | `POST` | `/names/:label/session` | Attach a World ID session to a name |
 | `POST` | `/names/:label/rotation` | Verify a session proof, rotate keys, and attest |
 | `GET` | `/names/:label/attestations` | Read MetaRotation attestations |
+| `POST` | `/names/:label/session/lookup` | Return the name's World ID session id to its registrant |
+| `PUT` | `/backups/:address` | Store an app's encrypted vault backup |
+| `GET` | `/backups/:address` | Read the latest encrypted vault backup |
 | `POST` | `/uniswap/:endpoint` | Proxy the Trading API `quote` endpoint only |
 | `POST` | `/paymaster` | Proxy ERC-7677 sponsorship on Base Sepolia |
 | `POST` | `/faucet` | Issue the one-time testnet welcome drop |
@@ -171,6 +174,20 @@ Refusals include 400 `expired`, `registration_rejected`, or `invalid_registerSig
 ### `GET /names/:label/attestations`
 
 Response: `{ attester, items: [{ label, oldMeta, newMeta, verifiedAt, signature }] }`, newest first. `attester` may be `null`. A client must pin its expected attester rather than trusting this field.
+
+### `POST /names/:label/session/lookup`
+
+Request: `{ deadline, signature }`, where the name's registrant signs the EIP-712 `SessionLookup(string label, uint256 deadline)` message in the "Soapay Names" domain (SDK `sessionLookupTypedData` and `signSessionLookup`; the deadline is at most one hour ahead). Response: `{ label, sessionId, attachedAt, rotationAllowedFrom }`, or 404 `no_session`. The employee app uses it after a recovery-phrase restore so a linked World ID session is found again without a second link; `GET /names/:label` never serves the id.
+
+## Encrypted backups
+
+### `PUT /backups/:address`
+
+Request: `{ version, ciphertext, signature }`. `ciphertext` is the app's client-side encrypted vault as base64 (at most 512 KiB); `version` must be a strictly increasing integer; `signature` is an EIP-191 signature by `address` over `soapay-backup:v1:<checksummed address>:<version>:<keccak256(ciphertext)>` (SDK `backupMessage`), verified for EOAs, ERC-1271, ERC-6492 and 7702 accounts. Success is 200 `{ address, version }`. A lower or equal version returns 409 `stale_version` with the current `version`, so a client can refetch and retry. The route is rate-limited per wallet and per IP. The API stores ciphertext only: the company app encrypts under its wallet-signature or passphrase lock, the employee app under a key derived from its passkey.
+
+### `GET /backups/:address`
+
+Response: `{ address, version, ciphertext, updatedAt }`, or 404 when the address has no backup. Rate-limited per IP.
 
 ## Swap, sponsorship, and faucet
 

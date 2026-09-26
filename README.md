@@ -278,10 +278,10 @@ Live on Base Sepolia and ENSv2 Sepolia (2026-09-25): an agent created `mcp-agent
 | Session verification: nonce, signal, credential, environment, replay, Developer Portal | [`apps/api/src/worldid/verifier.ts`](apps/api/src/worldid/verifier.ts), [`portal.ts`](apps/api/src/worldid/portal.ts) |
 | Routes: RP context, attach session, rotation + attestation + ERC-6538 relay + top-up | [`apps/api/src/routes/worldid.ts`](apps/api/src/routes/worldid.ts), [`rotation.ts`](apps/api/src/routes/rotation.ts) |
 | Typed data (RotationClaim, MetaRotation, AttachSession) and signals | [`packages/sdk/src/rotation.ts`](packages/sdk/src/rotation.ts) |
-| `<HumanCheck mode="create-session" \| "rotate">` over `IDKitSessionWidget` | [`packages/worldid-react`](packages/worldid-react) |
+| `<HumanCheck mode="create-session" \| "rotate">`: IDKit core `createSession` / `proveSession`, QR shown inline | [`packages/worldid-react`](packages/worldid-react) |
 | Tests with a mocked Developer Portal | [`apps/api/test/worldid.test.ts`](apps/api/test/worldid.test.ts) |
 
-App `app_0cc7167efe114ac2e0ef7d9827098353`, RP `rp_3ede5fe1cab9af48`, `WORLD_ENV=staging` for the demo. Setup is in [`apps/api/README.md`](apps/api/README.md) and [`apps/api/.env.example`](apps/api/.env.example).
+The World ID app and RP come from the api's environment (`WORLD_APP_ID`, `WORLD_RP_ID`; nothing in the code defaults them), and the RP must support World ID sessions (D-59). Setup is in [`apps/api/README.md`](apps/api/README.md) and [`apps/api/.env.example`](apps/api/.env.example).
 
 ## Roadmap
 
@@ -370,8 +370,8 @@ Five people, built at ETHGlobal Tokyo 2026.
 
 | Who | Role | Also | GitHub | X |
 | --- | --- | --- | --- | --- |
-| **Eason Chai** | Founder & CEO, Foresight and ELVTD | ELVTD: web3 solutions. ex-Virtuals Protocol | [@easonchai](https://github.com/easonchai) | [@easonchaiii](https://x.com/easonchaiii) |
-| **Yudhishthra** | Co-Founder, Aqua0 | ex-Nethermind, ex-Etherscan | [@0xYudhishthra](https://github.com/0xYudhishthra) | [@0xYudhishthra](https://x.com/0xYudhishthra) |
-| **Ee Sheng** | Head of Engineering, Thetanuts | Founder, zBase: private payments for agents. Base Batches 003 finalist | [@goheesheng](https://github.com/goheesheng) | [@goheesheng](https://x.com/goheesheng) |
+| **Eason Chai** | Founder & CEO, Foresight and ELVTD | Ex-engineer, Gitcoin. Previously contracted for Virtuals Protocol | [@easonchai](https://github.com/easonchai) | [@easonchaiii](https://x.com/easonchaiii) |
+| **Yudhishthra** | Co-Founder, Aqua0 | Ex-engineer, Nethermind and Etherscan | [@0xYudhishthra](https://github.com/0xYudhishthra) | [@0xYudhishthra](https://x.com/0xYudhishthra) |
+| **Ee Sheng** | Head of Engineering, Thetanuts | Founder, zBase: private payments for agents (Base Batches 003 finalist) | [@goheesheng](https://github.com/goheesheng) | [@goheesheng](https://x.com/goheesheng) |
 | **Marcus Tan** | Founding Engineer, Predictefy | ex-engineer, ELVTD | [@Marcussy34](https://github.com/Marcussy34) | [@marcustan1337](https://x.com/marcustan1337) |
 | **Cheong Kian** | Founding Engineer, Predictefy | | [@Ckayz](https://github.com/Ckayz) | [@LCKian88](https://x.com/LCKian88) |

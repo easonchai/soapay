@@ -1,10 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
 import { getAddress, verifyTypedData, type Address, type Hash, type Hex, type PrivateKeyAccount } from "viem";
-import { attachSessionTypedData, nameClaimTypedData, rotationClaimTypedData, rotationSignal, sessionSignal, worldIdSignalHash } from "@soapay/sdk";
+import {
+  attachSessionTypedData,
+  nameClaimTypedData,
+  rotationClaimTypedData,
+  rotationSignal,
+  sessionLookupTypedData,
+  sessionSignal,
+  worldIdSignalHash,
+} from "@soapay/sdk";
 import { hashSignal } from "@worldcoin/idkit-core/hashing";
 import type { Fetch } from "../src/worldid/portal.js";
 import { topUpRegistrant, type L1Funder } from "../src/topup.js";
-import { attesterAccount, j, makeTestApp, metaHex, metaUri, NOW, other, registrant } from "./helpers.js";
+import { attesterAccount, j, makeTestApp, metaHex, metaUri, NOW, other, registrant, TEST_WORLD_APP_ID, TEST_WORLD_RP_ID } from "./helpers.js";
+import { migrate, openDb } from "../src/db.js";
 
 const CHAIN_ID = 84532;
 const SESSION_A = `session_${"ab".repeat(64)}`;
@@ -18,10 +27,10 @@ type PortalMode = "ok" | "reject" | "production" | "down";
 
 function portal() {
   let mode: PortalMode = "ok";
-  const calls: { url: string; body: any }[] = [];
+  const calls: { url: string; body: any; headers: Record<string, string> }[] = [];
   const fetch: Fetch = async (url, init) => {
     const body = JSON.parse(String(init?.body));
-    calls.push({ url, body });
+    calls.push({ url, body, headers: { ...(init?.headers as Record<string, string>) } });
     if (mode === "down") throw new Error("ECONNREFUSED");
     if (mode === "reject") return Response.json({ success: false, code: "invalid_proof", detail: "bad" }, { status: 400 });
     return Response.json({
@@ -121,29 +130,38 @@ async function rotationBody(
 
 const rotate = (t: T, body: unknown) => t.post("/names/alice/rotation", body);
 
+async function expectCode(res: Promise<Response> | Response, status: number, code: string) {
+  const r = await res;
+  expect(r.status).toBe(status);
+  expect((await j(r)).error.code).toBe(code);
+}
+
 // ---------------------------------------------------------------------------
 
 describe("World ID config and RP context", () => {
-  it("serves public parameters only, with the registered app and RP ids by default", async () => {
-    const t = setup();
+  it("serves public parameters only, with the app and RP ids from the environment", async () => {
+    const t = setup({ env: { WORLD_STAGING_VERIFY_TOKEN: "staging-token-test" } });
     const cfg = await j(await t.app.request("/worldid/config"));
     expect(cfg).toEqual({
       enabled: true,
-      app_id: "app_0cc7167efe114ac2e0ef7d9827098353",
-      rp_id: "rp_3ede5fe1cab9af48",
+      app_id: TEST_WORLD_APP_ID,
+      rp_id: TEST_WORLD_RP_ID,
       environment: "staging",
       credential: "proof_of_human",
       attach_cooldown_seconds: 259_200,
       attester: attesterAccount.address,
     });
-    expect(JSON.stringify(cfg)).not.toMatch(/5555/);
+    expect(JSON.stringify(cfg)).not.toMatch(/5555|staging-token-test/);
   });
 
-  it("signs a session RP context and refuses uniqueness requests", async () => {
+  it("signs a session RP context without an action, stores the bind, and refuses uniqueness requests", async () => {
     const t = setup();
-    const res = await j(await t.post("/worldid/rp-context", { kind: "session" }));
+    const res = await j(await t.post("/worldid/rp-context", { kind: "session", bind: "soapay:test" }));
     expect(res.kind).toBe("session");
-    expect(res.rp_context.rp_id).toBe("rp_3ede5fe1cab9af48");
+    expect(res.app_id).toBe(TEST_WORLD_APP_ID);
+    expect(res.rp_context.rp_id).toBe(TEST_WORLD_RP_ID);
+    const row = t.db.prepare("SELECT kind, bind FROM worldid_requests WHERE nonce = ?").get(res.rp_context.nonce.toLowerCase()) as any;
+    expect(row).toEqual({ kind: "session", bind: "soapay:test" });
     expect(res.rp_context.nonce).toMatch(/^0x[0-9a-f]+$/i);
     expect(res.rp_context.expires_at - res.rp_context.created_at).toBe(300);
     expect(res).not.toHaveProperty("action");
@@ -186,7 +204,7 @@ describe("enrollment has no World ID gate", () => {
     expect(name.worldIdSession).toEqual({ attachedAt: NOW });
     expect(JSON.stringify(name)).not.toContain(SESSION_A); // the session id is never served
     expect(t.portal.calls).toHaveLength(1);
-    expect(t.portal.calls[0]!.url).toBe("https://developer.world.org/api/v4/verify/rp_3ede5fe1cab9af48");
+    expect(t.portal.calls[0]!.url).toBe(`https://developer.world.org/api/v4/verify/${TEST_WORLD_RP_ID}`);
     expect(t.portal.calls[0]!.body.session_id).toBe(SESSION_A);
     expect(t.worldId!.sessionForLabel("alice")?.session_id).toBe(SESSION_A);
   });
@@ -235,14 +253,14 @@ describe("POST /names/:label/session (attach later)", () => {
     expect(t.worldId!.sessionForLabel("alice")).toBeUndefined();
   });
 
-  it("never replaces an existing session, and a session backs one name only", async () => {
+  it("never replaces an existing session, but one session may back several names", async () => {
     const t = setup();
     await enrollWithSession(t);
     const again = await t.post("/names/alice/session", await attachBody(t, { sessionId: SESSION_B }));
     expect(again.status).toBe(409);
     expect((await j(again)).error.code).toBe("session_exists");
 
-    // Bob tries to bind Alice's session to his own name.
+    // The same person (same session) links a second demo name.
     expect((await t.post("/names", await claimBody({ signer: other, label: "bob", meta: metaUri(3) }))).status).toBe(201);
     const deadline = BigInt(NOW + 600);
     const signature = await other.signTypedData(attachSessionTypedData({ label: "bob", sessionId: SESSION_A, deadline, chainId: CHAIN_ID }));
@@ -251,8 +269,25 @@ describe("POST /names/:label/session (attach later)", () => {
       signature,
       worldIdResult: sessionResult({ nonce: await t.rpNonce(), signal: sessionSignal("bob", other.address) }),
     });
-    expect(res.status).toBe(409);
-    expect((await j(res)).error.code).toBe("session_taken");
+    expect(res.status).toBe(201);
+    expect(t.worldId!.sessionForLabel("bob")?.session_id).toBe(SESSION_A);
+    expect(t.worldId!.sessionForLabel("alice")?.session_id).toBe(SESSION_A);
+  });
+
+  it("treats a D-58 nullifier-only link as unlinked, and replaces it with a session", async () => {
+    const t = setup();
+    expect((await t.post("/names", await claimBody())).status).toBe(201);
+    t.db.prepare("INSERT INTO name_sessions (label, session_id, nullifier, attached_at, via) VALUES ('alice', NULL, '123', ?, 'enroll')").run(NOW);
+    expect(t.worldId!.sessionForLabel("alice")).toBeUndefined();
+    expect((await j(await t.app.request("/names/alice"))).worldIdSession).toBeNull();
+    await expectCode(rotate(t, await rotationBody(t)), 409, "no_session");
+    const res = await t.post("/names/alice/session", await attachBody(t));
+    expect(res.status).toBe(201);
+    expect(t.db.prepare("SELECT session_id, nullifier, via FROM name_sessions WHERE label = 'alice'").get()).toEqual({
+      session_id: SESSION_A,
+      nullifier: null,
+      via: "attach",
+    });
   });
 
   it("a late-attached session backs rotations only after the cooldown", async () => {
@@ -267,7 +302,107 @@ describe("POST /names/:label/session (attach later)", () => {
   });
 });
 
+describe("POST /names/:label/session/lookup (D-64: restore after a recovery-phrase restore)", () => {
+  async function lookupBody(o: { signer?: PrivateKeyAccount; label?: string; deadline?: bigint } = {}) {
+    const deadline = o.deadline ?? BigInt(NOW + 600);
+    const signature = await (o.signer ?? registrant).signTypedData(
+      sessionLookupTypedData({ label: o.label ?? "alice", deadline, chainId: CHAIN_ID }),
+    );
+    return { deadline: deadline.toString(), signature };
+  }
+  const lookup = (t: T, body: unknown, label = "alice") => t.post(`/names/${label}/session/lookup`, body);
+
+  it("returns the enrolled session id to the registrant, with no cooldown and no World ID call", async () => {
+    const t = setup();
+    await enrollWithSession(t);
+    const calls = t.portal.calls.length;
+    const res = await lookup(t, await lookupBody());
+    expect(res.status).toBe(200);
+    expect(await j(res)).toEqual({ label: "alice", sessionId: SESSION_A, attachedAt: NOW, rotationAllowedFrom: NOW });
+    expect(t.portal.calls).toHaveLength(calls);
+    // The public record still never serves it.
+    expect(JSON.stringify(await j(await t.app.request("/names/alice")))).not.toContain(SESSION_A);
+  });
+
+  it("reports the attach cooldown for a session linked after the claim", async () => {
+    const t = setup();
+    await t.post("/names", await claimBody());
+    const deadline = BigInt(NOW + 600);
+    const signature = await registrant.signTypedData(attachSessionTypedData({ label: "alice", sessionId: SESSION_B, deadline, chainId: CHAIN_ID }));
+    const attach = await t.post("/names/alice/session", {
+      deadline: deadline.toString(),
+      signature,
+      worldIdResult: sessionResult({ nonce: await t.rpNonce(), signal: sessionSignal("alice", registrant.address), sessionId: SESSION_B }),
+    });
+    expect(attach.status).toBe(201);
+    t.setNow(NOW + 100);
+    const res = await lookup(t, await lookupBody({ deadline: BigInt(NOW + 700) }));
+    expect(await j(res)).toEqual({ label: "alice", sessionId: SESSION_B, attachedAt: NOW, rotationAllowedFrom: NOW + 259_200 });
+  });
+
+  it("refuses a signature by anyone but the registrant", async () => {
+    const t = setup();
+    await enrollWithSession(t);
+    await expectCode(lookup(t, await lookupBody({ signer: other })), 401, "bad_signature");
+    // A SessionLookup for another label doesn't carry over.
+    await expectCode(lookup(t, await lookupBody({ label: "bob" })), 401, "bad_signature");
+    // Nor does another signature type over the same domain (an AttachSession).
+    const deadline = BigInt(NOW + 600);
+    const attachSig = await registrant.signTypedData(attachSessionTypedData({ label: "alice", sessionId: SESSION_A, deadline, chainId: CHAIN_ID }));
+    await expectCode(lookup(t, { deadline: deadline.toString(), signature: attachSig }), 401, "bad_signature");
+  });
+
+  it("refuses an expired deadline and one too far out", async () => {
+    const t = setup();
+    await enrollWithSession(t);
+    await expectCode(lookup(t, await lookupBody({ deadline: BigInt(NOW) })), 400, "expired");
+    await expectCode(lookup(t, await lookupBody({ deadline: BigInt(NOW + 3_601) })), 400, "deadline_too_far");
+    expect((await lookup(t, await lookupBody({ deadline: BigInt(NOW + 3_600) }))).status).toBe(200);
+  });
+
+  it("404s no_session for a name without a session (or a D-58 nullifier-only link), not_found for no name", async () => {
+    const t = setup();
+    await t.post("/names", await claimBody());
+    await expectCode(lookup(t, await lookupBody()), 404, "no_session");
+    t.db.prepare("INSERT INTO name_sessions (label, session_id, nullifier, attached_at, via) VALUES ('alice', NULL, '123', ?, 'enroll')").run(NOW);
+    await expectCode(lookup(t, await lookupBody()), 404, "no_session");
+    await expectCode(lookup(t, await lookupBody({ label: "carol" }), "carol"), 404, "not_found");
+  });
+
+  it("is rate-limited per IP", async () => {
+    const t = setup({ env: { RATE_LIMIT_NAMES_PER_IP: "2" } });
+    await enrollWithSession(t);
+    const body = await lookupBody();
+    expect((await lookup(t, body)).status).toBe(200);
+    expect((await lookup(t, body)).status).toBe(200);
+    expect((await lookup(t, body)).status).toBe(429);
+    t.setIp("10.0.0.9");
+    expect((await lookup(t, body)).status).toBe(200);
+  });
+
+  it("still works with World ID disabled (the link is read from the database)", async () => {
+    const t = setup();
+    await enrollWithSession(t);
+    const off = makeTestApp({ env: { WORLD_ID_DISABLED: "true" } });
+    // Same database contents: copy the rows the lookup needs.
+    const name = t.db.prepare("SELECT * FROM names WHERE label = 'alice'").get() as Record<string, unknown>;
+    off.db.prepare(`INSERT INTO names (${Object.keys(name).join(",")}) VALUES (${Object.keys(name).map(() => "?").join(",")})`).run(...(Object.values(name) as never[]));
+    off.db.prepare("INSERT INTO name_sessions (label, session_id, nullifier, attached_at, via) VALUES ('alice', ?, NULL, ?, 'enroll')").run(SESSION_A, NOW);
+    const res = await off.post("/names/alice/session/lookup", await lookupBody());
+    expect(res.status).toBe(200);
+    expect((await j(res)).sessionId).toBe(SESSION_A);
+  });
+});
+
 describe("POST /names/:label/rotation", () => {
+  it("tops up gas again only to finish a recent rotation", async () => {
+    const t = setup({});
+    await enrollWithSession(t);
+    const res = await t.app.request("/names/alice/rotation/gas", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    expect(res.status).toBe(409);
+    expect((await j(res)).error.code).toBe("no_recent_rotation");
+  });
+
   it("attests, relays the ERC-6538 re-registration and tops up gas", async () => {
     const sent: { to: Address; value: bigint }[] = [];
     const l1Funder: L1Funder = {
@@ -315,9 +450,14 @@ describe("POST /names/:label/rotation", () => {
     const reg = t.db.prepare("SELECT meta_bytes, nullifier FROM registrations").all() as any[];
     expect(reg).toEqual([{ meta_bytes: metaHex(2), nullifier: null }]);
 
-    // Gas top-up: need = 150k gas × 10 wei.
-    expect(out.topup).toMatchObject({ status: "sent", value: "1500000" });
-    expect(sent).toEqual([{ to: registrant.address, value: 1_500_000n }]);
+    // Gas top-up: need = 150k gas × 10 wei × 2 (headroom).
+    expect(out.topup).toMatchObject({ status: "sent", value: "3000000" });
+    expect(sent).toEqual([{ to: registrant.address, value: 3_000_000n }]);
+
+    // Finishing ran short: the app asks for gas again, allowed right after an attested rotation.
+    const again = await t.app.request("/names/alice/rotation/gas", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    expect(again.status).toBe(200);
+    expect((await j(again)).topup).toMatchObject({ status: "sent", value: "3000000" });
 
     // The record and the feed follow.
     expect((await j(await t.app.request("/names/alice"))).metaAddress).toBe(metaUri(2));
@@ -497,7 +637,7 @@ describe("gas top-up", () => {
     const t = makeTestApp({ env: { TOPUP_CAP_WEI: "1000000" } });
     const f = funder(400_000n);
     expect(await topUpRegistrant({ ...t.deps, config: t.config, l1Funder: f } as any, who)).toMatchObject({ status: "sent", value: "1000000" });
-    const g = funder(1_000_000n);
+    const g = funder(2_500_000n); // need 150k × 10 × 2 = 3,000,000
     expect(await topUpRegistrant({ ...t.deps, config: t.config, l1Funder: g } as any, who)).toMatchObject({ status: "sent", value: "500000" });
   });
 
@@ -545,5 +685,46 @@ describe("session proofs without a signal (World App runs sessions without one)"
     const b = await t.post("/names", { ...(await claimBody()), worldIdSession: sessionResult({ nonce: unbound, signal: "" }) });
     expect(b.status).toBe(403);
     expect((await j(b)).error.code).toBe("signal_mismatch");
+  });
+});
+
+describe("Developer Portal call", () => {
+  it("forwards the result unchanged, with the staging token only in staging and only when configured", async () => {
+    const t = setup({ env: { WORLD_STAGING_VERIFY_TOKEN: "staging-token-test" } });
+    await enrollWithSession(t);
+    expect(t.portal.calls[0]!.headers["x-staging-verification-token"]).toBe("staging-token-test");
+    expect(t.portal.calls[0]!.body).toMatchObject({ protocol_version: "4.0", session_id: SESSION_A });
+    expect(t.portal.calls[0]!.body).not.toHaveProperty("action");
+    expect(JSON.stringify(t.logs)).not.toContain("staging-token-test");
+
+    const u = setup();
+    await enrollWithSession(u);
+    expect(u.portal.calls[0]!.headers).not.toHaveProperty("x-staging-verification-token");
+
+    const prod = setup({ env: { WORLD_ENV: "production", WORLD_STAGING_VERIFY_TOKEN: "staging-token-test" } });
+    const nonce = await prod.rpNonce();
+    const res = await prod.post("/names", {
+      ...(await claimBody()),
+      worldIdSession: sessionResult({ nonce, signal: sessionSignal("alice", registrant.address), environment: "production" }),
+    });
+    expect(res.status).toBe(201);
+    expect(prod.portal.calls[0]!.headers).not.toHaveProperty("x-staging-verification-token");
+  });
+});
+
+describe("migrations", () => {
+  it("keep the D-58 nullifier column and index name_sessions by session id (append-only)", () => {
+    const db = openDb(":memory:");
+    migrate(db);
+    const cols = (db.prepare("PRAGMA table_info(name_sessions)").all() as { name: string; notnull: number }[]).map((c) => [c.name, c.notnull]);
+    expect(cols).toEqual([
+      ["label", 0],
+      ["session_id", 0],
+      ["nullifier", 0],
+      ["attached_at", 1],
+      ["via", 1],
+    ]);
+    const idx = (db.prepare("PRAGMA index_list(name_sessions)").all() as { name: string }[]).map((i) => i.name);
+    expect(idx).toEqual(expect.arrayContaining(["name_sessions_nullifier", "name_sessions_session"]));
   });
 });

@@ -39,7 +39,7 @@ World ID protects **future** pay. A thief with your phrase can rewrite the recor
 
 Two limits exist to stop a thief from adding their own World ID:
 
-- A session attached **after** the claim needs a 72-hour wait before it can back a key change. Link World ID during sign-up to avoid it.
+- A session attached **after** the claim needs a 72-hour wait before it can back a key change. Link World ID during sign-up to avoid it. The public testnet demo sets this wait to zero so recovery can be shown on a name linked after sign-up; the code default stays 72 hours wherever real pay is at stake.
 - Each name gets its own session. A session already used for another name is refused.
 
 ## What the employer sees
@@ -59,8 +59,8 @@ A scripted attacker with a stolen recovery phrase rewrote a demo name's ENS reco
 
 ## Recovery
 
-- **Lost device.** Install the app on a new device and restore from your recovery kit: open the kit file or paste the phrase. Every payment ever received is found again from the chain, and the keys are the same, so no rotation is needed.
-- **Passkey not working.** The passkey only unlocks one device. Delete the vault on that device and restore from the phrase.
+- **Lost device.** Open the app on a new device. A synced passkey restores the vault from its encrypted backup with **Unlock with passkey**; otherwise restore from your recovery kit (open the kit file or paste the phrase). Every payment ever received is found again from the chain, the keys are the same, and a phrase restore reads your World ID session back, so no rotation is needed.
+- **Passkey not working.** Delete the vault on that device and restore from the phrase.
 - **Leaked phrase.** Rotate to new keys, then move funds off the old addresses. With World ID linked, your employer's app follows on its own; without it, tell your employer to re-approve.
 - **Soapay gone.** The recovery phrase plus the public SDK recover addresses, ledger and pool secrets. Nothing depends on Soapay's servers.
 

@@ -29,6 +29,8 @@ Then tick **I saved my recovery kit somewhere safe** and select **Continue**. Th
 
 The default lock uses a passkey protected by Face ID, a fingerprint, or your device PIN. Select **Use Face ID / fingerprint (passkey)** and approve the device prompt. The passkey encrypts and unlocks the local vault; it does not replace the recovery kit.
 
+The passkey also backs the vault up. A key derived from the passkey encrypts the vault in your browser, and the app uploads that ciphertext to the Soapay API a few seconds after each change; the API cannot read it. Because a synced passkey reproduces the same key anywhere, **Unlock with passkey** on a new device, or after clearing site data, brings the vault back. **Settings**, under **This device**, shows when it was last backed up.
+
 ![Choose a device lock](../../../assets/screens/r03b-onboard-lock.png)
 
 If the browser cannot use the required passkey feature, select **Use a passphrase instead**. The app asks for a passphrase of at least 10 characters and encrypts the same local vault. A synced passkey in iCloud Keychain or Google Password Manager can be a useful second backup, but it must never be the only backup.
@@ -39,13 +41,13 @@ If the browser cannot use the required passkey feature, select **Use a passphras
 
 <Steps>
 
-1. Open the employee app on the new device and select **Restore from recovery phrase**.
+1. Open the employee app on the new device. With a synced passkey, select **Unlock with passkey**: the app fetches your encrypted backup and opens it. Otherwise select **Restore from recovery phrase**.
 
-2. Select **Open recovery kit** for the saved text file, or enter the 12 or 24 words under **Recovery phrase**.
+2. For a phrase restore, select **Open recovery kit** for the saved text file, or enter the 12 or 24 words under **Recovery phrase**, then create a new passkey or passphrase for this browser.
 
-3. Create a new passkey or passphrase for this browser.
+3. Let the app rescan the chain. The same phrase derives the same viewing and spending keys, so every earlier payment can be found again.
 
-4. Let the app rescan the chain. The same phrase derives the same viewing and spending keys, so every earlier payment can be found again.
+4. A phrase restore also reads your World ID session back from the API, so a name that was linked stays linked without a second World ID step.
 
 </Steps>
 

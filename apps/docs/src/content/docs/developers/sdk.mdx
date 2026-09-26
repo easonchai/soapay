@@ -235,6 +235,18 @@ The exit is a serializable, resumable state machine. Its main public surface is:
 
 Only `84532:11155111`, Base Sepolia to Ethereum Sepolia, is configured. The default Base Sepolia pay token is MockUSDC, so `exitAvailability` disables the route unless the source uses Circle USDC.
 
+## Backups, session lookup and dApp sessions: `backup.ts`, `rotation.ts`, `dapp.ts`
+
+| Export | Purpose |
+| --- | --- |
+| `backupMessage(args: { address: Address; version: number; ciphertext: string }): string` | Build the EIP-191 message an app signs for `PUT /backups/:address` |
+| `httpBackupClient(apiUrl: string, fetchFn?: typeof fetch): BackupClient` | Read and write encrypted vault backups through the API |
+| `sessionLookupTypedData(a: SessionLookup)` | Build the EIP-712 `SessionLookup` typed data for `POST /names/:label/session/lookup` |
+| `signSessionLookup(a: SessionLookup & { registrantKey: Hex; registrant?: Address }): Promise<Hex>` | Sign a session lookup with the registrant key |
+| `checkDappPrivacy(p: DappPrivacyInput): DappPrivacyCheck` | Run the privacy guard over a WalletConnect request before the employee app approves it |
+
+The SDK only builds messages and encrypts nothing itself: each app encrypts its vault client-side (the company app under its wallet-signature or passphrase lock, the employee app under a key derived from its passkey) and stores ciphertext through these helpers.
+
 ## Constants and defaults
 
 | Constant | Value |

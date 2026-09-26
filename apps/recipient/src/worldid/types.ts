@@ -1,7 +1,7 @@
 /**
  * World ID seam (docs/mvp-spec.md §2.1, §5, docs/worldid.md). World ID is used at ONE trust moment:
- * self-service key rotation. At onboarding the user MAY create a Proof of Human session
- * (`mode="create-session"`); a later rotation proves that same session (`mode="rotate"`).
+ * account recovery (key rotation). At onboarding the user MAY create a Proof of Human session
+ * (`mode="create-session"`); a later rotation proves that same session (`mode="rotate"`), D-59.
  *
  * The props mirror `@soapay/worldid-react`'s `<HumanCheck>`; see ./index.ts for which implementation
  * is used (the real one, or the mock in VITE_MOCK_API mode).
@@ -27,6 +27,8 @@ export type HumanCheckProps = {
   onResult: (r: HumanCheckResult) => void | Promise<void>;
   onCancel?: () => void;
   onError?: (e: Error & { code?: string }) => void;
+  /** Buttons only: the caller renders the explainer itself (onboarding's right-hand object). */
+  compact?: boolean;
 };
 
 /** The session id to keep in the vault (needed to rotate later). */

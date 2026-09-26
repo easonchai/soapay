@@ -28,9 +28,10 @@ Soapay has no telemetry that can link addresses without explicit opt-in. The sca
 | **Payments** | Rescan public announcements, see live balances, inspect one payment, and compare **Coworker view** with **My view** for a pay run. |
 | **Send** | Choose a destination and amount, review source addresses and fees, then follow the consolidation guard. Multi-address sends are queued to reduce timing links. |
 | **Exit** | Use a screened Privacy Pools route to reach an identifiable wallet without exposing which payroll line was yours. This screen is hidden on Base Sepolia. |
+| **Connect** | Pair with a dApp through WalletConnect: paste the `wc:` link, pick exactly one payment address for that dApp, and approve each request with the privacy guard. A dApp that sees two of your addresses could link them, so every session carries one. |
 | **Labels** | Mark your main wallet, exchange deposit, coworker-known address, or another address so the privacy guard can recognise risky destinations. |
 | **Name** | View the current key generation, link World ID for self-service recovery, and rotate the name to new keys. |
-| **Settings** | Configure network services, known payers, scan source, spend window, device lock, encrypted backup, and advanced recovery. |
+| **Settings** | Configure network services, known payers, scan source, spend window, device lock, the passkey-synced encrypted backup, and advanced recovery. |
 
 The top bar also contains **Pay**, which opens the company app, and **Lock**, which closes the local vault. On the Base Sepolia demo, **Exit** is absent because the mock test USDC cannot travel through Circle CCTP.
 

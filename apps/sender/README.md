@@ -2,7 +2,8 @@
 
 Employer app: keep a roster of ENS names → salaries, re-verify every name before each run, and pay the run
 in stealth USDC on Base. Static Vite + React SPA; the roster and run history are encrypted in the browser
-(`src/lib/vault.ts`) and never leave it.
+(`src/lib/vault.ts`); only their ciphertext leaves it, as an encrypted backup under the employer's wallet
+(`src/lib/backup.ts`, `PUT /backups/:address`, D-62), so logging in with the same wallet restores them in any browser.
 
 ```sh
 cp .env.example .env         # every value is optional
@@ -70,7 +71,7 @@ wallet in mock mode) → **vault gate** (create/unlock the encrypted roster + hi
 | Pay run (`#/pay`) | `PayRunPage`: the roster as the run table; **Resolve names** re-verifies every pin; blocked lines (record changed without a World ID attestation) show **Re-approve**; attested pins show **Re-verified by World ID**; denominated payouts (chunk size, exact/carry); **Paste rows** / CSV import only bulk-enrolls `name, salary` into the roster (roster only, owner decision 2026-09-26: raw `st:eth:` meta-addresses and plain addresses are rejected); optional **Run label** stored on the run record. **Review** → `ReviewPage` (plan, pay path, gas, warnings, Sign and send, or Safe export → `SafeExportPage`) | `usePayRun`, `useRoster`, `useWallet`, `usePayPath` |
 | History (`#/history`, `#/runs/<id>`) | `HistoryPage` (stats, runs, names → amounts, Export CSV) and `RunDetailPage` (steps, recheck, never-sent, retry, and **What coworkers see**: each landed tx rebuilt from its receipt by SDK `payRunBatchFromReceipt`, names beside it; D-41) | `useHistory`, `useRunActions`, `useRunOnChain` |
 | Recipients (`#/roster`) | `RecipientsPage`: add by name, **Invite employee** (`InvitesPanel`: link + QR, pending rows, re-invite), list with record status, detail with pinned record, re-approval, pause/remove, and every paid wallet with its **live USDC balance** and spend status (unspent / partly spent / withdrawn) | `useRoster`, `useInvites`, `useWalletBalances` |
-| Settings (`#/settings`) | `SettingsPage`: company name (top bar, invite org), chain / StealthDisperse / RPCs, attester, vault lock/delete | `useSettings`, `useStore` |
+| Settings (`#/settings`) | `SettingsPage`: company name (top bar, invite org), chain / StealthDisperse / RPCs, attester, backup (last backed up, Back up now, persistent storage), vault lock/delete | `useSettings`, `useStore` |
 
 CK's company view (employee → stealth wallets → live balances) is derived from our encrypted run records
 (`src/lib/wallets.ts`); his plaintext localStorage stores are not used. The company name is plain
@@ -79,7 +80,7 @@ localStorage (`soapay:org`), as are the pay-run draft toggles (`soapay:payrun`).
 Env: CK's `VITE_STEALTH_DISPERSE_ADDRESS` is accepted as an alias (`VITE_STEALTH_DISPERSE` wins);
 `VITE_OTHER_APP_URL` sets the top bar's **Receive** link (default `VITE_RECIPIENT_URL`). `VITE_DOCS_URL` sets the
 landing page's **Docs** links (default `/docs/`, the docs site served next to the apps). `?motion=off` disables
-animations (screenshots, QA).
+animations (screenshots, QA). The landing's motion (the headline word drawn as a cursor-reactive dot field, the last word rolling through payroll, payments and distribution, the How-it-works line art drawing in) follows the same switch and the OS reduced-motion setting.
 
 ## How to plug in another UI
 

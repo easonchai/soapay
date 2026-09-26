@@ -101,9 +101,14 @@ function main() {
         "every meta-address change needs the employer's manual approval",
     );
   } else {
-    if (!w.signingKey) {
+    const missing = [
+      !w.appId && "WORLD_APP_ID",
+      !w.rpId && "WORLD_RP_ID",
+      !w.signingKey && "WORLD_RP_SIGNING_KEY",
+    ].filter(Boolean);
+    if (missing.length > 0) {
       console.error(
-        "Config: WORLD_RP_SIGNING_KEY is required (the World ID 4.0 RP signer from the Developer Portal). " +
+        `Config: ${missing.join(", ")} required (the World ID 4.0 app, RP and RP signer from the Developer Portal). ` +
           "Set WORLD_ID_DISABLED=true to run without World ID.",
       );
       process.exit(1);

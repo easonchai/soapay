@@ -22,12 +22,32 @@ import {
   derivePayRun,
   getChainConfig,
   isValidLabel,
+  SESSION_LOOKUP_MAX_TTL_SECONDS,
+  sessionLookupTypedData,
   splitIntoDenominations,
+  dappTransfers,
   type PayRunLine,
+  type StealthCall,
+  type StealthInclusion,
 } from "@soapay/sdk";
+import type { DappExecution, DappService } from "./dapp.js";
 import { secp256k1 } from "@noble/curves/secp256k1.js";
 import { keccak_256 } from "@noble/hashes/sha3.js";
-import { bytesToHex, encodeAbiParameters, encodeEventTopics, getAddress, keccak256, toHex, type Address, type Hex } from "viem";
+import {
+  bytesToHex,
+  encodeAbiParameters,
+  encodeEventTopics,
+  getAddress,
+  isAddress,
+  isAddressEqual,
+  keccak256,
+  recoverTypedDataAddress,
+  stringToBytes,
+  toHex,
+  verifyMessage,
+  type Address,
+  type Hex,
+} from "viem";
 import type { ApiFetch } from "../api/client.js";
 import type { SendProgress, SpendQuote, SpendService } from "./spend.js";
 import type { SpendParams, SpendResult } from "@soapay/sdk";
@@ -62,14 +82,16 @@ const state: {
   world: World | null;
   names: Map<string, { label: string; registrant: Address; metaAddress: string; deadline: string }>;
   rotations: { label: string; oldMeta: string; newMeta: string; verifiedAt: string }[];
-  /** label → World ID session id (mock of the API's session binding). */
-  sessions: Map<string, string>;
+  /** label → World ID session (mock of the API's name_sessions). */
+  sessions: Map<string, { sessionId: string; attachedAt: number; via: "enroll" | "attach" }>;
   /** Invite code hashes already used. */
   claimedInvites: Set<string>;
   registered: Set<string>;
   /** Stealth addresses (lowercase) that have a 7702 delegation after their first mock spend or swap. */
   delegated: Set<string>;
   spendTxs: Map<string, MockSpendTx>;
+  /** D-63 passkey backups by lowercase address: ciphertext only, like the real API. */
+  backups: Map<string, { address: Address; version: number; ciphertext: string; updatedAt: number }>;
   bornAt: number;
 } = {
   meta: null,
@@ -81,6 +103,7 @@ const state: {
   registered: new Set(),
   delegated: new Set(),
   spendTxs: new Map(),
+  backups: new Map(),
   bornAt: Date.now(),
 };
 
@@ -235,7 +258,7 @@ export function createMockFetch(chainId: number): ApiFetch {
     await latency();
     const url = new URL(input, "http://mock.local");
     const method = (init?.method ?? "GET").toUpperCase();
-    const path = url.pathname.replace(/^.*?(\/(announcements|register|names|invites|health))/, "$1");
+    const path = url.pathname.replace(/^.*?(\/(announcements|register|names|invites|health|backups))/, "$1");
 
     const invite = /^\/invites\/(0x[0-9a-fA-F]{64})$/.exec(path);
     if (method === "GET" && invite) {
@@ -266,8 +289,39 @@ export function createMockFetch(chainId: number): ApiFetch {
       if (!sessionId || !/^session_[0-9a-f]+$/i.test(sessionId)) return err(403, "proof_missing", "worldIdResult must be an IDKit session result");
       if (state.sessions.has(label)) return err(409, "session_exists", "this name already has a World ID session");
       const attachedAt = Math.floor(Date.now() / 1000);
-      state.sessions.set(label, sessionId);
+      state.sessions.set(label, { sessionId, attachedAt, via: "attach" });
       return respond(201, { label, sessionId, attachedAt, rotationAllowedFrom: attachedAt + 72 * 3600 });
+    }
+
+    // D-64: the registrant reads its name's session id back (e.g. after a recovery-phrase restore).
+    const lookup = /^\/names\/([^/]+)\/session\/lookup$/.exec(path);
+    if (method === "POST" && lookup) {
+      const label = decodeURIComponent(lookup[1]!);
+      const row = state.names.get(label);
+      if (!row) return err(404, "not_found", "name not found");
+      const body = JSON.parse(String(init?.body ?? "{}")) as { signature?: Hex; deadline?: string };
+      if (!body.signature || !body.deadline || !/^\d+$/.test(body.deadline)) return err(400, "invalid_body", "deadline and signature are required");
+      const now = BigInt(Math.floor(Date.now() / 1000));
+      const deadline = BigInt(body.deadline);
+      if (deadline <= now) return err(400, "expired", "deadline has passed");
+      if (deadline > now + BigInt(SESSION_LOOKUP_MAX_TTL_SECONDS)) return err(400, "deadline_too_far", "deadline is too far out");
+      let signer: Address | null = null;
+      try {
+        signer = await recoverTypedDataAddress({ ...sessionLookupTypedData({ label, deadline, chainId }), signature: body.signature });
+      } catch {
+        // malformed signature
+      }
+      if (!signer || !isAddressEqual(signer, row.registrant)) {
+        return err(401, "bad_signature", "SessionLookup signature does not recover to the name's registrant");
+      }
+      const bound = state.sessions.get(label);
+      if (!bound) return err(404, "no_session", "this name has no World ID session");
+      return respond(200, {
+        label,
+        sessionId: bound.sessionId,
+        attachedAt: bound.attachedAt,
+        rotationAllowedFrom: bound.attachedAt + (bound.via === "attach" ? 72 * 3600 : 0),
+      });
     }
 
     const rotation = /^\/names\/([^/]+)\/rotation$/.exec(path);
@@ -286,8 +340,8 @@ export function createMockFetch(chainId: number): ApiFetch {
         return err(400, "invalid_body", "newMeta, deadline, registrantSig and registerSig are required");
       }
       const bound = state.sessions.get(label);
-      if (!bound) return err(403, "no_session", "this name has no World ID session; the employer must approve changes");
-      if (body.worldIdResult?.session_id !== bound) return err(403, "session_mismatch", "not the session enrolled for this name");
+      if (!bound) return err(409, "no_session", "this name has no World ID session; the employer must approve changes");
+      if (body.worldIdResult?.session_id !== bound.sessionId) return err(403, "session_mismatch", "not the session enrolled for this name");
       if (BigInt(body.deadline) <= BigInt(Math.floor(Date.now() / 1000))) return err(400, "expired", "deadline has passed");
       const oldMeta = row.metaAddress.toLowerCase();
       const newMeta = body.newMeta.toLowerCase();
@@ -301,6 +355,33 @@ export function createMockFetch(chainId: number): ApiFetch {
         registry: { status: "success", txHash: fakeTxHash(`reregister:${label}:${verifiedAt}`) },
         topup: { status: "sent", txHash: fakeTxHash(`fund:${label}:${verifiedAt}`) },
       });
+    }
+
+    // D-63 backups: same contract as apps/api (ciphertext only; EIP-191 signature by the address; version strictly increases).
+    const backup = /^\/backups\/([^/]+)$/.exec(path);
+    if (backup) {
+      const raw = decodeURIComponent(backup[1]!);
+      if (!isAddress(raw, { strict: false })) return err(400, "invalid_address", "address must be a 0x address");
+      const address = getAddress(raw);
+      const row = state.backups.get(address.toLowerCase());
+      if (method === "GET") return row ? respond(200, row) : err(404, "not_found", "no backup for this address");
+      if (method === "PUT") {
+        const body = JSON.parse(String(init?.body ?? "{}")) as { version?: unknown; ciphertext?: unknown; signature?: unknown };
+        const { version, ciphertext, signature } = body;
+        if (!Number.isSafeInteger(version) || (version as number) < 1 || typeof ciphertext !== "string" || typeof signature !== "string") {
+          return err(400, "invalid_body", "version, ciphertext and signature are required");
+        }
+        if (ciphertext.length > 512 * 1024) return err(413, "too_large", "ciphertext is over 512 KiB");
+        const message = `soapay-backup:v1:${address}:${version as number}:${keccak256(stringToBytes(ciphertext))}`;
+        const ok = await verifyMessage({ address, message, signature: signature as Hex }).catch(() => false);
+        if (!ok) return err(401, "bad_signature", "signature does not match the address");
+        if (row && (version as number) <= row.version) {
+          return respond(409, { error: { code: "stale_version", message: "version must increase", currentVersion: row.version }, version: row.version });
+        }
+        const next = { address, version: version as number, ciphertext, updatedAt: Date.now() };
+        state.backups.set(address.toLowerCase(), next);
+        return respond(200, { address, version: next.version, updatedAt: next.updatedAt });
+      }
     }
 
     if (method === "GET" && path === "/health") return respond(200, { ok: true, chainId, mock: true });
@@ -339,7 +420,7 @@ export function createMockFetch(chainId: number): ApiFetch {
           return respond(200, present({ label, registrant: MOCK_SPAMMER, metaAddress: "st:eth:0x", deadline: "0" }));
         }
         const row = state.names.get(label);
-        return row ? respond(200, present(row)) : err(404, "not_found", "name not found");
+        return row ? respond(200, present(row, state.sessions.get(label))) : err(404, "not_found", "name not found");
       }
       if (method === "POST" && !nameMatch[1]) {
         const body = JSON.parse(String(init?.body ?? "{}")) as {
@@ -358,6 +439,9 @@ export function createMockFetch(chainId: number): ApiFetch {
         if (existing && existing.registrant.toLowerCase() !== body.registrant.toLowerCase()) {
           return err(409, "label_taken", "label is already taken");
         }
+        if (existing && body.worldIdSession) {
+          return err(400, "use_session_route", "attach a session to an existing name with POST /names/:label/session");
+        }
         const row = { label: body.label, registrant: body.registrant, metaAddress: body.metaAddress, deadline: body.deadline };
         const reserved = Object.values(MOCK_INVITES).find((i) => i.label === body.label);
         if (reserved && !state.claimedInvites.has(keccak256(reserved.code).toLowerCase())) {
@@ -367,17 +451,20 @@ export function createMockFetch(chainId: number): ApiFetch {
           state.claimedInvites.add(keccak256(reserved.code).toLowerCase());
         }
         state.names.set(body.label, row);
-        if (body.worldIdSession?.session_id) state.sessions.set(body.label, body.worldIdSession.session_id);
-        return respond(201, present(row));
+        if (body.worldIdSession?.session_id) {
+          state.sessions.set(body.label, { sessionId: body.worldIdSession.session_id, attachedAt: Math.floor(Date.now() / 1000), via: "enroll" });
+        }
+        return respond(existing ? 200 : 201, present(row, state.sessions.get(body.label)));
       }
     }
     return err(404, "not_found", "Route not found");
   };
 }
 
-function present(row: { label: string; registrant: Address; metaAddress: string; deadline: string }) {
+function present(row: { label: string; registrant: Address; metaAddress: string; deadline: string }, session?: { attachedAt: number }) {
   const now = new Date().toISOString();
-  return { ...row, name: `${row.label}.soapay.eth`, txHash: null, createdAt: now, updatedAt: now };
+  // Like the API: whether a session backs the name, never the session id.
+  return { ...row, name: `${row.label}.soapay.eth`, txHash: null, createdAt: now, updatedAt: now, worldIdSession: session ? { attachedAt: session.attachedAt } : null };
 }
 
 const ANNOUNCER: Address = "0x55649E01B5Df198D18D95b5cc5051630cfD45564";
@@ -564,6 +651,37 @@ export function createMockSpendService(chainId?: number): SpendService {
   };
 }
 
+/**
+ * dApp calls over WalletConnect (D-61): accepts any value-free calls, applies USDC transfers to the
+ * mock balances, and "lands" the userOp a moment later. Nothing is sent anywhere.
+ */
+export function createMockDappService(chainId?: number): DappService {
+  return {
+    ready: true,
+    async execute(stealthKey: Hex, calls: readonly StealthCall[]): Promise<DappExecution> {
+      await latency();
+      if (calls.some((c) => (c.value ?? 0n) !== 0n)) throw new Error("mock: calls must not move ETH");
+      const from = privateKeyToAccount(stealthKey).address;
+      const usdc = getChainConfig(chainId ?? state.world?.chainId ?? 84532).usdc;
+      for (const t of dappTransfers(calls)) {
+        if (t.token.toLowerCase() !== usdc.toLowerCase()) continue;
+        const bal = state.world?.balances.get(from.toLowerCase()) ?? 0n;
+        if (t.amount > bal) throw new Error(`mock: insufficient balance in ${from}`);
+        state.world?.balances.set(from.toLowerCase(), bal - t.amount);
+      }
+      state.delegated.add(from.toLowerCase());
+      const now = Date.now();
+      const userOpHash = fakeTxHash(`dappop:${from}:${now}`);
+      const txHash = fakeTxHash(`dapptx:${from}:${now}`);
+      const block = state.world ? head(state.world.chainId) : 0n;
+      const included = sleep(1_200).then(
+        (): StealthInclusion => ({ success: true, userOpHash, txHash, blockHash: fakeTxHash(`dappblock:${now}`), blockNumber: block, gasUsed: 180_000n, logs: [] }),
+      );
+      return { userOpHash, included };
+    },
+  };
+}
+
 /** Stands in for the ENSv2 `setText(stealth)` on Sepolia. */
 export function createMockEnsWriter(): EnsWriter {
   return {
@@ -575,3 +693,8 @@ export function createMockEnsWriter(): EnsWriter {
   };
 }
 
+
+/** Test/demo hook: drop the mock backups (a fresh API). */
+export function resetMockBackups(): void {
+  state.backups.clear();
+}

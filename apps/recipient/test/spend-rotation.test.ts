@@ -17,7 +17,7 @@ import { createApi } from "../src/api/client.js";
 import { attachSession } from "../src/features/recovery/attach.js";
 import { finishRotation, prepareRotation, submitRotation } from "../src/features/rotation/flow.js";
 import { keyRing } from "../src/features/rotation/keys.js";
-import { createMockEnsWriter } from "../src/services/mock.js";
+import { createMockEnsWriter, createMockFetch } from "../src/services/mock.js";
 import { executeSpend, type SpendDraft } from "../src/spend/flow.js";
 import { mockSessionResult } from "../src/worldid/MockHumanCheck.js";
 import { rotationPathOf, sessionCooldownUntil } from "../src/hooks/useRotation.js";
@@ -109,8 +109,10 @@ describe("rotation", () => {
       body = JSON.parse(String(init?.body));
       return new Response(JSON.stringify({ label: "alex", sessionId: "session_ab", attachedAt: 10, rotationAllowedFrom: 10 + 72 * 3600 }), { status: 201 });
     });
-    const res = await attachSession({ api, chainId, label: "alex", result: { session_id: "session_ab" }, registrantKey: ring.current.registrantKey, now: 0 });
+    const result = { session_id: "session_ab", protocol_version: "4.0" };
+    const res = await attachSession({ api, chainId, label: "alex", result, registrantKey: ring.current.registrantKey, now: 0 });
     expect(res.rotationAllowedFrom).toBe(10 + 72 * 3600);
+    expect(body.worldIdResult).toEqual(result); // forwarded unchanged
     const signer = await recoverTypedDataAddress({
       ...attachSessionTypedData({ label: "alex", sessionId: "session_ab", deadline: BigInt(body.deadline as string), chainId }),
       signature: body.signature as Hex,
@@ -122,6 +124,8 @@ describe("rotation", () => {
   it("rotation is attested only with an attached session past its cooldown", () => {
     const name = { label: "alex", name: "alex.soapay.eth", at: 0 };
     expect(rotationPathOf({ name })).toBe("manual");
+    // A D-58 link (a nullifier, no session id) counts as unlinked (D-59).
+    expect(rotationPathOf({ name, recovery: { kind: "world-id", at: 0, nullifier: "0x0a", attachedTo: "alex" } })).toBe("manual");
     const rec = { kind: "world-id" as const, at: 0, sessionId: "session_ab", attachedTo: "alex" };
     expect(rotationPathOf({ name, recovery: rec })).toBe("attested");
     const late = { ...rec, rotationAllowedFrom: 1_000 };
@@ -131,10 +135,48 @@ describe("rotation", () => {
     expect(rotationPathOf({ name, recovery: { ...rec, attachedTo: "other" } })).toBe("manual");
   });
 
+  it("a wait the API has since shortened no longer blocks rotation (D-60)", () => {
+    const name = { label: "alex", name: "alex.soapay.eth", at: 0 };
+    // Linked at t=100 s while the API said 72 h; the API now says 0.
+    const late = { kind: "world-id" as const, at: 100_000, sessionId: "session_ab", attachedTo: "alex", rotationAllowedFrom: 100 + 72 * 3600 };
+    expect(rotationPathOf({ name, recovery: late }, 200_000)).toBe("manual");
+    expect(rotationPathOf({ name, recovery: late }, 200_000, 0)).toBe("attested");
+    expect(sessionCooldownUntil({ name, recovery: late }, 200_000, 0)).toBeNull();
+    // Unknown server setting: the stored date stands. A longer server wait never extends it.
+    expect(rotationPathOf({ name, recovery: late }, 200_000, null)).toBe("manual");
+    expect(sessionCooldownUntil({ name, recovery: late }, 200_000, 999 * 3600)).toBe((100 + 72 * 3600) * 1000);
+  });
+
   it("the mock HumanCheck returns IDKit-shaped session results", () => {
     const created = mockSessionResult({ mode: "create-session", signal: "soapay:session:alex:0x1" });
     expect(created.session_id).toMatch(/^session_[0-9a-f]+$/);
-    expect(mockSessionResult({ mode: "rotate", sessionId: "session_ab", signal: "x" }).session_id).toBe("session_ab");
+    expect(created).toMatchObject({ protocol_version: "4.0", responses: [{ identifier: "proof_of_human", issuer_schema_id: 1 }] });
+    expect(created).not.toHaveProperty("action");
+    const proved = mockSessionResult({ mode: "rotate", sessionId: "session_ab", signal: "x" });
+    expect(proved.session_id).toBe("session_ab");
+    expect((proved.responses as any)[0].session_nullifier[0]).not.toBe((created.responses as any)[0].session_nullifier[0]);
+  });
+
+  it("the mock API stores the session and rotates only for the same session", async () => {
+    const f = createMockFetch(chainId);
+    const keys = ring.current;
+    await f("https://api.test/register", { method: "POST", body: JSON.stringify({ registrant: keys.registrantAddress, metaAddress: keys.metaAddressURI }) });
+    const claim = { label: "alexmock", registrant: keys.registrantAddress, metaAddress: keys.metaAddressURI, deadline: "9999999999", signature: "0x" };
+    const created = mockSessionResult({ mode: "create-session", signal: "s" });
+    const linked = await f("https://api.test/names", { method: "POST", body: JSON.stringify({ ...claim, worldIdSession: created }) });
+    expect(linked.status).toBe(201);
+    const body = (worldIdResult: unknown) => ({
+      method: "POST",
+      body: JSON.stringify({ newMeta: "st:eth:0x01", deadline: "9999999999", registrantSig: "0x1", registerSig: "0x2", worldIdResult }),
+    });
+    const other = await f("https://api.test/names/alexmock/rotation", body(mockSessionResult({ mode: "rotate", sessionId: "session_cd", signal: "r" })));
+    expect(other.status).toBe(403);
+    expect((await other.json()).error.code).toBe("session_mismatch");
+    const same = await f(
+      "https://api.test/names/alexmock/rotation",
+      body(mockSessionResult({ mode: "rotate", sessionId: created.session_id!, signal: "r" })),
+    );
+    expect(same.status).toBe(201);
   });
 
   it("finishRotation writes the canonical new meta via the ENS writer", async () => {

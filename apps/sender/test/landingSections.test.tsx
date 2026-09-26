@@ -28,12 +28,15 @@ describe("Landing sections", () => {
     vi.useFakeTimers();
     Element.prototype.scrollIntoView = vi.fn();
   });
-  afterEach(() => vi.useRealTimers());
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
 
   it("renders the sections in order under the hero", () => {
     const { container } = mount();
     const heads = [...container.querySelectorAll("h1, h2")].map((h) => h.textContent);
-    const order = ["Every wallet address is a public bank statement.", "One batch. Two ways to read it.", "One signature. Nobody can read it back.", "A back office, not a crypto app.", "Paying a team? Paste names, sign once."];
+    const order = ["Public chain. Private payroll.", "One batch. Two ways to read it.", "A fresh address for every payment.", "A back office, not a crypto app.", "Paying a team? Paste names, sign once."];
     const idx = order.map((t) => heads.findIndex((h) => h?.includes(t)));
     expect(idx.every((i) => i >= 0)).toBe(true);
     expect([...idx].sort((a, b) => a - b)).toEqual(idx);
@@ -45,6 +48,7 @@ describe("Landing sections", () => {
     fireEvent.click(screen.getAllByRole("link", { name: "How it works" })[0]!);
     fireEvent.click(screen.getByRole("link", { name: "Product" }));
     expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(2);
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
     expect(window.location.hash).toBe(before);
   });
 

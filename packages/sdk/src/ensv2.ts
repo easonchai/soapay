@@ -663,6 +663,9 @@ export type EnsV2NameIssuer = {
   issue(args: IssueArgs): Promise<IssueResult>;
 };
 
+/** Gas limit for `register` when it's sent right after the resolver deployment (no estimate possible). */
+const REGISTER_GAS = 600_000n;
+
 export function createEnsV2NameIssuer(opts: {
   walletClient: EnsV2Writer;
   publicClient: EnsV2PublicClient;
@@ -674,6 +677,8 @@ export function createEnsV2NameIssuer(opts: {
   /** Default stealth writer (e.g. the World ID guard); falls back to each registrant. */
   defaultStealthWriter?: Address;
   deployment?: Deployment;
+  /** How long a retry waits for an earlier attempt's stealth record to appear (default 30 s). */
+  recoverWaitMs?: number;
 }): EnsV2NameIssuer {
   const d = opts.deployment ?? ENSV2_SEPOLIA;
   const parent = normalize(opts.parent ?? PARENT_NAME);
@@ -703,6 +708,20 @@ export function createEnsV2NameIssuer(opts: {
       throw e;
     }));
 
+  const sendNoWait = async (call: Call & { gas?: bigint; nonce?: number }): Promise<Hex> =>
+    opts.walletClient.sendTransaction({
+      account,
+      chain: opts.walletClient.chain ?? null,
+      to: call.to,
+      data: call.data,
+      ...(call.gas ? { gas: call.gas } : {}),
+      ...(call.nonce !== undefined ? { nonce: call.nonce } : {}),
+    } as never);
+  /** The issuer's next nonce (pending), when the client can tell; explicit nonces keep back-to-back sends ordered. */
+  const nextNonce = async (): Promise<number | undefined> => {
+    const pc = opts.publicClient as unknown as { getTransactionCount?: (a: { address: Address; blockTag: "pending" }) => Promise<number> };
+    return pc.getTransactionCount ? pc.getTransactionCount({ address: account.address, blockTag: "pending" }) : undefined;
+  };
   const send = async (call: Call): Promise<Hex> => {
     const hash = await opts.walletClient.sendTransaction({
       account,
@@ -739,10 +758,19 @@ export function createEnsV2NameIssuer(opts: {
             functionName: "getResolver",
             args: [label],
           })) as Address;
-          const stealth = (await opts.publicClient
-            .readContract({ address: resolver, abi: resolverRecordsAbi, functionName: "text", args: [namehash(name), TEXT_KEY_STEALTH] })
-            .catch(() => "")) as string;
-          if (stealth && stealth.toLowerCase() === metaAddress.toLowerCase()) return { recovered: true, name, resolver, registry };
+          const readStealth = async () =>
+            (await opts.publicClient
+              .readContract({ address: resolver, abi: resolverRecordsAbi, functionName: "text", args: [namehash(name), TEXT_KEY_STEALTH] })
+              .catch(() => "")) as string;
+          // The earlier attempt's register tx can land before its resolver deploy (they're sent back to
+          // back), so a retry may briefly see the name owned but no record yet: wait for it.
+          const deadline = Date.now() + (opts.recoverWaitMs ?? 30_000);
+          for (;;) {
+            const stealth = await readStealth();
+            if (stealth && stealth.toLowerCase() === metaAddress.toLowerCase()) return { recovered: true, name, resolver, registry };
+            if (stealth || Date.now() >= deadline) break;
+            await new Promise((r) => setTimeout(r, 2_000));
+          }
         }
         throw new Error(`Soapay ENSv2: ${name} is already taken`);
       }
@@ -765,9 +793,28 @@ export function createEnsV2NameIssuer(opts: {
       });
       const code = await opts.publicClient.getCode({ address: resolver });
       // Same salt => same inputs: a resolver left by an earlier attempt is already configured.
-      const resolverTxHash = code && code !== "0x" ? undefined : await send(deploy);
-      const txHash = await send(buildRegisterSubnameCall({ registry, label, registrant, resolver }));
-      return { txHash, name, resolver, registry, ...(resolverTxHash ? { resolverTxHash } : {}) };
+      const needsResolver = !(code && code !== "0x");
+      if (!needsResolver) {
+        const txHash = await send(buildRegisterSubnameCall({ registry, label, registrant, resolver }));
+        return { txHash, name, resolver, registry };
+      }
+      // Send both transactions back to back (consecutive nonces, mined in order) and wait once,
+      // instead of waiting a Sepolia block for each: the claim step is roughly twice as fast.
+      // `register` gets an explicit gas limit because estimating it would run before the resolver exists.
+      const nonce = await nextNonce();
+      const resolverTxHash = await sendNoWait({ ...deploy, ...(nonce !== undefined ? { nonce } : {}) });
+      const txHash = await sendNoWait({
+        ...buildRegisterSubnameCall({ registry, label, registrant, resolver }),
+        gas: REGISTER_GAS,
+        ...(nonce !== undefined ? { nonce: nonce + 1 } : {}),
+      });
+      const [r1, r2] = await Promise.all([
+        opts.publicClient.waitForTransactionReceipt({ hash: resolverTxHash }),
+        opts.publicClient.waitForTransactionReceipt({ hash: txHash }),
+      ]);
+      if (r1.status !== "success") throw new Error(`Soapay ENSv2: tx ${resolverTxHash} reverted`);
+      if (r2.status !== "success") throw new Error(`Soapay ENSv2: tx ${txHash} reverted`);
+      return { txHash, name, resolver, registry, resolverTxHash };
     },
   };
 }

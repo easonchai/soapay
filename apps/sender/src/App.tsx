@@ -184,7 +184,7 @@ function SettingsContainer({
   onChunkChange(v: string): void;
 }) {
   const s = useSettings();
-  const { app, vaultMode, lock, destroyVault, employees, invites, runs } = useStore();
+  const { app, vaultMode, lock, destroyVault, employees, invites, runs, backup, backupNow, enableWalletLock, walletLock } = useStore();
   const payPath = usePayPath();
   return (
     <SettingsPage
@@ -200,16 +200,20 @@ function SettingsContainer({
       counts={{ employees: employees.length, invites: invites.length, runs: runs.length }}
       onLock={lock}
       onDestroyVault={() => void destroyVault()}
+      backup={backup}
+      walletLock={walletLock}
+      onBackupNow={backupNow}
+      onEnableWalletLock={enableWalletLock}
     />
   );
 }
 
 function VaultContainer() {
-  const { phase, vaultMode, createVault, unlock } = useStore();
+  const { app, phase, vaultMode, createVault, unlock, restore, startFresh, walletLock, restoreOffer, restoreCheckError, backup } = useStore();
   const [error, setError] = useState<string | null>(null);
   const wrap = (p: Promise<void>) => {
     setError(null);
-    p.catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+    p.catch((e: unknown) => setError(e instanceof Error ? ((e as { shortMessage?: string }).shortMessage ?? e.message) : String(e)));
   };
   if (phase === "ready") return null;
   return (
@@ -218,8 +222,17 @@ function VaultContainer() {
       vaultMode={vaultMode}
       minPassphrase={MIN_PASSPHRASE_LENGTH}
       error={error}
+      walletLock={walletLock}
+      restore={restoreOffer}
+      backupEnabled={backup.enabled && !app.demo}
+      notice={restoreCheckError}
       onCreate={(mode: VaultMode, pass?: string) => wrap(createVault(mode, pass))}
       onUnlock={(pass?: string) => wrap(unlock(pass))}
+      onRestore={(pass?: string) => wrap(restore(pass))}
+      onStartFresh={() => {
+        setError(null);
+        startFresh();
+      }}
     />
   );
 }

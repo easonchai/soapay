@@ -21,7 +21,19 @@ export type RpContextResponse = {
 
 export type NameSessionRow = { label: string; session_id: string; attached_at: number; via: "enroll" | "attach" };
 
+/** name_sessions as stored: since migration 6 (D-58) `session_id` may be NULL (a nullifier-only row). */
+type RawNameSessionRow = Omit<NameSessionRow, "session_id"> & { session_id: string | null };
+
 type NonceRow = { nonce: string; kind: string; expires_at: number; used_at: number | null; bind: string | null };
+
+/** A name's World ID session, if any (also read with World ID disabled). A D-58 nullifier-only row is not a session link. */
+export function nameSession(db: Db, label: string): NameSessionRow | undefined {
+  const row = db.prepare("SELECT label, session_id, attached_at, via FROM name_sessions WHERE label = ?").get(label) as
+    | RawNameSessionRow
+    | undefined;
+  if (!row || row.session_id === null) return undefined;
+  return { label: row.label, session_id: row.session_id, attached_at: row.attached_at, via: row.via };
+}
 
 /** 0x hex (or decimal) field element → canonical decimal string; throws on anything else. */
 export function fieldToDecimal(v: unknown, what: string): string {
@@ -49,11 +61,14 @@ function isObj(v: unknown): v is Record<string, any> {
 export type VerifiedSession = { sessionId: string; sessionNullifier: string; commit: () => void };
 
 /**
- * World ID 4.0 through IDKit, a single trust moment (docs/worldid.md, docs/mvp-spec.md §5):
+ * World ID 4.0 through IDKit, a single trust moment: account recovery (docs/worldid.md,
+ * docs/mvp-spec.md §5, D-59):
  * - A name MAY carry a World ID session with the Proof of Human credential, created at
- *   enrollment (POST /names) or attached later (POST /names/:label/session).
- * - Rotation (POST /names/:label/rotation) must prove that same session.
- * No enrollment gate, no uniqueness action; we store session ids and used session nullifiers only.
+ *   enrollment (POST /names) or attached later (POST /names/:label/session). One session may
+ *   back several names (one person, several demo names); a name keeps its first session.
+ * - Rotation (POST /names/:label/rotation) must prove that same session (`proveSession`).
+ * No enrollment gate, no action: session requests take none. We store session ids and used
+ * session nullifiers only. Names linked under D-58 (a nullifier, no session id) count as unlinked.
  */
 export class WorldId {
   constructor(private readonly deps: { config: Config; db: Db; fetch: Fetch; logger: Logger; now: () => number }) {}
@@ -72,6 +87,7 @@ export class WorldId {
    */
   issueRpContext(bind?: string): RpContextResponse {
     const cfg = this.cfg;
+    // No action: session requests (create and prove) take none.
     const sig = signRequest({ signingKeyHex: cfg.signingKey!, ttl: cfg.rpTtlSeconds });
     const now = this.deps.now();
     this.deps.db
@@ -79,7 +95,7 @@ export class WorldId {
       .run(sig.nonce.toLowerCase(), now, now + cfg.rpTtlSeconds, bind ?? null);
     return {
       rp_context: { rp_id: cfg.rpId!, nonce: sig.nonce, created_at: sig.createdAt, expires_at: sig.expiresAt, signature: sig.sig },
-      app_id: cfg.appId,
+      app_id: cfg.appId!,
       environment: cfg.environment,
       kind: "session",
     };
@@ -88,8 +104,9 @@ export class WorldId {
   // -------------------------------------------------------------------------
   // Session bookkeeping
 
+  /** The name's World ID session, if any. A D-58 nullifier-only row is not a session link. */
   sessionForLabel(label: string): NameSessionRow | undefined {
-    return this.deps.db.prepare("SELECT * FROM name_sessions WHERE label = ?").get(label) as NameSessionRow | undefined;
+    return nameSession(this.deps.db, label);
   }
 
   // -------------------------------------------------------------------------
@@ -178,25 +195,30 @@ export class WorldId {
   // Create / attach: a new session (no existing_session_id) bound to label + registrant
 
   /**
-   * Verifies a freshly created session. The returned `commit` also binds it to `label`
-   * (a session can back one name only; a name keeps its first session).
+   * Verifies a freshly created session. The returned `commit` also binds it to `label`.
+   * A name keeps its first session; one session may back several names (D-59, as D-58 allowed
+   * one human several names), since each rotation still needs a fresh proof of that session.
    */
   async verifyNewSession(args: { label: string; signal: string; result: unknown; via: "enroll" | "attach" }): Promise<VerifiedSession> {
-    const v = await this.verify(args.result, args.signal);
-    if (this.deps.db.prepare("SELECT 1 FROM name_sessions WHERE session_id = ?").get(v.sessionId)) {
-      throw new ApiError(409, "session_taken", "this World ID session is already bound to another name");
+    if (this.sessionForLabel(args.label)) {
+      throw new ApiError(409, "session_exists", "this name already has a World ID session; it can't be replaced here");
     }
+    const v = await this.verify(args.result, args.signal);
     return {
       ...v,
       commit: () => {
         v.commit();
-        try {
-          this.deps.db
-            .prepare("INSERT INTO name_sessions (label, session_id, attached_at, via) VALUES (?, ?, ?, ?)")
-            .run(args.label, v.sessionId, this.deps.now(), args.via);
-        } catch {
-          throw new ApiError(409, "session_exists", "this name already has a World ID session (or the session is taken)");
+        if (this.sessionForLabel(args.label)) {
+          throw new ApiError(409, "session_exists", "this name already has a World ID session; it can't be replaced here");
         }
+        // Replaces a D-58 nullifier-only row, which no longer backs a rotation.
+        this.deps.db
+          .prepare(
+            `INSERT INTO name_sessions (label, session_id, nullifier, attached_at, via) VALUES (?, ?, NULL, ?, ?)
+             ON CONFLICT(label) DO UPDATE SET session_id = excluded.session_id, nullifier = NULL,
+               attached_at = excluded.attached_at, via = excluded.via`,
+          )
+          .run(args.label, v.sessionId, this.deps.now(), args.via);
       },
     };
   }

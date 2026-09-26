@@ -15,11 +15,31 @@ import {
   type StoredEnvelope,
 } from "./passkeyCrypto.js";
 import { newVaultData, vaultKeys, type KeySecret, type VaultData } from "./types.js";
+import { contentHash, deriveBackupKeys, type BackupKeys } from "./backup.js";
+import type { Address } from "viem";
 
 export type VaultStatus = "loading" | "empty" | "locked" | "unlocked" | "error";
 
 /** `seal` re-encrypts under the session's key with whichever lock (passphrase or passkey) the vault uses. */
-type Session = { data: VaultData; keys: SoapayKeys; key: CryptoKey; seal: (d: VaultData) => Promise<StoredEnvelope> };
+type Session = {
+  data: VaultData;
+  keys: SoapayKeys;
+  key: CryptoKey;
+  seal: (d: VaultData) => Promise<StoredEnvelope>;
+  /** Passkey vaults only (D-63): the backup keys derived from the same PRF output. */
+  backup: BackupKeys | null;
+};
+
+/** A downloaded backup (GET /backups/:address). */
+export type FetchedBackup = { version: number; ciphertext: string };
+
+/** No backup is stored for the passkey the user picked (D-63). */
+export class BackupNotFoundError extends Error {
+  override name = "BackupNotFoundError";
+  constructor() {
+    super("There's no Soapay backup for this passkey yet.");
+  }
+}
 
 /** How to re-lock an open vault (Settings): a new passphrase, or a new passkey. */
 export type NewLock = { kind: "passphrase"; passphrase: string } | { kind: "passkey" };
@@ -44,6 +64,16 @@ export type VaultApi = {
   createWithPasskey(secret: KeySecret, account?: string): Promise<void>;
   unlock(passphrase: string): Promise<void>;
   unlockWithPasskey(): Promise<void>;
+  /** Whether this device can offer "Unlock with passkey" restore (discoverable passkey + PRF, D-63). */
+  passkeyRestoreAvailable(): Promise<boolean>;
+  /**
+   * D-63: on an empty browser, pick a synced passkey, derive its backup address, fetch and decrypt the
+   * backup, and write a fresh local vault locked with that same passkey. Throws `BackupNotFoundError`
+   * when `fetchBackup` returns null, `PasskeyUnsupportedError` without PRF.
+   */
+  restoreWithPasskey(fetchBackup: (address: Address) => Promise<FetchedBackup | null>): Promise<VaultData>;
+  /** In-memory backup keys while a passkey vault is unlocked; null otherwise. Never persisted. */
+  backupKeys: BackupKeys | null;
   /** Re-encrypts the open vault under a new lock (e.g. passkey → passphrase). */
   relock(to: NewLock): Promise<void>;
   lock(): void;
@@ -111,7 +141,8 @@ export function VaultProvider({
       const { credentialId, prf } = await passkey.register(new Uint8Array(PRF_SALT), account ?? data.profile.name?.name);
       try {
         const v = await createPasskeyVault(data, credentialId, prf);
-        return { envelope: v.envelope, key: v.key, seal: (d: VaultData) => sealWithPasskeyKey(d, v.key, v.params) };
+        const backup = await deriveBackupKeys(prf);
+        return { envelope: v.envelope, key: v.key, seal: (d: VaultData) => sealWithPasskeyKey(d, v.key, v.params), backup };
       } finally {
         prf.fill(0);
       }
@@ -125,7 +156,7 @@ export function VaultProvider({
 
     const v = await createVault(data, passphrase);
     await saveEnvelope(v.envelope);
-    setLive({ data, keys, key: v.key, seal: (d) => sealWithKey(d, v.key, v.kdf) });
+    setLive({ data, keys, key: v.key, seal: (d) => sealWithKey(d, v.key, v.kdf), backup: null });
     setLockKind("passphrase");
     setStatus("unlocked");
   }, []);
@@ -136,7 +167,7 @@ export function VaultProvider({
       const keys = vaultKeys(data);
       const v = await passkeySealed(data, account);
       await saveEnvelope(v.envelope);
-      setLive({ data, keys, key: v.key, seal: v.seal });
+      setLive({ data, keys, key: v.key, seal: v.seal, backup: v.backup });
       setLockKind("passkey");
       setStatus("unlocked");
     },
@@ -152,7 +183,7 @@ export function VaultProvider({
     if (isPasskeyEnvelope(env)) throw new Error("This vault unlocks with a passkey, not a passphrase.");
     const v = await openVault<VaultData>(env, passphrase);
     const keys = vaultKeys(v.data);
-    setLive({ data: v.data, keys, key: v.key, seal: (d) => sealWithKey(d, v.key, v.kdf) });
+    setLive({ data: v.data, keys, key: v.key, seal: (d) => sealWithKey(d, v.key, v.kdf), backup: null });
     setStatus("unlocked");
   }, []);
 
@@ -167,12 +198,45 @@ export function VaultProvider({
     try {
       const v = await openPasskeyVault<VaultData>(env, prf);
       const keys = vaultKeys(v.data);
-      setLive({ data: v.data, keys, key: v.key, seal: (d) => sealWithPasskeyKey(d, v.key, v.params) });
+      const backup = await deriveBackupKeys(prf);
+      setLive({ data: v.data, keys, key: v.key, seal: (d) => sealWithPasskeyKey(d, v.key, v.params), backup });
       setStatus("unlocked");
     } finally {
       prf.fill(0);
     }
   }, [passkey]);
+
+  const passkeyRestoreAvailable = useCallback(
+    async () => typeof passkey.discover === "function" && (await passkey.available().catch(() => false)),
+    [passkey],
+  );
+
+  const restoreWithPasskey = useCallback(
+    async (fetchBackup: (address: Address) => Promise<FetchedBackup | null>) => {
+      if (!passkey.discover) throw new Error("This browser can't restore from a passkey.");
+      if (await loadEnvelope()) throw new Error("This browser already has a Soapay vault. Unlock it instead.");
+      const { credentialId, prf } = await passkey.discover(new Uint8Array(PRF_SALT));
+      try {
+        const backup = await deriveBackupKeys(prf);
+        const found = await fetchBackup(backup.address);
+        if (!found) throw new BackupNotFoundError();
+        const restored = await backup.open<Omit<VaultData, "backup">>(found.ciphertext, found.version);
+        const hash = await contentHash(restored);
+        const data: VaultData = { ...restored, backup: { address: backup.address, version: found.version, at: Date.now(), hash } };
+        const keys = vaultKeys(data);
+        // Re-wrap for this device under the same passkey (fresh HKDF salt), so the normal unlock works here.
+        const v = await createPasskeyVault(data, credentialId, prf);
+        await saveEnvelope(v.envelope);
+        setLive({ data, keys, key: v.key, seal: (d) => sealWithPasskeyKey(d, v.key, v.params), backup });
+        setLockKind("passkey");
+        setStatus("unlocked");
+        return data;
+      } finally {
+        prf.fill(0);
+      }
+    },
+    [passkey],
+  );
 
   const lock = useCallback(() => {
     // Drop every reference to the key and plaintext. JS cannot zero strings; GC reclaims them.
@@ -207,15 +271,16 @@ export function VaultProvider({
       enqueue(async () => {
         const cur = sessionRef.current;
         if (!cur) throw new Error("Vault is locked");
-        let next: { envelope: StoredEnvelope; key: CryptoKey; seal: Session["seal"] };
+        let next: { envelope: StoredEnvelope; key: CryptoKey; seal: Session["seal"]; backup: BackupKeys | null };
         if (to.kind === "passphrase") {
           const v = await createVault(cur.data, to.passphrase);
-          next = { envelope: v.envelope, key: v.key, seal: (d) => sealWithKey(d, v.key, v.kdf) };
+          next = { envelope: v.envelope, key: v.key, seal: (d) => sealWithKey(d, v.key, v.kdf), backup: null };
         } else {
           next = await passkeySealed(cur.data);
         }
         await saveEnvelope(next.envelope);
-        if (sessionRef.current?.key === cur.key) setLive({ ...sessionRef.current, key: next.key, seal: next.seal });
+        // A new passkey means a new backup address; the next sync uploads there (BackupSync).
+        if (sessionRef.current?.key === cur.key) setLive({ ...sessionRef.current, key: next.key, seal: next.seal, backup: next.backup });
         setLockKind(to.kind);
       }),
     [enqueue, passkeySealed],
@@ -259,13 +324,16 @@ export function VaultProvider({
       createWithPasskey,
       unlock,
       unlockWithPasskey,
+      passkeyRestoreAvailable,
+      restoreWithPasskey,
+      backupKeys: session?.backup ?? null,
       relock,
       lock,
       update,
       exportEnvelope,
       wipe,
     }),
-    [status, error, session, lockKind, passkeyAvailable, create, createWithPasskey, unlock, unlockWithPasskey, relock, lock, update, exportEnvelope, wipe],
+    [status, error, session, lockKind, passkeyAvailable, create, createWithPasskey, unlock, unlockWithPasskey, passkeyRestoreAvailable, restoreWithPasskey, relock, lock, update, exportEnvelope, wipe],
   );
 
   return <VaultContext.Provider value={api}>{children}</VaultContext.Provider>;

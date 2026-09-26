@@ -9,6 +9,8 @@ interface ImportMetaEnv {
   readonly VITE_L1_RPC_URL?: string;
   readonly VITE_PAY_TOKEN?: string;
   readonly VITE_OTHER_APP_URL?: string;
+  /** Reown (WalletConnect) project id; empty turns "Connect to a dApp" off. */
+  readonly VITE_WALLETCONNECT_PROJECT_ID?: string;
   /** CK alias of VITE_STEALTH_DISPERSE; ours wins when both are set. */
   readonly VITE_STEALTH_DISPERSE_ADDRESS?: string;
   /** CK alias: its origin is used as VITE_API_URL when that is unset. */

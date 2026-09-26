@@ -50,7 +50,9 @@ export type OnboardingEvent =
   | { type: "NAME_CHOSEN"; label: string; inviteCode?: `0x${string}` }
   | { type: "NAMED" }
   | { type: "SKIP_NAME" }
-  | { type: "FINISH" };
+  | { type: "FINISH" }
+  /** D-63: the vault came back from a passkey backup; continue from what it records. */
+  | { type: "RESTORED"; profile: Profile };
 
 export const initialState: OnboardingState = { step: "welcome" };
 
@@ -72,6 +74,7 @@ export function reduce(state: OnboardingState, event: OnboardingEvent): Onboardi
     case "welcome":
       if (event.type === "CREATE") return { step: "backup", mnemonic: event.mnemonic };
       if (event.type === "RESTORE") return { step: "restore", error: null };
+      if (event.type === "RESTORED") return resumeState(event.profile);
       return state;
 
     // Recovering an older wallet-signature account (plain EOAs only; D-45). The screen checks the account

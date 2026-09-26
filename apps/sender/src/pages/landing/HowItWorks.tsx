@@ -1,38 +1,73 @@
-import { Dots, InView } from "@soapay/ui";
-import { FlowDiagram } from "./FlowDiagram.js";
+import { useRef } from "react";
+import { useGSAP } from "@gsap/react";
+import { Dots, motionOff } from "@soapay/ui";
+import gsap from "gsap";
+import { DrawSVGPlugin } from "gsap/DrawSVGPlugin";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { StepArt } from "./StepArt.js";
 import "./how.css";
 
-type Step = { title: string; body: string };
-type Column = { tag: string; title: string; steps: Step[]; foot: string };
+gsap.registerPlugin(ScrollTrigger, DrawSVGPlugin);
 
-const COLUMNS: Column[] = [
+const STEPS = [
   {
-    tag: "For your company",
-    title: "Pay a team",
-    steps: [
-      { title: "Paste names and amounts", body: "From a spreadsheet; names resolve live, failures show before signing." },
-      { title: "Review the batch", body: "Optionally split into equal chunks. Nothing sent yet." },
-      { title: "Sign once, or export to Safe", body: "The batch goes out as one transaction." },
-    ],
-    foot: "41 names → 337 fresh addresses → 1 transaction",
+    title: "One name per person",
+    body: "Someone on your team claims alice.soapay.eth once. It publishes a key, not a wallet.",
   },
   {
-    tag: "For your team",
-    title: "Get paid privately",
-    steps: [
-      { title: "Create keys, back up twelve words", body: "The twelve words are the only recovery." },
-      { title: "Claim a name", body: "alice.soapay.eth or your own ENS name, registered once on chain." },
-      {
-        title: "Share the name, spend from the app",
-        body: "No gas top-ups. Exit via pool when the destination knows you.",
-      },
-    ],
-    foot: "alice.soapay.eth → 0x7a3F…9c1E, 0x3b8E…71aD, …",
+    title: "A new address per payment",
+    body: "From that key, Soapay makes a brand-new address for each payment. No two can be linked.",
   },
-];
+  {
+    title: "Only its owner can open it",
+    body: "Alice's key finds her payments and spends them. To everyone else they are just addresses.",
+  },
+] as const;
 
-/** Landing section: header, the flow diagram, then one column each for payer and recipient. */
+function StepArrow() {
+  return (
+    <svg className="how-arrow" viewBox="0 0 20 8" aria-hidden="true">
+      <path d="M0 4h18M14 1l4 3-4 3" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/** Plain-language sequence from one public name to privately owned payments. */
 export function HowItWorks() {
+  const gridRef = useRef<HTMLDivElement>(null);
+
+  useGSAP(
+    () => {
+      const grid = gridRef.current;
+      if (!grid || motionOff()) return;
+
+      // Set payoffs before the reveal timeline so filled marks never flash on screen.
+      gsap.set(".how-payoff", { opacity: 0, scale: 0.6, transformOrigin: "50% 50%" });
+      const sequence = gsap.timeline({
+        scrollTrigger: { trigger: grid, start: "top 75%", once: true },
+      });
+
+      gsap.utils.toArray<HTMLElement>(".how-step3", grid).forEach((column, index) => {
+        const drawing = gsap.timeline();
+        drawing.fromTo(
+          column.querySelectorAll(".how-ink"),
+          { drawSVG: "0%" },
+          { drawSVG: "100%", duration: 0.7, ease: "power2.out", stagger: 0.08 },
+        );
+        drawing.to(column.querySelectorAll(".how-payoff"), {
+          opacity: 1,
+          scale: 1,
+          transformOrigin: "50% 50%",
+          duration: 0.3,
+          ease: "back.out(1.6)",
+          stagger: 0.12,
+        });
+        sequence.add(drawing, index * 0.18);
+      });
+    },
+    { scope: gridRef },
+  );
+
   return (
     <section className="land-section how" id="how" aria-labelledby="how-title">
       <div className="land-wrap">
@@ -40,36 +75,21 @@ export function HowItWorks() {
           <div className="text">
             <span className="eyebrow">How it works</span>
             <h2 className="land-h2" id="how-title">
-              One signature. Nobody can read it back.
+              A <span className="how-accent">fresh address</span> for every payment.
             </h2>
-            <p className="land-body">
-              No new chain, token or bridge. A name, a derivation, a fresh address per payment.
-            </p>
+            <p className="land-body">That is the whole trick. The app is just where you run it.</p>
           </div>
           <Dots mode="right" className="dots" animate />
         </div>
 
-        <InView amount={0.15}>
-          <FlowDiagram />
-        </InView>
-
-        <div className="how-steps">
-          {COLUMNS.map((col, c) => (
-            <div className="how-col" key={col.tag}>
-              <div className="how-col-head">
-                <span className="how-tag">{col.tag}</span>
-                <h3 className="how-col-title">{col.title}</h3>
-              </div>
-              {col.steps.map((s, i) => (
-                <InView key={s.title} className="how-step" delay={0.05 * (i + c * 3)} amount={0.2}>
-                  <span className="n">{String(i + 1).padStart(2, "0")}</span>
-                  <div>
-                    <div className="t">{s.title}</div>
-                    <div className="d">{s.body}</div>
-                  </div>
-                </InView>
-              ))}
-              <div className="how-col-foot">{col.foot}</div>
+        <div className="how-steps3" ref={gridRef}>
+          {STEPS.map((step, index) => (
+            <div className="how-step3" key={step.title}>
+              <span className="how-n">{String(index + 1).padStart(2, "0")}</span>
+              {index < STEPS.length - 1 && <StepArrow />}
+              <StepArt step={(index + 1) as 1 | 2 | 3} />
+              <h3 className="how-t">{step.title}</h3>
+              <p className="how-d">{step.body}</p>
             </div>
           ))}
         </div>

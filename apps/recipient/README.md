@@ -68,7 +68,7 @@ mode offers a demo EOA and a demo smart wallet (refused) instead of a browser wa
 | Flow | Logic | Spec |
 | --- | --- | --- |
 | Onboarding | `src/onboarding/machine.ts` (pure reducer), `actions.ts` | PRD Flow 1 |
-| Optional World ID recovery session | `src/worldid/` seam, `features/recovery/attach.ts` | mvp-spec §5 |
+| Optional World ID recovery session (Proof of Human, D-59) | `src/worldid/` seam, `features/recovery/attach.ts` | mvp-spec §5 |
 | Scan | `src/scan/` (worker pool + `runScan` + `mergeScanResult`) | §3 scan.ts |
 | Ledger / clusters | `hooks/useWallet.ts` over SDK `buildLedger` / `balanceView` | PRD Flow 3 |
 | Send with the guard | `src/spend/flow.ts` (`prepareSpend`, `executeSpend`) | PRD Flow 4 |
@@ -139,6 +139,25 @@ When `packages/sdk/src/exit.ts` lands: switch `sdkExit()` to a static import, re
 from `features/exit/types.ts`, and align `buildCtx` with the SDK's context. Mock mode
 (`features/exit/mock.ts`) runs the whole flow in ~35 s per leg (approval ~15 s) and declines the leg with
 pool index 1 to show the refund path.
+
+## Connect to a dApp (WalletConnect, D-61)
+
+The **dApps** tab (also "dApp" on each ledger row and "Use a dApp instead" on Send) makes the app a
+WalletConnect wallet for ONE payment address per session: pick the address, paste the dApp's `wc:` link,
+approve. Requests from connected dApps open an approval sheet over any screen (`screens/DappRequestSheet.tsx`)
+with the decoded calls, how gas is paid and the privacy guard's verdict.
+
+- Needs `VITE_WALLETCONNECT_PROJECT_ID` (Reown project id, public; allow-list the app's origin in the Reown
+  dashboard). Unset, the screen says "WalletConnect isn't configured". The WalletConnect SDK is loaded
+  lazily: the relay is only contacted once you connect, or on unlock if you have connected before.
+- Supported: `eth_accounts`, `eth_chainId`, `wallet_switchEthereumChain` (active chain only),
+  `eth_sendTransaction` (value must be 0; returns the bundle tx hash once the userOp lands),
+  `wallet_sendCalls` / `wallet_getCallsStatus` / `wallet_getCapabilities` (atomic + paymasterService),
+  `personal_sign`, `eth_signTypedData_v4`. Everything else is refused with 4200.
+- Code: `features/walletconnect/` (`router.ts` method → action, `namespaces.ts` one-address sessions,
+  `controller.ts` WalletKit wiring), `hooks/useWalletConnect.tsx`, `services/dapp.ts` (SDK
+  `executeFromStealth`; mock in `services/mock.ts`). Protocol logic is in `@soapay/sdk` (`dapp.ts`).
+- On Base Sepolia a dApp's contracts must be in the API's `PAYMASTER_EXTRA_TARGETS`, or sponsorship is refused.
 
 ## Invite links
 

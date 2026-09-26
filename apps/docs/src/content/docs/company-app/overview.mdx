@@ -26,24 +26,26 @@ Named wallets appear before **Browser wallet**. The connected account determines
 
 ## Open the payroll vault
 
-After the wallet connects, the app opens the vault gate. The vault protects the roster, invite codes, and run records stored in this browser. Nothing in that vault is sent to a server.
+After the wallet connects, the app opens the vault gate. The vault protects the roster, invite codes, and run records. It is encrypted in the browser; with a wallet-signature or passphrase lock an encrypted copy is also kept on the Soapay API, which cannot read it.
 
 <Steps>
 
-1. On **Set up the payroll vault**, choose **Device key** or **Passphrase**.
+1. On **Set up the payroll vault**, choose the protection under **Vault protection**.
 
-2. **Device key** is tied to this browser profile. It is the fastest option, but clearing site data removes the key.
+2. **Wallet signature (recommended)**: your wallet unlocks the vault and it is backed up encrypted, so logging in with the same wallet restores it in any browser. Your wallet asks you to sign twice when you create it.
 
-3. **Passphrase** works on another device and survives cleared site data. It must contain at least 10 characters. Keep it somewhere safe.
+3. **Device key** is tied to this browser profile. It is the fastest option, but clearing site data removes the key and it cannot be backed up.
 
-4. Select **Create vault**. On a later visit, use **Unlock on this device** or enter the passphrase and select **Unlock**.
+4. **Passphrase** must contain at least 10 characters. It is backed up encrypted, and restoring in another browser asks for the passphrase. Keep it somewhere safe because the app cannot reset it.
+
+5. Select **Create vault**. On a later visit, use **Unlock with wallet** or **Unlock on this device**, or enter the passphrase and select **Unlock**. In a browser that has no vault yet, the app finds your wallet's backup and offers **Restore your payroll**: **Restore with wallet**, or **Restore** with the passphrase.
 
 </Steps>
 
 ![Payroll vault setup](../../../assets/screens/s03-sender-vault.png)
 
-<Aside type="caution" title="Browser storage matters">
-  A device-key vault depends on this browser profile. The passphrase option is portable, but the roster and history still stay in browser storage. Keep the records and credentials your organisation needs for recovery.
+<Aside type="caution" title="Device-key vaults stay in one browser">
+  A device-key vault depends on this browser profile and is never backed up. The wallet-signature and passphrase locks restore from the encrypted backup, so keep the wallet (or the passphrase) your organisation needs for recovery.
 </Aside>
 
 ## Try the off-chain demo

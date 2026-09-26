@@ -26,7 +26,7 @@ This guide takes you from your employer's invite to your first payment. You need
 
 2. **Save your recovery kit.** Your recovery phrase is the one key to every payment you will ever get, even if Soapay disappears. You do not need to remember it: click **Download recovery kit** for a small file with the phrase and restore instructions, **Copy phrase** for a password-manager note, or **Show words** for paper. Tick "I saved my recovery kit somewhere safe" and click **Continue**. The phrase is shown on this screen only.
 
-3. **Lock this device.** Click **Use Face ID / fingerprint (passkey)** and confirm with your device. If your browser cannot use a passkey, choose **Use a passphrase instead**. The passkey only protects this device; the recovery kit is still your only backup.
+3. **Lock this device.** Click **Use Face ID / fingerprint (passkey)** and confirm with your device. If your browser cannot use a passkey, choose **Use a passphrase instead**. The passkey also encrypts a backup of your vault that the app keeps on the Soapay API, so **Unlock with passkey** brings it back on a new device; the recovery kit is still the root of everything.
 
 4. **Publish your payment address.** Click **Register for free**. The app registers your stealth meta-address on the public ERC-6538 registry through a throwaway address derived from your keys. Your main wallet never signs, and Soapay pays the gas.
 
@@ -37,7 +37,7 @@ This guide takes you from your employer's invite to your first payment. You need
 </Steps>
 
 <Aside type="tip" title="Link World ID now if you can">
-  A World ID session added later from Name settings needs a 72-hour wait before it can back a key change. Linking it during sign-up avoids the wait.
+  A World ID session added later from Name settings needs a 72-hour wait before it can back a key change (the public testnet demo sets this wait to zero). Linking it during sign-up avoids the wait.
 </Aside>
 
 ## Your first payment
@@ -53,7 +53,7 @@ To spend, click **Send** on a row. Sends are gasless, and a privacy guard warns 
 ## What to keep safe
 
 - **The recovery phrase.** Losing it loses the funds. Nobody can reset it: not Soapay, not your employer. Never share it.
-- **The passkey is not a backup.** It only unlocks this device. A passkey synced through iCloud Keychain or Google Password Manager counts as a second backup, never the only one.
+- **The passkey restores the vault, not the phrase.** A passkey synced through iCloud Keychain or Google Password Manager brings your vault back on a new device through its encrypted backup, but if the passkey is gone, only the recovery kit recovers your keys.
 - **If the phrase leaks,** rotate to new keys and move your funds promptly. World ID protects future pay; funds already received are protected only by keeping the phrase secret. See [Key rotation and recovery](/docs/concepts/key-rotation-and-recovery/).
 
 Next: the [Employee app guide](/docs/employee-app/overview/).

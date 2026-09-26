@@ -25,7 +25,7 @@ This guide takes you from opening the company app to a signed pay run. On the li
 
 1. **Log in.** Open the [company app](/) and click **Login with wallet**. Pick your wallet under **Choose a wallet**. Your wallet is your login; there is no account to create.
 
-2. **Set up the payroll vault.** Choose how this browser unlocks the vault: **Device key** (fastest, tied to this browser profile) or **Passphrase** (at least 10 characters, survives cleared site data and works on another device). Click **Create vault**. The vault holds your roster and history, encrypted here; nothing is sent to a server.
+2. **Set up the payroll vault.** Choose how the vault unlocks: **Wallet signature (recommended)**, where your wallet unlocks it and a backup is kept encrypted so logging in restores it in any browser (your wallet signs twice now); **Device key**, the fastest, tied to this browser profile and never backed up; or **Passphrase** (at least 10 characters), backed up encrypted, with the passphrase asked for when you restore elsewhere. Click **Create vault**. The vault holds your roster and history, encrypted in the browser before anything is stored or backed up; the API only ever sees ciphertext.
 
 3. **Receive the welcome drop.** On Base Sepolia the first login sends 1,000,000 test USDC to your wallet, once per wallet. A banner reads "Welcome: 1,000,000 test USDC sent to your wallet." with a Basescan link. A plain wallet still needs a little Base Sepolia ETH for gas; smart wallets pay no gas here.
 
