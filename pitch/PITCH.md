@@ -76,7 +76,7 @@ Group 3: companies that had to build a private ledger to get around it, and ever
 
 Slide takeaway: the biggest names in payments have all said the same thing, and each of them fixed it only for enterprises, behind an operator. Everyone else still pays in public.
 
-Pending: evidence-E-companies-vendors.md and evidence-F-companies-daos.md, a second research pass on named companies and organizations only.
+Pending: EVIDENCE.md §E and EVIDENCE.md §F, a second research pass on named companies and organizations only.
 
 Source pool below (kept for citations):
 
@@ -98,8 +98,8 @@ Beat 2, evidence wall. Every quote checked against the fetched page on Sep 25, 2
 | Arkham on Trump | Disclosed $2,806,341 balance matched to an NFT royalty wallet, published as a live profile. | Aug 16, 2023 | https://info.arkm.com/announcements/donald-trumps-crypto-holdings-are-now-on-arkham |
 | Arkham Intel Exchange | Paid bounties to deanonymize wallet owners, called a "dox-to-earn program" by critics. | Jul 2023 | https://finance.yahoo.com/news/arkham-dox-earn-platform-offers-181403790.html |
 | EDPB, EU regulators | On-chain metadata including wallet addresses "may constitute personal data when they enable direct or indirect identification of a natural person" | Jul 7, 2026 | https://www.edpb.europa.eu/documents/guideline/guidelines-on-processing-of-personal-data-through-blockchain-technologies_en |
-| J.P. Morgan, Kinexys head Oliver Harris | Public blockchains "were radically transparent by design." "And until recently, there were some trade-offs between compliance, privacy, and finality." WebFetch extract, matched across two fetches. | Jun 2, 2026 podcast | see evidence-B-institutions.md item on JPMorgan for the page |
-| Ethereum Foundation, Privacy Cluster | Launched with 47 members. Foundation quote via Decrypt: "Privacy is normal. Privacy is for everyone." Useful with EF judges in the room. | Oct 2025 | see evidence-B-institutions.md |
+| J.P. Morgan, Kinexys head Oliver Harris | Public blockchains "were radically transparent by design." "And until recently, there were some trade-offs between compliance, privacy, and finality." WebFetch extract, matched across two fetches. | Jun 2, 2026 podcast | see EVIDENCE.md §B item on JPMorgan for the page |
+| Ethereum Foundation, Privacy Cluster | Launched with 47 members. Foundation quote via Decrypt: "Privacy is normal. Privacy is for everyone." Useful with EF judges in the room. | Oct 2025 | see EVIDENCE.md §B |
 | Base Ledgers, Japanese coverage | Atarashii Keizai: 「同基盤は現在早期アクセスとして提供されており、利用には申請が必要となっている。」 (early access, application required). Launch was June 17 in Japan. | Jun 2026 | https://www.neweconomy.jp/posts/584457 |
 
 Scale, so the leak is not hypothetical. Strongest numbers first. "Full scrape" means the quote was read on the page itself.

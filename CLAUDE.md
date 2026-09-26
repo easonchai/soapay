@@ -1,6 +1,6 @@
 # Soapay
 
-Stealth-address payroll on Base. Product spec: `PRD.md`. PRD review: `docs/prd-analysis.md`. Contract plan: `contracts/PLAN.md`. MVP interfaces: `docs/mvp-spec.md`.
+Stealth-address payroll on Base. Product spec: `PRD.md`. Contract plan: `contracts/PLAN.md`. MVP interfaces: `docs/mvp-spec.md`.
 
 ## Layout
 
@@ -23,7 +23,6 @@ Stealth-address payroll on Base. Product spec: `PRD.md`. PRD review: `docs/prd-a
 - `pnpm install` · `pnpm build` · `pnpm test` · `pnpm typecheck` · `pnpm dev`, all run through turbo. `pnpm test` includes `forge test`.
 - Dev ports: recipient 5173, sender 5174, docs 5175, api 8787. Copy each app's `.env.example` to `.env.local` (Base Sepolia); the api needs `RELAYER_PRIVATE_KEY` for registration (`POST /register`, `POST /relay`) and the faucet, and `PIMLICO_API_KEY` for sponsored gas (`POST /paymaster`).
 - **Testnet vs mainnet (D-52):** on Base Sepolia the pay token is Soapay's **mock USDC** `0x028D969c20b740582428f5043954c380686214Bb` (`MOCK_USDC_BASE_SEPOLIA`; override with `VITE_PAY_TOKEN` / `PAY_TOKEN`), stealth spends are **gas-sponsored** through the API's `/paymaster` proxy, wallets get a one-time **welcome drop** (`/faucet`), and the **exit is hidden** (CCTP needs Circle USDC). Base mainnet keeps Circle USDC and the Circle paymaster; never change mainnet paths for the demo. Fund a wallet with `scripts/fund-usdc.sh`.
-- Frontend M1 design and task record: `docs/frontend-m1-design.md`, `docs/frontend-m1-plan.md`.
 - One package: `pnpm --filter @soapay/sdk test`, `pnpm --filter @soapay/contracts test`.
 - Contract fork tests run when `BASE_RPC_URL` is set.
 
