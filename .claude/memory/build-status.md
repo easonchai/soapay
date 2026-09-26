@@ -209,3 +209,6 @@ metadata:
   - Found in the live check: the production CSP blocked framer-motion styles. Fixed by allowing inline styles only; this is an agent decision awaiting the owner's confirmation, logged.
   - Open: the landing-copy overclaim (see prd-open-questions).
   - Next: D-27 (privacy doc + platform-free swap) → D-31/D-28 (denominations default + timing queue) → live World ID → D-29 → demo-flow doc.
+- Checkpoint 26 (2026-09-26):
+  - **The public URL is now https://soapay.up.railway.app** (the service domain was renamed via the Railway GraphQL `serviceDomainUpdate`, using the CLI's access token; PUBLIC_ORIGIN and CORS updated; both redeployed; the old URL returns 404).
+  - Four parallel agents started, all on branches off `yudhishthra` with CK's UI flow frozen: `privacy-swap` (D-27 + docs/privacy-model.md), `denoms-timing` (D-31 + D-28), `sdk-agnostic` (D-29, additive only), `demo-flow` (docs/demo-flow.md walking CK's real UI).
