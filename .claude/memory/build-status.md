@@ -197,3 +197,5 @@ metadata:
 - **Agent decisions awaiting owner confirmation:** D-19 (the exit mints to the same stealth address).
 - **From now on every checkpoint cites decision IDs + commits** (rule added to CLAUDE.md).
 - Open: the CK clash fixes are in flight on `integrate-ck` (D-24, D-25); then merge, push and redeploy Railway (D-30).
+- Checkpoint 23 (2026-09-26): **D-31**: no PP v2 early access. Hackathon amount privacy = denominations ON by default (one company-wide chunk) + timing queue (D-28) + exit per chunk, which is the PRD's v1 promise. D-26 is partly superseded.
+  Work queue after the CK merge (D-24/25): redeploy (D-30) → privacy doc + platform-free swap (D-27) → denominations default + timing queue (D-31, D-28) → live World ID run → SDK refactor (D-29) → demo-flow doc.
