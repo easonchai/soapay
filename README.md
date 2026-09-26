@@ -75,6 +75,32 @@ The employee app scans the Announcer, finds only its own lines, and shows live b
 
 Every screen of both apps, in demo order: [`docs/demo-flow.md`](docs/demo-flow.md) and [`docs/demo-screens`](docs/demo-screens).
 
+## Compared with Fluidkey
+
+Both are built on ERC-5564 and ERC-6538, and both hide your wallet from strangers. The difference is the batch and the server. Fluidkey never touches the payroll batch, which is where a coworker reads your salary, and it has to see every payment you receive to work. Soapay hides the salary from the coworker, and nobody but you can see what you receive.
+
+| | [Fluidkey](https://docs.fluidkey.com/readme/frequently-asked-questions/) | Soapay |
+| --- | --- | --- |
+| Who it's for | Individuals receiving payments | Teams paying groups: payroll, contributors, grants |
+| Hides your wallet from strangers | Yes | Yes |
+| Hides your salary from a coworker in the same batch | No | Yes |
+| Who derives your stealth address | Fluidkey's server, at name resolution | The sender's browser; the ephemeral key is thrown away |
+| Who holds your viewing key | Fluidkey | Only you |
+| What the company's server can see | Every payment you receive | Nothing beyond public chain data |
+| What your employer learns | n/a | Name → stealth address → amount, never your main wallet |
+| Batch payments | No | One transaction, N recipients, pays and announces atomically |
+| Amounts in the batch | Visible per person | Split into identical chunks, sorted so per-tx totals never leak |
+| Spending | Stealth Safes with sponsored gas | Plain EOA, EIP-7702 on first spend, gas in USDC via the Circle Paymaster |
+| Receivable from any wallet by name | Yes | In the sender app; gateway mode for other wallets is on the roadmap |
+| Consolidation guard | No | Cluster graph, labels, block on identifiable destinations, timing queue |
+| Compliant exit | No | Privacy Pools via CCTP, screened by an association set |
+| Swap without linking | No | In place, inside the stealth address, placeholder quote |
+| Key rotation | Not documented | World ID attested; the employer's app accepts it automatically |
+| Recovery without the company | Addresses | Everything: addresses, ledger, pool secrets, from the seed and the public SDK |
+| Agents | No | MCP server, `.soapay.eth` names with ENSIP-26 records |
+| Chains | 7 mainnets plus a Near intents bridge | Base Sepolia today, Base first |
+| Fiat ramps | Yes | No |
+
 ## Tests
 
 **809 tests, all passing** (`pnpm test`, 2026-09-26). Every privacy invariant in the PRD is a test in one of these packages.
