@@ -281,6 +281,32 @@ The first time a name is paid, the company app stores `name → meta-address` lo
 | --- | --- | --- |
 | Stealth EOA, no code, 500 USDC, key derived by you | One type-4 transaction from the bundler: the address signs a 7702 authorization (chain, Simple7702Account, nonce), then `EntryPoint.handleOps` (1) sets the code pointer, (2) validates the userOp against the address's own ECDSA signature, (3) the Circle Paymaster takes gas in USDC (a permit verified through ERC-1271), (4) executes `USDC.transfer` | Code `0xef0100 ‖ Simple7702Account`, 499.99 USDC, key still yours |
 
+**A first spend, step by step.** Two things make it work: 7702 lets the address borrow a contract's code while keeping its own address, key and balance, and 4337 lets someone else pay the ETH for gas and be repaid in USDC from that same address. Example: send 300 USDC from stealth address `0xD259` (500 USDC, 0 ETH, no code).
+
+```text
+YOUR DEVICE                                         ON-CHAIN (Base)
+recovery phrase
+ └ spending key
+    └ stealth key for 0xD259                        0xD259: 500 USDC, 0 ETH, no code
+        signs 3 things:
+        ① authorization  "0xD259's code = Simple7702Account"
+        ② userOp         "transfer 300 USDC to 0xBEEF"
+        ③ USDC permit    "paymaster may take up to 0.01 USDC from 0xD259"
+             │
+bundler (Pimlico) wraps ①②③ in one type-4 tx,       pays the ETH gas up front
+             │
+EntryPoint v0.8
+  a. applies ①: 0xD259 now runs Simple7702Account   0xD259: code → Simple7702Account
+  b. 0xD259 validates ② by checking its own signature
+  c. Circle Paymaster uses ③ to pull 0.0057 USDC     paymaster +0.0057 USDC,
+     and repays the bundler's ETH                    bundler repaid in ETH
+  d. executes ② from 0xD259                          0xBEEF +300 USDC
+                                                    0xD259 after: 199.9943 USDC, 0 ETH,
+                                                    same address, still your key
+```
+
+What doesn't happen: no new address, no contract deployed, no ETH sent to `0xD259`, no hop through anything you'd have to fund. The only outgoing transfers are the 300 USDC and the fraction of a cent the paymaster charged. Later spends from `0xD259` skip ① because the pointer is already set. Each other stealth address goes through the same first-spend flow on its own, so a send that draws from three addresses is three user operations in one bundle, and that's the moment the privacy guard warns that those three become visibly linked.
+
 **What 7702 does.** Since Pectra (May 2025) an EOA can sign a small authorization saying "my code is whatever lives at this implementation address". A type-4 transaction carrying it writes a 23-byte pointer into the account. From then on, calls to the address run the implementation's code with the address's own storage and balance, so it behaves like a smart account while the private key still controls it. Nothing is deployed: `Simple7702Account` was deployed once by the 4337 team, and every delegated account points at the same bytes.
 
 **Soapay does this lazily.** On the first spend from an address, the employee app signs the authorization and hands it to the bundler together with a 4337 user operation. EntryPoint v0.8 understands that combination, so delegation and the spend land in one transaction, and the Circle Paymaster takes gas from the USDC already sitting there. That's why a stealth address never needs ETH, which would otherwise link it to whoever sent the ETH. It cost about 0.0057 USDC per spend on Base Sepolia.
