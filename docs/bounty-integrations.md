@@ -5,8 +5,47 @@ A single page for checking each integration against the prize criteria. Status a
 | | ENSv2 | World ID (IDKit) | Uniswap API |
 | --- | --- | --- | --- |
 | Role in the product | Pay-by-name identity; the employee alone controls where salary goes | Self-service key rotation (salary-redirect protection) | Convert salary *in place* inside a stealth address |
-| Live on testnet | **Yes**, end to end | **Partly**: RP and action live, full proof flow not yet run live | **Yes** for swap-in-place (Base Sepolia, on-chain quote); Trading API live on Base mainnet (placeholder-swapper quote, executed on a fork) |
+| Live on testnet | **Yes**, end to end | **Production mode live** (D-51); the World App run is the last step | **Yes** for swap-in-place (Base Sepolia, on-chain quote); Trading API live on Base mainnet (placeholder-swapper quote, executed on a fork) |
 | Deep docs | `contracts/ENSV2.md` | `docs/worldid.md` | `FEEDBACK.md` |
+
+---
+
+
+## Prize requirements, checked one by one
+
+Requirement text is quoted from the ETHGlobal Tokyo 2026 prize page (fetched 2026-09-26). ✅ met · ⏳ needs one action before submission.
+
+### ENS: Best Use of ENSv2 ($6,000)
+
+| Requirement | How Soapay meets it | Status |
+| --- | --- | --- |
+| "Project must be built on ENSv2 (Sepolia)" | `soapay.eth` with its own Permissioned Registry and one Permissioned Resolver per employee, on Sepolia (`contracts/ENSV2.md`, `packages/sdk/src/ensv2.ts`) | ✅ |
+| "ENSv2 features should be central to the product, not a cosmetic add-on" | The name is how every payee is addressed, and ENSv2's per-name resolver plus access control (only the employee can write the `stealth` record) is what stops an employer, platform or thief from redirecting salary. `addr` is left unset on purpose. Agents get names with ENSIP-26 records | ✅ |
+| "Your demo must be functional and not just include hard-coded values" | Names are issued live from an invite link (reserve → register → issue), resolved and pinned by the company app, and cross-checked against ERC-6538. Issuance tx: [0x4b11…e255](https://sepolia.etherscan.io/tx/0x4b11d38050ef0020f5de0e4a269ed278f206ee0f0d5b61f84aa4e9b56db2e255) | ✅ |
+| "Link to a live demo" | https://soapay.up.railway.app (company app at `/`, employee app at `/app/`) | ✅ |
+| "Code … open source and accessible on Github" | https://github.com/easonchai/soapay (public) | ✅ |
+
+### World: Best Use of IDKit ($5,000)
+
+| Requirement | How Soapay meets it | Status |
+| --- | --- | --- |
+| "Integrate IDKit in a functioning application … or onchain flow" | IDKit 4.3 in the employee app (`packages/worldid-react`), used on the Name screen and at the name step of onboarding | ✅ |
+| "Use at least one supported World ID credential" | Selfie Check, through a World ID **session** | ✅ |
+| "Verify the result on the server or onchain as appropriate" | `apps/api` checks nonce, session id, signal hash, credential, environment and replay, then verifies with the Developer Portal v4 endpoint; only then signs the EIP-712 `MetaRotation` attestation | ✅ |
+| "Clearly explain the specific product event requiring trust and why the chosen credential is the minimum sufficient assurance" | The event is **key rotation**: changing where future salary goes. It's a continuity question ("same person who set up this name?"), so a Selfie Check session is the weakest credential that ties the change to a person rather than a key; Proof of Human would add an Orb visit without answering it better ([docs/worldid.md](worldid.md)) | ✅ |
+| "Demonstrate a successful verification" | Production mode is live (D-51). The run with a real World App is the last step | ⏳ owner runs it with the World App |
+| "…and one meaningful alternative path (cancellation, unavailable credential, rejection, ineligible user)" | No session, cancelled proof, a different person, expired or replayed proof: no attestation, so the company app **blocks** the line with "meta change unverified" until the employer approves by hand. A session added after onboarding also has a 72-hour wait | ✅ in code; ⏳ show it in the demo video |
+| "Integration debrief/feedback: time to first success, friction, missing capability or documentation, the one improvement with the greatest impact" | [docs/worldid.md → Integration debrief](worldid.md#integration-debrief) | ⏳ fill in "time to first success" after the live run |
+
+### Uniswap: Best Uniswap Stack Contribution ($6,000)
+
+| Requirement | How Soapay meets it | Status |
+| --- | --- | --- |
+| "A public GitHub repository with open-source code" | https://github.com/easonchai/soapay | ✅ |
+| "A FEEDBACK.md file" | [FEEDBACK.md](../FEEDBACK.md), with live-verified findings and line pointers | ✅ |
+| "A completed submission to the Uniswap Developer Feedback Form … that includes the link to your FEEDBACK.md" | Draft answers in [docs/submission/uniswap-feedback-form.md](submission/uniswap-feedback-form.md) | ⏳ owner submits |
+| "README clearly points to the relevant contracts and lines of code" | README "Uniswap integration": `swap.ts` placeholder-swapper quote, route re-encoding, `/quote`-only client, in-place checks, entry points; `spend.ts` userOp pipeline; the fork E2E (line ranges updated 2026-09-26) | ✅ |
+| Integration in the product | Convert salary **in place** inside a stealth address: Trading API quote (placeholder swapper, V2/V3 route rebuilt by us) → one 7702 userOp with Permit2 + Universal Router, gas in USDC. Live swap: [0x2bf6…5c81](https://sepolia.basescan.org/tx/0x2bf66ce2b28b118becdd5aba49d612a444bcffaa006c33b09b92165b5ec55c81) | ✅ |
 
 ---
 
