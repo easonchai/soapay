@@ -7,8 +7,8 @@ Which prize we are going for, per sponsor:
 | Sponsor | Prize we fit | Amount | Why that one |
 | --- | --- | --- | --- |
 | World | Best Use of IDKit | $5,000, up to 2 teams | Their strong examples include "recovery or protection of an important account action", which is exactly our one trust moment. We do not use World ID for Agents, so do not claim that track. |
-| ENS | Best Use of ENSv2 | $6,000, 1st to 3rd | ENSv2 on Sepolia is central: every payee is a subname with its own Permissioned Resolver and per-record roles. |
-| Curvegrid | Best AI Agent Project | $1,000 | "Using our blockchain development platform MultiBaas is not a requirement." Our MCP server is a policy-aware stablecoin payment agent, which is three of their listed ideas. We do not use MultiBaas, and we say so. |
+| ENS | Best Use of ENSv2 | $6,000, 1st to 3rd | ENSv2 on Sepolia is central: our own subname registry, a Permissioned Resolver per name, Enhanced Access Control down to one text record, non-transferable and revocable subnames. Agents as namespaces is their stated bonus, and the MCP server does exactly that. |
+| Curvegrid | Best Digital Asset Dashboard | $1,000 | "Using our blockchain development platform MultiBaas is not a requirement." The employee app is a dashboard of token holdings across many addresses that turns them into actions, which is what the track asks for. We do not use MultiBaas, and we say so. |
 
 ## World ($15,000): Best Use of IDKit
 
@@ -64,13 +64,13 @@ The one improvement with the greatest impact: let IDKitSessionWidget accept pres
 **Why you're applicable**
 
 ```text
-Applying for Best Use of ENSv2. Every payee in Soapay is an ENSv2 name on Sepolia: soapay.eth runs its own subname registry, and each employee or agent gets a subname with its own PermissionedResolver, deployed through the VerifiableFactory with its stealth text record and its roles set atomically in initialize. Enhanced Access Control gives each actor exactly one power: the employee's key holds ROLE_SET_TEXT on the stealth record only, our issuer holds ROLE_REGISTRAR only, the subname carries an empty role bitmap so it cannot be transferred, and the company keeps ROLE_UNREGISTER. The name is how every payment is addressed (the payer resolves it once through the Universal Resolver, pins the meta-address, and derives a fresh stealth address per payment), and the per-record roles are what make "only the employee can redirect their own salary" enforceable on chain. There is no addr record on purpose, so a plain wallet cannot pay a static, linkable address. AI agents get the same names with ENSIP-26 agent-context and agent-endpoint records, written in the same initialize call. Live on Sepolia, issued from the running app, with a Foundry fork test against the real ENSv2 contracts.
+Applying for Best Use of ENSv2. Soapay is built on the ENSv2 hierarchy on Sepolia: soapay.eth deploys its own subname registry and issues every payee, human or agent, a subname under its own rules. Each subname gets its own Permissioned Resolver, deployed through the VerifiableFactory with its stealth text record and its roles set atomically in initialize, so the name fully owns its data. Enhanced Access Control delegates one specific right per actor: the employee's key may edit only the stealth text record (ROLE_SET_TEXT on that one resource), our issuer may only register names (ROLE_REGISTRAR), the subname carries an empty role bitmap so it is non-transferable, it never expires, and the company keeps ROLE_UNREGISTER so it is revocable. The name is how every payment is addressed: the payer resolves it once through the Universal Resolver, pins the meta-address and derives a fresh stealth address per payment, and that per-record role is what makes "only the employee can redirect their own salary" enforceable on chain. There is no addr record on purpose, so a plain wallet cannot pay a static, linkable address. Agents are namespaces too: our MCP server claims <label>.soapay.eth for an AI agent with ENSIP-26 agent-context and agent-endpoint records written in the same initialize call, its own registrant key for the stealth record, and spending guardrails. Live on Sepolia with names issued from the running app, a Foundry fork test against the real ENSv2 contracts, and the live demo and public repo on the project page.
 ```
 
 Strict two-sentence version, if the field enforces its limit:
 
 ```text
-Every payee in Soapay is an ENSv2 subname on Sepolia with its own PermissionedResolver, deployed through the VerifiableFactory with its stealth record and roles set atomically in initialize, and Enhanced Access Control gives each actor one power: the employee's key can write only the stealth record, our issuer can only register names, subnames are non-transferable, and the company can only revoke. The name is how every payment is addressed (resolved once through the Universal Resolver, pinned, then a fresh stealth address per payment), so ENSv2's per-record roles are what make "only the employee can redirect their own salary" enforceable on chain, with no addr record on purpose and ENSIP-26 records for agents.
+Soapay is built on the ENSv2 hierarchy on Sepolia: soapay.eth runs its own subname registry, every payee gets a subname with its own Permissioned Resolver (records and roles set atomically in initialize through the VerifiableFactory), and Enhanced Access Control delegates one right per actor, so the employee's key can edit only the stealth text record, our issuer can only register names, and subnames are non-transferable, non-expiring and revocable by the parent. The name is how every payment is addressed (resolved once through the Universal Resolver, pinned, then a fresh stealth address per payment), which makes "only the employee can redirect their own salary" enforceable on chain with no addr record on purpose, and agents are namespaces too, claiming their own subnames with ENSIP-26 records and their own registrant keys through our MCP server.
 ```
 
 **Link to the line of code**
@@ -105,31 +105,39 @@ Friction: (1) PermissionedRegistry.register safe-mints an ERC-1155, so an owner 
 Missing: an ERC-1155 receiver check or revert reason on register; a one-line note that resolver roles are per resource across the resolver; and ENSIP-25 agent-registration records only verify once a live registry lists the name, so we accept them but do not set them by default.
 ```
 
-## Curvegrid ($3,000): Best AI Agent Project
+## Curvegrid ($3,000): Best Digital Asset Dashboard
 
-Be upfront: MultiBaas is not used anywhere in the repo, and their prize page says it is not required. Judging is "based on your idea and technical execution".
+Be upfront: MultiBaas is not used anywhere in the repo, and their prize page says it is not required. Judging is "based on your idea and technical execution". The dashboard is the employee app: someone paid in tokens across dozens of fresh addresses, with one screen that rebuilds their holdings from chain data and tells them which moves are safe.
 
 **Why you're applicable**
 
 ```text
-Applying for Best AI Agent Project. Soapay ships an MCP server that gives an AI agent its own pay identity (an ENSv2 name with a stealth meta-address and ENSIP-26 records) and lets it pay, get paid, find and spend USDC by name, privately, on Base Sepolia. It is a policy-aware stablecoin payment agent: every value move is a dry run, then a confirm of a single-use plan that expires in ten minutes, under per-call and per-day USDC caps, an optional payee allowlist and pinned meta-addresses, with keys that never leave the process. Agents pay each other by name the same way. Live run: an agent created mcp-agent-7c1e.soapay.eth, received 0.3 USDC through our batch contract, found it with scan, and spent 0.1 USDC to another name through a bundler and a USDC paymaster. We did not use MultiBaas; the agent talks to the chain through viem and our public SDK.
+Applying for Best Digital Asset Dashboard. Soapay's employee app is a dashboard for someone paid in tokens across many addresses: each payment lands on a fresh stealth address, so the app scans the chain with the viewing key, recomputes every address, reads live balances, and shows one headline figure (USDC across N addresses, last scan time) with a ledger row per address, the pay runs that paid you, and your privacy clusters (which addresses are already linked by past spends). It turns that into actions: a consolidation guard reviews every Send and blocks or warns before a spend that would link addresses or reach a wallet you have labelled as known, suggests which addresses to spend from, and releases spends through a timing queue; each address spends gaslessly through EIP-7702 and a paymaster; Name shows the key rotation state; and Exit plans a compliant cash-out through Privacy Pools via CCTP with the minimums, fees and each leg's timeline on screen (built and fork-tested, hidden on the Base Sepolia demo because the testnet mock token cannot bridge). Nothing is trusted from the announcement: the announced amount is a hint, the live balance is what you can spend, and everything rebuilds from your seed with the public SDK. The company app is the payer-side view: pay-run history with per-run detail, the coworker view of a batch, and recipients whose pinned addresses flag a line for approval when the record changes. We did not use MultiBaas; the apps read the chain through viem and our public SDK.
 ```
 
 Strict two-sentence version, if the field enforces its limit:
 
 ```text
-Soapay ships an MCP server that gives an AI agent its own pay identity (an ENSv2 name with a stealth meta-address and ENSIP-26 records) and lets it pay, get paid, find and spend USDC by name, privately, on Base Sepolia, as a policy-aware stablecoin payment agent: every value move is a dry run, then a confirm of a single-use expiring plan, under per-call and per-day caps, an optional payee allowlist and pinned meta-addresses. We did not use MultiBaas; the agent talks to the chain through viem and our public SDK, and it ran live (mcp-agent-7c1e.soapay.eth received 0.3 USDC and spent 0.1 USDC to another name).
+Soapay's employee app is a dashboard for someone paid in tokens across many fresh stealth addresses: it scans the chain with the viewing key, reads live balances, and shows one headline figure, a ledger row per address, the pay runs that paid you and your privacy clusters, then turns that into actions through a consolidation guard that blocks or warns before any Send that would link addresses, gasless spends from each address, and an Exit that plans a compliant cash-out through Privacy Pools with fees and leg timelines on screen (built, hidden on the testnet demo since the mock token cannot bridge). The company app is the payer-side view (pay-run history, per-run detail, the coworker view of a batch, and pinned recipients that flag a line when a record changes), and we did not use MultiBaas; both apps read the chain through viem and our public SDK.
 ```
 
 **Link to the line of code**
 
-Primary, the MCP tools (`create_agent_identity`, `pay`, `scan`, `balance`, `spend`, `swap_in_place`):
+Primary, the employee dashboard (headline figure, ledger table, privacy clusters, history):
 
 ```text
-https://github.com/easonchai/soapay/blob/82c09589b2a88e474c2744c146bdae39680a4a8e/apps/mcp/src/server.ts#L75-L164
+https://github.com/easonchai/soapay/blob/82c09589b2a88e474c2744c146bdae39680a4a8e/apps/recipient/src/screens/Home.tsx#L31
 ```
 
-Also: the guardrails (caps, allowlist, single-use expiring plans): https://github.com/easonchai/soapay/blob/82c09589b2a88e474c2744c146bdae39680a4a8e/apps/mcp/src/guardrails.ts#L38-L83
+If the field takes more than one link, or in the feedback field:
+
+- Ledger rebuilt from chain data, live balances only: https://github.com/easonchai/soapay/blob/82c09589b2a88e474c2744c146bdae39680a4a8e/packages/sdk/src/scan.ts#L413 and https://github.com/easonchai/soapay/blob/82c09589b2a88e474c2744c146bdae39680a4a8e/packages/sdk/src/scan.ts#L349
+- Consolidation guard: the spend plan and source suggestions: https://github.com/easonchai/soapay/blob/82c09589b2a88e474c2744c146bdae39680a4a8e/packages/sdk/src/guard.ts#L296 and https://github.com/easonchai/soapay/blob/82c09589b2a88e474c2744c146bdae39680a4a8e/packages/sdk/src/guard.ts#L441
+- The Send review that shows the guard's decision: https://github.com/easonchai/soapay/blob/82c09589b2a88e474c2744c146bdae39680a4a8e/apps/recipient/src/screens/GuardDecision.tsx#L43
+- Pay runs that paid you: https://github.com/easonchai/soapay/blob/82c09589b2a88e474c2744c146bdae39680a4a8e/apps/recipient/src/screens/PayRunViews.tsx#L107
+- Exit planner with fee summary and leg timeline (built and fork-tested; hidden on the Base Sepolia demo, D-52): https://github.com/easonchai/soapay/blob/82c09589b2a88e474c2744c146bdae39680a4a8e/apps/recipient/src/screens/Exit.tsx#L69
+- Company-side pay-run history: https://github.com/easonchai/soapay/blob/82c09589b2a88e474c2744c146bdae39680a4a8e/apps/sender/src/pages/HistoryPage.tsx#L38
+- Screenshots: the README's "Screens" section, and `docs/demo-flow.md`
 
 **How easy is it to use (1 to 10)**
 
@@ -138,7 +146,7 @@ We did not use MultiBaas, so we cannot rate it honestly. Leave the field at its 
 **Additional feedback for the sponsor**
 
 ```text
-We did not use MultiBaas, so we have no integration feedback. Our README covers the items your prize asks for: a one-sentence summary at the top, the team with GitHub and X handles at the bottom, setup under "Getting started" and test commands under "Tests". The agent is in apps/mcp, and its README has the live run.
+We did not use MultiBaas, so we have no integration feedback. Our README covers the items your prize asks for: a one-sentence summary at the top, the team with GitHub and X handles at the bottom, setup under "Getting started" and test commands under "Tests". The dashboard is the employee app in apps/recipient, shown in the README's "Screens" section, and the live demo is linked at the top of the README.
 ```
 
 ## Before you submit
