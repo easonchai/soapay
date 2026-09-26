@@ -22,6 +22,7 @@ const hours = (w: QueueWindow) => `${Math.round(w.minMs / 3_600_000)}–${Math.r
  */
 export function QueueList({ groupId }: { groupId?: string }) {
   const q = useQueue();
+  const chainId = useServices().settings.chainId;
   const items = q.pending.filter((i) => i.kind === "spend" && (!groupId || i.groupId === groupId));
   const failed = q.recent.filter((i) => i.kind === "spend" && i.status === "failed" && (!groupId || i.groupId === groupId));
   const sent = groupId ? q.recent.filter((i) => i.groupId === groupId && i.status === "sent") : [];
@@ -32,7 +33,9 @@ export function QueueList({ groupId }: { groupId?: string }) {
     <div className="space-y-2 border-t px-4 py-3 text-sm" data-testid="spend-queue">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="font-medium">
-          Queued · {items.length} {items.length === 1 ? "transfer" : "transfers"}
+          {items.length === 0 && sent.length > 0
+            ? `Sent · ${sent.length} ${sent.length === 1 ? "transfer" : "transfers"}`
+            : `Queued · ${items.length} ${items.length === 1 ? "transfer" : "transfers"}`}
           {next ? <span className="font-normal text-muted-foreground"> · next window {windowTime(next.opensAt)}</span> : null}
         </span>
         {groups.length > 0 && (
@@ -72,7 +75,20 @@ export function QueueList({ groupId }: { groupId?: string }) {
             <span>
               <Addr address={i.from} /> → <Addr address={i.to} /> · {formatUsdc(BigInt(i.amount))} USDC
             </span>
-            <span className="text-xs">sent</span>
+            {i.txHash && explorerTxUrl(chainId, i.txHash) ? (
+              <a
+                className="text-xs underline"
+                href={explorerTxUrl(chainId, i.txHash)}
+                target="_blank"
+                rel="noreferrer"
+                title={i.txHash}
+                data-testid="queue-sent-link"
+              >
+                sent ↗
+              </a>
+            ) : (
+              <span className="text-xs">sent</span>
+            )}
           </li>
         ))}
       </ul>
@@ -207,14 +223,7 @@ export function Spend() {
       {s.step === "queued" && (
         <div className="space-y-4">
           <Card>
-            <CardHeader
-              title={`Queued ${formatUsdc(s.draft.amount)} USDC`}
-              description={
-                <>
-                  to <Addr address={s.draft.to} chars={6} />, one address per window, in random order. Keep the app open, or come back later.
-                </>
-              }
-            />
+            <QueuedHeader groupId={s.groupId} amount={s.draft.amount} to={s.draft.to} />
             <QueueList groupId={s.groupId} />
           </Card>
           <Button variant="outline" onClick={flow.reset}>
@@ -261,5 +270,30 @@ export function Spend() {
         </div>
       )}
     </>
+  );
+}
+
+/** "Queued …" while transfers wait; "Sent …" once every transfer in this send has gone out. */
+function QueuedHeader({ groupId, amount, to }: { groupId?: string; amount: bigint; to: `0x${string}` }) {
+  const q = useQueue();
+  const waiting = q.pending.some((i) => i.kind === "spend" && i.groupId === groupId);
+  return waiting ? (
+    <CardHeader
+      title={`Queued ${formatUsdc(amount)} USDC`}
+      description={
+        <>
+          to <Addr address={to} chars={6} />, one address per window, in random order. Keep the app open, or come back later.
+        </>
+      }
+    />
+  ) : (
+    <CardHeader
+      title={`Sent ${formatUsdc(amount)} USDC`}
+      description={
+        <>
+          to <Addr address={to} chars={6} />. Each transfer links to the block explorer below.
+        </>
+      }
+    />
   );
 }
