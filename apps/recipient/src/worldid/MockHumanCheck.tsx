@@ -35,6 +35,7 @@ export function MockHumanCheck(props: HumanCheckProps) {
   return (
     <HumanCheckFrame
       mode={props.mode}
+      {...(props.compact ? { compact: true } : {})}
       busy={busy}
       {...(props.onCancel ? { onCancel: props.onCancel } : {})}
       onOpen={async () => {

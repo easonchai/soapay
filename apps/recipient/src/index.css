@@ -185,10 +185,10 @@ tr.expanded td {
 
 /* Payments hero. */
 .hero { position: relative; display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; padding: 8px 0 20px; overflow: visible; }
-.hero .text { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.hero .text { position: relative; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .hero .figure { font-size: 36px; }
 .hero .figure.zero { color: var(--ink-disabled); }
-.hero .hero-dots { position: absolute; right: 0; top: -10px; width: 260px; height: 120px; opacity: 0.7; pointer-events: none; }
+.hero .hero-dots { position: absolute; left: 44%; right: auto; top: -6px; width: 240px; height: 110px; opacity: 0.6; pointer-events: none; }
 .hero .actions { position: relative; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
 .share-row { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid var(--accent); background: var(--surface); font-size: 13px; }
 .share-row .value { font-family: var(--mono); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -214,6 +214,7 @@ tr.expanded td {
 .rows-grid .row .v { min-width: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
 .rows-grid .row .v .note { color: var(--ink2); font-size: 12px; }
 .rows-grid .row .v input, .rows-grid .row .v select { width: 100%; }
+.rows-grid .row .v input[type='checkbox'] { width: auto; }
 .rows-grid .row .a { display: flex; gap: 8px; align-items: center; }
 .rows-grid .row .a button { height: 30px; }
 .full { width: 100%; }
@@ -229,3 +230,13 @@ tr.expanded td {
   .legend { grid-template-columns: 1fr; }
   .rows-grid .row { grid-template-columns: 1fr; gap: 8px; }
 }
+/* Rows that just appeared (labels list, ledger rows from the latest scan). */
+li.flash, tr.flash > td { animation: rowflash 1.2s ease-out 1; }
+/* Onboarding polish: designer's seed grid is underlined rows, not boxes; programmatic focus on the h1 draws no ring; choice cards read left-aligned. */
+.seed-card .seed { gap: 0 20px; }
+.seed-card .seed li { border: 0; border-bottom: 1px solid var(--hairline); padding: 8px 0; font-size: 14px; }
+.onb-grid h1:focus, .gate h1:focus { outline: none; box-shadow: none; }
+.choice .opt { text-align: left; justify-content: flex-start; }
+.choice .opt > span { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.onb-grid .opt, .legend .opt { text-align: left; justify-content: flex-start; }
+.onb-grid .opt > span:not(.radio), .legend .opt > span:not(.radio) { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
