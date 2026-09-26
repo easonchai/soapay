@@ -160,6 +160,18 @@ describe("Faucet", () => {
     expect(screen.queryByRole("button")).toBeNull();
   });
 
+  it("compact: one line with the same demo button, or the same ETH-faucet link on Base Sepolia", () => {
+    const { unmount } = render(<Faucet chainId={84532} demo compact usdcBalance={25_000_000_000n} />);
+    expect(screen.getByRole("button", { name: "Get 10,000 test USDC" })).toBeInTheDocument();
+    expect(screen.getByText(/25,000\.00 USDC/)).toBeInTheDocument();
+    expect(screen.getByTestId("faucet")).toHaveClass("faucet-line");
+    unmount();
+    render(<Faucet chainId={84532} demo={false} compact usdcBalance={12_000_000n} />);
+    expect(screen.getByRole("link", { name: /base sepolia eth/i })).toHaveAttribute("href", "https://www.alchemy.com/faucets/base-sepolia");
+    expect(screen.queryByRole("button")).toBeNull();
+    expect(screen.queryByText(/from Soapay/)).toBeNull();
+  });
+
   it("renders nothing on mainnet", () => {
     const { container } = render(<Faucet chainId={8453} demo={false} />);
     expect(container).toBeEmptyDOMElement();

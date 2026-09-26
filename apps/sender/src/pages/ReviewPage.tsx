@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { formatEther } from "viem";
-import { CountUp, Dots, ErrorLine, FreshMark, NavyPanel, Stagger, StaggerItem } from "@soapay/ui";
+import { Bloom, Collapse, CountUp, ErrorLine, FreshMark, NavyPanel, Stagger, StaggerItem } from "@soapay/ui";
 import type { PayPathState, WalletState } from "../hooks/usePayPath.js";
 import type { PayRunState } from "../hooks/usePayRun.js";
 import { USDC_DECIMALS } from "../lib/amount.js";
@@ -28,6 +28,7 @@ export function ReviewPage({ run, plan, wallet, payPath, chainName, testnet = fa
   const [bigRunOk, setBigRunOk] = useState(false);
   const confirmed = !bigTestRun || bigRunOk;
   const [showSafe, setShowSafe] = useState(false);
+  const [showHow, setShowHow] = useState(false);
   const path = payPath.probe?.path;
   const canPay = path?.kind === "batch" || path?.kind === "disperse";
   const sending = run.stage === "executing";
@@ -70,16 +71,35 @@ export function ReviewPage({ run, plan, wallet, payPath, chainName, testnet = fa
           }
         : { h: "Couldn't check your wallet", p: payPath.error ?? "" };
 
+  // One "Before you send" box: every condition that used to be its own Notice, as a list item.
+  const warnings: { key: string; text: string }[] = [];
+  if (plan.smallTeam) warnings.push({ key: "small-team", text: plan.smallTeam });
+  if (!chunk) warnings.push({ key: "denoms-off", text: "Denominated payouts off: every line is a whole salary, readable by coworkers on chain." });
+  if (chunk && remainders > 0) {
+    warnings.push({
+      key: "remainders",
+      text: `${remainders === 1 ? "1 remainder line" : `${remainders} remainder lines`} under ${chunkLabel} USDC stand${remainders === 1 ? "s" : ""} out: paid in full, never carried over.`,
+    });
+  }
+  if (plan.denomStats && plan.denomStats.uniqueAmountCount > 0) {
+    warnings.push({ key: "unique-amounts", text: `${plural(plan.denomStats.uniqueAmountCount, "line amount")} occur only once and can single someone out.` });
+  }
+  for (const m of run.funding?.problems ?? []) warnings.push({ key: `funding:${m}`, text: m });
+  if (wallet.wrongChain) warnings.push({ key: "wrong-chain", text: `Wallet on another chain; it will be asked to switch to ${chainName}.` });
+
   return (
-    <div className="split" style={{ display: "grid", gridTemplateColumns: "420px 1fr", gap: 48, padding: "8px 0" }}>
-      <div className="stack-lg">
+    <div className="review">
+      <div className="stack">
+        <button className="btn-text" style={{ alignSelf: "flex-start", marginLeft: -6 }} onClick={onBack} disabled={sending}>
+          ← Back to edit
+        </button>
         <span className="eyebrow">Review · {run.label.trim() || "pay run"}</span>
         <h1>
           <CountUp value={Number(plan.total) / 10 ** USDC_DECIMALS} format={(n) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} duration={0.8} /> USDC
           to {plural(people.length, "person", "people")}, on {plural(plan.lines.length, "fresh address", "fresh addresses")}.
         </h1>
         <p className="ink2 pretty">
-          {txs === 1 ? "One transaction." : `${txs} transactions from one sorted list.`} Addresses known only to each recipient.{" "}
+          {txs === 1 ? "One transaction." : `${txs} transactions from one sorted list.`}{" "}
           {chunk
             ? `On chain: ${plan.lines.length} payments of about ${chunkLabel} USDC to ${plan.lines.length} strangers.`
             : `On chain: ${plan.lines.length} payments to ${plan.lines.length} strangers.`}
@@ -119,28 +139,31 @@ export function ReviewPage({ run, plan, wallet, payPath, chainName, testnet = fa
             </div>
           </div>
         </NavyPanel>
-        <div className="panel" style={{ padding: "16px 20px" }}>
-          <div style={{ fontWeight: 500 }}>{modeCard.h}</div>
-          {modeCard.p && <p className="ink2 pretty" style={{ marginTop: 4 }}>{modeCard.p}</p>}
+        <div className="panel" style={{ padding: "12px 16px" }}>
+          <div className="between">
+            <span style={{ fontSize: 13, fontWeight: 500 }}>{modeCard.h}</span>
+            {modeCard.p && (
+              <button className="btn-text" style={{ marginRight: -6 }} onClick={() => setShowHow((s) => !s)} aria-expanded={showHow}>
+                {showHow ? "Hide" : "How it pays"}
+              </button>
+            )}
+          </div>
+          <Collapse open={showHow && !!modeCard.p}>
+            <p className="ink2 pretty" style={{ marginTop: 6, fontSize: 13 }}>
+              {modeCard.p}
+            </p>
+          </Collapse>
         </div>
-        {plan.smallTeam && <Notice tone="warn">{plan.smallTeam}</Notice>}
-        {!chunk && (
-          <Notice tone="warn">Denominated payouts off: every line is a whole salary, readable by coworkers on chain.</Notice>
-        )}
-        {chunk && remainders > 0 && (
+        {warnings.length > 0 && (
           <Notice tone="warn">
-            {remainders === 1 ? "1 remainder line" : `${remainders} remainder lines`} under {chunkLabel} USDC stand{remainders === 1 ? "s" : ""} out: paid in full, never carried over.
+            <span className="t">Before you send</span>
+            <ul>
+              {warnings.map((w) => (
+                <li key={w.key}>{w.text}</li>
+              ))}
+            </ul>
           </Notice>
         )}
-        {plan.denomStats && plan.denomStats.uniqueAmountCount > 0 && (
-          <Notice tone="warn">{plural(plan.denomStats.uniqueAmountCount, "line amount")} occur only once and can single someone out.</Notice>
-        )}
-        {run.funding?.problems.map((m) => (
-          <Notice key={m} tone="warn">
-            {m}
-          </Notice>
-        ))}
-        {wallet.wrongChain && <Notice tone="warn">Wallet on another chain; it will be asked to switch to {chainName}.</Notice>}
         {bigTestRun && (
           <Notice tone="warn">
             <span data-testid="testnet-big-run">{bigTestRun}</span>{" "}
@@ -150,33 +173,12 @@ export function ReviewPage({ run, plan, wallet, payPath, chainName, testnet = fa
             </label>
           </Notice>
         )}
-        <Dots mode="diamond" style={{ flex: 1, minHeight: 80, width: "100%" }} />
         <ErrorLine error={run.error} />
-        <div className="actions">
-          <button className="btn-lg" onClick={onBack} disabled={sending}>
-            Back to edit
-          </button>
-          <button className="btn-primary btn-lg" style={{ flex: 1 }} onClick={() => void run.execute()} disabled={sending || !canPay || !confirmed}>
-            {sending ? "Sending… confirm in wallet" : path?.kind === "disperse" ? "Approve and send" : "Sign and send"}
-          </button>
-        </div>
-        <div className="stack-sm">
-          <button className="btn-text" style={{ alignSelf: "flex-start" }} onClick={() => setShowSafe((s) => !s)}>
-            {showSafe ? "Hide Safe export" : "Paying from a Safe? Export instead"}
-          </button>
-          {showSafe && (
-            <div className="actions">
-              <input className="mono" style={{ flex: 1 }} placeholder="Safe address 0x…" value={safe} onChange={(e) => setSafe(e.target.value)} aria-label="Safe address" />
-              <button onClick={() => void run.exportSafe(safe)} disabled={!safe || sending}>
-                Export for Safe
-              </button>
-            </div>
-          )}
-        </div>
       </div>
 
-      <div className="stack-sm" style={{ gap: 12 }}>
-        <div className="between" style={{ alignItems: "baseline" }}>
+      <div className="col-right">
+        <Bloom className="halo" leaving={sending} />
+        <div className="between" style={{ alignItems: "baseline", marginBottom: 12 }}>
           <span style={{ fontWeight: 500 }}>What each person receives</span>
           <span className="ink2">History keeps them for audit; every run derives new ones.</span>
         </div>
@@ -212,6 +214,31 @@ export function ReviewPage({ run, plan, wallet, payPath, chainName, testnet = fa
             </span>
           </div>
         </div>
+      </div>
+
+      {/* Safe export row: full width, directly above the bar, so opening it never moves the actions. */}
+      <div className="safe-row">
+        <Collapse open={showSafe}>
+          <div className="actions">
+            <input className="mono" style={{ flex: 1 }} placeholder="Safe address 0x…" value={safe} onChange={(e) => setSafe(e.target.value)} aria-label="Safe address" />
+            <button onClick={() => void run.exportSafe(safe)} disabled={!safe || sending}>
+              Export for Safe
+            </button>
+          </div>
+        </Collapse>
+      </div>
+
+      <div className="action-bar">
+        <button className="btn-lg" onClick={onBack} disabled={sending}>
+          Back to edit
+        </button>
+        <button className="btn-text" onClick={() => setShowSafe((s) => !s)} aria-expanded={showSafe}>
+          {showSafe ? "Hide Safe export" : "Paying from a Safe? Export instead"}
+        </button>
+        <span className="spacer" />
+        <button className="btn-primary btn-lg" onClick={() => void run.execute()} disabled={sending || !canPay || !confirmed}>
+          {sending ? "Sending… confirm in wallet" : path?.kind === "disperse" ? "Approve and send" : "Sign and send"}
+        </button>
       </div>
     </div>
   );

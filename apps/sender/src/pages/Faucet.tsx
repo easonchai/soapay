@@ -19,9 +19,36 @@ export type FaucetProps = {
   usdcBalance?: bigint | null | undefined;
   /** Demo only: credits the demo wallet. */
   onFaucet?: (() => void) | undefined;
+  /** One line (Pay run rail): "Test USDC · balance · action", no panel and no explainer. */
+  compact?: boolean | undefined;
 };
 
-export function Faucet({ chainId, demo, usdcBalance = null, onFaucet }: FaucetProps) {
+export function Faucet({ chainId, demo, usdcBalance = null, onFaucet, compact = false }: FaucetProps) {
+  if (!demo && !isTestnetChain(chainId)) return null;
+  if (compact) {
+    return (
+      <div className="faucet-line" data-testid="faucet">
+        <span style={{ fontWeight: 500 }}>Test USDC</span>
+        {(demo || usdcBalance !== null) && <span className="mono num">{usdcBalance === null ? "…" : `${usdc(usdcBalance)} USDC`}</span>}
+        {demo ? (
+          <button
+            className="btn-text"
+            style={{ fontSize: 12 }}
+            onClick={() => {
+              onFaucet?.();
+              toast.success(`${DRIP} USDC added`);
+            }}
+          >
+            Get {DRIP} test USDC
+          </button>
+        ) : (
+          <a href={BASE_SEPOLIA_ETH_FAUCET_URL} target="_blank" rel="noreferrer">
+            Base Sepolia ETH for gas ↗
+          </a>
+        )}
+      </div>
+    );
+  }
   if (demo) {
     return (
       <div className="panel panel-pad between" style={{ gap: 12, flexWrap: "wrap" }} data-testid="faucet">
@@ -42,7 +69,6 @@ export function Faucet({ chainId, demo, usdcBalance = null, onFaucet }: FaucetPr
       </div>
     );
   }
-  if (!isTestnetChain(chainId)) return null;
   return (
     <div className="panel panel-pad stack-sm" style={{ gap: 6 }} data-testid="faucet">
       <span style={{ fontWeight: 500 }}>Test USDC</span>

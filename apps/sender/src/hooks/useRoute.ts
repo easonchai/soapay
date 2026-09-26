@@ -1,14 +1,14 @@
-// Minimal hash router (#/roster, #/pay, #/history, #/runs/<id>, #/settings) so any UI
+// Minimal hash router (#/roster, #/pay, #/pay/review, #/history, #/runs/<id>, #/settings) so any UI
 // can deep-link without pulling in a routing library.
 import { useCallback, useEffect, useState } from "react";
 
-export type Route = { page: "roster" } | { page: "pay" } | { page: "history" } | { page: "run"; id: string } | { page: "settings" };
+export type Route = { page: "roster" } | { page: "pay"; view?: "review" } | { page: "history" } | { page: "run"; id: string } | { page: "settings" };
 
 export function parseRoute(hash: string): Route {
   const parts = hash.replace(/^#\/?/, "").split("/").filter(Boolean);
   switch (parts[0]) {
     case "pay":
-      return { page: "pay" };
+      return parts[1] === "review" ? { page: "pay", view: "review" } : { page: "pay" };
     case "history":
       return { page: "history" };
     case "runs":
@@ -21,7 +21,9 @@ export function parseRoute(hash: string): Route {
 }
 
 export function routeHref(r: Route): string {
-  return r.page === "run" ? `#/runs/${encodeURIComponent(r.id)}` : `#/${r.page}`;
+  if (r.page === "run") return `#/runs/${encodeURIComponent(r.id)}`;
+  if (r.page === "pay" && r.view === "review") return "#/pay/review";
+  return `#/${r.page}`;
 }
 
 export function useRoute(): [Route, (r: Route) => void] {
@@ -35,4 +37,10 @@ export function useRoute(): [Route, (r: Route) => void] {
     location.hash = routeHref(r);
   }, []);
   return [route, go];
+}
+
+/** Swap the current hash without adding a history entry (used to leave a view that no longer applies). */
+export function replaceRoute(r: Route): void {
+  history.replaceState(history.state, "", routeHref(r));
+  dispatchEvent(new HashChangeEvent("hashchange"));
 }

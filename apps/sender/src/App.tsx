@@ -8,7 +8,7 @@ import { useStore } from "./hooks/store.js";
 import { usePayPath, useWallet } from "./hooks/usePayPath.js";
 import { usePayRun } from "./hooks/usePayRun.js";
 import { useRoster } from "./hooks/useRoster.js";
-import { useRoute, type Route } from "./hooks/useRoute.js";
+import { replaceRoute, useRoute, type Route } from "./hooks/useRoute.js";
 import { useInvitePolling, useInvites } from "./hooks/useInvites.js";
 import { useHistory, useRunActions } from "./hooks/useRunActions.js";
 import { useRunOnChain } from "./hooks/useRunOnChain.js";
@@ -63,9 +63,9 @@ function realTestnet(app: { chainId: number; demo: boolean }): boolean {
 }
 
 /** Test-USDC affordance for the current chain (demo button, testnet faucet links, nothing on mainnet). */
-function FaucetSlot({ usdcBalance }: { usdcBalance: bigint | null }) {
+function FaucetSlot({ usdcBalance, compact = false }: { usdcBalance: bigint | null; compact?: boolean }) {
   const { app } = useStore();
-  return <Faucet chainId={app.chainId} demo={app.demo} usdcBalance={usdcBalance} onFaucet={() => demoLedger.faucet()} />;
+  return <Faucet chainId={app.chainId} demo={app.demo} usdcBalance={usdcBalance} onFaucet={() => demoLedger.faucet()} compact={compact} />;
 }
 
 function RecipientsContainer({ go, org }: { go(r: Route): void; org: string }) {
@@ -104,13 +104,18 @@ function InvitePoller() {
   return null;
 }
 
-function PayRunContainer({ go, chunk }: { go(r: Route): void; chunk: string }) {
+function PayRunContainer({ go, chunk, review }: { go(r: Route): void; chunk: string; review: boolean }) {
   const { app } = useStore();
   const run = usePayRun();
   const roster = useRoster();
   const wallet = useWallet();
   const payPath = usePayPath();
-  const [editing, setEditing] = useState(false);
+  const planned = Boolean(run.plan) && run.stage === "planned";
+
+  // #/pay/review is only meaningful with a plan in memory (a reload or deep link has none): fall back to the editor.
+  useEffect(() => {
+    if (review && !planned && !run.safeChunks) replaceRoute({ page: "pay" });
+  }, [review, planned, run.safeChunks]);
 
   // A real pay run executes step by step: follow it on the run page (it persists every step).
   useEffect(() => {
@@ -121,8 +126,8 @@ function PayRunContainer({ go, chunk }: { go(r: Route): void; chunk: string }) {
     const id = run.runId;
     return <SafeExportPage chunks={run.safeChunks} onDownload={run.downloadSafeChunk} onOpenRun={() => go({ page: "run", id })} onNewRun={run.reset} />;
   }
-  if (run.plan && run.stage === "planned" && !editing) {
-    return <ReviewPage run={run} plan={run.plan} wallet={wallet} payPath={payPath} chainName={app.chain.name} testnet={realTestnet(app)} onBack={() => setEditing(true)} />;
+  if (review && run.plan && planned) {
+    return <ReviewPage run={run} plan={run.plan} wallet={wallet} payPath={payPath} chainName={app.chain.name} testnet={realTestnet(app)} onBack={() => go({ page: "pay" })} />;
   }
   return (
     <PayRunPage
@@ -135,11 +140,11 @@ function PayRunContainer({ go, chunk }: { go(r: Route): void; chunk: string }) {
       chunk={chunk}
       testnet={realTestnet(app)}
       onOpenSettings={() => go({ page: "settings" })}
-      faucet={<FaucetSlot usdcBalance={payPath.funding?.usdcBalance ?? null} />}
+      faucet={<FaucetSlot usdcBalance={payPath.funding?.usdcBalance ?? null} compact />}
       onReview={(d: Denomination | null) => {
-        setEditing(false);
-        // Re-plans with fresh addresses every time; a plan is never reused.
-        run.preview(d);
+        // Re-plans with fresh addresses every time; a plan is never reused. Review is its own
+        // history entry, so browser Back returns to this editor with the roster intact.
+        if (run.preview(d)) go({ page: "pay", view: "review" });
       }}
     />
   );
@@ -331,7 +336,7 @@ export function App() {
 
   let body: ReactNode;
   if (phase !== "ready") body = <VaultContainer />;
-  else if (route.page === "pay") body = <PayRunContainer go={go} chunk={chunk} />;
+  else if (route.page === "pay") body = <PayRunContainer go={go} chunk={chunk} review={route.view === "review"} />;
   else if (route.page === "history") body = <HistoryContainer go={go} />;
   else if (route.page === "run") body = <RunContainer id={route.id} go={go} />;
   else if (route.page === "settings")

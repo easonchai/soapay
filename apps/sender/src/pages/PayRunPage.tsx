@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import { Bloom, Collapse, CountUp, ErrorLine, NavyPanel, PageHead, Presence, Reveal, Stagger, StaggerItem, Toggle, toast } from "@soapay/ui";
 import { smallTeamWarning } from "@soapay/sdk";
@@ -29,7 +29,7 @@ export type PayRunPageProps = {
   /** Testnet: small example amounts (D-47). */
   testnet?: boolean;
   onOpenSettings?(): void;
-  /** Test-USDC affordance (pages/Faucet.tsx), shown under the total; nothing on mainnet. */
+  /** Test-USDC affordance (pages/Faucet.tsx, compact), last in the rail; nothing on mainnet. */
   faucet?: ReactNode;
 };
 
@@ -104,12 +104,50 @@ export function PayRunPage({ run, roster, wallet, payPath, chainName, onReview, 
     onReview(denomination);
   }
 
-  let reviewLabel = "Review";
-  if (rows.length === 0) reviewLabel = "Review — add recipients first";
-  else if (!checked) reviewLabel = "Review — resolve names first";
-  else if (payable.length === 0) reviewLabel = "Review — nobody is payable";
-  else if (denomError) reviewLabel = "Review — fix chunk size";
-  const canReview = checked && payable.length > 0 && !denomError && !verifying;
+  // A short "Names resolved" beat on the primary button once verification finishes (900 ms).
+  const [justResolved, setJustResolved] = useState(false);
+  const wasVerifying = useRef(false);
+  const resolvedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (wasVerifying.current && !verifying && checked) {
+      setJustResolved(true);
+      if (resolvedTimer.current) clearTimeout(resolvedTimer.current);
+      resolvedTimer.current = setTimeout(() => setJustResolved(false), 900);
+    }
+    wasVerifying.current = verifying;
+  }, [verifying, checked]);
+  useEffect(
+    () => () => {
+      if (resolvedTimer.current) clearTimeout(resolvedTimer.current);
+    },
+    [],
+  );
+
+  const executing = run.stage === "executing";
+  // ONE stepped primary action: Add recipients → Resolve names → (Names resolved) → Review N lines.
+  // `key` drives the label morph and stays put while the progress counter ticks.
+  const primary: { key: string; label: ReactNode; disabled: boolean; onClick?: () => void } = (() => {
+    if (rows.length === 0) return { key: "add", label: "Add recipients", disabled: true };
+    if (verifying) return { key: "resolving", label: run.progress ? `Resolving ${run.progress.done}/${run.progress.total}…` : "Resolving…", disabled: true };
+    if (justResolved) {
+      return {
+        key: "resolved",
+        disabled: true,
+        label: (
+          <>
+            Names resolved
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true" style={{ marginLeft: 6, verticalAlign: -2 }}>
+              <path d="M3 8.5l3 3 7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </>
+        ),
+      };
+    }
+    if (!checked) return { key: "resolve", label: "Resolve names", disabled: executing, onClick: () => void run.verify() };
+    if (payable.length === 0) return { key: "nobody", label: "Nobody payable", disabled: true };
+    if (denomError) return { key: "chunk", label: "Fix chunk size", disabled: true };
+    return { key: "review", label: `Review ${plural(preview.lines, "line")}`, disabled: executing, onClick: review };
+  })();
 
   const summary = (() => {
     if (rows.length === 0) return "Add recipients, or paste rows.";
@@ -119,7 +157,6 @@ export function PayRunPage({ run, roster, wallet, payPath, chainName, onReview, 
     }
     const other = blocked.filter((r) => r.payability && !r.payability.payable && r.payability.reason === "error");
     if (other.length) parts.push(`${plural(other.length, "name")} failed to resolve; left out.`);
-    if (!checked && !verifying) parts.push("Resolve names to continue.");
     return parts.join(" ");
   })();
 
@@ -288,76 +325,10 @@ export function PayRunPage({ run, roster, wallet, payPath, chainName, onReview, 
           </div>
           <div className="between">
             <span className="ink2 pretty">{summary}</span>
-            <button className="btn" onClick={() => void run.verify()} disabled={verifying || rows.length === 0 || run.stage === "executing"}>
-              {run.progress ? `Resolving ${run.progress.done}/${run.progress.total}…` : checked ? "Resolve again" : "Resolve names"}
-            </button>
           </div>
         </div>
 
-        <div className="stack">
-          <label className="field">
-            <span>Run label (optional)</span>
-            <input
-              value={run.label}
-              maxLength={MAX_RUN_LABEL}
-              placeholder="September payroll"
-              aria-label="Run label"
-              onChange={(e) => run.setLabel(e.target.value)}
-            />
-          </label>
-          <div className="panel panel-pad stack">
-            <div className="between">
-              <span style={{ fontWeight: 500 }}>Denominated payouts</span>
-              <Toggle on={denomOn} onChange={setDenomOn} label="Denominated payouts" />
-            </div>
-            <p className="ink2 pretty">Same-size chunks for every salary, so on-chain amounts identify nobody. Costs more gas.</p>
-            {!denomOn && (
-              <span className="st-warn">Off for this run: each line is a whole salary, readable by coworkers.</span>
-            )}
-            <div style={{ borderTop: "1px solid var(--hairline)", paddingTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
-              <div className="between num" style={{ fontSize: 12 }}>
-                <span style={{ fontFamily: "var(--sans)" }} className="ink2">
-                  Chunk size
-                </span>
-                <span style={{ whiteSpace: "nowrap" }}>
-                  {denomOn && !denomError ? `${trimZeros(chunk)} USDC` : "—"}
-                  {onOpenSettings && (
-                    <button className="btn-text" style={{ marginLeft: 6, fontSize: 12 }} onClick={onOpenSettings}>
-                      Change
-                    </button>
-                  )}
-                </span>
-              </div>
-              <div className="between num" style={{ fontSize: 12 }}>
-                <span style={{ fontFamily: "var(--sans)" }} className="ink2">
-                  Remainder
-                </span>
-                <span style={{ fontFamily: "var(--sans)" }}>{denomOn ? "one smaller final line, exact wage" : "—"}</span>
-              </div>
-              <div className="between num" style={{ fontSize: 12 }}>
-                <span style={{ fontFamily: "var(--sans)" }} className="ink2">
-                  Recipients
-                </span>
-                <span>{payable.length}</span>
-              </div>
-              <div className="between num" style={{ fontSize: 12 }}>
-                <span style={{ fontFamily: "var(--sans)" }} className="ink2">
-                  Lines
-                </span>
-                <span>
-                  <CountUp value={preview.lines} format={(n) => String(Math.round(n))} duration={0.35} />
-                </span>
-              </div>
-              <div className="between num" style={{ fontSize: 12 }}>
-                <span style={{ fontFamily: "var(--sans)" }} className="ink2">
-                  Transactions (≤350 lines each)
-                </span>
-                <span>{preview.txCount}</span>
-              </div>
-            </div>
-            {denomError && <span className="st-warn">{denomError}</span>}
-          </div>
-
+        <aside className="rail">
           <NavyPanel>
             <span className="label">Total · {plural(payable.length, "recipient")}</span>
             <span className="amount">
@@ -366,24 +337,90 @@ export function PayRunPage({ run, roster, wallet, payPath, chainName, onReview, 
             </span>
             <div className="rows rule">
               <div>
-                <span className="k">Wallet balance after</span>
+                <span className="k">Lines</span>
+                <span>
+                  <CountUp value={preview.lines} format={(n) => String(Math.round(n))} duration={0.35} />
+                </span>
+              </div>
+              <div>
+                <span className="k">Transactions</span>
+                <span title="≤350 lines each">{preview.txCount}</span>
+              </div>
+              <div>
+                <span className="k">Wallet after</span>
                 <span>{balance === null ? "…" : `${usdc(balance - preview.total < 0n ? 0n : balance - preview.total)} USDC`}</span>
               </div>
             </div>
           </NavyPanel>
-          {faucet}
+
+          <div className="panel compact">
+            <div className="between">
+              <span style={{ fontSize: 13, fontWeight: 500 }}>Denominated payouts</span>
+              <Toggle on={denomOn} onChange={setDenomOn} label="Denominated payouts" />
+            </div>
+            {!denomOn ? (
+              <span className="st-warn">Off for this run: each line is a whole salary, readable by coworkers.</span>
+            ) : denomError ? (
+              <span className="st-warn">{denomError}</span>
+            ) : (
+              <>
+              <div className="line">
+                <span>
+                  <span className="num">{`${trimZeros(chunk)} USDC`}</span> chunks
+                </span>
+                {onOpenSettings && (
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <button className="btn-text" style={{ fontSize: 12, height: 20 }} onClick={onOpenSettings}>
+                      Change
+                    </button>
+                  </>
+                )}
+              </div>
+              <span className="hint">Remainder: one smaller final line, exact wage.</span>
+              </>
+            )}
+          </div>
+
+          <label className="field">
+            <span>Run label (optional)</span>
+            <input
+              className="slim"
+              value={run.label}
+              maxLength={MAX_RUN_LABEL}
+              placeholder="September payroll"
+              aria-label="Run label"
+              onChange={(e) => run.setLabel(e.target.value)}
+            />
+          </label>
+
           {!enough && <Notice tone="warn">Wallet USDC below the total. A Safe export pays from the Safe.</Notice>}
           {smallTeam && <Notice tone="warn">{smallTeam}</Notice>}
 
-          <button className="btn-primary btn-lg" onClick={review} disabled={!canReview} style={{ position: "relative", overflow: "hidden" }}>
+          <button
+            className={`btn-primary btn-xl full${primary.disabled ? "" : " pulse"}`}
+            data-testid="pay-primary"
+            onClick={primary.onClick}
+            disabled={primary.disabled}
+            style={{ position: "relative", overflow: "hidden" }}
+          >
             <Presence mode="wait" initial={false}>
-              <motion.span key={reviewLabel} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.16 }}>
-                {reviewLabel}
+              <motion.span key={primary.key} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.16 }}>
+                {primary.label}
               </motion.span>
             </Presence>
           </button>
+          <div className="status">
+            <span>{rows.length === 0 ? "No recipients yet." : checked ? `${payable.length} payable · resolved` : `${plural(payable.length, "recipient")} · resolve to continue`}</span>
+            {checked && !verifying && (
+              <button className="btn-text" style={{ fontSize: 12 }} onClick={() => void run.verify()} disabled={executing}>
+                Resolve again
+              </button>
+            )}
+          </div>
           <p className="hint">Sending from {wallet.address ? short(wallet.address) : "your wallet"}.</p>
-        </div>
+          {faucet}
+        </aside>
       </div>
     </div>
   );

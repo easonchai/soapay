@@ -73,7 +73,8 @@ export type PayRunState = {
   label: string;
   setLabel(label: string): void;
   verify(): Promise<void>;
-  preview(denomination: Denomination | null): void;
+  /** Derives the plan and moves to `planned`; returns it, or null when planning failed (error is set). */
+  preview(denomination: Denomination | null): RunPlan | null;
   execute(): Promise<void>;
   exportSafe(safeAddress: string): Promise<void>;
   downloadSafeChunk(index: number): void;
@@ -141,8 +142,10 @@ export function usePayRun(): PayRunState {
         setPlan(p);
         setStage("planned");
         payPath.refresh();
+        return p;
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
+        return null;
       }
     },
     [rows, payPath],

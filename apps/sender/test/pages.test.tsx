@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach } from "vitest";
 afterEach(cleanup);
 import type { Address } from "viem";
@@ -132,8 +132,63 @@ describe("Pay run screen (CK design on our hooks)", () => {
     expect(screen.getByText("5 USDC")).toBeInTheDocument();
   });
 
-  it("needs a Resolve before Review", () => {
-    render(<PayRunPage run={run()} roster={roster([emp("alice")])} wallet={wallet} payPath={payPath} chainName="Base Sepolia" onReview={() => undefined} onOpenRecipients={() => undefined} />);
-    expect(screen.getByRole("button", { name: /Review — resolve names first/ })).toBeDisabled();
+  it("one primary button steps from Resolve names to Review", () => {
+    const verify = vi.fn(noop);
+    const { unmount } = render(
+      <PayRunPage run={run({ verify })} roster={roster([emp("alice")])} wallet={wallet} payPath={payPath} chainName="Base Sepolia" onReview={() => undefined} onOpenRecipients={() => undefined} />,
+    );
+    const primary = screen.getByTestId("pay-primary");
+    expect(primary).toHaveTextContent("Resolve names");
+    expect(primary).toBeEnabled();
+    fireEvent.click(primary);
+    expect(verify).toHaveBeenCalledTimes(1);
+    // The old footer Resolve button is gone: one primary action, and no "Resolve again" before a first resolve.
+    expect(screen.queryByRole("button", { name: "Resolve again" })).toBeNull();
+    unmount();
+
+    const onReview = vi.fn();
+    const alice = emp("alice");
+    render(
+      <PayRunPage
+        run={run({ stage: "verified", rows: [{ employee: alice, check: undefined, payability: { payable: true } }] })}
+        roster={roster([alice])}
+        wallet={wallet}
+        payPath={payPath}
+        chainName="Base Sepolia"
+        onReview={onReview}
+        onOpenRecipients={() => undefined}
+      />,
+    );
+    const review = screen.getByTestId("pay-primary");
+    expect(review).toHaveTextContent(/^Review \d+ lines?/);
+    expect(review).toBeEnabled();
+    fireEvent.click(review);
+    expect(onReview).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Resolve again" })).toBeInTheDocument();
+  });
+
+  it("shows Names resolved for a beat when verification finishes, then steps to Review", async () => {
+    const alice = emp("alice");
+    const verifying = run({ stage: "verifying", progress: { done: 0, total: 1 } });
+    const { rerender } = render(
+      <PayRunPage run={verifying} roster={roster([alice])} wallet={wallet} payPath={payPath} chainName="Base Sepolia" onReview={() => undefined} onOpenRecipients={() => undefined} />,
+    );
+    const primary = screen.getByTestId("pay-primary");
+    expect(primary).toHaveTextContent("Resolving 0/1…");
+    expect(primary).toBeDisabled();
+
+    const verified = run({ stage: "verified", rows: [{ employee: alice, check: undefined, payability: { payable: true } }] });
+    rerender(<PayRunPage run={verified} roster={roster([alice])} wallet={wallet} payPath={payPath} chainName="Base Sepolia" onReview={() => undefined} onOpenRecipients={() => undefined} />);
+    await waitFor(() => expect(screen.getByTestId("pay-primary")).toHaveTextContent("Names resolved"));
+    expect(screen.getByTestId("pay-primary")).toBeDisabled();
+    await waitFor(() => expect(screen.getByTestId("pay-primary")).toHaveTextContent(/^Review \d+ lines?/), { timeout: 3000 });
+    expect(screen.getByTestId("pay-primary")).toBeEnabled();
+  });
+
+  it("disables the primary button with a reason when nothing can be sent", () => {
+    render(<PayRunPage run={run()} roster={roster([])} wallet={wallet} payPath={payPath} chainName="Base Sepolia" onReview={() => undefined} onOpenRecipients={() => undefined} />);
+    const primary = screen.getByTestId("pay-primary");
+    expect(primary).toHaveTextContent("Add recipients");
+    expect(primary).toBeDisabled();
   });
 });
