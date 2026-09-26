@@ -1,0 +1,30 @@
+# Deploys the api and web services to Railway (project "soapay", production) on every push to main.
+# Railway's own GitHub integration can't see this repo, so CI uploads the checked-out commit instead.
+# Nobody deploys by hand: merge to main and this runs. Needs the RAILWAY_TOKEN repo secret
+# (a Railway *project* token for the production environment).
+name: Deploy to Railway
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: railway-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [api, web]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the Railway CLI
+        run: npm install -g @railway/cli
+      - name: Deploy ${{ matrix.service }}
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: railway up --service ${{ matrix.service }} --ci
