@@ -208,7 +208,7 @@ export function Hero({
   onScan: () => void;
   onFullScan: () => void;
   /** Omitted where the exit isn't offered (testnet mock USDC, D-52). */
-  onExit?: () => void;
+  onExit?: (() => void) | undefined;
   children?: ReactNode;
 }) {
   const zero = total === 0n;
