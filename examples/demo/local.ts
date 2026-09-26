@@ -20,16 +20,35 @@ export type DemoLocal = {
   agent: { label: string; phrase: string };
 };
 
-export function loadOrCreateLocal(): DemoLocal {
-  if (existsSync(LOCAL_FILE)) return JSON.parse(readFileSync(LOCAL_FILE, "utf8")) as DemoLocal;
-  const local: DemoLocal = {
-    holders: HOLDER_LABELS.map((label) => ({ label, phrase: generateMnemonic() })),
-    rawHolder: { id: "dana", phrase: generateMnemonic() },
-    agent: { label: AGENT_LABEL, phrase: generateMnemonic() },
-  };
-  writeFileSync(LOCAL_FILE, `${JSON.stringify(local, null, 2)}\n`, { mode: 0o600 });
+/** Demo employees for the World ID recovery beat (scripts/demo-setup-recovery.ts). */
+export type RecoveryEntry = { label: string; phrase: string };
+
+/** The whole file, whatever other scripts keep in it. Empty object when it doesn't exist. */
+export function readLocalRaw(): Record<string, unknown> {
+  return existsSync(LOCAL_FILE) ? (JSON.parse(readFileSync(LOCAL_FILE, "utf8")) as Record<string, unknown>) : {};
+}
+
+/** Writes the whole file, mode 0600. Callers merge into readLocalRaw() so other entries survive. */
+export function writeLocalRaw(data: Record<string, unknown>): void {
+  writeFileSync(LOCAL_FILE, `${JSON.stringify(data, null, 2)}\n`, { mode: 0o600 });
   chmodSync(LOCAL_FILE, 0o600);
-  return local;
+}
+
+export function loadOrCreateLocal(): DemoLocal {
+  // Fill in whatever is missing (the file may have been created by another demo script), keep the rest.
+  const raw = readLocalRaw() as Partial<DemoLocal> & Record<string, unknown>;
+  let changed = false;
+  if (!Array.isArray(raw.holders)) (raw.holders = HOLDER_LABELS.map((label) => ({ label, phrase: generateMnemonic() }))), (changed = true);
+  if (!raw.rawHolder) (raw.rawHolder = { id: "dana", phrase: generateMnemonic() }), (changed = true);
+  if (!raw.agent) (raw.agent = { label: AGENT_LABEL, phrase: generateMnemonic() }), (changed = true);
+  if (changed) writeLocalRaw(raw);
+  return raw as DemoLocal;
+}
+
+/** Recovery-beat entries (label → phrase). */
+export function recoveryEntries(): RecoveryEntry[] {
+  const r = readLocalRaw().recovery;
+  return Array.isArray(r) ? (r as RecoveryEntry[]) : [];
 }
 
 export const metaOf = (phrase: string) => keysFromMnemonic(phrase).metaAddressURI;

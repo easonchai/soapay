@@ -119,6 +119,30 @@ The Convert tab is gone from the employee app (the Uniswap bounty is no longer t
 - **Pre-staged:** the session attached at enrollment (past the 72 h cooldown if it was attached later); the simulator open and logged in.
 - **Fallback:** if the simulator stalls past 10 s, cancel and show [s13](demo-screens/s13-sender-rotation-status.png) (the attested vs blocked pills), or run the sender's mock "Rotate keys (World ID attested)" on the localhost fallback.
 
+## Recovery beat: a stolen phrase can't redirect pay (World ID account recovery)
+
+Two employees, same company. **alex-demo** lost a device and recovers with World ID: the payer's app follows. **sam-demo**'s recovery phrase was stolen: the thief rewrites sam's ENS record on-chain, but the payer's app blocks the line. Code: `scripts/demo-attacker.ts`, `scripts/demo-setup-recovery.ts`, `scripts/demo-recovery-check.ts` (D-55). Phrases live only in the git-ignored `scripts/.demo-recipients.local.json`; nothing prints a phrase or key.
+
+**Before the demo** (from the repo root of the main checkout, after `pnpm install && pnpm build`):
+
+1. `pnpm demo:setup-recovery` claims `sam-demo.soapay.eth` through the live API (idempotent; prints names and addresses only).
+2. **alex-demo, manual:** in the employee app (https://soapay.up.railway.app/app/), create a new account, claim `alex-demo`, and on Recovery **link World ID with the World App at enrollment** (don't skip it). A session attached *later* can only back a rotation after the 72 h cooldown (`attach_cooldown_seconds` on `GET /api/worldid/config`), so a same-day demo needs the session at enrollment. The setup script doesn't create alex for this reason, and it can't fake the World App.
+3. In the company app, **Recipients** → add `sam-demo.soapay.eth` and `alex-demo.soapay.eth` (resolve and pin).
+4. Optional rehearsal, no browser: `pnpm demo:recovery-check` pins sam, runs the attacker, asserts **blocked (meta changed, no valid attestation)** with the SDK and `soapay distribute`, then restores (≈ 2 min, live txs).
+5. Hijack sam beforehand: `pnpm demo:attacker sam-demo` (~15 s: ENS `setText` on Sepolia + ERC-6538 on Base Sepolia, then the API refusal). Or keep it for the stage. `DEMO_DRY=1` shows the plan without sending.
+
+**On stage** (≈ 30 s):
+
+- **alex (employee app):** Name → **Rotate to new keys** → World ID in the World App → "Keys rotated … with a World ID attestation". **Company app:** Recipients → **Re-verify all** → alex shows **Re-verified by World ID**.
+- **sam (terminal, if not done beforehand):** `pnpm demo:attacker sam-demo`. Read the summary line: "Record rewritten on-chain ✓. Attestation: refused (no_session). At the next pay run, the company app will block sam-demo's line." Open the Etherscan link: the record really changed.
+- **Company app:** **Re-verify all** → sam shows **Blocked · record changed**. A pay run won't pay sam until the employer checks with sam by hand.
+- **Say:** "Same key, same power over the ENS record. The difference is the human: alex proved it in the World App, the thief can't. The payer follows only the human."
+- **Honest line (say it if asked):** World ID protects **future** salary. A stolen phrase can still spend what sam has already received; that's what the recovery kit's safety is for (keep the phrase offline; move funds and rotate as soon as a leak is suspected).
+
+**After:** `pnpm demo:attacker sam-demo --restore` puts sam's own keys back (same registrant key), so the beat can be re-run. Then Re-verify in the company app shows sam OK again (the pin never moved).
+
+Env for the scripts: `API_URL` (default the Railway API), `ENS_RPC_URL`, `RPC_URL`, `SOAPAY_DEMO_FILE` (phrase file), `SOAPAY_ENV_ROOT` (where the git-ignored `contracts/.env` and `apps/api/.env` live, for the gas top-ups; defaults to the checkout). The stolen registrant needs a little gas: the attacker tops it up with just the shortfall from the `soapay.eth` owner (Sepolia) and the deployer (Base Sepolia), printing addresses only. A real thief brings their own gas.
+
 ## UI vs SDK
 
 The demo is UI-only: judges follow a person, not a library. The SDK appears in **at most one beat**, and only as a sentence plus one frame. Say "every screen you saw calls `@soapay/sdk`; so does this agent" over a 5-second terminal clip of the MCP server (`resolve_name` on `mcp-agent-7c1e.soapay.eth`, or `whoami`). That clip replaces the last 5 s of Beat 7 if there's time. Otherwise it goes on the closing slide, with the repo link. If the terminal beat (Beat 4b) runs, it *is* the SDK beat: skip this clip. Don't live-code, and don't show the SDK anywhere a screen already shows the same thing.
