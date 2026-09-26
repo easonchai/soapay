@@ -16,6 +16,8 @@ apps/mcp/.state/
 # Demo secrets and state (scripts/demo-pluggable.sh)
 scripts/*.local.json
 scripts/*.local.env
+scripts/*.local.csv
+scripts/*.local.txt
 scripts/.demo-state/
 # soapay distribute meta-address pins (next to each CSV)
 .soapay/
