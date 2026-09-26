@@ -24,8 +24,9 @@ export default defineConfig({
         "@fontsource/ibm-plex-mono/400.css",
         "./src/styles/soapay.css",
       ],
-      // Light by default, like the apps (Starlight's own provider follows the OS scheme).
-      components: { ThemeProvider: "./src/components/ThemeProvider.astro" },
+      // Light by default, like the apps (Starlight's own provider follows the OS scheme), and the
+      // splash hero carries the landing page's dot fields, address scramble and reveals.
+      components: { ThemeProvider: "./src/components/ThemeProvider.astro", Hero: "./src/components/Hero.astro" },
       social: [{ icon: "github", label: "GitHub", href: GITHUB }],
       editLink: { baseUrl: `${GITHUB}/edit/main/apps/docs/` },
       lastUpdated: true,

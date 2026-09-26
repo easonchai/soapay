@@ -22,6 +22,8 @@
   --soapay-line-strong: #3a4656;
   --soapay-accent-soft: #1f3552;
   --soapay-on-accent: #0b0f14;
+  /* dot-field colour for the splash hero canvases, "r,g,b" (the dark accent) */
+  --soapay-dots: 143,179,227;
 }
 :root[data-theme="light"] {
   /* light palette: navy accent on a white canvas */
@@ -45,6 +47,7 @@
   --soapay-line-strong: #b8c0cb;
   --soapay-accent-soft: #e4eefa;
   --soapay-on-accent: #ffffff;
+  --soapay-dots: 30,58,95;
 }
 
 /* Type: a touch smaller than Starlight's default, tight headings like the app (600, negative tracking). */
@@ -143,6 +146,79 @@ header.header {
 }
 .hero .sl-flex.actions {
   justify-content: center;
+}
+
+/* Hero effects (src/components/Hero.astro): the landing page's two diamond dot fields flank the copy
+   (packages/ui styles.css .land-hero .dots), a mono eyebrow carries the scrambling fresh address, and
+   the copy fades up in a stagger. Dots hide on narrow screens, like the landing. */
+.hero[class] {
+  position: relative;
+  overflow: hidden;
+  min-height: 24rem;
+}
+.hero .sl-flex.stack {
+  position: relative;
+}
+.hero .sl-dots {
+  position: absolute;
+  top: 50%;
+  width: 360px;
+  height: 360px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.hero .sl-dots.l {
+  left: -100px;
+}
+.hero .sl-dots.r {
+  right: -100px;
+}
+@media (max-width: 72rem) {
+  .hero .sl-dots {
+    display: none;
+  }
+}
+.hero-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0 0 0.25rem;
+  font-family: var(--sl-font-mono);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--sl-color-accent);
+}
+.hero-eyebrow .hero-addr {
+  font: inherit;
+  padding: 0.3em 0.5em;
+  border-radius: 2px;
+  background: var(--soapay-accent-soft);
+  color: var(--sl-color-accent);
+  min-width: 8.5ch;
+  text-align: center;
+}
+@keyframes hero-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.hero .reveal {
+  animation: hero-reveal 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation-delay: var(--d, 0s);
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero .reveal {
+    animation: none;
+  }
+}
+html[data-motion="off"] .hero .reveal {
+  animation: none;
 }
 
 /* Card icons use the app's soft accent chip, not Starlight's orange. */
