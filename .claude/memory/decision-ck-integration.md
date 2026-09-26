@@ -12,4 +12,7 @@ Owner decisions, 2026-09-26. Precedence: **PRD → recorded design/architecture 
 - **Backend:** fold CK's `apps/gateway` `POST /relay` into `apps/api` as a compatible route (same request shape; one relayer key and nonce sequence; idempotency and receipts), then delete `apps/gateway`.
 - **Names:** our ENSv2 `*.soapay.eth` issuance plus invites replace CK's "link an existing addr" step.
 
+- **Clash 1 (owner, 2026-09-26):** rotation for signature-derived accounts means **moving to a recovery-phrase account** (new keys → exit or move funds → rotate the name via the normal route).
+- **Clash 2:** the sender pay run is **roster only** (pinned, verified ENS names). Pasting only bulk-imports into the roster; raw meta-addresses and plain addresses are rejected.
+- After the clashes are resolved: merge `integrate-ck` → `yudhishthra`, push, and redeploy Railway.
 **How to apply:** any clash not covered here goes to the owner; don't guess.
