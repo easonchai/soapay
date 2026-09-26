@@ -330,7 +330,7 @@ describe("guard-writer and revoke builders", () => {
 
 type Sent = { to: Address; data: Hex };
 
-function fakeClients(opts: { isIssuer?: boolean; status?: number; resource?: bigint; existingCode?: boolean } = {}) {
+function fakeClients(opts: { isIssuer?: boolean; status?: number; resource?: bigint; existingCode?: boolean; stealth?: string } = {}) {
   const sent: Sent[] = [];
   const account = privateKeyToAccount(`0x${"11".repeat(32)}`);
   const walletClient: EnsV2Writer = {
@@ -350,6 +350,10 @@ function fakeClients(opts: { isIssuer?: boolean; status?: number; resource?: big
           return opts.isIssuer ?? true;
         case "getState":
           return { status: opts.status ?? REGISTRY_STATUS.AVAILABLE, expiry: 0n, latestOwner: REGISTRANT, tokenId: 1n, resource: opts.resource ?? 9n };
+        case "getResolver":
+          return "0x00000000000000000000000000000000000000Re".replace("Re", "e1");
+        case "text":
+          return opts.stealth ?? "";
         default:
           throw new Error(`unexpected read ${functionName}`);
       }
@@ -406,6 +410,18 @@ describe("createEnsV2NameIssuer", () => {
     const res = await issuer.issue({ label: "alice", registrant: REGISTRANT, metaAddress: META_1 });
     expect(sent).toHaveLength(1);
     expect(res.resolverTxHash).toBeUndefined();
+  });
+
+  it("finishes a claim an interrupted request already issued (same registrant, same meta-address)", async () => {
+    const done = fakeClients({ status: REGISTRY_STATUS.REGISTERED, stealth: META_1 });
+    const res = await createEnsV2NameIssuer({ ...done, registry: REGISTRY, resolverAdmin: PARENT_ADMIN }).issue({
+      label: "alice",
+      registrant: REGISTRANT,
+      metaAddress: META_1,
+    });
+    expect(res.recovered).toBe(true);
+    expect(res.txHash).toBeUndefined();
+    expect(done.sent).toHaveLength(0);
   });
 
   it("refuses taken names, non-issuers and bad input", async () => {

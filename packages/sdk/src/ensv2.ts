@@ -30,6 +30,7 @@ import {
   getAddress,
   getContractAddress,
   isAddress,
+  isAddressEqual,
   keccak256,
   labelhash,
   namehash,
@@ -46,6 +47,7 @@ import {
 import { normalize, packetToBytes } from "viem/ens";
 import { sepolia } from "viem/chains";
 import { formatMetaAddressURI } from "./keys.js";
+import { resolverRecordsAbi } from "./abis.js";
 import { PARENT_NAME, TEXT_KEY_REGISTRANT, TEXT_KEY_STEALTH } from "./constants.js";
 
 // ---------------------------------------------------------------------------
@@ -643,8 +645,13 @@ export type IssueArgs = {
 };
 
 export type IssueResult = {
-  /** The `register` transaction (the name exists once it is mined). */
-  txHash: Hex;
+  /**
+   * The `register` transaction (the name exists once it is mined). Absent when `recovered`: the name
+   * was already issued to this registrant with this meta-address by an earlier, interrupted attempt.
+   */
+  txHash?: Hex;
+  /** True when an earlier attempt had already issued exactly this name; nothing was sent. */
+  recovered?: true;
   /** The resolver deployment transaction, if one was sent. */
   resolverTxHash?: Hex;
   name: string;
@@ -722,7 +729,23 @@ export function createEnsV2NameIssuer(opts: {
 
       const { registry, admin, proxyLogic } = await loadSetup();
       const state = await getRegistryState(opts.publicClient, registry, label);
-      if (state.status !== REGISTRY_STATUS.AVAILABLE) throw new Error(`Soapay ENSv2: ${name} is already taken`);
+      if (state.status !== REGISTRY_STATUS.AVAILABLE) {
+        // An interrupted earlier attempt (e.g. the API restarted mid-request) may have issued exactly
+        // this name. Same registrant and same stealth record = the same claim: finish it idempotently.
+        if (state.status === REGISTRY_STATUS.REGISTERED && isAddressEqual(state.latestOwner, registrant)) {
+          const resolver = (await opts.publicClient.readContract({
+            address: registry,
+            abi: permissionedRegistryAbi,
+            functionName: "getResolver",
+            args: [label],
+          })) as Address;
+          const stealth = (await opts.publicClient
+            .readContract({ address: resolver, abi: resolverRecordsAbi, functionName: "text", args: [namehash(name), TEXT_KEY_STEALTH] })
+            .catch(() => "")) as string;
+          if (stealth && stealth.toLowerCase() === metaAddress.toLowerCase()) return { recovered: true, name, resolver, registry };
+        }
+        throw new Error(`Soapay ENSv2: ${name} is already taken`);
+      }
 
       const deploy = buildDeployNameResolverCall({
         name,
