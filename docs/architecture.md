@@ -239,6 +239,32 @@ sequenceDiagram
 
 Fees are roughly fixed per leg, so the Exit screen shows the whole cost and "you receive ≈ X of Y" before starting (D-48). On testnet the relayer charges about 21.5 USDC per withdrawal, so small exits withdraw directly, with the destination paying a little Sepolia ETH.
 
+### 7. Use a dApp from one payment address (WalletConnect, D-61)
+
+The employee app is also a WalletConnect wallet (Reown WalletKit), so a salary address can use Aave, Morpho or any other dApp directly, gaslessly, without first moving the money to a wallet that would link it.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant D as dApp
+  participant WC as WalletConnect relay
+  participant R as Employee app
+  participant X as Stealth address
+  D->>WC: session proposal (wc: link pasted into the app)
+  R->>WC: approve with ONE stealth address, active chain only
+  D->>WC: eth_sendTransaction / wallet_sendCalls / personal_sign / eth_signTypedData_v4
+  R->>R: approval sheet: decoded calls + privacy guard (checkDappPrivacy)
+  R->>X: one userOp (7702 + paymaster), same path as Send
+  R-->>D: real tx hash (after inclusion), or an EIP-5792 bundle id
+```
+
+- **One address per session.** The session namespace carries exactly one account (`buildSessionNamespaces`), and every request re-checks it (`sessionAccount`); a session with two addresses is refused. A dApp never sees a second payment address.
+- **Where the logic lives.** Signing, call decoding and the privacy check are in the SDK (`packages/sdk/src/dapp.ts`: `signMessageAsStealth`, `signTypedDataAsStealth`, `decodeDappCall`, `checkDappPrivacy`, `waitForStealthExecution`); execution is the SDK's `executeFromStealth`. The app only routes requests (`apps/recipient/src/features/walletconnect/`).
+- **Privacy guard.** ERC-20 transfers in the calls go through `planSpend` exactly like Send. Any other place the request names an address (Aave's `onBehalfOf`, a typed-data field, a signed message) is matched against your other stealth addresses and every identifiable address; a match blocks until you tick the override. Transfers you approve are recorded as guard links.
+- **No ETH.** Stealth addresses hold none, so any request with `value` is refused. `eth_sign` and `eth_signTransaction` are refused too.
+- **Gas.** Base mainnet: Circle paymaster, fee in USDC from the address, any target. Base Sepolia: the API's `/paymaster` only sponsors allow-listed targets (pay token, Permit2, Universal Router, StealthDisperse, Announcer). A dApp contract works there only after the operator adds it to `PAYMASTER_EXTRA_TARGETS` (an explicit opt-in that already exists; nothing was widened).
+- **Leaks this doesn't hide.** The dApp learns the one address and everything it does. WalletConnect's session store (IndexedDB, outside the encrypted vault) records which address is connected to which dApp. The relay sees the browser's IP, like the RPC and bundler (out of scope for v1).
+
 ## What each piece stores, and why
 
 ### An employee's ENS name (`alice.soapay.eth`, ENSv2 on Sepolia)

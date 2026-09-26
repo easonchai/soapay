@@ -128,7 +128,16 @@ export function Spend() {
 
   return (
     <>
-      <PageHeader eyebrow="Send" title="Send" description="Each address sends in its own transaction, spaced by a random window so your addresses stay unlinked." />
+      <PageHeader
+        eyebrow="Send"
+        title="Send"
+        description="Each address sends in its own transaction, spaced by a random window so your addresses stay unlinked."
+        action={
+          <Button variant="ghost" size="sm" onClick={() => void navigate("/connect")}>
+            Use a dApp instead
+          </Button>
+        }
+      />
       {!flow.ready && <Alert variant="warning">{flow.unavailableReason}</Alert>}
 
       <div className="send-grid">

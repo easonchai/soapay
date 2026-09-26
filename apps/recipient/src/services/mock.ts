@@ -23,8 +23,12 @@ import {
   getChainConfig,
   isValidLabel,
   splitIntoDenominations,
+  dappTransfers,
   type PayRunLine,
+  type StealthCall,
+  type StealthInclusion,
 } from "@soapay/sdk";
+import type { DappExecution, DappService } from "./dapp.js";
 import { secp256k1 } from "@noble/curves/secp256k1.js";
 import { keccak_256 } from "@noble/hashes/sha3.js";
 import { bytesToHex, encodeAbiParameters, encodeEventTopics, getAddress, keccak256, toHex, type Address, type Hex } from "viem";
@@ -560,6 +564,37 @@ export function createMockSpendService(chainId?: number): SpendService {
         onProgress?.(i + 1, spends.length);
       }
       return out;
+    },
+  };
+}
+
+/**
+ * dApp calls over WalletConnect (D-61): accepts any value-free calls, applies USDC transfers to the
+ * mock balances, and "lands" the userOp a moment later. Nothing is sent anywhere.
+ */
+export function createMockDappService(chainId?: number): DappService {
+  return {
+    ready: true,
+    async execute(stealthKey: Hex, calls: readonly StealthCall[]): Promise<DappExecution> {
+      await latency();
+      if (calls.some((c) => (c.value ?? 0n) !== 0n)) throw new Error("mock: calls must not move ETH");
+      const from = privateKeyToAccount(stealthKey).address;
+      const usdc = getChainConfig(chainId ?? state.world?.chainId ?? 84532).usdc;
+      for (const t of dappTransfers(calls)) {
+        if (t.token.toLowerCase() !== usdc.toLowerCase()) continue;
+        const bal = state.world?.balances.get(from.toLowerCase()) ?? 0n;
+        if (t.amount > bal) throw new Error(`mock: insufficient balance in ${from}`);
+        state.world?.balances.set(from.toLowerCase(), bal - t.amount);
+      }
+      state.delegated.add(from.toLowerCase());
+      const now = Date.now();
+      const userOpHash = fakeTxHash(`dappop:${from}:${now}`);
+      const txHash = fakeTxHash(`dapptx:${from}:${now}`);
+      const block = state.world ? head(state.world.chainId) : 0n;
+      const included = sleep(1_200).then(
+        (): StealthInclusion => ({ success: true, userOpHash, txHash, blockHash: fakeTxHash(`dappblock:${now}`), blockNumber: block, gasUsed: 180_000n, logs: [] }),
+      );
+      return { userOpHash, included };
     },
   };
 }

@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router";
 import type { LedgerEntry } from "@soapay/sdk";
 import { Copy, CountUp, Dots, FreshMark, InView, Progress, Reveal, toast } from "@soapay/ui";
 import type { Address } from "viem";
-import { chainName, explorerTxUrl } from "../config.js";
+import { chainName, exitOffered, explorerTxUrl } from "../config.js";
 import { describePhase, useScanner, type ScannerApi } from "../hooks/scanner.js";
 import { useChain } from "../hooks/useChain.js";
 import { lastSpendTx } from "../hooks/useChainViews.js";
@@ -61,7 +61,7 @@ export function Home() {
         onSend={() => void navigate("/spend")}
         onScan={() => void scanner.scan()}
         onFullScan={() => void scanner.scan({ full: true })}
-        onExit={() => void navigate("/exit")}
+        onExit={exitOffered(svc.settings.chainId) ? () => void navigate("/exit") : undefined}
       >
         Live balances on {chainName(svc.settings.chainId)}. Last scan: {state.lastScannedBlock ? `block ${state.lastScannedBlock}` : "never"}
         {state.balancesAt ? `, balances ${relativeTime(state.balancesAt)}` : ""}.
@@ -106,6 +106,7 @@ export function Home() {
               chainId={svc.settings.chainId}
               mock={svc.mock}
               onSend={(amount) => void navigate("/spend", { state: { amount } })}
+              onConnect={(address) => void navigate("/connect", { state: { address } })}
             />
           </InView>
         </>
@@ -206,7 +207,8 @@ export function Hero({
   onSend: () => void;
   onScan: () => void;
   onFullScan: () => void;
-  onExit: () => void;
+  /** Omitted where the exit isn't offered (testnet mock USDC, D-52). */
+  onExit?: () => void;
   children?: ReactNode;
 }) {
   const zero = total === 0n;
@@ -236,9 +238,11 @@ export function Hero({
         <Button variant="ghost" onClick={onFullScan} disabled={running}>
           Rescan from start
         </Button>
-        <Button variant="ghost" onClick={onExit} disabled={addressCount === 0}>
-          Exit
-        </Button>
+        {onExit && (
+          <Button variant="ghost" onClick={onExit} disabled={addressCount === 0}>
+            Exit
+          </Button>
+        )}
       </div>
     </div>
   );
@@ -305,6 +309,7 @@ export function LedgerTable({
   chainId,
   mock,
   onSend,
+  onConnect,
 }: {
   entries: LedgerEntry[];
   spends: SpendRecord[];
@@ -314,6 +319,8 @@ export function LedgerTable({
   mock: boolean;
   /** Open Send prefilled with this row's balance (a plain decimal string). */
   onSend: (amount: string) => void;
+  /** Use this row's address with a dApp over WalletConnect (D-61). */
+  onConnect: (address: Address) => void;
 }) {
   const [open, setOpen] = useState<string | null>(null);
   const spent = useMemo(() => spentAddresses(spends, conversions), [spends, conversions]);
@@ -378,6 +385,14 @@ export function LedgerTable({
                         onClick={() => onSend(formatUsdc(e.balance, { precise: true }).replace(/,/g, ""))}
                       >
                         Send
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-inline"
+                        title="Use this address with a dApp (WalletConnect)"
+                        onClick={() => onConnect(e.stealthAddress)}
+                      >
+                        dApp
                       </button>
                       <button type="button" className="btn-text btn-inline" onClick={() => setOpen(isOpen ? null : key)}>
                         {isOpen ? "Hide" : "Details"}

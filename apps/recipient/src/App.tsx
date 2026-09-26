@@ -3,7 +3,9 @@ import { Loading } from "@soapay/ui";
 import { ScannerProvider } from "./hooks/scanner.js";
 import { InviteProvider, useInvite } from "./hooks/useInvite.js";
 import { Onboarding } from "./onboarding/Onboarding.js";
+import { Connect } from "./screens/Connect.js";
 import { Exit } from "./screens/Exit.js";
+import { WalletConnectProvider } from "./hooks/useWalletConnect.js";
 import { ExitProvider } from "./hooks/useExit.js";
 import { QueueProvider } from "./hooks/useQueue.js";
 import { Home } from "./screens/Home.js";
@@ -54,11 +56,13 @@ function Gate() {
         <ScannerProvider>
           <QueueProvider>
           <ExitProvider>
+          <WalletConnectProvider>
             <HashRouter>
               <Routes>
                 <Route element={<Layout />}>
                   <Route index element={<Home />} />
                   <Route path="spend" element={<Spend />} />
+                  <Route path="connect" element={<Connect />} />
                   {exitOn && <Route path="exit" element={<Exit />} />}
                   <Route path="labels" element={<Labels />} />
                   <Route path="name" element={<NameSettings />} />
@@ -67,6 +71,7 @@ function Gate() {
                 </Route>
               </Routes>
             </HashRouter>
+          </WalletConnectProvider>
           </ExitProvider>
           </QueueProvider>
         </ScannerProvider>

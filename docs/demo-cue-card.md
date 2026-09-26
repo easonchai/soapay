@@ -68,7 +68,7 @@ The short version of [demo-flow.md](demo-flow.md) to walk through on stage. The 
 
 - **Keys:** the recovery phrase derives a spending key and a viewing key. The ENS `stealth` record holds only the two public keys. Each payment's address comes from those plus the sender's one-time key, so only Alex can find and open it.
 - **Pinning:** the company app resolves each name once and pins its keys. A changed record is paid only with a World ID attestation or the employer's re-approval.
-- **World ID:** a Proof of Human *session* is linked at sign-up; a rotation must prove the same session. It's bound to the change through the single-use RP nonce, and replays are refused. Linking later has a 72 h wait.
+- **World ID:** a Proof of Human *session* is linked at sign-up; a rotation must prove the same session. It's bound to the change through the single-use RP nonce, and replays are refused. Linking later has a 72 h wait by default (set to 0 on the testnet demo).
 - **Gasless spend:** each stealth address is upgraded to a Simple7702Account on first spend, and a paymaster covers gas (Pimlico on testnet, Circle's USDC paymaster on mainnet).
 - **What's out of scope:** chain analysts and RPC linkage. The adversary is a coworker; the employer is trusted.
 - **Honest caveat:** World ID protects *future* pay. A leaked phrase can still spend what's already received, so rotate and move funds quickly.
