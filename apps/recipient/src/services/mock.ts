@@ -38,10 +38,13 @@ import {
   encodeAbiParameters,
   encodeEventTopics,
   getAddress,
+  isAddress,
   isAddressEqual,
   keccak256,
   recoverTypedDataAddress,
+  stringToBytes,
   toHex,
+  verifyMessage,
   type Address,
   type Hex,
 } from "viem";
@@ -87,6 +90,8 @@ const state: {
   /** Stealth addresses (lowercase) that have a 7702 delegation after their first mock spend or swap. */
   delegated: Set<string>;
   spendTxs: Map<string, MockSpendTx>;
+  /** D-63 passkey backups by lowercase address: ciphertext only, like the real API. */
+  backups: Map<string, { address: Address; version: number; ciphertext: string; updatedAt: number }>;
   bornAt: number;
 } = {
   meta: null,
@@ -98,6 +103,7 @@ const state: {
   registered: new Set(),
   delegated: new Set(),
   spendTxs: new Map(),
+  backups: new Map(),
   bornAt: Date.now(),
 };
 
@@ -252,7 +258,7 @@ export function createMockFetch(chainId: number): ApiFetch {
     await latency();
     const url = new URL(input, "http://mock.local");
     const method = (init?.method ?? "GET").toUpperCase();
-    const path = url.pathname.replace(/^.*?(\/(announcements|register|names|invites|health))/, "$1");
+    const path = url.pathname.replace(/^.*?(\/(announcements|register|names|invites|health|backups))/, "$1");
 
     const invite = /^\/invites\/(0x[0-9a-fA-F]{64})$/.exec(path);
     if (method === "GET" && invite) {
@@ -349,6 +355,33 @@ export function createMockFetch(chainId: number): ApiFetch {
         registry: { status: "success", txHash: fakeTxHash(`reregister:${label}:${verifiedAt}`) },
         topup: { status: "sent", txHash: fakeTxHash(`fund:${label}:${verifiedAt}`) },
       });
+    }
+
+    // D-63 backups: same contract as apps/api (ciphertext only; EIP-191 signature by the address; version strictly increases).
+    const backup = /^\/backups\/([^/]+)$/.exec(path);
+    if (backup) {
+      const raw = decodeURIComponent(backup[1]!);
+      if (!isAddress(raw, { strict: false })) return err(400, "invalid_address", "address must be a 0x address");
+      const address = getAddress(raw);
+      const row = state.backups.get(address.toLowerCase());
+      if (method === "GET") return row ? respond(200, row) : err(404, "not_found", "no backup for this address");
+      if (method === "PUT") {
+        const body = JSON.parse(String(init?.body ?? "{}")) as { version?: unknown; ciphertext?: unknown; signature?: unknown };
+        const { version, ciphertext, signature } = body;
+        if (!Number.isSafeInteger(version) || (version as number) < 1 || typeof ciphertext !== "string" || typeof signature !== "string") {
+          return err(400, "invalid_body", "version, ciphertext and signature are required");
+        }
+        if (ciphertext.length > 512 * 1024) return err(413, "too_large", "ciphertext is over 512 KiB");
+        const message = `soapay-backup:v1:${address}:${version as number}:${keccak256(stringToBytes(ciphertext))}`;
+        const ok = await verifyMessage({ address, message, signature: signature as Hex }).catch(() => false);
+        if (!ok) return err(401, "bad_signature", "signature does not match the address");
+        if (row && (version as number) <= row.version) {
+          return respond(409, { error: { code: "stale_version", message: "version must increase", currentVersion: row.version }, version: row.version });
+        }
+        const next = { address, version: version as number, ciphertext, updatedAt: Date.now() };
+        state.backups.set(address.toLowerCase(), next);
+        return respond(200, { address, version: next.version, updatedAt: next.updatedAt });
+      }
     }
 
     if (method === "GET" && path === "/health") return respond(200, { ok: true, chainId, mock: true });
@@ -660,3 +693,8 @@ export function createMockEnsWriter(): EnsWriter {
   };
 }
 
+
+/** Test/demo hook: drop the mock backups (a fresh API). */
+export function resetMockBackups(): void {
+  state.backups.clear();
+}

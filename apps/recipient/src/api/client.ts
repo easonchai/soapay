@@ -113,6 +113,15 @@ export type NameRecord = {
   worldIdSession?: { attachedAt: number } | null;
 };
 
+/** GET /backups/:address (D-63). The server stores the ciphertext only. */
+export type BackupRecord = { address: Address; version: number; ciphertext: string; updatedAt: string | number };
+/**
+ * PUT /backups/:address. `signature`: EIP-191 personal_sign by `address` over
+ * `soapay-backup:v1:${checksummedAddress}:${version}:${keccak256(utf8 ciphertext)}` (vault/backup.ts).
+ * `version` must be higher than the stored one (409 `stale_version` otherwise).
+ */
+export type BackupPutBody = { version: number; ciphertext: string; signature: Hex };
+
 function base(apiUrl: string): string {
   return apiUrl.replace(/\/+$/, "");
 }
@@ -189,6 +198,17 @@ export function createApi(apiUrl: string, fetchFn: ApiFetch = (i, init) => fetch
         throw e;
       }
     },
+    /** null when this address has no backup. */
+    async getBackup(address: Address): Promise<BackupRecord | null> {
+      try {
+        return await call<BackupRecord>(fetchFn, `${root}/backups/${address}`);
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 404) return null;
+        throw e;
+      }
+    },
+    putBackup: (address: Address, body: BackupPutBody) =>
+      call<BackupRecord | { address: Address; version: number }>(fetchFn, `${root}/backups/${address}`, { ...json(body), method: "PUT" }),
     /** null when the label is free. */
     async getName(label: string): Promise<NameRecord | null> {
       try {

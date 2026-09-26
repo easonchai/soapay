@@ -6,7 +6,7 @@ import { createPublicClient, http, isAddressEqual } from "viem";
 import { chainName } from "../config.js";
 import { demoEoaWallet, demoSmartWallet, deriveWalletKeys, injectedKeyWallet, injectedProvider, type KeyWallet } from "./walletKeys.js";
 import { useServices } from "../services/ServicesProvider.js";
-import { useVault } from "../vault/VaultProvider.js";
+import { BackupNotFoundError, useVault } from "../vault/VaultProvider.js";
 import { MIN_PASSPHRASE_LENGTH } from "../vault/crypto.js";
 import { PasskeyUnsupportedError } from "../vault/passkey.js";
 import { Alert, Badge, Button, Card, Checkbox, CopyButton, Field, Input, Textarea, cn, errorMessage } from "../ui/kit.js";
@@ -173,6 +173,7 @@ function Step({ state, dispatch, headingRef }: StepProps) {
               Restore from recovery phrase
             </Button>
           </div>
+          <PasskeyRestore dispatch={dispatch} />
           <p className="hint">
             Your keys are created in this browser and stay encrypted here; you unlock them with a passkey (or a passphrase). Nothing secret is
             ever sent anywhere.
@@ -197,6 +198,74 @@ function Step({ state, dispatch, headingRef }: StepProps) {
     case "done":
       return <ShareStep dispatch={dispatch} headingRef={headingRef} />;
   }
+}
+
+/**
+ * D-63: "Unlock with passkey" on the welcome screen. The synced passkey (iCloud Keychain, Google Password
+ * Manager) derives the backup address and key; the vault is fetched, decrypted here and re-locked for
+ * this browser. Hidden when this browser can't do passkeys with PRF (the recovery phrase still works).
+ */
+function PasskeyRestore({ dispatch }: Pick<StepProps, "dispatch">) {
+  const vault = useVault();
+  const svc = useServices();
+  const [available, setAvailable] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notFound, setNotFound] = useState(false);
+  const { passkeyRestoreAvailable } = vault;
+
+  useEffect(() => {
+    let cancelled = false;
+    void passkeyRestoreAvailable().then((ok) => !cancelled && setAvailable(ok));
+    return () => {
+      cancelled = true;
+    };
+  }, [passkeyRestoreAvailable]);
+
+  if (!available) return null;
+
+  const restore = async () => {
+    setBusy(true);
+    setError(null);
+    setNotFound(false);
+    try {
+      const data = await vault.restoreWithPasskey((address) => svc.api.getBackup(address));
+      // An onboarded vault goes straight to the ledger (App gate); an unfinished one resumes here.
+      dispatch({ type: "RESTORED", profile: data.profile });
+    } catch (err) {
+      if (err instanceof BackupNotFoundError) setNotFound(true);
+      else if (err instanceof PasskeyUnsupportedError) setError(`${err.message} Restore from your recovery phrase instead.`);
+      else setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="stack-sm" data-testid="passkey-restore">
+      {notFound && (
+        <Alert
+          variant="warning"
+          title="No backup for this passkey"
+          action={
+            <Button size="sm" variant="outline" onClick={() => dispatch({ type: "RESTORE" })}>
+              Restore from recovery phrase
+            </Button>
+          }
+        >
+          <span data-testid="no-backup">
+            Soapay has no backup for the passkey you picked. It may be a different Soapay passkey, or the account never synced one. Use your
+            recovery phrase instead.
+          </span>
+        </Alert>
+      )}
+      {error && <Alert variant="destructive">{error}</Alert>}
+      <Button size="lg" variant="ghost" className="w-full" loading={busy} disabled={busy} onClick={() => void restore()}>
+        {busy ? "Waiting for your passkey…" : "Unlock with passkey"}
+      </Button>
+      <p className="hint">Already use Soapay on another device, or cleared this browser? Your synced passkey brings your account back.</p>
+    </div>
+  );
 }
 
 /**
