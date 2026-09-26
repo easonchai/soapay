@@ -18,7 +18,7 @@
 
 On a public chain, everyone with a browser: one payroll batch on Base shows every recipient and every amount next to each other, readable forever. Your colleagues too: at Gitcoin DAO a contributor started from their own pay address and put names to fifteen salaries. So companies walk away, and the fixes built for them (Base Ledgers, Tempo Zones, Toku on Aleo) are private ledgers for enterprises: not for everyone, since you apply for access, and not fully private, since every payment goes through the company running them, which sees it and decides what you can withdraw. Everyone else still pays in public.
 
-Soapay fixes both on the public chain itself. Nothing sits between payer and recipient: the sender's browser derives a fresh stealth address for every line, pays it directly on Base and throws the ephemeral key away. Only you can open that address and spend from it, so nobody but the payer and you sees the payment, and nobody decides what you can withdraw. There is nothing to apply for either: share a name and you can be paid, the money lands in a wallet only you control, and it all runs on open standards with a public SDK. Nothing of ours holds money, and the one contract we wrote keeps no state and has no owner.
+Soapay fixes both on the public chain itself. Nothing sits between payer and recipient: the sender's browser derives a fresh stealth address for every line, pays it directly on Base and throws the ephemeral key away. Only you can open that address and spend from it, so nobody but the payer and you sees the payment, and nobody decides what you can withdraw. There is nothing to apply for either: share an ENS name and you can be paid, with no account at Soapay and no server of ours in the loop. The money lands in a wallet only you control, and it all runs on open standards with a public SDK. Nothing of ours holds money, and the one contract we wrote keeps no state and has no owner.
 
 ## Built for payroll. Ready for any payout.
 
@@ -36,7 +36,7 @@ The SDK already treats these as one thing. [`packages/sdk/src/distribute.ts`](pa
 
 ## Not another stealth wallet
 
-Fluidkey and Umbra use the same ERC-5564 and ERC-6538 standards, and both hide your wallet from strangers. They are wallets for an individual receiving payments: a server derives your addresses at name resolution and holds your viewing key, so it sees every payment you receive, and it never touches the batch, which is where a coworker reads your salary. Soapay is the rail for the payer side of the same standards. The sender's browser derives every address and throws the ephemeral key away, only you hold your viewing key, and nothing of ours sees more than public chain data. One transaction pays and announces every recipient, amounts are chunked and sorted so per-transaction totals never leak, a consolidation guard and a timing queue keep spends from linking your addresses, a compliant exit through Privacy Pools lets you cash out, and everything rebuilds from your seed with the public SDK. Row by row: [Compared with Fluidkey](#compared-with-fluidkey).
+Fluidkey and Umbra use the same ERC-5564 and ERC-6538 standards, and both hide your wallet from strangers. They are wallets for an individual receiving payments: a server derives your addresses at name resolution and holds your viewing key, so it sees every payment you receive, and it never touches the batch, which is where a coworker reads your salary. Soapay is the rail for the payer side of the same standards. The sender's browser derives every address and throws the ephemeral key away, only you hold your viewing key, and nothing of ours sees more than public chain data. One transaction pays and announces every recipient, amounts are chunked and sorted so per-transaction totals never leak, a consolidation guard and a timing queue keep spends from linking your addresses, a compliant exit through Privacy Pools lets you cash out, and everything rebuilds from your seed with the public SDK. It is also permissionless: no account with us, any ENS name that carries the stealth records can be paid, and the one contract we wrote has no owner. Row by row: [Compared with Fluidkey](#compared-with-fluidkey).
 
 ## Contents
 
@@ -141,6 +141,7 @@ Both are built on ERC-5564 and ERC-6538, and both hide your wallet from stranger
 | Who derives your stealth address | Fluidkey's server, at name resolution | The sender's browser; the ephemeral key is thrown away |
 | Who holds your viewing key | Fluidkey | Only you |
 | What the company's server can see | Every payment you receive | Nothing beyond public chain data |
+| Account with the company | Required: a Fluidkey name, resolved by Fluidkey's off-chain resolver | None: any ENS name that carries the stealth records, with no server of ours in the loop |
 | What your employer learns | n/a | Name → stealth address → amount, never your main wallet |
 | Batch payments | No | One transaction, N recipients, pays and announces atomically |
 | Amounts in the batch | Visible per person | Split into identical chunks, sorted so per-tx totals never leak |
