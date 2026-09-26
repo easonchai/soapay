@@ -12,9 +12,10 @@ export class UsageError extends Error {
 export const USAGE = `Usage:
   soapay distribute --csv <file> --asset <symbol|token> [--chain 84532] [--preset payroll|dividend|grant]
                     [--total <amount>] [--decimals <n>] [--chunk <amount>] [--max-lines <n>]
-                    [--disperse <address>] [--rpc <url>] [--show-lines] [--json] [--dry-run | --execute]
+                    [--disperse <address>] [--rpc <url>] [--ens-rpc <url>] [--show-lines] [--json]
+                    [--dry-run | --execute [--allow-mainnet]]
   soapay scan --mnemonic-env <VAR> [--chain 84532] [--api <url> | --rpc <url>] [--from <block>] [--to <block>]
-              [--no-balances] [--json]
+              [--known-payer <address>]... [--no-balances] [--json]
 
 distribute
   CSV header: recipient,amount[,id]   (payroll, grant)   amounts in whole token units, e.g. 1250.50
@@ -22,12 +23,15 @@ distribute
   recipient is a meta-address (st:eth:0x…), a 0x address registered in ERC-6538, or an ENS name.
   --preset dividend needs --total; for grant, --total is an optional budget.
   --chunk pays whole denominations of that size plus one remainder line per recipient.
-  Dry run by default: prints the plan (lines, chunks, gas). --execute sends it via StealthDisperse
-  from PAYER_PRIVATE_KEY (read from the environment, never from flags).
+  Names are resolved on the ENS chain (--ens-rpc) and cross-checked against ERC-6538 on the pay chain.
+  Dry run by default: prints the plan (lines, chunks, gas). --execute prints a preflight (payer,
+  balances, txs), then sends it via StealthDisperse from PAYER_PRIVATE_KEY (read from the environment,
+  never from flags): one exact-total approval, then the pay txs, each with an explorer link.
+  --execute refuses non-testnet chains unless --allow-mainnet is also given.
 
 scan
   Reads the recovery phrase from the named environment variable and prints received payments,
-  with real balances unless --no-balances.`;
+  with real balances unless --no-balances. Payments from a --known-payer are not flagged unknown-payer.`;
 
 export type Preset = "payroll" | "dividend" | "grant";
 
@@ -43,9 +47,11 @@ export type DistributeArgs = {
   maxLines?: number;
   disperse?: Address;
   rpc?: string;
+  ensRpc?: string;
   showLines: boolean;
   json: boolean;
   execute: boolean;
+  allowMainnet: boolean;
 };
 
 export type ScanArgs = {
@@ -57,6 +63,7 @@ export type ScanArgs = {
   fromBlock?: bigint;
   toBlock?: bigint;
   balances: boolean;
+  knownPayers?: Address[];
   json: boolean;
 };
 
@@ -112,16 +119,19 @@ export function parseCli(argv: readonly string[]): CliArgs {
       "max-lines": { type: "string" },
       disperse: { type: "string" },
       rpc: { type: "string" },
+      "ens-rpc": { type: "string" },
       "show-lines": { type: "boolean", default: false },
       json: { type: "boolean", default: false },
       "dry-run": { type: "boolean", default: false },
       execute: { type: "boolean", default: false },
+      "allow-mainnet": { type: "boolean", default: false },
     });
     const s = (k: string) => v[k] as string | undefined;
     const b = (k: string) => v[k] === true;
     if (!s("csv")) throw new UsageError("--csv is required");
     if (!s("asset")) throw new UsageError("--asset is required");
     if (b("execute") && b("dry-run")) throw new UsageError("--execute and --dry-run are mutually exclusive");
+    if (b("allow-mainnet") && !b("execute")) throw new UsageError("--allow-mainnet only applies with --execute");
     const preset = s("preset");
     if (preset !== "payroll" && preset !== "dividend" && preset !== "grant") {
       throw new UsageError("--preset must be payroll, dividend or grant (vesting schedules: use the SDK's vesting preset)");
@@ -143,6 +153,7 @@ export function parseCli(argv: readonly string[]): CliArgs {
       showLines: b("show-lines"),
       json: b("json"),
       execute: b("execute"),
+      allowMainnet: b("allow-mainnet"),
     };
     if (total !== undefined) out.total = total;
     if (decimals !== undefined) out.decimals = Number(decimals);
@@ -153,6 +164,8 @@ export function parseCli(argv: readonly string[]): CliArgs {
     if (disperse !== undefined) out.disperse = getAddress(disperse);
     const rpc = url(s("rpc"), "--rpc");
     if (rpc !== undefined) out.rpc = rpc;
+    const ensRpc = url(s("ens-rpc"), "--ens-rpc");
+    if (ensRpc !== undefined) out.ensRpc = ensRpc;
     return out;
   }
 
@@ -165,6 +178,7 @@ export function parseCli(argv: readonly string[]): CliArgs {
       from: { type: "string" },
       to: { type: "string" },
       "no-balances": { type: "boolean", default: false },
+      "known-payer": { type: "string", multiple: true },
       json: { type: "boolean", default: false },
     });
     const s = (k: string) => v[k] as string | undefined;
@@ -187,6 +201,9 @@ export function parseCli(argv: readonly string[]): CliArgs {
     const to = block(s("to"), "--to");
     if (to !== undefined) out.toBlock = to;
     if (from !== undefined && to !== undefined && to < from) throw new UsageError("--to must be >= --from");
+    const known = (v["known-payer"] as string[] | undefined) ?? [];
+    for (const k of known) if (!isAddress(k, { strict: false })) throw new UsageError(`--known-payer must be an address (got "${k}")`);
+    if (known.length) out.knownPayers = known.map((k) => getAddress(k));
     return out;
   }
 

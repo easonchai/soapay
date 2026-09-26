@@ -71,6 +71,25 @@ Total 3:00. Time is the budget for each beat; the clicks are exactly CK's labels
 - **Proposed visual (the owner's pending question):** a **"Coworker view / My view" toggle** on each pay-run group in Payments. Coworker view renders every line of that tx as Basescan shows it: amount plus a short address, with nothing highlighted. My view is the same list with my lines highlighted and every other line labelled "not mine, can't tell whose". The data is already there, because the scanner reads every announcement of the tx to find mine. Until it's built, use the two-window layout above. See Gaps #1.
 - **Fallback:** if Basescan throws its Cloudflare check, show the same tx in the pre-warmed tab, or the StealthDisperse contract's token-transfer list.
 
+### Beat 4b: Plug it into anything (terminal, 10–20 s) · CLI + MCP, live on Base Sepolia
+
+- **Pitch line:** "Soapay doesn't care who gets paid: a person or an agent gets the same name, the same privacy, the same exit."
+- **What it shows:** Soapay is building blocks, not just an app. The rails are payer- and payee-agnostic: anyone (an employer, a company paying dividends, a DAO, an agent) pays anyone (a person or an agent) at a fresh address derived from their spending and viewing keys. Payroll is the first product; dividends and grants run on the same rails (`--preset dividend`, `--preset grant`).
+- **The clip** (one command, `scripts/demo-pluggable.sh`, about 35–40 s live; show steps 2 and 4, or play it back at 2x):
+  1. An AI agent claims `invoice-agent.soapay.eth` through the MCP server (ENSIP-26 `agent-context` written at issuance). Idempotent: after the first run it prints "already this agent's".
+  2. **One** revenue-share run pays three people (`dividend-ana|ben|cleo.soapay.eth`), a raw meta-address and the agent together:
+     ```bash
+     soapay distribute --preset dividend --csv examples/demo/holders.csv --asset usdc --total 0.5 --chunk 0.05 --execute
+     ```
+     Plan → preflight (payer, balances, "2 txs: 1 approval (exact total) + 1 pay (12 lines)") → Basescan links. On-chain it's 12 equal-looking lines to 12 strangers; the agent's lines are indistinguishable from the people's.
+  3. Ana scans with her phrase (`soapay scan --mnemonic-env SOAPAY_PHRASE --from <block> --known-payer <company>`): 4 lines, 0.2 USDC, real balances.
+  4. The agent scans over MCP ("the pay run has 12 lines; 2 are mine"), then spends 0.02 USDC to a name with no ETH: gas is paid in USDC (7702 + paymaster), the same path the recipient app uses.
+- **Say:** "Same SDK under the apps, a CLI and an agent. A dividend is one command. The agent is just another payee: same name, same privacy, same exit."
+- **Agent use cases to name:** revenue share, bounties, contractor invoices, agent-to-agent settlement. **"Why not x402?"** x402 pays the same public address on every call. Per-request stealth payments work on this same design; whether they fit is cost vs privacy (one announcement per payment is about 2x a transfer's gas on Base, scanning volume grows, and consolidating many small payments reveals totals), so they're on the roadmap, not ruled out.
+- **Pre-staged (once):** `pnpm build`, then `pnpm --filter @soapay/examples demo:setup` (claims the people's names through the API relayer and writes `examples/demo/holders.csv`; the recovery phrases stay in the git-ignored `scripts/.demo-recipients.local.json`). A funded Base Sepolia EOA as the payer: `PAYER_PRIVATE_KEY` in the environment, or `PAYER_ENV_FILE=apps/mcp/.env PAYER_ENV_VAR=AGENT_PAYER_PRIVATE_KEY`. Each run spends `DIVIDEND_TOTAL` (default 0.5 USDC) plus a little gas.
+- **Rehearse without sending:** `DEMO_DRY=1 scripts/demo-pluggable.sh` (plan only).
+- **Fallback:** `DEMO_REPLAY=1 scripts/demo-pluggable.sh` replays the recorded live run offline, in colour ([`demo-screens/beat4-pluggable-live.txt`](demo-screens/beat4-pluggable-live.txt), `.ansi` for colour). Live txs from that recording, 2026-09-26: pay run [0xf7fb06df…](https://sepolia.basescan.org/tx/0xf7fb06dfa47313fbeab80fe6e01cc0d003d38d221819ad35d09bfcad9051ce0e) (12 lines, 5 payees incl. the agent), the agent's gasless spend [0x35172021…](https://sepolia.basescan.org/tx/0x3517202141e4f1ad9849aa40f04ec3d7e332bd8d38a72d991d64d1e4b4d3f3e2).
+
 ### Beat 5: Spend gaslessly, and the guard → compliant exit (1:50–2:25) · Send → Exit · (Privacy Pools)
 
 - **Clicks, gasless spend:** **Send** tab ([r09](demo-screens/r09-send-form.png)) → To = a fresh address, Amount `80` → **Review**: "No new links. This spend doesn't connect any of your stealth addresses to each other or to an identifiable wallet" ([r14](demo-screens/r14-send-review-ok.png)) → **Send** → "Sent · 1 transaction confirmed" ([r15](demo-screens/r15-send-done.png)).
@@ -100,7 +119,7 @@ Total 3:00. Time is the budget for each beat; the clicks are exactly CK's labels
 
 ## UI vs SDK
 
-The demo is UI-only: judges follow a person, not a library. The SDK appears in **at most one beat**, and only as a sentence plus one frame. Say "every screen you saw calls `@soapay/sdk`; so does this agent" over a 5-second terminal clip of the MCP server (`resolve_name` on `mcp-agent-7c1e.soapay.eth`, or `whoami`). That clip replaces the last 5 s of Beat 7 if there's time. Otherwise it goes on the closing slide, with the repo link. Don't live-code, and don't show the SDK anywhere a screen already shows the same thing.
+The demo is UI-only: judges follow a person, not a library. The SDK appears in **at most one beat**, and only as a sentence plus one frame. Say "every screen you saw calls `@soapay/sdk`; so does this agent" over a 5-second terminal clip of the MCP server (`resolve_name` on `mcp-agent-7c1e.soapay.eth`, or `whoami`). That clip replaces the last 5 s of Beat 7 if there's time. Otherwise it goes on the closing slide, with the repo link. If the terminal beat (Beat 4b) runs, it *is* the SDK beat: skip this clip. Don't live-code, and don't show the SDK anywhere a screen already shows the same thing.
 
 ## Gaps that weaken the story (recommendations; no app code changed)
 

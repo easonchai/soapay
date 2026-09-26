@@ -108,7 +108,7 @@ export function planDistribution(params: PlanDistributionParams): DistributionPl
   const warnings = [...(params.warnings ?? [])];
   if (params.recipients.length < SMALL_DISTRIBUTION_THRESHOLD) {
     warnings.push(
-      `Only ${params.recipients.length} recipient(s): with fewer than ${SMALL_DISTRIBUTION_THRESHOLD}, amounts alone may identify people. Consider denominations.`,
+      `Only ${params.recipients.length} recipient(s): with fewer than ${SMALL_DISTRIBUTION_THRESHOLD}, amounts alone may identify people.${params.split ? "" : " Consider denominations."}`,
     );
   }
 

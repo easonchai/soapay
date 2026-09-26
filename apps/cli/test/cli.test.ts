@@ -1,9 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { hexToBytes, numberToHex, type Address } from "viem";
-import { buildMetadata77, CHAINS, derivePayRun, generateMnemonic, keysFromMnemonic, type AnnouncementRecord } from "@soapay/sdk";
+import { decodeFunctionData, erc20Abi, hexToBytes, numberToHex, type Address, type Hash, type Hex } from "viem";
+import { privateKeyToAddress } from "viem/accounts";
+import {
+  buildMetadata77,
+  CHAINS,
+  derivePayRun,
+  generateMnemonic,
+  keysFromMnemonic,
+  type AnnouncementRecord,
+  type NameResolver,
+  type RegisteredChain,
+} from "@soapay/sdk";
 import { parseCli, UsageError } from "../src/args.js";
 import { parseCsv } from "../src/csv.js";
-import { run, type CliIo } from "../src/cli.js";
+import { run, type CliIo, type PayerChain } from "../src/cli.js";
 
 const USDC_SEPOLIA = CHAINS[84532].usdc;
 const PAYER = "0x1111111111111111111111111111111111111111" as Address;
@@ -44,6 +54,7 @@ describe("argument parsing", () => {
       showLines: false,
       json: false,
       execute: false,
+      allowMainnet: false,
     });
     const d = parseCli(["distribute", "--csv", "h.csv", "--asset", USDC_SEPOLIA, "--chain", "8453", "--preset", "dividend", "--total", "1000", "--chunk", "50", "--max-lines", "100", "--dry-run"]);
     expect(d).toMatchObject({ chainId: 8453, preset: "dividend", total: "1000", chunk: "50", maxLines: 100, execute: false });
@@ -78,6 +89,8 @@ describe("argument parsing", () => {
     expect(() => parseCli(["scan"])).toThrow(/mnemonic-env/);
     expect(() => parseCli(["scan", "--mnemonic-env", "test test junk"])).toThrow(/variable name/);
     expect(() => parseCli(["scan", "--mnemonic-env", "X", "--from", "20", "--to", "10"])).toThrow(/--to/);
+    expect(parseCli(["scan", "--mnemonic-env", "X", "--known-payer", PAYER, "--known-payer", PAYER.toLowerCase()])).toMatchObject({ knownPayers: [PAYER, PAYER] });
+    expect(() => parseCli(["scan", "--mnemonic-env", "X", "--known-payer", "0x12"])).toThrow(/--known-payer/);
   });
 });
 
@@ -173,5 +186,123 @@ describe("soapay scan", () => {
     const missing = io({}, {});
     expect(await run(["scan", "--mnemonic-env", "NOPE", "--no-balances"], missing.cli)).toBe(2);
     expect(missing.err.join()).toMatch(/NOPE is not set/);
+  });
+});
+
+describe("soapay distribute --execute", () => {
+  const KEY = `0x${"42".repeat(32)}` as Hex;
+  const DISPERSE = "0x6B7a1cC570Af2DDd427DA694351438F0FE8039CA" as Address;
+
+  type Sent = { to: Address; data: Hex };
+  function fakePayer(opts: { usdc?: bigint; eth?: bigint; allowanceLag?: number } = {}) {
+    const sent: Sent[] = [];
+    const events: string[] = [];
+    let allowance = 0n;
+    let lag = opts.allowanceLag ?? 0;
+    let built = 0;
+    const factory = (key: Hex, _chain: RegisteredChain, rpc: string): PayerChain => {
+      built++;
+      expect(key).toBe(KEY);
+      expect(rpc).toMatch(/^https:\/\//);
+      return {
+        payer: privateKeyToAddress(key),
+        tokenBalance: async () => opts.usdc ?? 10_000_000n,
+        ethBalance: async () => opts.eth ?? 10n ** 16n,
+        allowance: async () => {
+          events.push("allowance");
+          if (lag > 0) {
+            lag--;
+            return 0n;
+          }
+          return allowance;
+        },
+        sendTransaction: async (tx) => {
+          sent.push(tx);
+          events.push(tx.to === USDC_SEPOLIA ? "approve" : "pay");
+          if (tx.to === USDC_SEPOLIA) {
+            const d = decodeFunctionData({ abi: erc20Abi, data: tx.data });
+            allowance = (d.args as readonly [Address, bigint])[1];
+          }
+          return `0x${sent.length.toString(16).padStart(64, "0")}` as Hash;
+        },
+        waitForTransactionReceipt: async () => ({ status: "success" }),
+      };
+    };
+    return { factory, sent, events, built: () => built };
+  }
+
+  const dividendCsv = `recipient,holdings,id\n${metas[0]},500,ana\n${metas[1]},300,ben\n${metas[2]},200,cleo\n`;
+  const argv = ["distribute", "--csv", "h.csv", "--asset", "usdc", "--preset", "dividend", "--total", "1", "--chunk", "0.1", "--execute"];
+
+  it("prints a preflight, approves the exact total to StealthDisperse, then pays, with explorer links", async () => {
+    const payer = fakePayer({ allowanceLag: 2 });
+    const { cli, out, err } = io({ "h.csv": dividendCsv }, { PAYER_PRIVATE_KEY: KEY }, { payerChain: payer.factory, pollMs: 0 });
+    expect(await run(argv, cli)).toBe(0);
+    const text = out.join("\n");
+
+    expect(text).toContain("Soapay dividend plan\n");
+    expect(text).toContain("recipients  3 (3 meta-addresses)");
+    expect(text).toContain(`payer       ${privateKeyToAddress(KEY)}`);
+    expect(text).toContain("holds       10 USDC, 0.01 ETH for gas");
+    expect(text).toContain("sends       1 USDC in 10 lines to 3 recipients");
+    expect(text).toContain("txs         2: 1 approval (exact total, to StealthDisperse) + 1 pay (10 lines)");
+    expect(text).toContain(`approve     https://sepolia.basescan.org/tx/0x${"1".padStart(64, "0")}`);
+    expect(text).toContain(`pay 1/1     https://sepolia.basescan.org/tx/0x${"2".padStart(64, "0")}`);
+    expect(text).toContain("Done: 1 USDC to 3 recipients on 10 fresh stealth addresses");
+    expect(text).not.toContain("Nothing sent");
+
+    // Approval for the exact total (never max), to the StealthDisperse spender.
+    const [approve, pay] = payer.sent as [Sent, Sent];
+    expect(payer.sent).toHaveLength(2);
+    expect(decodeFunctionData({ abi: erc20Abi, data: approve.data })).toEqual({ functionName: "approve", args: [DISPERSE, 1_000_000n] });
+    expect(pay.to).toBe(DISPERSE);
+    // The first pay waits until the approval is visible (the RPC-lag fix).
+    expect(payer.events).toEqual(["approve", "allowance", "allowance", "allowance", "pay"]);
+
+    // The key is read from the environment and never echoed.
+    expect([...out, ...err].join("\n")).not.toContain(KEY.slice(2));
+  });
+
+  it("sends nothing when the payer is short on the token or on gas", async () => {
+    for (const [opts, msg] of [
+      [{ usdc: 999_999n }, /holds 0.999999 USDC; the plan needs 1 USDC. Nothing was sent/],
+      [{ eth: 0n }, /no ETH for gas on Base Sepolia. Nothing was sent/],
+    ] as const) {
+      const payer = fakePayer(opts);
+      const { cli, err } = io({ "h.csv": dividendCsv }, { PAYER_PRIVATE_KEY: KEY }, { payerChain: payer.factory });
+      expect(await run(argv, cli)).toBe(2);
+      expect(err.join()).toMatch(msg);
+      expect(payer.sent).toHaveLength(0);
+    }
+  });
+
+  it("refuses a non-testnet chain without --allow-mainnet, before touching the key", async () => {
+    const payer = fakePayer();
+    const { cli, err } = io({ "h.csv": dividendCsv }, { PAYER_PRIVATE_KEY: KEY }, { payerChain: payer.factory });
+    expect(await run([...argv, "--chain", "8453"], cli)).toBe(2);
+    expect(err.join()).toMatch(/Base is not a testnet; --execute there also needs --allow-mainnet/);
+    expect(payer.built()).toBe(0);
+    expect(() => parseCli(["distribute", "--csv", "a", "--asset", "usdc", "--allow-mainnet"])).toThrow(/only applies with --execute/);
+  });
+
+  it("keeps stdout machine-readable with --json and reports names checked against ERC-6538", async () => {
+    const payer = fakePayer();
+    const resolver: NameResolver = {
+      name: "fixture-ens",
+      canResolve: () => true,
+      resolve: async (id) => ({ metaAddressURI: metas[Number(id.slice(1, 2))]!, source: "ens" }),
+    };
+    const csv = `recipient,holdings\na0.soapay.eth,1\na1.soapay.eth,1\na2.soapay.eth,2\n`;
+    const { cli, out, err } = io({ "h.csv": csv }, { PAYER_PRIVATE_KEY: KEY }, { payerChain: payer.factory, resolver, pollMs: 0 });
+    expect(await run([...argv, "--json"], cli)).toBe(0);
+    const [plan, result] = out.map((s) => JSON.parse(s));
+    expect(plan.resolvedBy).toEqual({ ens: 3 });
+    expect(result.links).toHaveLength(2);
+    expect(result.links[1]).toMatch(/^https:\/\/sepolia\.basescan\.org\/tx\/0x/);
+    expect(err.join("\n")).toContain("Preflight");
+
+    const dry = io({ "h.csv": csv }, {}, { resolver });
+    expect(await run(["distribute", "--csv", "h.csv", "--asset", "usdc", "--preset", "dividend", "--total", "1"], dry.cli)).toBe(0);
+    expect(dry.out.join("\n")).toContain("recipients  3 (3 names checked against ERC-6538)");
   });
 });

@@ -24,6 +24,7 @@ export async function scanPayments(params: {
   announcements: readonly AnnouncementRecord[];
   chain: RegisteredChain;
   balancesClient?: MulticallClient;
+  knownPayers?: readonly Address[];
 }): Promise<ScanResult> {
   const { matches, stats } = scanAnnouncementsWithStats(params.announcements, {
     spendingPublicKey: params.keys.spendingPublicKey,
@@ -39,7 +40,7 @@ export async function scanPayments(params: {
   const ledger = buildLedger(
     matches,
     balances.filter((b) => b.balance !== 0n),
-    [],
+    params.knownPayers ?? [],
     { stealthDisperse: params.chain.stealthDisperse ? [params.chain.stealthDisperse] : [] },
   );
   return { scanned: stats.scanned, matches, ledger };
@@ -62,6 +63,11 @@ export function formatScan(r: ScanResult, chain: RegisteredChain): string {
   const out = [`Scanned ${r.scanned} announcement(s) on ${chain.chain.name} (${chain.id}): ${r.matches.length} payment(s) to you.`];
   if (r.ledger) {
     if (r.ledger.length === 0 && r.matches.length > 0) out.push("All matched addresses are empty (already spent).");
+    const totals = new Map<Address, bigint>();
+    for (const e of r.ledger) if (e.balance !== null) totals.set(e.token, (totals.get(e.token) ?? 0n) + e.balance);
+    if (totals.size > 0) {
+      out.push(`Balance: ${[...totals].map(([t, v]) => fmt(chain, t, v)).join(", ")} across ${r.ledger.length} address(es), read on-chain.`);
+    }
     for (const e of r.ledger) {
       out.push(
         `  ${e.stealthAddress}  balance ${fmt(chain, e.token, e.balance)}  payer ${e.payer ?? "unknown"}${e.flags.length ? `  [${e.flags.join(", ")}]` : ""}`,

@@ -1,0 +1,51 @@
+
+[1m1. An AI agent gets a soapay name, like any employee[0m
+[36m▸[0m [1minvoice-agent[0m [2m(MCP)[0m create_agent_identity [2mlabel=invoice-agent[0m
+  [32minvoice-agent.soapay.eth[0m [2m(already this agent's)[0m  [2mmeta st:eth:0x03e275ad…d8d9fd[0m
+  ENSIP-26 agent-context: [2m"Sends invoices and gets paid privately in USDC." [invoice, receive-usdc][0m
+
+[1m2. One payout run: three people, a raw meta-address and the agent[0m
+[2mholders.csv: a revenue-share register. Names resolve on ENSv2 and are cross-checked against ERC-6538.[0m
+[36m$ soapay distribute --preset dividend --csv examples/demo/holders.csv --asset usdc --total 0.5 --chunk 0.05 --execute[0m
+Soapay dividend plan
+  chain       Base Sepolia (84532)
+  asset       USDC 0x036CbD53842c5426634e7929541eC2318f3dCF7e (6 decimals)
+  recipients  5 (4 names checked against ERC-6538, 1 meta-address)
+  lines       12
+  total       0.5 USDC
+  txs         1 (lines per tx: 12; max 350)
+  gas         504000 total, planning estimate (504000 per tx)
+  pay path    StealthDisperse 0x6B7a1cC570Af2DDd427DA694351438F0FE8039CA
+warning: Only 5 recipient(s): with fewer than 10, amounts alone may identify people.
+
+Preflight
+  payer       0x7757A7C9f4eD02a02353A7929cfb399e9286f52c
+  holds       12.35 USDC, 0.4 ETH for gas
+  sends       0.5 USDC in 12 lines to 5 recipients
+  txs         2: 1 approval (exact total, to StealthDisperse) + 1 pay (12 lines)
+
+Sending
+  approve     https://sepolia.basescan.org/tx/0x707257c6df8774e8e647354a6b51347f60f7cfd1bf03e88de00153b600a33ab8
+  pay 1/1     https://sepolia.basescan.org/tx/0xf7fb06dfa47313fbeab80fe6e01cc0d003d38d221819ad35d09bfcad9051ce0e
+
+Done: 0.5 USDC to 5 recipients on 12 fresh stealth addresses, every line announced (ERC-5564).
+
+[1m3. dividend-ana.soapay.eth scans with her recovery phrase[0m
+[36m$ soapay scan --mnemonic-env SOAPAY_PHRASE --from 47313826 --known-payer 0x7757A7C9f4eD02a02353A7929cfb399e9286f52c[0m
+Scanned 12 announcement(s) on Base Sepolia (84532): 4 payment(s) to you.
+Balance: 0.2 USDC across 4 address(es), read on-chain.
+  0x3e90729268C9AbA044B0EFaf5bFf7573a701554C  balance 0.05 USDC  payer 0x7757A7C9f4eD02a02353A7929cfb399e9286f52c
+  0x56b293E46D1b9F131c51736D3019f5b87AEc3343  balance 0.05 USDC  payer 0x7757A7C9f4eD02a02353A7929cfb399e9286f52c
+  0xbFd1D5EF77821ee9eD3c7c4045EE64aED1C628D8  balance 0.05 USDC  payer 0x7757A7C9f4eD02a02353A7929cfb399e9286f52c
+  0xEaF95820fbE8669083DEEe7BE18b133BDf98a70F  balance 0.05 USDC  payer 0x7757A7C9f4eD02a02353A7929cfb399e9286f52c
+
+[1m4. The agent scans over MCP, finds only its lines, and spends without ETH[0m
+[36m▸[0m [1minvoice-agent[0m [2m(MCP)[0m scan
+  the pay run has 12 lines; [32m2 are mine, 0.075 USDC[0m. The rest are not mine to see.
+  [32m+0.05 USDC[0m at 0x59515BE48BA4545Fde7E1a523f73e653e3A9d3FC [2m(4 payments to this agent so far)[0m
+  [32m+0.025 USDC[0m at 0x215142DC5CF0f3A567951c9A4C4f18Ef82717299 [2m(4 payments to this agent so far)[0m
+[36m▸[0m [1minvoice-agent[0m [2m(MCP)[0m spend 0.02 USDC to dividend-cleo.soapay.eth
+  guard: allow · 1 userOp, max fee 0.010654 USDC paid in USDC, no ETH
+  [32msent[0m  https://sepolia.basescan.org/tx/0x3517202141e4f1ad9849aa40f04ec3d7e332bd8d38a72d991d64d1e4b4d3f3e2
+
+[32mSoapay does not care who gets paid: a person or an agent gets the same name, the same privacy, the same exit.[0m
