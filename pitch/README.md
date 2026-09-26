@@ -31,7 +31,7 @@ To render one slide as a PNG for a quick look, open the HTML with `?only=N` in t
 4. Everyone sees everything (a live payout batch on Base)
 5. The chain published it anyway (Gitcoin DAO, 2022, and nothing has changed since)
 6. Dealbreaker for companies (Visa, plus Stripe, Circle, J.P. Morgan, Fireblocks)
-7. Existing solutions today (Toku on Aleo, Tempo Zones with Deel, Base Ledgers), and the two flaws they share
+7. Existing solutions today (Toku on Aleo, Tempo Zones with Deel, Base Ledgers), and the two flaws they share, permissioned and not fully private
 8. Solution
 9. Architecture diagram
 10. Partner tracks (ENS, World, and the Curvegrid dashboard track)
