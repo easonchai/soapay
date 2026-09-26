@@ -1,6 +1,6 @@
 import { vi } from "vitest";
 import type { Hono } from "hono";
-import { verifyTypedData, type Address, type Hash, type Hex } from "viem";
+import { verifyMessage, verifyTypedData, type Address, type Hash, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { buildApp, type BuildAppDeps } from "../src/app.js";
 import type { HumanVerifier, NameIssuer } from "../src/hooks.js";
@@ -90,6 +90,7 @@ export function makeTestApp(
     getLogs: vi.fn(async (_args: any): Promise<any[]> => []),
     // EOA-only ECDSA by default; tests override it to stand in for ERC-1271 / 6492 wallets.
     verifyTypedData: vi.fn(async (args: any): Promise<boolean> => verifyTypedData(args)),
+    verifyMessage: vi.fn(async (args: any): Promise<boolean> => verifyMessage(args)),
   };
   let n = 0;
   const relayer = {
@@ -133,9 +134,11 @@ export function makeTestApp(
   const app: Hono = buildApp(deps);
   const setIp = (v: string) => (ip = v);
   const setNow = (v: number) => (now = v);
+  const put = (path: string, body: unknown) =>
+    app.request(path, { method: "PUT", body: JSON.stringify(body), headers: { "content-type": "application/json" } });
   const post = (path: string, body: unknown) =>
     app.request(path, { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" } });
-  return { app, db, config, client, relayer, logs, deps, setIp, setNow, post, indexer, worldId };
+  return { app, db, config, client, relayer, logs, deps, setIp, setNow, post, put, indexer, worldId };
 }
 
 /** Response.json() typed loosely for assertions. */
