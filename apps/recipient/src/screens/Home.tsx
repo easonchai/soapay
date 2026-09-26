@@ -4,11 +4,14 @@ import { Copy, CountUp } from "@soapay/ui";
 import { chainName, explorerTxUrl } from "../config.js";
 import { describePhase, useScanner } from "../hooks/scanner.js";
 import { useChain } from "../hooks/useChain.js";
+import { lastSpendTx } from "../hooks/useChainViews.js";
 import { useWallet } from "../hooks/useWallet.js";
 import { useServices } from "../services/ServicesProvider.js";
 import { Addr, Alert, Badge, Button } from "../ui/kit.js";
 import { formatUsdc, relativeTime, USDC_DECIMALS } from "../ui/format.js";
 import { useUnlocked } from "../vault/VaultProvider.js";
+import { GaslessProofPanel } from "./GaslessProof.js";
+import { PayRuns } from "./PayRunViews.js";
 
 const FLAG_TEXT: Record<string, string> = {
   "unknown-payer": "Unknown payer",
@@ -115,6 +118,7 @@ export function Home() {
                 const isOpen = open === key;
                 const url = first && !svc.mock ? explorerTxUrl(svc.settings.chainId, first.txHash) : undefined;
                 const payerName = wallet.payerName(e.payer);
+                const spent = isOpen ? lastSpendTx(e.stealthAddress, wallet.spends, wallet.conversions) : null;
                 return (
                   <Fragment key={key}>
                     <tr className={isOpen ? "expanded" : undefined}>
@@ -182,6 +186,11 @@ export function Home() {
                               The announced amount is a hint from whoever announced it; the live balance is what you can spend. Send uses the
                               guard, so this address isn't linked to others by accident.
                             </div>
+                            {spent && (
+                              <div style={{ maxWidth: 560 }}>
+                                <GaslessProofPanel address={e.stealthAddress} txHash={spent.txHash} />
+                              </div>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -193,6 +202,8 @@ export function Home() {
           </table>
         </div>
       )}
+
+      <PayRuns />
 
       <div className="grid gap-8 md:grid-cols-2">
         <section className="stack-sm">

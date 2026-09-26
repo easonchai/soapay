@@ -1,12 +1,19 @@
 import { ErrorLine, FreshMark, NavyPanel, PageHead, Pill } from "@soapay/ui";
 import { fmtDate } from "@soapay/sdk";
 import type { RunActions } from "../hooks/useRunActions.js";
+import type { RunOnChain } from "../hooks/useRunOnChain.js";
+import { CoworkerViewPanel } from "./CoworkerViewPanel.js";
 import type { StepStatus } from "../lib/run.js";
 import { runTitle } from "../lib/run.js";
 import { Notice, short, usdc } from "../ui/kit.js";
 import { PATH_LABEL, STATUS_TONE } from "./HistoryPage.js";
 
-export type RunDetailPageProps = RunActions & { txUrl(hash: string): string; onBack(): void };
+export type RunDetailPageProps = RunActions & {
+  txUrl(hash: string): string;
+  onBack(): void;
+  /** "What coworkers see" (D-41); omitted for Safe exports, which this app never sends. */
+  onChain?: RunOnChain;
+};
 
 const STEP_TONE: Record<StepStatus | "skipped", "ok" | "warn" | "danger" | "muted"> = {
   landed: "ok",
@@ -187,6 +194,8 @@ export function RunDetailPage(p: RunDetailPageProps) {
           ))}
         </div>
       </div>
+
+      {p.onChain && run.path !== "safe-export" && <CoworkerViewPanel onChain={p.onChain} txUrl={p.txUrl} />}
     </div>
   );
 }

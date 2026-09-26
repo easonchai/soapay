@@ -11,6 +11,7 @@ import { useRoster } from "./hooks/useRoster.js";
 import { useRoute, type Route } from "./hooks/useRoute.js";
 import { useInvitePolling, useInvites } from "./hooks/useInvites.js";
 import { useHistory, useRunActions } from "./hooks/useRunActions.js";
+import { useRunOnChain } from "./hooks/useRunOnChain.js";
 import { useSettings } from "./hooks/useSettings.js";
 import { useWalletBalances } from "./hooks/useWalletBalances.js";
 import { formatUsdc } from "./lib/amount.js";
@@ -150,7 +151,8 @@ function HistoryContainer({ go }: { go(r: Route): void }) {
 function RunContainer({ id, go }: { id: string; go(r: Route): void }) {
   const actions = useRunActions(id);
   const chainId = actions.view?.run.chainId ?? 0;
-  return <RunDetailPage {...actions} txUrl={(h) => txUrl(chainId, h)} onBack={() => go({ page: "history" })} />;
+  const onChain = useRunOnChain(actions.view?.run);
+  return <RunDetailPage {...actions} onChain={onChain} txUrl={(h) => txUrl(chainId, h)} onBack={() => go({ page: "history" })} />;
 }
 
 function SettingsContainer({
