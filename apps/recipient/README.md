@@ -76,6 +76,12 @@ prices directly against the Universal Router V3 with QuoterV2 instead.
 
 A half-finished rotation is saved as `profile.pendingRotation` and resumable from Name settings.
 
+**Wallet-signature accounts** rotate by moving to a recovery-phrase account (owner decision 2026-09-26).
+Name settings guides them: (1) create a phrase (`useRotation().adoptPhrase` → `adoptRecoveryPhrase`),
+(2) optionally Exit or Send funds from the old addresses, (3) the normal rotation above. The wallet keys stay
+as generation 0 (still scanned, still spendable, and their registrant still controls the name); generation
+g ≥ 1 is the phrase's generation g − 1 (`phraseOffsetOf`, `keysForAccountGeneration`).
+
 ## How to plug in another UI
 
 Every screen in `src/screens/` is thin: it renders a hook's state and calls its actions. To build a

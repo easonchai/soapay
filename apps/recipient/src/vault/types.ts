@@ -1,6 +1,6 @@
 import type { AnnouncementRecord, ClusterGraphJSON, MetadataHints, ScanMatch } from "@soapay/sdk";
 import type { Address, Hex } from "viem";
-import { keysFromMnemonic, keysFromSignature, type SoapayKeys } from "@soapay/sdk";
+import { keysFromMnemonic, keysFromSignature, validateMnemonic, type SoapayKeys } from "@soapay/sdk";
 import { ENV } from "../config.js";
 import type { ExitRecord } from "../features/exit/types.js";
 
@@ -185,8 +185,27 @@ export function vaultKeys(data: Pick<VaultData, "mnemonic" | "walletKeys">): Soa
   return data.walletKeys ? keysFromSignature(data.walletKeys.signature) : keysFromMnemonic(data.mnemonic);
 }
 
-/** Recovery-phrase vaults can rotate keys (features/rotation/keys.ts); wallet-signature ones can't yet. */
-export const hasRecoveryPhrase = (data: Pick<VaultData, "walletKeys">): boolean => !data.walletKeys;
+/**
+ * True when the vault holds a recovery phrase and so can derive new key generations (rotation).
+ * Wallet-signature accounts get one by moving to a phrase account (`adoptRecoveryPhrase`).
+ */
+export const hasRecoveryPhrase = (data: Pick<VaultData, "mnemonic">): boolean => data.mnemonic !== "";
+
+/** 1 when generation 0 is wallet-signature keys and later generations come from a phrase (rotation/keys.ts). */
+export const phraseOffsetOf = (data: Pick<VaultData, "walletKeys">): number => (data.walletKeys ? 1 : 0);
+
+/**
+ * Move a wallet-signature account to a recovery phrase (owner decision 2026-09-26). The wallet keys
+ * stay as generation 0, so old payments are still scanned and spendable and their registrant still
+ * controls the name; the phrase supplies generation 1 onward, which the normal rotation route (World ID
+ * session, or the employer's re-approval) then points the name at.
+ */
+export function adoptRecoveryPhrase(data: VaultData, mnemonic: string): VaultData {
+  if (!data.walletKeys) throw new Error("This account already uses a recovery phrase.");
+  if (data.mnemonic !== "") throw new Error("A recovery phrase is already set up for this account.");
+  if (!validateMnemonic(mnemonic)) throw new Error("That isn't a valid recovery phrase.");
+  return { ...data, mnemonic: mnemonic.trim().toLowerCase().split(/\s+/).join(" ") };
+}
 
 export function chainState(data: VaultData, chainId = data.settings.chainId): ChainState {
   return data.chains[String(chainId)] ?? emptyChainState();

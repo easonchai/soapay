@@ -29,9 +29,19 @@ export type KeyRing = {
   all: SoapayKeys[];
 };
 
-export function keyRing(mnemonic: string, generation: number, gen0?: SoapayKeys): KeyRing {
+/**
+ * Accounts that started on wallet-signature keys and then moved to a recovery phrase (owner decision
+ * 2026-09-26): generation 0 is the wallet-signature key set and generation g ≥ 1 is the phrase's
+ * generation g − 1. `phraseOffset` is 1 for them, 0 for phrase-native accounts.
+ */
+export function keysForAccountGeneration(mnemonic: string, generation: number, phraseOffset = 0): SoapayKeys {
+  if (generation < phraseOffset) throw new Error("This generation comes from a wallet signature, not the recovery phrase");
+  return keysForGeneration(mnemonic, generation - phraseOffset);
+}
+
+export function keyRing(mnemonic: string, generation: number, gen0?: SoapayKeys, phraseOffset = 0): KeyRing {
   const all: SoapayKeys[] = [];
-  for (let g = 0; g <= generation; g++) all.push(g === 0 && gen0 ? gen0 : keysForGeneration(mnemonic, g));
+  for (let g = 0; g <= generation; g++) all.push(g === 0 && gen0 ? gen0 : keysForAccountGeneration(mnemonic, g, phraseOffset));
   const base = all[0]!;
   const top = all[generation]!;
   return {
