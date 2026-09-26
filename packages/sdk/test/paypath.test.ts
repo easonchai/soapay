@@ -33,7 +33,12 @@ describe("selectPayPath", () => {
   it("EOA whose wallet can upgrade via 7702 ('ready') → StealthDisperse when deployed (wallets cap batch size)", () => {
     const p = selectPayPath({ ...base, capabilities: { atomic: { status: "ready" } } });
     expect(p.kind).toBe("disperse");
-    expect(p.reason).toMatch(/7702/);
+    expect(p.reason).toMatch(/caps a batch/);
+  });
+
+  it("EOA already delegated with 7702 ('supported', e.g. a MetaMask smart account) → StealthDisperse when deployed", () => {
+    const p = selectPayPath({ ...base, accountKind: "delegated-eoa", capabilities: { atomic: { status: "supported" } } });
+    expect(p.kind).toBe("disperse");
   });
 
   it("EOA whose wallet can upgrade via 7702 ('ready') → batch when StealthDisperse isn't deployed", () => {

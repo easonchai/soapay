@@ -73,15 +73,17 @@ export function selectPayPath(i: PayPathInput): PayPath {
   }
 
   const atomic = atomicSupport(i.capabilities, i.chainId);
-  // A plain EOA the wallet *could* upgrade with EIP-7702 ("ready") still pays through StealthDisperse
-  // when it's deployed: wallets cap EIP-5792 batches at a handful of calls (MetaMask refused a
-  // 125-line run, 250 calls, as "too large"), while StealthDisperse pays up to 350 lines per tx.
-  if (atomic === "ready" && i.stealthDisperse && i.disperseDeployed) {
+  // An EOA (plain, or already delegated with EIP-7702, e.g. a MetaMask smart account) pays through
+  // StealthDisperse when it's deployed, whatever batching the wallet reports: MetaMask caps EIP-5792
+  // batches at 10 calls ("Batch size cannot exceed 10"), i.e. 5 lines of [transfer, announce], while
+  // StealthDisperse pays up to 350 lines per tx.
+  const eoaLike = i.accountKind === "eoa" || i.accountKind === "delegated-eoa";
+  if (eoaLike && (atomic === "ready" || atomic === "supported") && i.stealthDisperse && i.disperseDeployed) {
     return {
       kind: "disperse",
       title: "StealthDisperse (plain account)",
       reason:
-        "Your wallet could batch by upgrading this account with EIP-7702, but wallets cap batch size. You approve the exact run total once, then sign one StealthDisperse payment per chunk of up to 350 lines; each pays and announces its lines in the same transaction.",
+        "Your wallet can batch, but it caps a batch at a handful of calls. You approve the exact run total once, then sign one StealthDisperse payment per chunk of up to 350 lines; each pays and announces its lines in the same transaction.",
     };
   }
   if (atomic === "supported" || atomic === "ready") {
