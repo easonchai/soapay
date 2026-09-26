@@ -160,11 +160,14 @@ function main() {
   const shutdown = (sig: string) => {
     logger.info("shutting down", { sig });
     indexer.stop();
+    // Let in-flight requests finish: a name claim waits for Sepolia blocks (15–30 s), and a redeploy
+    // killing it mid-way left users with a stalled claim. Railway's drain window
+    // (RAILWAY_DEPLOYMENT_DRAINING_SECONDS=60 on this service) gives us the time.
     server.close(() => {
       db.close();
       process.exit(0);
     });
-    setTimeout(() => process.exit(0), 5_000).unref();
+    setTimeout(() => process.exit(0), 45_000).unref();
   };
   process.on("SIGINT", () => shutdown("SIGINT"));
   process.on("SIGTERM", () => shutdown("SIGTERM"));
