@@ -95,6 +95,22 @@ Choices and limits:
 
 Live (2026-09-25): `mcp-agent-7c1e.soapay.eth` on ENSv2 Sepolia resolves `agent-context` and `agent-endpoint[web]` through viem's `getEnsText`.
 
+## Live agent demo (`pnpm demo:agent-live`)
+
+`pnpm demo:agent` drives these tools from a script. `pnpm demo:agent-live` hands them to a real model instead: Claude Sonnet 5 (`claude-sonnet-5`) gets a plain-English task and this server's tools, and decides on its own which tools to call and with what arguments. Code: `examples/demo/agent-live.ts` (terminal) and `agent-live-core.ts` (loop, bridge, redaction; tested in `examples/test/agent-live.test.ts`).
+
+```bash
+pnpm --filter @soapay/mcp build                  # the demo starts apps/mcp/dist/index.js over stdio
+pnpm demo:agent-live join                        # paste the invite link at the prompt (hidden)
+pnpm demo:agent-live spend 0.5 alex-demo         # --env <file> for another agent, --max-turns <n> (default 12)
+```
+
+- **Tasks.** `join`: "You are the billing agent for Meridian Labs. Join payroll with this invite and set up your Soapay identity." `spend`: "Check what you've been paid, then pay 0.5 USDC to alex-demo.soapay.eth. Confirm the plan yourself." The system prompt tells the model to be brief, act without asking, and confirm a plan itself unless the guard says `block`.
+- **Backends.** Default: the local `claude` CLI, headless (`claude -p --model claude-sonnet-5 --mcp-config … --output-format stream-json`), on the machine's existing Claude login, so no API key is needed. Claude Code's built-in tools are off and only the task's Soapay tools are allowed. With `ANTHROPIC_API_KEY` set (environment or the env file), `--backend sdk` runs the same loop on the Anthropic TypeScript SDK instead, with this process bridging the MCP tools into the Messages API.
+- **Tools per task.** `join` sees `whoami`, `create_agent_identity`, `resolve_name`. `spend` sees `whoami`, `scan`, `balance`, `resolve_name`, `spend`. `pay` (the payer wallet) and swaps are never offered.
+- **Screen.** The model's short messages stream as `◆ …`, each tool call shows as `▸ tool(args…)` with a spinner, then its result (name, records, guard decision, Basescan/Etherscan links), then a summary of the tools the agent chose. The invite link is hidden on input and redacted everywhere after; keys and the recovery phrase go to the server through its environment only (the CLI's MCP config file holds only `${VAR}` references); RPC URLs print host-only.
+- **Settings.** The same env file as `pnpm demo:agent` (`scripts/.demo-agent.local.env`, created by `pnpm demo:agent init`).
+
 ## Development
 
 ```bash
