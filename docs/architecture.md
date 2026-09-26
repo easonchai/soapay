@@ -226,6 +226,53 @@ sequenceDiagram
 
 Fees are roughly fixed per leg, so the Exit screen shows the whole cost and "you receive ≈ X of Y" before starting (D-48). On testnet the relayer charges about 21.5 USDC per withdrawal, so small exits withdraw directly, with the destination paying a little Sepolia ETH.
 
+## What each piece stores, and why
+
+### An employee's ENS name (`alice.soapay.eth`, ENSv2 on Sepolia)
+
+Live example, read from Sepolia on 2026-09-26:
+
+| Record | Example value | Who can write it | Why |
+| --- | --- | --- | --- |
+| `stealth` (text) | `st:eth:0x02d7882e…` (141 characters) | **Only the employee's registrant key**: Enhanced Access Control grants it `ROLE_SET_TEXT` on the `keccak256("stealth")` resource of its own resolver, and nothing else. The company (parent owner) can also rewrite it, because the employer is trusted | The employee's **stealth meta-address** in ERC-5564 URI form: `st:eth:0x` followed by two compressed secp256k1 public keys, the 33-byte **spending** key and the 33-byte **viewing** key. It's all a payer needs to create a fresh address per payment, and it reveals nothing about any payment. It's public keys only |
+| `soapay:registrant` (text) | `0xFC24…C143` | Set once at issuance; **nobody** can change it afterwards except the parent owner | The **throwaway registrant address** derived from the employee's keys. It holds the `stealth` writer role and is the key under which the meta-address is registered in the ERC-6538 registry on Base, so a payer can cross-check "ENS says X" against "the registry says X" before pinning |
+| `addr` | **not set** (resolves to `null`) | Nobody (the registrant has no role for it) | Deliberate. A plain wallet paying `alice.soapay.eth` would send every payment to one static, linkable address. With no `addr`, only a stealth-aware sender can pay the name |
+| `agent-context`, `agent-endpoint[<protocol>]` (agents only, ENSIP-26) | `{"name":"invoice-agent.soapay.eth","description":"Sends invoices and gets paid privately in USDC.",…}` | Set once at issuance (immutable afterwards) | What the agent does and where to reach it, so agents are discoverable by name with their own identity and permissions |
+
+How the name itself is set up:
+
+- **Our own subname registry.** `soapay.eth` points at its own ENSv2 `UserRegistry` (a PermissionedRegistry), deployed through the ENS VerifiableFactory. The API's issuer key holds `ROLE_REGISTRAR` there and nothing else: it can register new labels, but not change or revoke existing ones.
+- **One Permissioned Resolver per employee.** EAC text roles are scoped per resolver, so if two employees shared a resolver, the `stealth` role would let each overwrite the other's record. Each name gets its own resolver proxy, and the records are written *before* the name is registered, so it's never visible half-configured.
+- **Non-transferable, revocable, never expiring.** The employee owns the name's token but has no transfer, resolver or subregistry role. Expiry is `2^64 - 1`, and the company revokes by unregistering (for example, when someone leaves).
+- **No resolver on the parent.** A parent resolver could answer for a revoked subname through wildcard resolution, so `soapay.eth` deliberately has none.
+- **Resolution** uses viem's standard Universal Resolver, so any ENS-aware tool can read these records.
+
+Full role table and calls: [contracts/ENSV2.md](../contracts/ENSV2.md).
+
+### The ERC-6538 registry entry (Base Sepolia)
+
+`registrant → (scheme 1, meta-address)`, written by our relayer with `registerKeysOnBehalf` using the registrant's signature, so the employee never needs gas or a funded wallet. It's the canonical, chain-local copy of the same meta-address, and the payer's cross-check source.
+
+### What the payer's app keeps (the pin)
+
+The first time a name is paid, the company app stores `name → meta-address` locally (the **pin**). Every later run re-resolves the name. If the record changed, it pays only if a valid World ID attestation from the attester it pinned covers exactly *pinned → current*; otherwise the line is blocked until the employer approves by hand. The CLI does the same in `.soapay/pins.json`.
+
+### The World ID pieces
+
+| Piece | Contents | Why |
+| --- | --- | --- |
+| Session signal (link World ID) | `soapay:session:<label>:<registrant>` | Binds the Selfie Check session to this exact name and key, so a proof can't be replayed for another name |
+| Rotation signal | `soapay:rotate:<label>:<new meta-address>:<deadline>` | Binds the proof to this exact change and a deadline |
+| What the API stores | per name: the `session_id`, when and how it was attached; globally: used session nullifiers and RP nonces | Continuity check and replay protection. **No identity data** is stored or seen |
+| `MetaRotation` attestation (EIP-712, signed by the API's attester) | `label`, `oldMeta`, `newMeta`, `verifiedAt` | What the payer's app verifies before accepting a changed record. It covers one exact change, from one pinned attester |
+| `RotationClaim` (EIP-712, signed by the employee's registrant key) | `label`, `oldMeta`, `newMeta`, `deadline` | Proves the key holder asked for this change, alongside the World ID proof that it's the same person |
+
+### Each payment line on-chain
+
+- **USDC transfer** from the employer to a fresh stealth address (through `StealthDisperse`, or an EIP-5792 batch).
+- **ERC-5564 announcement** on the canonical Announcer: scheme `1`, the stealth address, the one-time ephemeral public key, and metadata `viewTag (1 byte) | transfer selector (4) | token (20) | amount (32) | payer (20)`. The view tag lets a scanner skip ~255 of 256 announcements cheaply. The payer is appended because the announcement's `caller` is always the contract. Scanners recompute the address and read the real balance; they never trust the metadata amount or token.
+- Lines in a batch are **strictly ascending by address** (enforced on-chain), so the order says nothing about names.
+
 ## Why EIP-7702 for spending (and not a contract per address)
 
 **Before any spend, a stealth address is a plain account.** ERC-5564 gives you a private key, and so an ordinary externally owned account: no contract, no code, just an address USDC can be sent to like any wallet. That's deliberate. Any sender, including a plain disperse tool, can pay it with a normal transfer, and on a block explorer it looks like every other fresh address.
@@ -248,6 +295,34 @@ Fees are roughly fixed per leg, so the Exit screen shows the whole cost and "you
 **The trade-off.** Every Soapay stealth address ends up pointing at the same implementation, which is a mild shared fingerprint. It's the same fingerprint as every other 7702 wallet using that implementation, so it groups you with the crowd rather than with your coworkers, but it isn't zero.
 
 **Why the paymaster works.** The Circle Paymaster needs a USDC permit signed by the account. Once the EOA has code, USDC verifies that signature through ERC-1271 by asking the account, and `Simple7702Account` answers by recovering the ECDSA signer and checking it equals itself. We verified this on a Base fork (`packages/sdk/test/fork.e2e.test.ts`) after an earlier note wrongly said it would fail; the spend path relies on it.
+
+## Against each sponsor's full brief
+
+Beyond the qualification checklist in [docs/bounty-integrations.md](bounty-integrations.md), this is how we use what each sponsor's brief highlights.
+
+**ENS: "Best Use of ENSv2".** The brief asks teams to explore the hierarchical registry, Enhanced Access Control, per-subname Permissioned Resolvers and subname setups, with bonus points for agents as namespaces.
+
+| Brief highlights | Soapay |
+| --- | --- |
+| Deploy your own subname registry and manage subnames under your own rules | ✅ `soapay.eth` → our own `UserRegistry`; an issuer key that can only register |
+| Enhanced Access Control: "letting an account edit only certain text records" | ✅ Exactly our core rule: the employee's key can write the `stealth` record and nothing else |
+| Give subnames their own Permissioned Resolver so they fully own their data | ✅ One resolver per employee (required for the rule above to be safe) |
+| Expiring, revocable, non-transferable vs transferable, forever names | ✅ Non-transferable and revocable; no expiry |
+| Wildcard resolution off a parent's resolver; record or namespace aliasing | ➖ Deliberately not used: a parent resolver could answer for revoked names |
+| Bonus: agents as namespaces, each with their own identity and permissions | ✅ Agents get `*.soapay.eth` with ENSIP-26 `agent-context`/`agent-endpoint` records, the same `stealth` rule, and are paid in the same batch as people |
+
+**World: "Best Use of IDKit".** The brief rewards "the best decision about which credential is needed", and lists "recovery or protection of an important account action" as a strong example.
+
+| Brief highlights | Soapay |
+| --- | --- |
+| A real trust moment | ✅ Changing where future salary goes (key rotation) |
+| The proportionate credential, and why | ✅ Selfie Check through a **session**: the question is continuity ("same person who set up this name?"), not uniqueness, so Proof of Human (an Orb visit) or Passport would ask for more than the moment needs |
+| Selfie Check "now live with Sybil score" | ➖ We verify the full result, including the score, through the Developer Portal but don't gate on it: a score measures sybil risk, and rotation asks about continuity. Noted as a possible extra signal |
+| A workflow that becomes safer or simpler | ✅ Safer: a stolen key can't redirect pay. Simpler: no call to HR to approve a key change. Essential for pseudonymous contributors paid by a DAO |
+
+We don't enter "World ID for Agents". Our agents are payees, and no agent action there needs a human's approval.
+
+**Uniswap: "Best Uniswap Stack Contribution".** The brief is "build on or integrate any part of the Uniswap stack, including the Uniswap API, the Uniswap AMM (v2, v3, or v4)". ✅ We use the **Uniswap API** for quotes and execute on **v2/v3 pools** through the Universal Router and Permit2, so both named parts are covered, plus a `FEEDBACK.md` with live findings.
 
 ## Who sees what
 
