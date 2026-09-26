@@ -26,3 +26,7 @@ Written 2026-09-26. `yudhishthra` is 96 commits ahead of the merge base. `main` 
 2. Port CK's screens onto `apps/*/src/hooks` (the logic seam), then delete the duplicate SDK modules.
 3. Add "derive from wallet (EOA only)" to the SDK's `keys.ts` as a second entry point.
 4. `pnpm build && pnpm typecheck && pnpm test`, then check the live demo against Base Sepolia.
+
+## Status (2026-09-26): merged on `integrate-ck`
+
+`main` was merged into `yudhishthra` on the `integrate-ck` branch. CK's screens and `packages/ui` now run on our SDK, API and hooks. `apps/gateway` is gone, and `POST /relay` lives in `apps/api` with the same request shape. The signature keys became an EOA-only option in `keys.ts`. His formatters, `findRegistrationBlock`, per-wallet live balances and pay-path order are in the SDK or the sender lib. `sequential` mode and his localStorage stores were dropped. Open clashes are marked `TODO(clash)`: rotation for signature-derived accounts (`apps/recipient/src/hooks/useRotation.ts`) and his paste-per-run list versus our pinned roster (`apps/sender/src/pages/PayRunPage.tsx`).
