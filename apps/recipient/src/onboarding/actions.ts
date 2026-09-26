@@ -10,7 +10,7 @@ import { ApiError, type Api, type NameRecord, type RegisterResult } from "../api
 import type { Hex } from "viem";
 import type { HumanCheckResult } from "../worldid/types.js";
 
-/** The optional World ID proof (the link, D-58) for POST /names as `worldIdSession`, forwarded unchanged. */
+/** The optional World ID session for POST /names, forwarded unchanged. */
 export function sessionFields(r: HumanCheckResult | undefined): { worldIdSession?: unknown } {
   return r ? { worldIdSession: r } : {};
 }
@@ -57,7 +57,7 @@ export async function claimName(p: {
   keys: SoapayKeys;
   chainId: number;
   label: string;
-  /** Optional World ID proof that links the name (self-service recovery, §5, D-58). */
+  /** Optional World ID session (self-service recovery, §5). */
   session?: HumanCheckResult | undefined;
   /** Invite code when the employer reserved this label (§7). */
   inviteCode?: Hex | undefined;

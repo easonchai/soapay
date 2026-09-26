@@ -23,7 +23,6 @@ import {
   getChainConfig,
   isValidLabel,
   splitIntoDenominations,
-  worldIdNullifierOf,
   type PayRunLine,
 } from "@soapay/sdk";
 import { secp256k1 } from "@noble/curves/secp256k1.js";
@@ -63,7 +62,7 @@ const state: {
   world: World | null;
   names: Map<string, { label: string; registrant: Address; metaAddress: string; deadline: string }>;
   rotations: { label: string; oldMeta: string; newMeta: string; verifiedAt: string }[];
-  /** label → linked World ID nullifier, decimal (mock of the API's World ID link, D-58). */
+  /** label → World ID session id (mock of the API's session binding). */
   sessions: Map<string, string>;
   /** Invite code hashes already used. */
   claimedInvites: Set<string>;
@@ -261,14 +260,14 @@ export function createMockFetch(chainId: number): ApiFetch {
     if (method === "POST" && attach) {
       const label = decodeURIComponent(attach[1]!);
       if (!state.names.has(label)) return err(404, "not_found", "name not found");
-      const body = JSON.parse(String(init?.body ?? "{}")) as { signature?: string; deadline?: string; worldIdResult?: unknown };
+      const body = JSON.parse(String(init?.body ?? "{}")) as { signature?: string; deadline?: string; worldIdResult?: { session_id?: string } };
       if (!body.signature || !body.deadline) return err(400, "invalid_body", "deadline and signature are required");
-      const nullifier = worldIdNullifierOf(body.worldIdResult);
-      if (nullifier === undefined) return err(403, "proof_missing", "worldIdResult must be an IDKit Proof of Human result");
-      if (state.sessions.has(label)) return err(409, "session_exists", "this name is already linked to a World ID");
+      const sessionId = body.worldIdResult?.session_id;
+      if (!sessionId || !/^session_[0-9a-f]+$/i.test(sessionId)) return err(403, "proof_missing", "worldIdResult must be an IDKit session result");
+      if (state.sessions.has(label)) return err(409, "session_exists", "this name already has a World ID session");
       const attachedAt = Math.floor(Date.now() / 1000);
-      state.sessions.set(label, nullifier.toString());
-      return respond(201, { label, attachedAt, rotationAllowedFrom: attachedAt + 72 * 3600 });
+      state.sessions.set(label, sessionId);
+      return respond(201, { label, sessionId, attachedAt, rotationAllowedFrom: attachedAt + 72 * 3600 });
     }
 
     const rotation = /^\/names\/([^/]+)\/rotation$/.exec(path);
@@ -281,16 +280,14 @@ export function createMockFetch(chainId: number): ApiFetch {
         deadline?: string;
         registrantSig?: string;
         registerSig?: string;
-        worldIdResult?: unknown;
+        worldIdResult?: { session_id?: string };
       };
       if (!body.newMeta || !body.deadline || !body.registrantSig || !body.registerSig) {
         return err(400, "invalid_body", "newMeta, deadline, registrantSig and registerSig are required");
       }
       const bound = state.sessions.get(label);
-      if (!bound) return err(409, "no_worldid_link", "this name isn't linked to a World ID; the employer must approve changes");
-      if (worldIdNullifierOf(body.worldIdResult)?.toString() !== bound) {
-        return err(403, "human_mismatch", "proof is from a different person than the one linked to this name");
-      }
+      if (!bound) return err(409, "no_session", "this name has no World ID session; the employer must approve changes");
+      if (body.worldIdResult?.session_id !== bound) return err(403, "session_mismatch", "not the session enrolled for this name");
       if (BigInt(body.deadline) <= BigInt(Math.floor(Date.now() / 1000))) return err(400, "expired", "deadline has passed");
       const oldMeta = row.metaAddress.toLowerCase();
       const newMeta = body.newMeta.toLowerCase();
@@ -350,7 +347,7 @@ export function createMockFetch(chainId: number): ApiFetch {
           registrant: Address;
           metaAddress: string;
           deadline: string;
-          worldIdSession?: unknown;
+          worldIdSession?: { session_id?: string };
           inviteCode?: Hex;
         };
         if (!isValidLabel(body.label)) return err(400, "invalid_label", "label must be 3-32 of [a-z0-9-]");
@@ -370,8 +367,7 @@ export function createMockFetch(chainId: number): ApiFetch {
           state.claimedInvites.add(keccak256(reserved.code).toLowerCase());
         }
         state.names.set(body.label, row);
-        const linked = worldIdNullifierOf(body.worldIdSession);
-        if (linked !== undefined) state.sessions.set(body.label, linked.toString());
+        if (body.worldIdSession?.session_id) state.sessions.set(body.label, body.worldIdSession.session_id);
         return respond(201, present(row));
       }
     }

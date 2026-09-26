@@ -277,10 +277,10 @@ Live on Base Sepolia and ENSv2 Sepolia (2026-09-25): an agent created `mcp-agent
 | Session verification: nonce, signal, credential, environment, replay, Developer Portal | [`apps/api/src/worldid/verifier.ts`](apps/api/src/worldid/verifier.ts), [`portal.ts`](apps/api/src/worldid/portal.ts) |
 | Routes: RP context, attach session, rotation + attestation + ERC-6538 relay + top-up | [`apps/api/src/routes/worldid.ts`](apps/api/src/routes/worldid.ts), [`rotation.ts`](apps/api/src/routes/rotation.ts) |
 | Typed data (RotationClaim, MetaRotation, AttachSession) and signals | [`packages/sdk/src/rotation.ts`](packages/sdk/src/rotation.ts) |
-| `<HumanCheck mode="create-session" \| "rotate">` over `IDKitSessionWidget` | [`packages/worldid-react`](packages/worldid-react) |
+| `<HumanCheck mode="create-session" \| "rotate">`: IDKit core `createSession` / `proveSession`, QR shown inline | [`packages/worldid-react`](packages/worldid-react) |
 | Tests with a mocked Developer Portal | [`apps/api/test/worldid.test.ts`](apps/api/test/worldid.test.ts) |
 
-App `app_0cc7167efe114ac2e0ef7d9827098353`, RP `rp_3ede5fe1cab9af48`, `WORLD_ENV=staging` for the demo. Setup is in [`apps/api/README.md`](apps/api/README.md) and [`apps/api/.env.example`](apps/api/.env.example).
+The World ID app and RP come from the api's environment (`WORLD_APP_ID`, `WORLD_RP_ID`; nothing in the code defaults them), and the RP must support World ID sessions (D-59). Setup is in [`apps/api/README.md`](apps/api/README.md) and [`apps/api/.env.example`](apps/api/.env.example).
 
 ## Roadmap
 

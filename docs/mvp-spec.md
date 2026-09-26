@@ -75,9 +75,9 @@ The exact contract addresses, role ids and calls are in `contracts/ENSV2.md` (th
 
 World ID 4.0 proofs can't be verified on-chain on Sepolia (only on World Chain and Arc). So the **registrant keeps the ENSv2 `stealth` writer role** (the ENS story: only the employee controls their record), and the **sender app is the enforcement point**:
 
-1. **Recipient app:** a one-time Proof of Human proof on the `soapay-recovery` action (D-58), then `POST /names/:label/rotation {newMeta, deadline, registrantSig (EIP-712 RotationClaim), worldIdResult}`.
+1. **Recipient app:** `IDKit.proveSession(savedSessionId)` with the Proof of Human constraint (D-59), then `POST /names/:label/rotation {newMeta, deadline, registrantSig (EIP-712 RotationClaim), worldIdResult}`.
 2. **API:**
-   - verifies that the proof's nullifier equals the one linked to the name, that its single-use RP nonce hasn't been used, and that the registrant signature is valid;
+   - verifies that the proof's `session_id` equals the one linked to the name, that its single-use RP nonce and session nullifier haven't been used, and that the registrant signature is valid;
    - issues an **EIP-712 attestation** signed by `ATTESTER_PRIVATE_KEY`: `MetaRotation(string label, string oldMeta, string newMeta, uint256 verifiedAt)`. It is stored and served at `GET /names/:label/attestations`;
    - **sponsors the registrant's Sepolia gas** for the `setText` (a small top-up from the L1 relayer). The registrant is already public, so this links nothing new.
 3. **Registrant:** calls `setText(stealth)` on its own Permissioned Resolver. The rotation request also carries a fresh `registerKeysOnBehalf` signature for the new meta-address. The API relays it to the ERC-6538 registry on Base in the same World-ID-gated request, so `resolveStealthMeta`'s registry cross-check keeps passing. The rotation doesn't count against the once-per-human `/register` allowance.
@@ -129,11 +129,11 @@ Name claim, EIP-712 (`metaAddress` is signed in canonical lowercase `st:eth:0x�
 
 Owner decision (2026-09-25, supersedes the earlier two-moment design):
 - **No enrollment gate.** Onboarding doesn't require World ID, and there's no Orb requirement. Relayer abuse is handled with rate limits (employer invite links later if needed).
-- **Trust moment: key rotation / recovery.** Changing the meta-address behind a name redirects future salary. At enrollment the employee MAY link World ID with a one-time **Proof of Human** request on the `soapay-recovery` action (D-54, D-58); the API stores the proof's **nullifier**, which is stable per (human, RP, action). A later rotation must come with a proof carrying the same nullifier. The API verifies it and issues the MetaRotation attestation (§2.1), and the sender app auto-accepts. (Earlier versions used a World ID session with Selfie Check, then Proof of Human; sessions turned out to be unavailable for our RP, D-58.)
+- **Trust moment: key rotation / recovery.** Changing the meta-address behind a name redirects future salary. At enrollment the employee MAY link World ID with a **Proof of Human session** (`IDKit.createSession`, D-54, D-59); the API stores its **session id**. A later rotation must prove that same session (`IDKit.proveSession`). The API verifies it and issues the MetaRotation attestation (§2.1), and the sender app auto-accepts. (D-58 briefly used one-time requests matched by nullifier, because the first RP rejected sessions; production allows one such proof per person per action, so D-59 restored sessions on a fresh RP.)
 - **Why Proof of Human:** moving future salary is the highest-stakes action, and World calls Selfie Check medium-assurance (D-54).
-- **Alternative paths:** no World ID linked (`no_worldid_link`), a cancelled or expired proof, a different person (`human_mismatch`), or a replayed proof (`request_used`) → no attestation → the sender app blocks the line and the employer approves by hand.
+- **Alternative paths:** no World ID session linked (`no_session`), a cancelled or expired proof, another session (`session_mismatch`), or a replayed proof (`session_replayed`, `request_used`) → no attestation → the sender app blocks the line and the employer approves by hand.
 - **Where it's essential:** DAO contributors are often pseudonymous, so the payer has no out-of-band channel to confirm a change; World ID is the only continuity signal that keeps the contributor pseudonymous. For known employees it automates what HR would otherwise confirm by phone.
-- Proofs are verified server-side in `apps/api`. We store the linked nullifier per name and every RP nonce we signed (marked used), never identity. The nullifier is RP- and action-scoped, so it can't be linked across apps. The `soapay-enroll` action exists in the Portal but is unused.
+- Proofs are verified server-side in `apps/api`. We store the linked session id per name, each used session nullifier, and every RP nonce we signed (marked used), never identity. The session is RP-scoped, so it can't be linked across apps. Session requests take no action.
 
 ## 6. Uniswap: convert salary in place
 

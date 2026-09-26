@@ -39,6 +39,10 @@ export function metaHex(n = 1): Hex {
 /** Canonical URI form (what NameClaims are signed over and what the API stores). */
 export const metaUri = (n = 1) => `st:eth:${metaHex(n)}`;
 
+/** Test-only World ID app and RP ids (the real ones come from the environment, D-59). */
+export const TEST_WORLD_APP_ID = "app_test0000soapay";
+export const TEST_WORLD_RP_ID = "rp_test0000soapay";
+
 export type Fakes = {
   client: { [K in keyof ReadClient]: ReturnType<typeof vi.fn> };
   relayer: WriteClient & { writeContract: ReturnType<typeof vi.fn> };
@@ -66,6 +70,8 @@ export function makeTestApp(
     CHAIN_ID: "84532",
     RELAYER_PRIVATE_KEY: RELAYER_KEY,
     DB_PATH: ":memory:",
+    WORLD_APP_ID: TEST_WORLD_APP_ID,
+    WORLD_RP_ID: TEST_WORLD_RP_ID,
     WORLD_RP_SIGNING_KEY: TEST_RP_SIGNING_KEY,
     ...opts.env,
   });
