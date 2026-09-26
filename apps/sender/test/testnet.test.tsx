@@ -23,10 +23,10 @@ describe("testnet defaults (D-47)", () => {
     expect(r.rows.map((x) => x.amount)).toEqual([12_000_000n, 8_500_000n]);
   });
 
-  it("asks for a confirmation above 50 test USDC, never on mainnet", () => {
-    expect(TESTNET_RUN_CONFIRM_ABOVE).toBe(50_000_000n);
-    expect(testnetRunConfirmation(50_000_000n, true)).toBeNull();
-    expect(testnetRunConfirmation(50_000_001n, true)).toBe("This run sends 50.000001 test USDC; the faucet gives 20 per 2 hours.");
+  it("asks for a confirmation above the 1,000,000 USDC welcome drop, never on mainnet", () => {
+    expect(TESTNET_RUN_CONFIRM_ABOVE).toBe(1_000_000_000_000n);
+    expect(testnetRunConfirmation(1_000_000_000_000n, true)).toBeNull();
+    expect(testnetRunConfirmation(1_000_000_000_001n, true)).toBe("This run sends 1,000,000.000001 test USDC, more than the 1,000,000 USDC welcome drop.");
     expect(testnetRunConfirmation(26_600_000_000n, false)).toBeNull();
   });
 });
@@ -78,21 +78,21 @@ const review = (total: bigint, testnet: boolean) =>
   render(<ReviewPage run={run} plan={plan(total)} wallet={wallet} payPath={payPath} chainName="Base Sepolia" testnet={testnet} onBack={() => undefined} />);
 
 describe("Review: large testnet run confirmation", () => {
-  it("holds a testnet run above 50 USDC until the employer confirms", () => {
-    review(60_000_000n, true);
-    expect(screen.getByTestId("testnet-big-run").textContent).toBe("This run sends 60.00 test USDC; the faucet gives 20 per 2 hours.");
+  it("holds a testnet run above the welcome drop until the employer confirms", () => {
+    review(1_500_000_000_000n, true);
+    expect(screen.getByTestId("testnet-big-run").textContent).toBe("This run sends 1,500,000.00 test USDC, more than the 1,000,000 USDC welcome drop.");
     const send = screen.getByRole("button", { name: "Approve and send" });
     expect(send).toBeDisabled();
     fireEvent.click(screen.getByRole("checkbox", { name: "Send it anyway" }));
     expect(send).toBeEnabled();
   });
 
-  it("does not ask at or below 50 USDC, or on mainnet", () => {
-    review(50_000_000n, true);
+  it("does not ask at or below the drop, or on mainnet", () => {
+    review(1_000_000_000_000n, true);
     expect(screen.queryByTestId("testnet-big-run")).toBeNull();
     expect(screen.getByRole("button", { name: "Approve and send" })).toBeEnabled();
     cleanup();
-    review(60_000_000n, false);
+    review(1_500_000_000_000n, false);
     expect(screen.queryByTestId("testnet-big-run")).toBeNull();
     expect(screen.getByRole("button", { name: "Approve and send" })).toBeEnabled();
   });

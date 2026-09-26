@@ -14,6 +14,8 @@ import { useHistory, useRunActions } from "./hooks/useRunActions.js";
 import { useRunOnChain } from "./hooks/useRunOnChain.js";
 import { useSettings } from "./hooks/useSettings.js";
 import { useWalletBalances } from "./hooks/useWalletBalances.js";
+import { useWelcomeDrop } from "./hooks/useWelcomeDrop.js";
+import { welcomeMessage, type WelcomeDrop } from "./lib/sponsorship.js";
 import { formatUsdc } from "./lib/amount.js";
 import { demoLedger } from "./lib/demoChain.js";
 import { MIN_PASSPHRASE_LENGTH, type VaultMode } from "./lib/vault.js";
@@ -229,10 +231,36 @@ function exitDemo() {
   location.assign(location.pathname);
 }
 
-function Banners() {
+type Welcome = { drop: Extract<WelcomeDrop, { status: "sent" }> | null; dismiss(): void };
+
+function Banners({ welcome }: { welcome: Welcome }) {
   const { app } = useStore();
   const wallet = useWallet();
   const items: ReactNode[] = [];
+  if (welcome.drop) {
+    const d = welcome.drop;
+    items.push(
+      <Notice key="welcome" tone="ok" role="status">
+        <b>{welcomeMessage(d)}.</b>{" "}
+        <a href={txUrl(app.chainId, d.usdc.txHash)} target="_blank" rel="noreferrer">
+          View on Basescan
+        </a>
+        {d.eth && (
+          <>
+            {" "}
+            (plus a little ETH for gas:{" "}
+            <a href={txUrl(app.chainId, d.eth.txHash)} target="_blank" rel="noreferrer">
+              tx
+            </a>
+            )
+          </>
+        )}{" "}
+        <button type="button" className="btn-text btn-inline" onClick={welcome.dismiss}>
+          Dismiss
+        </button>
+      </Notice>,
+    );
+  }
   if (!app.stealthDisperse) {
     items.push(
       <Notice key="5792" tone="warn">
@@ -275,6 +303,9 @@ export function App() {
   const [loggedOut, setLoggedOut] = useState(session.get);
   const [org, setOrg] = useState(getOrgName);
   const [chunk, setChunk] = useState(() => getChunkSize(app.chainId));
+  // Base Sepolia demo (D-52): a wallet that connects gets test USDC once; nothing shows if it already did.
+  // Demo mode is off-chain sample data, so it never claims the welcome drop.
+  const welcome = useWelcomeDrop(wallet.isConnected && !app.demo ? wallet.address : undefined);
   // The default follows the chain (5 USDC on a testnet, 500 elsewhere); a saved value never changes.
   useEffect(() => setChunk(getChunkSize(app.chainId)), [app.chainId]);
 
@@ -347,7 +378,7 @@ export function App() {
       />
       <main className="app-main">
         {phase === "ready" && <InvitePoller />}
-        <Banners />
+        <Banners welcome={welcome} />
         <Presence mode="wait" initial={false}>
           <Fade key={phase !== "ready" ? "vault" : route.page === "run" ? `run-${route.id}` : route.page} y={8}>
             {body}

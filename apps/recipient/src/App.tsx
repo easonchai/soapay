@@ -3,7 +3,6 @@ import { Loader2 } from "lucide-react";
 import { ScannerProvider } from "./hooks/scanner.js";
 import { InviteProvider, useInvite } from "./hooks/useInvite.js";
 import { Onboarding } from "./onboarding/Onboarding.js";
-import { Convert } from "./screens/Convert.js";
 import { Exit } from "./screens/Exit.js";
 import { ExitProvider } from "./hooks/useExit.js";
 import { QueueProvider } from "./hooks/useQueue.js";
@@ -14,7 +13,8 @@ import { NameSettings } from "./screens/NameSettings.js";
 import { Settings } from "./screens/Settings.js";
 import { Spend } from "./screens/Spend.js";
 import { Unlock } from "./screens/Unlock.js";
-import { ServicesProvider } from "./services/ServicesProvider.js";
+import { ServicesProvider, useServices } from "./services/ServicesProvider.js";
+import { exitOffered } from "./config.js";
 import { Alert } from "./ui/kit.js";
 import { VaultProvider, useVault } from "./vault/VaultProvider.js";
 
@@ -25,6 +25,8 @@ import { VaultProvider, useVault } from "./vault/VaultProvider.js";
 function Gate() {
   const vault = useVault();
   const invite = useInvite().state;
+  // The exit is hidden on the Base Sepolia demo (mock pay token, D-52): no tab, no route.
+  const exitOn = exitOffered(useServices().settings.chainId);
   switch (vault.status) {
     case "loading":
       return (
@@ -57,8 +59,7 @@ function Gate() {
                 <Route element={<Layout />}>
                   <Route index element={<Home />} />
                   <Route path="spend" element={<Spend />} />
-                  <Route path="convert" element={<Convert />} />
-                  <Route path="exit" element={<Exit />} />
+                  {exitOn && <Route path="exit" element={<Exit />} />}
                   <Route path="labels" element={<Labels />} />
                   <Route path="name" element={<NameSettings />} />
                   <Route path="settings" element={<Settings />} />

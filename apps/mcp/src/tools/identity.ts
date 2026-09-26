@@ -70,7 +70,9 @@ export async function whoami(ctx: Ctx) {
       remainingTodayUsdc: formatUsdc(ctx.caps.remainingToday(now)),
       payeeAllowlist: ctx.config.payeeAllowlist,
     },
-    note: "Received funds sit in one-time stealth addresses; call `balance` or `scan` to see them.",
+    note:
+      "Received funds sit in one-time stealth addresses; call `balance` or `scan` to see them." +
+      (ctx.config.chainId === 84532 && payer && usdc === 0n ? " The payer holds no test USDC: call `get_test_funds`." : ""),
   };
 }
 

@@ -4,6 +4,19 @@ How the apps, the SDK, the API and the contracts fit together, and where the ENS
 
 Network: Base Sepolia for payments and spending, Ethereum Sepolia for ENSv2 and the Privacy Pools exit.
 
+## Testnet vs mainnet (D-52, D-53)
+
+So anyone can try the whole platform without Circle's faucet, the Base Sepolia demo differs from mainnet in four places. Mainnet code paths are unchanged.
+
+| | Base Sepolia (the demo) | Base mainnet |
+| --- | --- | --- |
+| Pay token ("USDC" in the apps) | Soapay's **mock USDC** `0x028D969c…14Bb` (6 decimals, EIP-2612 permit, minted only by the API's faucet key; `contracts/src/MockUSDC.sol`). Overridable with `VITE_PAY_TOKEN` / `PAY_TOKEN` | Circle USDC, fixed |
+| Gas for stealth spends | **Sponsored**: a Pimlico sponsorship paymaster through the API's `POST /paymaster` proxy (the Pimlico key never reaches a browser; only allow-listed call targets) | The Circle Paymaster takes it in USDC |
+| Funding | **Welcome drop**: a wallet that opens the company app gets 1,000,000 mock USDC once (`POST /faucet`); smart-wallet employers paying by EIP-5792 batch get their gas sponsored too | The company's own USDC and ETH |
+| Exit (Privacy Pools via CCTP) | **Hidden**: CCTP only moves Circle USDC, so the mock can't bridge. The code and tests stay | Available once a mainnet route is configured |
+
+The employee app has no Convert screen on any chain (D-53); the SDK's swap-in-place and the MCP `swap_in_place` tool remain. A mock USDC / WETH 0.05% pool exists on Base Sepolia (`0x820537A7…0b14`) but the product no longer depends on it.
+
 ## The whole system
 
 Blue borders are ENS, black World ID, pink Uniswap, navy our own code. The dashed red node is the adversary.
@@ -37,8 +50,8 @@ flowchart LR
     REG["ERC-6538 Registry"]
     ANN["ERC-5564 Announcer"]
     SD["StealthDisperse<br/>(our only contract,<br/>no funds, no state)"]
-    USDC["Circle USDC"]
-    AA["EntryPoint v0.8 +<br/>Simple7702Account +<br/>Circle Paymaster"]
+    USDC["USDC<br/>(mock on Base Sepolia)"]
+    AA["EntryPoint v0.8 +<br/>Simple7702Account +<br/>paymaster (Circle on Base,<br/>sponsored on Base Sepolia)"]
     UR["Uniswap Universal Router<br/>+ Permit2"]
   end
 
@@ -105,7 +118,7 @@ flowchart LR
 
 ### Uniswap (Trading API): convert your salary without breaking your privacy
 
-- **What we built:** swap in place. One EIP-7702 userOp from the stealth address does Permit2 plus the Universal Router swap, gas is paid in USDC by the paymaster, and the output stays at the same address (D-20).
+- **What we built:** swap in place. One EIP-7702 userOp from the stealth address does Permit2 plus the Universal Router swap, gas is paid in USDC by the paymaster, and the output stays at the same address (D-20). It lives in the SDK and the MCP `swap_in_place` tool; the employee web app's Convert screen was removed (D-53), and the Uniswap bounty is no longer targeted.
 - **Privacy detail:** quotes come from the Trading API with a placeholder swapper, through a proxy that forwards `/quote` only. The SDK rebuilds the V2/V3 route itself, so neither Uniswap nor our server sees the stealth address (D-27, D-32, D-33). On Base Sepolia it falls back to the on-chain QuoterV2.
 - **Proof:** [live swap on Base Sepolia](https://sepolia.basescan.org/tx/0x2bf66ce2b28b118becdd5aba49d612a444bcffaa006c33b09b92165b5ec55c81). Code: `packages/sdk/src/swap.ts`. Feedback: [FEEDBACK.md](../FEEDBACK.md).
 
@@ -158,14 +171,14 @@ sequenceDiagram
   autonumber
   participant R as Employee app
   participant I as Indexer / RPC
-  participant P as Circle Paymaster
+  participant P as Paymaster
   participant X as Stealth address
   R->>I: fetch announcements
   R->>R: viewing key matches mine (view tag first)
   R->>R: spending key → this address's key
   R->>R: privacy guard (no linking)
   R->>X: 7702 upgrade + userOp
-  P->>X: gas paid in USDC, 0 ETH ever
+  P->>X: gas paid in USDC (Base) or sponsored (Base Sepolia), 0 ETH ever
 ```
 
 ### 4. Key rotation (World ID)
@@ -188,7 +201,7 @@ sequenceDiagram
   E->>E: accept automatically, or block and alert
 ```
 
-### 5. Convert in place (Uniswap)
+### 5. Convert in place (Uniswap; SDK and MCP only since D-53)
 
 ```mermaid
 sequenceDiagram
@@ -309,7 +322,9 @@ What doesn't happen: no new address, no contract deployed, no ETH sent to `0xD25
 
 **What 7702 does.** Since Pectra (May 2025) an EOA can sign a small authorization saying "my code is whatever lives at this implementation address". A type-4 transaction carrying it writes a 23-byte pointer into the account. From then on, calls to the address run the implementation's code with the address's own storage and balance, so it behaves like a smart account while the private key still controls it. Nothing is deployed: `Simple7702Account` was deployed once by the 4337 team, and every delegated account points at the same bytes.
 
-**Soapay does this lazily.** On the first spend from an address, the employee app signs the authorization and hands it to the bundler together with a 4337 user operation. EntryPoint v0.8 understands that combination, so delegation and the spend land in one transaction, and the Circle Paymaster takes gas from the USDC already sitting there. That's why a stealth address never needs ETH, which would otherwise link it to whoever sent the ETH. It cost about 0.0057 USDC per spend on Base Sepolia.
+**Soapay does this lazily.** On the first spend from an address, the employee app signs the authorization and hands it to the bundler together with a 4337 user operation. EntryPoint v0.8 understands that combination, so delegation and the spend land in one transaction, and the Circle Paymaster takes gas from the USDC already sitting there. That's why a stealth address never needs ETH, which would otherwise link it to whoever sent the ETH. It cost about 0.0057 USDC per spend on Base Sepolia with Circle USDC.
+
+**On the Base Sepolia demo (D-52)** the pay token is our mock USDC, which the Circle Paymaster doesn't accept, so step ③ disappears: the userOp carries a sponsorship paymaster's signature (Pimlico, requested through the API's `/paymaster` proxy) and the address pays nothing at all. Same 7702 authorization, same single userOp, still 0 ETH on the address. Verified live: [first spend with the authorization](https://sepolia.basescan.org/tx/0x15ea6dcd7f489ff829365c6e9dfef0b86859aba4cdc97e0a010fa761e418265c), [a later one](https://sepolia.basescan.org/tx/0x1c10b505c4d5e43306e1c518ffa8e7ba407391dfeed0539d472d614aed452d8f).
 
 **Could we deploy a contract per address instead?** Yes, and Fluidkey does: a counterfactual Safe per stealth address (CREATE2 from the stealth key as owner), deployed by a factory on first spend. We chose 7702 for four reasons:
 
@@ -320,7 +335,7 @@ What doesn't happen: no new address, no contract deployed, no ETH sent to `0xD25
 
 **The trade-off.** Every Soapay stealth address ends up pointing at the same implementation, which is a mild shared fingerprint. It's the same fingerprint as every other 7702 wallet using that implementation, so it groups you with the crowd rather than with your coworkers, but it isn't zero.
 
-**Why the paymaster works.** The Circle Paymaster needs a USDC permit signed by the account. Once the EOA has code, USDC verifies that signature through ERC-1271 by asking the account, and `Simple7702Account` answers by recovering the ECDSA signer and checking it equals itself. We verified this on a Base fork (`packages/sdk/test/fork.e2e.test.ts`) after an earlier note wrongly said it would fail; the spend path relies on it.
+**Why the paymaster works (mainnet).** The Circle Paymaster needs a USDC permit signed by the account. Once the EOA has code, USDC verifies that signature through ERC-1271 by asking the account, and `Simple7702Account` answers by recovering the ECDSA signer and checking it equals itself. We verified this on a Base fork (`packages/sdk/test/fork.e2e.test.ts`) after an earlier note wrongly said it would fail; the spend path relies on it.
 
 ## Against each sponsor's full brief
 
@@ -348,7 +363,7 @@ Beyond the qualification checklist in [docs/bounty-integrations.md](bounty-integ
 
 We don't enter "World ID for Agents". Our agents are payees, and no agent action there needs a human's approval.
 
-**Uniswap: "Best Uniswap Stack Contribution".** The brief is "build on or integrate any part of the Uniswap stack, including the Uniswap API, the Uniswap AMM (v2, v3, or v4)". ✅ We use the **Uniswap API** for quotes and execute on **v2/v3 pools** through the Universal Router and Permit2, so both named parts are covered, plus a `FEEDBACK.md` with live findings.
+**Uniswap: "Best Uniswap Stack Contribution".** No longer targeted (owner, 09-26; D-53): the employee app's Convert screen is gone. The SDK still uses the **Uniswap API** for quotes and executes on **v2/v3 pools** through the Universal Router and Permit2 (MCP `swap_in_place`), and `FEEDBACK.md` keeps the live findings.
 
 ## Who sees what
 

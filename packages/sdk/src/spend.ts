@@ -33,13 +33,15 @@ import {
   type BundlerClient,
   type UserOperation,
 } from "viem/account-abstraction";
-import { ENTRYPOINT_V08, SIMPLE_7702_ACCOUNT, getSpendChainConfig } from "./constants.js";
+import { ENTRYPOINT_V08, SIMPLE_7702_ACCOUNT, defaultPaymasterMode, getSpendChainConfig, type PaymasterMode } from "./constants.js";
 import { circlePaymaster } from "./paymasters/circle.js";
+import { sponsoredPaymaster } from "./paymasters/sponsored.js";
 import type { PaymasterAdapter, PaymasterContext, SpendCall } from "./paymasters/types.js";
 
 export * from "./paymasters/types.js";
 export * from "./paymasters/circle.js";
 export * from "./paymasters/pimlico.js";
+export * from "./paymasters/sponsored.js";
 
 /** Default fee cap: 1 USDC. Base gas is cents; this also bounds the paymaster permit. */
 export const DEFAULT_MAX_FEE_USDC = 1_000_000n;
@@ -94,8 +96,13 @@ export type CreateSpendClientOptions<chain extends Chain = Chain> = {
   bundlerTransport?: Transport;
   /** Chain RPC. Defaults to the chain's public RPC over http(). Must have `chain` set. */
   publicClient?: PublicClient<Transport, chain>;
-  /** Default "circle". */
-  paymaster?: "circle" | PaymasterAdapter;
+  /**
+   * Gas mode. Default: the chain's `paymaster` (`defaultPaymasterMode`): "circle-usdc" on Base
+   * mainnet and exit destinations, "sponsored" on Base Sepolia (D-52). "circle" = "circle-usdc".
+   */
+  paymaster?: PaymasterMode | "circle" | PaymasterAdapter;
+  /** ERC-7677 sponsorship endpoint for "sponsored" (the Soapay API's `/paymaster`). Required then. */
+  paymasterUrl?: string;
   /** Gas price source. Default: viem's (2x the node's EIP-1559 estimate). See `pimlicoFeesPerGas`. */
   estimateFeesPerGas?: EstimateFeesPerGas;
 };
@@ -122,8 +129,18 @@ export function createSpendClient<chain extends Chain = Chain>(options: CreateSp
     transport,
     ...(estimate ? { userOperation: { estimateFeesPerGas: ({ bundlerClient }) => estimate(bundlerClient as BundlerClient) } } : {}),
   });
-  const paymaster = options.paymaster === undefined || options.paymaster === "circle" ? circlePaymaster() : options.paymaster;
+  const paymaster = resolvePaymaster(options.chainId, options.paymaster, options.paymasterUrl);
   return { chainId: options.chainId, chain: config.chain, usdc: config.usdc, publicClient, bundlerClient, paymaster };
+}
+
+/** Resolves a gas mode (or adapter) to an adapter. "sponsored" needs the proxy URL. */
+export function resolvePaymaster(chainId: number, mode: CreateSpendClientOptions["paymaster"], paymasterUrl?: string): PaymasterAdapter {
+  const m = mode ?? defaultPaymasterMode(chainId);
+  if (typeof m !== "string") return m;
+  if (m === "circle" || m === "circle-usdc") return circlePaymaster();
+  if (!paymasterUrl)
+    throw new SpendError(`Soapay spend: chain ${chainId} uses sponsored gas; pass paymasterUrl (the Soapay API's /paymaster endpoint)`);
+  return sponsoredPaymaster({ url: paymasterUrl });
 }
 
 /** `pimlico_getUserOperationGasPrice` ("standard" tier), for Pimlico bundlers. */

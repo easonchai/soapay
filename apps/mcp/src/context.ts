@@ -59,7 +59,13 @@ export interface Api {
   /** null when free. */
   getName(label: string): Promise<NameRecord | null>;
   announcements(): Promise<AnnouncementRecord[]>;
+  /** POST /faucet: the Base Sepolia welcome drop (once per address, D-52). */
+  faucet(address: Address): Promise<FaucetResult>;
 }
+
+export type FaucetResult =
+  | { status: "sent"; address: Address; usdc: { amount: string; txHash: Hash }; eth: { amount: string; txHash: Hash } | null }
+  | { status: "already_claimed"; address: Address };
 
 export class ApiError extends Error {
   override name = "ApiError";

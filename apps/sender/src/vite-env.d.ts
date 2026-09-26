@@ -15,6 +15,8 @@ interface ImportMetaEnv {
   /** CK alias of VITE_STEALTH_DISPERSE; ours wins when both are set. */
   readonly VITE_STEALTH_DISPERSE_ADDRESS?: string;
   readonly VITE_OTHER_APP_URL?: string;
+  /** Base Sepolia pay token (D-52). Empty = Soapay's mock USDC. */
+  readonly VITE_PAY_TOKEN?: string;
 }
 
 interface ImportMeta {

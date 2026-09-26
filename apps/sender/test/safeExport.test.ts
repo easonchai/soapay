@@ -12,7 +12,8 @@ import {
 import { planRun } from "../src/lib/run.js";
 import { buildSafeExport } from "../src/lib/safeExport.js";
 
-const USDC = "0x036CbD53842c5426634e7929541eC2318f3dCF7e" as const;
+// The Base Sepolia pay token (Soapay mock USDC, D-52).
+const USDC = "0x028D969c20b740582428f5043954c380686214Bb" as const;
 const SAFE = "0x2222222222222222222222222222222222222222" as const;
 
 /** Unpacks MultiSend's operation|to|value|len|data encoding. */

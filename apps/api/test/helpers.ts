@@ -9,6 +9,7 @@ import { loadConfig, type Config } from "../src/config.js";
 import { openDb } from "../src/db.js";
 import { Indexer } from "../src/indexer.js";
 import type { L1Funder } from "../src/topup.js";
+import type { FaucetWallet } from "../src/faucet.js";
 import type { Logger } from "../src/util.js";
 import type { Fetch } from "../src/worldid/portal.js";
 import { WorldId } from "../src/worldid/verifier.js";
@@ -56,6 +57,8 @@ export function makeTestApp(
     attester?: boolean;
     l1Funder?: L1Funder;
     uniswapFetch?: typeof fetch;
+    paymasterFetch?: typeof fetch;
+    faucetWallet?: FaucetWallet;
   } = {},
 ) {
   const config: Config = loadConfig({
@@ -118,6 +121,8 @@ export function makeTestApp(
     ...(opts.attester ? { attester: attesterAccount } : {}),
     ...(opts.l1Funder ? { l1Funder: opts.l1Funder } : {}),
     ...(opts.uniswapFetch ? { uniswapFetch: opts.uniswapFetch } : {}),
+    ...(opts.paymasterFetch ? { paymasterFetch: opts.paymasterFetch } : {}),
+    ...(opts.faucetWallet ? { faucetWallet: opts.faucetWallet } : {}),
   };
   const app: Hono = buildApp(deps);
   const setIp = (v: string) => (ip = v);

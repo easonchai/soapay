@@ -12,7 +12,7 @@
  */
 import { getAddress, isAddress, type Address, type Chain } from "viem";
 import { base, baseSepolia } from "viem/chains";
-import { ANNOUNCER_ADDRESS, CHAINS, REGISTRY_ADDRESS } from "./constants.js";
+import { ANNOUNCER_ADDRESS, CHAINS, REGISTRY_ADDRESS, payTokenFor, setPayTokenOverride } from "./constants.js";
 
 // ---------------------------------------------------------------------------------------------
 // Assets
@@ -290,11 +290,23 @@ function registerDefaults(): void {
     announcerStartBlock: CHAINS[baseSepolia.id].announcerStartBlock,
     ensChain: CHAINS[baseSepolia.id].ensChain,
     stealthDisperse: STEALTH_DISPERSE_BASE_SEPOLIA,
-    assets: { USDC: erc20Asset(CHAINS[baseSepolia.id].usdc, { symbol: "USDC", decimals: 6 }) },
+    // The pay token: the mock on Base Sepolia (D-52) unless `configurePayToken` overrides it.
+    assets: { USDC: erc20Asset(payTokenFor(baseSepolia.id), { symbol: "USDC", decimals: 6 }) },
   });
 }
 
 registerDefaults();
+
+/**
+ * Sets (or clears, with an empty value) the testnet pay-token override (`setPayTokenOverride`) and
+ * points the registered "USDC" asset at it. Apps call this once at startup with `VITE_PAY_TOKEN` /
+ * `PAY_TOKEN`. Throws for mainnet, whose token is fixed.
+ */
+export function configurePayToken(chainId: number, token: string | undefined | null): void {
+  setPayTokenOverride(chainId, token);
+  const entry = chainRegistry.get(chainId);
+  if (entry) entry.assets.USDC = erc20Asset(getAddress(payTokenFor(chainId)), { symbol: "USDC", decimals: 6 });
+}
 
 /** Restores the registry to the pre-registered defaults (Base, Base Sepolia). For tests. */
 export function resetChainRegistry(): void {

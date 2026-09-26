@@ -9,7 +9,8 @@ import { demoMetaAddresses, maybeSend, printPlan } from "./shared.js";
 
 const CHAIN_ID = 84532; // Base Sepolia
 const usdc = resolveAsset(CHAIN_ID, "USDC");
-// Testnet-sized amounts on a testnet (faucet USDC is scarce): every figure below is divided by 10,000,
+// Testnet-sized amounts on a testnet (kept small for the demo; "USDC" there is Soapay's mock token,
+// D-52): every figure below is divided by 10,000,
 // so the round sends 4.25 test USDC instead of 42,500.
 const SCALE = isTestnetChain(CHAIN_ID) ? 10_000 : 1;
 const usd = (n: number) => parseUnits(String(n / SCALE), 6);

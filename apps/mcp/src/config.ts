@@ -1,5 +1,5 @@
 import { getAddress, isAddress, isHex, type Address, type Hex } from "viem";
-import { validateMnemonic } from "@soapay/sdk";
+import { configurePayToken, validateMnemonic } from "@soapay/sdk";
 import { parseUsdc } from "./util.js";
 
 export const DEFAULT_STEALTH_DISPERSE: Address = "0x6B7a1cC570Af2DDd427DA694351438F0FE8039CA";
@@ -12,6 +12,8 @@ export type McpConfig = {
   rpcUrl: string | undefined;
   ensRpcUrl: string | undefined;
   bundlerUrl: string;
+  /** ERC-7677 sponsorship endpoint for stealth spends where gas is sponsored (Base Sepolia, D-52). */
+  paymasterUrl: string;
   stealthDisperse: Address;
   stateDir: string;
   /** Base units. */
@@ -77,13 +79,21 @@ export function loadConfig(env: Record<string, string | undefined>): { config: M
   if (payerKey && (!isHex(payerKey) || payerKey.length !== 66)) throw new ConfigError("AGENT_PAYER_PRIVATE_KEY must be 32 bytes of hex");
 
   const ttl = Number(env.PLAN_TTL_SECONDS ?? "600");
+  // Base Sepolia pay token (D-52): Soapay's mock USDC unless PAY_TOKEN overrides it. Mainnet is fixed.
+  try {
+    configurePayToken(84532, env.PAY_TOKEN?.trim() || undefined);
+  } catch (e) {
+    throw new ConfigError(`PAY_TOKEN: ${(e as Error).message}`);
+  }
+  const apiUrl = (env.API_URL ?? "http://localhost:8787").replace(/\/+$/, "");
   return {
     config: {
-      apiUrl: (env.API_URL ?? "http://localhost:8787").replace(/\/+$/, ""),
+      apiUrl,
       chainId,
       rpcUrl: env.RPC_URL || undefined,
       ensRpcUrl: env.ENS_RPC_URL || undefined,
       bundlerUrl: env.BUNDLER_URL || DEFAULT_BUNDLER_URL,
+      paymasterUrl: env.PAYMASTER_URL || `${apiUrl}/paymaster`,
       stealthDisperse: getAddress(sd),
       stateDir: (env.STATE_DIR || "~/.soapay-mcp").replace(/^~(?=\/|$)/, env.HOME ?? "."),
       maxPerCallUsdc,

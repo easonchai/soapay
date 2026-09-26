@@ -2,7 +2,7 @@ import { serve } from "@hono/node-server";
 import { getConnInfo } from "@hono/node-server/conninfo";
 import type { Context } from "hono";
 import { createPublicClient, createWalletClient, http } from "viem";
-import { privateKeyToAccount } from "viem/accounts";
+import { nonceManager, privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
 import { WORLD_ID_CREDENTIAL, getChainConfig } from "@soapay/sdk";
 import { buildApp } from "./app.js";
@@ -13,6 +13,7 @@ import { Indexer } from "./indexer.js";
 import { allowAllVerifier } from "./hooks.js";
 import { makeNameIssuer } from "./issuer.js";
 import type { L1Funder } from "./topup.js";
+import { mockUsdcMintAbi, type FaucetWallet } from "./faucet.js";
 import { consoleLogger as logger, pruneRateLimits } from "./util.js";
 import { pruneWorldIdRequests, WorldId } from "./worldid/verifier.js";
 
@@ -48,10 +49,24 @@ function main() {
   const { chain } = getChainConfig(config.chainId);
   const transport = http(config.rpcUrl, { retryCount: 2, timeout: 30_000 });
   const publicClient = createPublicClient({ chain, transport });
-  const relayer = config.relayerPrivateKey
-    ? createWalletClient({ chain, transport, account: privateKeyToAccount(config.relayerPrivateKey) })
-    : undefined;
+  // One account (and nonce manager) for registrations and the faucet, so their txs never collide.
+  const relayerAccount = config.relayerPrivateKey ? privateKeyToAccount(config.relayerPrivateKey, { nonceManager }) : undefined;
+  const relayer = relayerAccount ? createWalletClient({ chain, transport, account: relayerAccount }) : undefined;
   if (!relayer) logger.warn("RELAYER_PRIVATE_KEY not set: POST /register is disabled");
+  const faucetWallet: FaucetWallet | undefined =
+    relayer && relayerAccount && config.faucet.enabled
+      ? {
+          address: relayerAccount.address,
+          getBalance: (a) => publicClient.getBalance(a),
+          mint: ({ token, to, amount }) =>
+            relayer.writeContract({ address: token, abi: mockUsdcMintAbi, functionName: "mint", args: [to, amount], chain, account: relayerAccount }),
+          sendEth: ({ to, value }) => relayer.sendTransaction({ to, value, chain, account: relayerAccount }),
+          waitForReceipt: (hash) => publicClient.waitForTransactionReceipt({ hash, timeout: config.receiptTimeoutMs }),
+        }
+      : undefined;
+  if (config.faucet.enabled && !faucetWallet) logger.warn("RELAYER_PRIVATE_KEY not set: POST /faucet is disabled");
+  if (config.chainId === 84532 && !config.paymaster.pimlicoApiKey)
+    logger.warn("PIMLICO_API_KEY not set: POST /paymaster answers 503 sponsorship_disabled (testnet spends can't be sent)");
 
   const db = openDb(config.dbPath);
   const client = publicClient as unknown as ReadClient;
@@ -114,6 +129,7 @@ function main() {
     worldId,
     attester,
     l1Funder: makeL1Funder(config),
+    faucetWallet,
   });
 
   if (config.indexer.enabled) indexer.start();
@@ -130,6 +146,9 @@ function main() {
     relayer: relayer?.account.address ?? null,
     worldId: worldId ? { environment: w.environment, rpId: w.rpId, credential: WORLD_ID_CREDENTIAL } : "DISABLED",
     uniswapProxy: config.uniswap.apiKey ? "enabled" : "disabled (UNISWAP_API_KEY unset)",
+    paymaster: config.paymaster.pimlicoApiKey ? "enabled" : "disabled (PIMLICO_API_KEY unset)",
+    faucet: faucetWallet ? { usdc: config.faucet.usdcAmount.toString(), ethWei: config.faucet.ethDripWei.toString(), perDay: config.faucet.perDay } : "disabled",
+    payToken: getChainConfig(config.chainId).usdc,
     attester: attester?.address ?? null,
   });
 

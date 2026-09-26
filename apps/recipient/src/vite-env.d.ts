@@ -7,7 +7,7 @@ interface ImportMetaEnv {
   readonly VITE_RPC_URL?: string;
   readonly VITE_MOCK_API?: string;
   readonly VITE_L1_RPC_URL?: string;
-  readonly VITE_SWAP_VIA_API?: string;
+  readonly VITE_PAY_TOKEN?: string;
   readonly VITE_OTHER_APP_URL?: string;
   /** CK alias of VITE_STEALTH_DISPERSE; ours wins when both are set. */
   readonly VITE_STEALTH_DISPERSE_ADDRESS?: string;

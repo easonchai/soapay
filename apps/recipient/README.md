@@ -1,11 +1,11 @@
 # @soapay/recipient
 
-The employee's app: keys, onboarding, scanner, ledger, privacy-guarded spending, convert-in-place, and
-key rotation. A static Vite + React SPA. Keys are derived and kept in this browser, encrypted with the
+The employee's app: keys, onboarding, scanner, ledger, privacy-guarded spending, the compliant exit, and
+key rotation. (Convert-in-place was removed from the app in D-53; it stays in the SDK and the MCP server.) A static Vite + React SPA. Keys are derived and kept in this browser, encrypted with the
 user's passphrase (PBKDF2-SHA256 600k + AES-GCM, `src/vault/crypto.ts`); nothing secret is sent anywhere.
 
 ```sh
-pnpm --filter @soapay/recipient dev:mock   # in-browser mock API, chain, bundler, ENS and Uniswap
+pnpm --filter @soapay/recipient dev:mock   # in-browser mock API, chain, bundler and ENS
 pnpm --filter @soapay/recipient dev        # against VITE_API_URL / VITE_RPC_URL / VITE_BUNDLER_URL
 pnpm --filter @soapay/recipient test       # vitest (jsdom)
 pnpm --filter @soapay/recipient build
@@ -16,10 +16,15 @@ names are accepted as aliases: `VITE_STEALTH_DISPERSE_ADDRESS` (ours, `VITE_STEA
 `VITE_RELAY_URL` (its origin becomes the API URL when `VITE_API_URL` is unset). `VITE_OTHER_APP_URL` is the
 top bar's "Pay" link to the company app (default: `http://localhost:5174` in dev, `/sender/` in a build).
 
+**Base Sepolia (D-52):** the pay token is Soapay's mock USDC (`VITE_PAY_TOKEN` overrides it), Send's gas is
+sponsored through `${apiUrl}/paymaster` (so Send needs the API URL there; mainnet uses the Circle
+paymaster), and the **Exit** tab, route and the guard's "Exit through Privacy Pools" offer are hidden,
+because CCTP only bridges Circle USDC (`exitOffered(chainId)` in `src/config.ts`).
+
 ## Look: CK's Direction A · Ledger
 
 The presentation is CK's design from `@soapay/ui` (imported in `main.tsx`): the `Shell`/`TopBar` frame with
-the Payments · Send · Exit · Convert · Labels · Name · Settings · Pay tabs, his wizard `Steps` for onboarding,
+the Payments · Send · Exit (not on the Base Sepolia demo) · Labels · Name · Settings · Pay tabs, his wizard `Steps` for onboarding,
 his dashboard layout (headline figure from live balances, ledger table with expandable rows, Rescan / Rescan
 from start), and his Settings facts list. `src/ui/kit.tsx` renders the same components as before with Ledger
 classes (`btn`, `notice-*`, `pill-*`, `panel`, `facts`, `share`), and `index.css` points Tailwind's colour
@@ -67,17 +72,10 @@ mode offers a demo EOA and a demo smart wallet (refused) instead of a browser wa
 | Scan | `src/scan/` (worker pool + `runScan` + `mergeScanResult`) | §3 scan.ts |
 | Ledger / clusters | `hooks/useWallet.ts` over SDK `buildLedger` / `balanceView` | PRD Flow 3 |
 | Send with the guard | `src/spend/flow.ts` (`prepareSpend`, `executeSpend`) | PRD Flow 4 |
-| Convert in place | `features/convert/swap.ts` over SDK `quoteSwapInPlace` / `swapInPlace` | §6 |
 | Key rotation | `features/rotation/` (`prepareRotation`, `submitRotation`, `finishRotation`) | §2.1 |
 | Pay runs: coworker view / my view (D-41) | `screens/PayRunViews.tsx`, `hooks/useChainViews.ts` over SDK `fetchPayRunBatch` / `markOwnLines` | Goal 2 |
 | Gas proof after a spend (D-41) | `screens/GaslessProof.tsx` over SDK `readGaslessProof` | Flow 4 |
 | Compliant exit | `features/exit/` (planner, runner, SDK seam `sdk.ts`, mock), `hooks/useExit.tsx` | §9 |
-
-### Convert and the Uniswap API key
-
-Quotes go to the Soapay API's proxy at `${apiUrl}/uniswap`, which adds `UNISWAP_API_KEY` server-side.
-The key never ships in this bundle. Turn the proxy off in Settings (or `VITE_SWAP_VIA_API=0`) and the SDK
-prices directly against the Universal Router V3 with QuoterV2 instead.
 
 ### Key rotation: two paths
 
@@ -105,11 +103,10 @@ and write new components against these:
 | Import | Gives you |
 | --- | --- |
 | `VaultProvider`, `useVault()` (`src/vault/VaultProvider.tsx`) | `status` (`loading`/`empty`/`locked`/`unlocked`), `create(phrase \| walletKeySecret, passphrase)`, `unlock`, `lock`, `update`, `wipe` |
-| `ServicesProvider`, `useServices()` | API client, chain reads, spend / swap / ENS services; mock or real by env |
+| `ServicesProvider`, `useServices()` | API client, chain reads, spend / exit / ENS services; mock or real by env |
 | `ScannerProvider`, `useScanner()` (`src/hooks/scanner.tsx`) | `scan({full?})`, `cancel`, `running`, `phase`, `last`, `error`; `describePhase(phase)` |
 | `useWallet()` | `ledger`, `view` (clusters), `balances`, `total`, `spends`, `conversions`, `payerName` |
 | `useSpendFlow()` | `state` (`form` → `review` → `sending` → `result`), `prepare(to, amount)`, `setOverride`, `send`, `reset` |
-| `useConvert()` | `state` (`form` → `review` → `swapping` → `done`), `sources`, `targets`, `quote(form)`, `confirm` |
 | `useRotation()` | `state` (`idle` → `confirm` → `human`? → `working` → `done`), `path`, `start`, `confirm`, `onHuman`, `resume`, `attach` |
 | `ExitProvider`, `useExit()` | `exits` (per-leg state), `sources`, `estimate(selected, privacy)`, `start`, `withdrawNow`, `retry`; polls and resumes on its own while unlocked |
 | `useLabels()` | `rows`, `setLabel(address, label)`, `remove` |

@@ -4,7 +4,7 @@
 // history do not.
 import { getAddress, isAddress, type Address, type Chain } from "viem";
 import { base, baseSepolia } from "viem/chains";
-import { CHAINS, DEFAULT_CHAIN_ID, isTestnetChain, type SoapayChainConfig } from "@soapay/sdk";
+import { DEFAULT_CHAIN_ID, configurePayToken, getChainConfig, isTestnetChain, type SoapayChainConfig } from "@soapay/sdk";
 
 export const SUPPORTED_CHAIN_IDS = [baseSepolia.id, base.id] as const;
 export type SupportedChainId = (typeof SUPPORTED_CHAIN_IDS)[number];
@@ -177,7 +177,7 @@ export function setOrgName(v: string): void {
 const CHUNK_KEY = "soapay:chunk";
 /** Mainnet default chunk size. */
 export const DEFAULT_CHUNK_USDC = "500";
-/** Testnet default (D-47): faucet USDC is scarce (20 per address per 2 hours), so chunks are small. */
+/** Testnet default (D-47): small chunks keep demo runs readable (test USDC is no longer scarce, D-52). */
 export const TESTNET_CHUNK_USDC = "5";
 
 /** The default chunk for a chain: 5 USDC on a testnet, 500 USDC elsewhere (and in demo mode, whose salaries are mainnet-sized). */
@@ -201,11 +201,26 @@ export function setChunkSize(v: string, chainId: number = loadSettings().chainId
   else s.removeItem(CHUNK_KEY);
 }
 
+/**
+ * Applies VITE_PAY_TOKEN (Base Sepolia only, D-52): the token the company pays in. Empty = the SDK
+ * default, Soapay's mock USDC. Base mainnet's Circle USDC can't be overridden. Returns the error, if any.
+ */
+export function applyPayToken(env: Pick<ImportMetaEnv, "VITE_PAY_TOKEN"> = import.meta.env): string | null {
+  try {
+    configurePayToken(baseSepolia.id, envString(env.VITE_PAY_TOKEN));
+    return null;
+  } catch (e) {
+    return (e as Error).message;
+  }
+}
+applyPayToken();
+
 export function resolveConfig(settings: Settings = loadSettings(), env: ImportMetaEnv = import.meta.env): AppConfig {
-  const sdk = CHAINS[settings.chainId] as SoapayChainConfig;
+  // getChainConfig applies the pay-token override (the mock USDC on Base Sepolia by default).
+  const sdk: SoapayChainConfig = getChainConfig(settings.chainId);
   const demo = readDemoFlag(env);
-  // Demo pays through a fake StealthDisperse so plain accounts have a pay path without a deployment.
-  const disperse = settings.stealthDisperse[settings.chainId] ?? sdk.stealthDisperse ?? (demo ? DEMO_STEALTH_DISPERSE : null);
+  // Demo pays through a fake StealthDisperse (off-chain sample data), even where a real one is deployed.
+  const disperse = demo ? DEMO_STEALTH_DISPERSE : (settings.stealthDisperse[settings.chainId] ?? sdk.stealthDisperse ?? null);
   return {
     chainId: settings.chainId,
     chain: sdk.chain,

@@ -23,6 +23,12 @@ Chosen per connected wallet by the SDK's `selectPayPath` (`packages/sdk/src/payp
 | Plain EOA | `StealthDisperse`: approve the exact total, then one `pay` per chunk |
 | Safe | Transaction Builder export through `MultiSendCallOnly` (never `MultiSend`) |
 
+**Base Sepolia (D-52):** the company pays in Soapay's mock USDC (`VITE_PAY_TOKEN` overrides it). When a wallet
+connects, the app asks `${VITE_API_URL}/faucet` once and shows "Welcome: 1,000,000 test USDC sent to your wallet"
+with a Basescan link (nothing if it already claimed). EIP-5792 batches pass an optional `paymasterService`
+capability pointing at `${VITE_API_URL}/paymaster`, so smart-wallet employers need no ETH; plain EOAs (the
+StealthDisperse path) still pay their own gas. Base mainnet: Circle USDC, no drop, no sponsorship.
+
 When `VITE_STEALTH_DISPERSE` is unset (and Settings has no address for the chain) the app shows an
 **"EIP-5792 path only"** banner: plain EOAs can't pay until the contract is deployed and configured.
 

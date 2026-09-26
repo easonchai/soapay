@@ -3,7 +3,9 @@
 #   1. an AI agent claims invoice-agent.soapay.eth over MCP (ENSIP-26 records);
 #   2. ONE revenue-share run pays three people, a raw meta-address and the agent, with one CLI command;
 #   3. one of the people scans with her recovery phrase and finds only her lines;
-#   4. the agent scans over MCP, finds only its lines, and spends gaslessly (gas paid in USDC).
+#   4. the agent scans over MCP, finds only its lines, and spends gaslessly (on Base Sepolia the gas is
+#      sponsored through the API's /paymaster; on Base the Circle paymaster takes it in USDC).
+# The payer needs Soapay mock USDC on Base Sepolia: scripts/fund-usdc.sh <payer> (D-52).
 #
 #   scripts/demo-pluggable.sh              # the whole beat (sends DIVIDEND_TOTAL, default 0.5 USDC)
 #   DEMO_DRY=1 scripts/demo-pluggable.sh   # rehearse: dry-run plan only, nothing sent

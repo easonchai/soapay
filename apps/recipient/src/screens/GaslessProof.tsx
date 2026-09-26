@@ -55,13 +55,15 @@ export function proofRows(p: GaslessProof, links: Links): ProofRow[] {
     rows.push({ key: "submitter", label: "Submitted by", value: `Bundler ${shortAddr(s.submitter)}, which fronted the ETH gas`, ...(subHref ? { href: subHref } : {}) });
     if (s.paymaster) {
       const pmHref = links.address(s.paymaster);
+      const pmName = s.paymasterKind === "circle" ? "Circle Paymaster" : s.paymasterKind === "sponsored" ? "Sponsoring paymaster (testnet)" : "Paymaster";
       rows.push({
         key: "paymaster",
         label: "Gas paid by",
-        value: `${s.paymasterKind === "circle" ? "Circle Paymaster" : "Paymaster"} ${shortAddr(s.paymaster)}`,
+        value: `${pmName} ${shortAddr(s.paymaster)}`,
         ...(pmHref ? { href: pmHref } : {}),
       });
-      if (s.usdcFee !== null) rows.push({ key: "fee", label: "Gas fee", value: `${formatUsdc(s.usdcFee, { precise: true })} USDC (from this address, net of refund)` });
+      if (s.paymasterKind === "sponsored") rows.push({ key: "fee", label: "Gas fee", value: "None: sponsored on this testnet (nothing taken from this address)" });
+      else if (s.usdcFee !== null) rows.push({ key: "fee", label: "Gas fee", value: `${formatUsdc(s.usdcFee, { precise: true })} USDC (from this address, net of refund)` });
     } else {
       rows.push({ key: "paymaster", label: "Gas paid by", value: "No paymaster: the account paid its own gas" });
     }
@@ -69,9 +71,13 @@ export function proofRows(p: GaslessProof, links: Links): ProofRow[] {
   return rows;
 }
 
+/** Shown when a testnet spend's gas was sponsored (D-52). Honest about what mainnet does instead. */
+export const SPONSORED_HEADLINE = "0 ETH here. Gas was sponsored (testnet); on mainnet the Circle paymaster takes it in USDC.";
+
 /** The one-line claim at the top: only as strong as the reads allow. */
 export function proofHeadline(p: GaslessProof): string {
   const paid = !!p.spend?.paymaster && p.spend.usdcFee !== null && p.spend.usdcFee > 0n;
+  if (p.ethBalance === 0n && p.spend?.paymasterKind === "sponsored") return SPONSORED_HEADLINE;
   if (p.ethBalance === 0n && paid) return "0 ETH here. Gas was paid in USDC by the paymaster.";
   if (p.ethBalance === 0n) return "0 ETH here.";
   return `This address holds ${formatEther(p.ethBalance)} ETH.`;

@@ -4,7 +4,8 @@ import { erc20Abi, generateMnemonic, keysFromMnemonic } from "@soapay/sdk";
 import { attemptFromPlan, canRetry, planRun, runStatus, type RunRecord } from "../src/lib/run.js";
 import { confirmNotSent, executeAttempt, normalizeInterrupted, recheckRun, type ExecDeps } from "../src/lib/execute.js";
 
-const USDC = "0x036CbD53842c5426634e7929541eC2318f3dCF7e" as const;
+// The Base Sepolia pay token (Soapay mock USDC, D-52).
+const USDC = "0x028D969c20b740582428f5043954c380686214Bb" as const;
 const DISPERSE = "0x000000000000000000000000000000000000dEaD" as const;
 const PAYER = "0x3333333333333333333333333333333333333333" as const;
 

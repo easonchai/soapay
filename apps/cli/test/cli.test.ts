@@ -437,3 +437,17 @@ describe("soapay distribute: meta-address pins (D-49)", () => {
     expect(bad.err.join()).toContain(`${PIN_FILE}: pin file is not valid JSON`);
   });
 });
+
+describe("Base Sepolia pay token (D-52)", () => {
+  it("--asset usdc is Soapay's mock USDC on 84532; PAY_TOKEN overrides it; junk fails cleanly", async () => {
+    const { getChainConfig, MOCK_USDC_BASE_SEPOLIA, configurePayToken } = await import("@soapay/sdk");
+    expect(USDC_SEPOLIA).toBe(MOCK_USDC_BASE_SEPOLIA);
+    const ok = io({}, { PAY_TOKEN: "0x2222222222222222222222222222222222222222" });
+    expect(await run(["help"], ok.cli)).toBe(0);
+    expect(getChainConfig(84532).usdc).toBe("0x2222222222222222222222222222222222222222");
+    const bad = io({}, { PAY_TOKEN: "usdc" });
+    expect(await run(["help"], bad.cli)).toBe(1);
+    expect(bad.err.join("\n")).toMatch(/not an address/);
+    configurePayToken(84532, undefined);
+  });
+});

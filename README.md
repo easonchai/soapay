@@ -12,6 +12,9 @@
 
 **Live demo:** [soapay.up.railway.app](https://soapay.up.railway.app/) (company app) · [soapay.up.railway.app/app/](https://soapay.up.railway.app/app/) (employee app), on Base Sepolia.
 
+> [!NOTE]
+> **Testnet notes (D-52).** On Base Sepolia the apps pay in **Soapay's mock USDC** ([`0x028D…14Bb`](https://sepolia.basescan.org/address/0x028D969c20b740582428f5043954c380686214Bb)), not Circle's, so you don't need a faucet: the first time a wallet opens the company app it gets **1,000,000 test USDC** once. Stealth spends are **gas-sponsored** (on mainnet the Circle Paymaster takes gas in USDC), and smart-wallet employers paying by EIP-5792 batch are sponsored too; a plain EOA employer still needs a little Base Sepolia ETH. The compliant **exit is hidden** on the testnet build, because CCTP only bridges Circle USDC. Details: [docs/testnet-deployment.md](docs/testnet-deployment.md).
+
 **Soapay is privacy infrastructure for payments on chain**: every payment lands on a fresh address that only you can open, and you can spend it without it ever linking back to you. A recipient shares one ENS name. Each payment to it goes to a new ERC-5564 stealth address, so a coworker reading the same payroll batch sees a list of never-before-seen addresses and can't tell which line is theirs.
 
 ## Who sees what you earn?
@@ -55,7 +58,7 @@ Fluidkey and Umbra use the same ERC-5564 and ERC-6538 standards, and both hide y
 - [Repository](#repository)
 
 **Integrations**
-- [Uniswap: convert salary in place](#uniswap-integration)
+- [Uniswap: convert salary in place (SDK and MCP)](#uniswap-integration)
 - [ENSv2: names and key rotation](#ensv2-integration)
 - [Agents (MCP)](#agents-mcp)
 - [World ID: attested recovery](#world-id-integration)
@@ -161,26 +164,29 @@ Both are built on ERC-5564 and ERC-6538, and both hide your wallet from stranger
 
 ## Tests
 
-**809 tests, all passing** (`pnpm test`, 2026-09-26). Every privacy invariant in the PRD is a test in one of these packages.
+**907 tests, all passing** (`pnpm test`, 2026-09-26). Every privacy invariant in the PRD is a test in one of these packages.
 
 | Package | Tests | Skipped | Runner |
 | --- | --- | --- | --- |
-| `@soapay/sdk` | 313 | 18 fork and live tests, need `FORK_E2E=1` or keys | vitest |
-| `@soapay/recipient` | 140 | | vitest |
-| `@soapay/sender` | 132 | | vitest |
-| `@soapay/api` | 127 | | vitest |
-| `@soapay/mcp` | 54 | | vitest |
-| `@soapay/contracts` | 31 | 2 fork tests, need `BASE_RPC_URL` | forge |
-| `@soapay/cli` | 12 | | vitest |
+| `@soapay/sdk` | 350 | 18 fork and live tests, need `FORK_E2E=1` or keys | vitest |
+| `@soapay/recipient` | 138 | | vitest |
+| `@soapay/sender` | 151 | | vitest |
+| `@soapay/api` | 146 | | vitest |
+| `@soapay/mcp` | 61 | | vitest |
+| `@soapay/contracts` | 44 | 2 fork tests, need `BASE_RPC_URL` | forge |
+| `@soapay/cli` | 17 | | vitest |
 
 The skipped tests are the Base and Sepolia fork end-to-ends (a full payroll run, gasless 7702 spend, in-place swap, Privacy Pools exit). They pass with a fork RPC set; see [Getting started](#getting-started).
 
 ## Uniswap integration
 
+> [!NOTE]
+> Since D-53 the employee **web app has no Convert tab** (the Uniswap bounty is no longer targeted). Swap in place lives on in the SDK and the MCP server's `swap_in_place` tool.
+
 **Convert salary in place.** An employee can turn part of a stealth address's USDC into WETH or ETH **inside that same address**. Moving funds to a "swap wallet" would link the two addresses, and a coworker who spots the link can tie a salary line to a person. So the swap runs where the money already is, and nothing leaves the address.
 
 - **One userOp per address.** The stealth address delegates to `Simple7702Account` (EIP-7702) on first use and runs one batch: exact `USDC.approve(Permit2)`, then exact `Permit2.approve(UniversalRouter)`, then the Universal Router swap, then a `BALANCE_CHECK_ERC20` floor. Both allowances end at zero.
-- **Gas in USDC.** The Circle Paymaster takes gas from the same USDC balance, so the address never needs ETH, which would itself have to come from somewhere linkable.
+- **Gas in USDC.** The Circle Paymaster takes gas from the same USDC balance, so the address never needs ETH, which would itself have to come from somewhere linkable. (On the Base Sepolia demo the gas is sponsored instead, D-52.)
 - **Quotes never reveal the address** (D-27). On Base mainnet the SDK asks the Uniswap Trading API `/quote` for a **random placeholder swapper**, then re-encodes the quoted V2/V3 route itself as Universal Router 2.1.2 commands paying the stealth address; it never calls `/swap`, and a guard refuses any request containing the stealth address. On Base Sepolia (where the API times out), or without a key, it quotes on-chain with QuoterV2.
 - **Nothing pays a third party.** The SDK decodes every Universal Router command, v4 actions included, and refuses to sign if any output could go anywhere but the stealth address: a transfer, a fee portion, or a different recipient.
 - **Preferences stay local.** The conversion preference lives only in the recipient app, never in a public record ([spec §6](docs/mvp-spec.md#6-uniswap-convert-salary-in-place)).
@@ -327,6 +333,13 @@ Base, chain `8453`.
 | ERC-5564 Announcer (canonical) | [`0x5564…5564`](https://basescan.org/address/0x55649E01B5Df198D18D95b5cc5051630cfD45564) |
 | ERC-6538 Registry (canonical) | [`0x6538…6538`](https://basescan.org/address/0x6538E6bf4B0eBd30A8Ea093027Ac2422ce5d6538) |
 | USDC | [`0x8335…2913`](https://basescan.org/address/0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913) |
+
+Base Sepolia, chain `84532` (the live demo; [docs/testnet-deployment.md](docs/testnet-deployment.md)):
+
+| Contract | Address |
+| --- | --- |
+| `StealthDisperse` (ours) | [`0x6B7a…39CA`](https://sepolia.basescan.org/address/0x6B7a1cC570Af2DDd427DA694351438F0FE8039CA) |
+| `MockUSDC` (ours, testnet only: the pay token, minted by the API faucet) | [`0x028D…14Bb`](https://sepolia.basescan.org/address/0x028D969c20b740582428f5043954c380686214Bb) |
 
 ## Repository
 

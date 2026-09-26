@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { encodeAbiParameters, encodeEventTopics, getAddress, type Address, type Hex } from "viem";
 import { erc20Abi } from "../src/abis.js";
-import { ENTRYPOINT_V08, SIMPLE_7702_ACCOUNT } from "../src/constants.js";
+import { ENTRYPOINT_V08, MOCK_USDC_BASE_SEPOLIA, SIMPLE_7702_ACCOUNT } from "../src/constants.js";
 import type { BatchReceipt, ReceiptLog } from "../src/batch.js";
 import { gaslessProofFromReads, readGaslessProof, userOperationEventAbi, type GaslessProofClient } from "../src/gasless.js";
 import { CIRCLE_PAYMASTER_V08 } from "../src/paymasters/circle.js";
@@ -19,9 +19,12 @@ const OP: Hex = "0x2c91abe48efe0b0a1ca52f4ea57f39216342fc91c57bf9e91a9b3f19b215d
 const TX: Hex = "0x1167b83dfab7476ac32b286b890fdcfdba396766d9389778568d949cbffc1bae";
 const DESIGNATOR = `0xef0100${SIMPLE_7702_ACCOUNT.slice(2).toLowerCase()}` as Hex;
 
-function transfer(from: Address, to: Address, value: bigint, i: number): ReceiptLog {
+/** The pay token on Base Sepolia is the mock (D-52); Circle's paymaster still charges Circle USDC. */
+const PAY_TOKEN = getAddress(MOCK_USDC_BASE_SEPOLIA);
+
+function transfer(from: Address, to: Address, value: bigint, i: number, token: Address = USDC): ReceiptLog {
   return {
-    address: USDC,
+    address: token,
     topics: encodeEventTopics({ abi: erc20Abi, eventName: "Transfer", args: { from, to } }) as Hex[],
     data: encodeAbiParameters([{ type: "uint256" }], [value]),
     logIndex: i,
@@ -106,10 +109,24 @@ describe("gaslessProofFromReads", () => {
 
   it("an unknown paymaster is 'other'", () => {
     const p = gaslessProofFromReads(
-      { address: STEALTH, ethBalance: 0n, nonce: 1, code: DESIGNATOR, receipt: receipt([transfer(STEALTH, OTHER, 9n, 0), userOpEvent(STEALTH, OTHER, 1)]) },
+      { address: STEALTH, ethBalance: 0n, nonce: 1, code: DESIGNATOR, receipt: receipt([transfer(STEALTH, OTHER, 9n, 0, PAY_TOKEN), userOpEvent(STEALTH, OTHER, 1)]) },
       { chainId: CHAIN },
     );
     expect(p.spend).toMatchObject({ paymaster: OTHER, paymasterKind: "other", usdcFee: 9n });
+  });
+
+  it("a paymaster that took nothing is 'sponsored' (testnet sponsorship, D-52)", () => {
+    const p = gaslessProofFromReads(
+      {
+        address: STEALTH,
+        ethBalance: 0n,
+        nonce: 1,
+        code: DESIGNATOR,
+        receipt: receipt([transfer(STEALTH, TO, 1_000_000n, 0, PAY_TOKEN), userOpEvent(STEALTH, OTHER, 1)]),
+      },
+      { chainId: CHAIN },
+    );
+    expect(p.spend).toMatchObject({ paymaster: OTHER, paymasterKind: "sponsored", usdcFee: 0n });
   });
 });
 

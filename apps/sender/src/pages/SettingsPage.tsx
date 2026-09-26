@@ -72,7 +72,7 @@ export function SettingsPage(p: SettingsPageProps) {
           </div>
           <span className="hint">Every full line is this amount; each remainder is one smaller line. Default {defaultChunk} USDC
             {testnet
-              ? " on this testnet (faucet USDC is scarce). An exit needs about 16.4 USDC on one address: use a larger chunk or denominations off for that line."
+              ? " on this testnet (small, so demo runs stay readable)."
               : "."}</span>
         </label>
       </div>

@@ -16,7 +16,7 @@ import {
   type Transport,
 } from "viem";
 import type { UserOperation } from "viem/account-abstraction";
-import { getSpendChainConfig } from "../constants.js";
+import { circleUsdcFor } from "../constants.js";
 import type { PaymasterAdapter, PaymasterContext, PaymasterFields } from "./types.js";
 
 /**
@@ -175,7 +175,8 @@ export function circlePaymaster(options: CirclePaymasterOptions = {}): Paymaster
     if (!a) throw new Error(`Circle paymaster: no v0.8 deployment known for chain ${chainId}`);
     return a;
   };
-  const feeToken = (chainId: number) => getSpendChainConfig(chainId).usdc;
+  // Always Circle USDC (the only token the Circle paymaster accepts), even where the pay token is a mock.
+  const feeToken = (chainId: number) => circleUsdcFor(chainId);
 
   async function fields(ctx: PaymasterContext): Promise<PaymasterFields> {
     const paymaster = addressFor(ctx.chainId);
