@@ -1,0 +1,25 @@
+# Soapay web: recipient app at /, sender app at /sender/, /api proxied to the API service.
+# Build from the repo root. Public settings arrive as build args (Railway passes service variables).
+FROM node:24-slim AS build
+WORKDIR /repo
+RUN corepack enable
+ARG PUBLIC_ORIGIN
+ARG VITE_CHAIN_ID=84532
+ARG VITE_STEALTH_DISPERSE
+ARG VITE_ATTESTER
+ARG VITE_RPC_URL=https://sepolia.base.org
+ARG VITE_ENS_RPC_URL=https://ethereum-sepolia-rpc.publicnode.com
+ARG VITE_BUNDLER_URL=https://public.pimlico.io/v2/84532/rpc
+ENV VITE_CHAIN_ID=$VITE_CHAIN_ID VITE_STEALTH_DISPERSE=$VITE_STEALTH_DISPERSE VITE_ATTESTER=$VITE_ATTESTER \
+    VITE_RPC_URL=$VITE_RPC_URL VITE_ENS_RPC_URL=$VITE_ENS_RPC_URL VITE_BUNDLER_URL=$VITE_BUNDLER_URL
+COPY . .
+RUN pnpm install --frozen-lockfile --filter "@soapay/recipient..." --filter "@soapay/sender..."
+RUN bash scripts/build-demo.sh "$PUBLIC_ORIGIN"
+
+FROM node:24-slim
+WORKDIR /app
+COPY --from=build /repo/scripts/serve-demo.mjs scripts/serve-demo.mjs
+COPY --from=build /repo/apps/recipient/dist apps/recipient/dist
+COPY --from=build /repo/apps/sender/dist apps/sender/dist
+ENV HOST=0.0.0.0
+CMD ["node", "scripts/serve-demo.mjs"]

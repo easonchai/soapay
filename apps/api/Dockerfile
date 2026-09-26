@@ -23,6 +23,6 @@ WORKDIR /app
 COPY --from=build /repo/apps/api/dist/index.js ./index.js
 RUN mkdir -p /data && chown node:node /data
 USER node
-VOLUME ["/data"]
+# Persist /data with a platform volume (Railway: attach a volume at /data; Docker: -v soapay-data:/data).
 EXPOSE 8787
 CMD ["node", "index.js"]

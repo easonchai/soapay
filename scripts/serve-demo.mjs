@@ -10,6 +10,7 @@ import { createReadStream, statSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 
 const PORT = Number(process.env.PORT ?? 4300);
+const HOST = process.env.HOST ?? "127.0.0.1";
 const API = new URL(process.env.API_TARGET ?? "http://localhost:8787");
 const ROOT = new URL("..", import.meta.url).pathname;
 const MOUNTS = [
@@ -65,6 +66,6 @@ function proxyApi(req, res) {
 
 createServer((req, res) => (req.url.startsWith("/api/") || req.url === "/api" ? proxyApi(req, res) : serveStatic(req, res))).listen(
   PORT,
-  "127.0.0.1",
-  () => console.log(`demo server on http://127.0.0.1:${PORT} (recipient /, sender /sender/, api /api → ${API.origin})`),
+  HOST,
+  () => console.log(`demo server on http://${HOST}:${PORT} (recipient /, sender /sender/, api /api → ${API.origin})`),
 );

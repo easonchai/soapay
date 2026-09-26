@@ -177,3 +177,7 @@ metadata:
   - Swap-in-place on Base Sepolia through the Universal Router fallback (tx 0x2bf66ce2…c81), gasless, the stealth address held no ETH.
   - The Trading API key is in the gitignored apps/api/.env and works on Base mainnet quotes, including with a throwaway swapper (the privacy-friendly quote approach). Base Sepolia /quote always times out upstream (recorded in FEEDBACK.md).
   - The demo server was restarted: `node scripts/serve-demo.mjs`; the API runs as `node --env-file=.env dist/index.js`.
+- Checkpoint 19 (2026-09-26):
+  - Deploy prep for Railway: the api Dockerfile has no VOLUME (use a platform volume at /data); `scripts/web.Dockerfile` serves both apps plus the /api proxy (API_TARGET = the private api URL); serve-demo honours HOST; `.railwayignore`.
+  - **Railway is blocked:** the personal workspace trial has expired (create_project fails). The Aqua0 team workspace exists. Waiting on the owner.
+  - Shielded rail research DONE (docs/shielded-rail-research.md): no production shielded pool on Base. Demoable on testnet: Fhenix CoFHE on Base Sepolia (needs our own unaudited FHERC20 wrapper holding funds, which breaks the no-custody rule; about 3 days) or Privacy Pools v2 (Ethereum Sepolia; SDK early access from 0xbow). The timing fix recommendation is a client-side randomized queue of one address per window across sessions (pre-signed userOps can't carry time windows with Simple7702Account + the Circle paymaster).
