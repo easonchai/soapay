@@ -122,6 +122,8 @@ describe.skipIf(!live)("LIVE exit (EXIT_LIVE=1)", () => {
       keys,
       withdrawParts: 1,
       leaveChange: false,
+      // Optional per-run fee caps (USDC base units), e.g. when Sepolia gas spikes past the SDK default.
+      ...(env.EXIT_MAX_FEE_L1_USDC ? { maxFeeUsdc: { [sepolia.id]: BigInt(env.EXIT_MAX_FEE_L1_USDC) } } : {}),
       persist: (l) => {
         state.leg = l;
         save();
