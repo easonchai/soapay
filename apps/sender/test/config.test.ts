@@ -1,5 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { envDefaults, getOrgName, recipientAppUrls, setOrgName } from "../src/config.js";
+import { DEFAULT_CHUNK_USDC, envDefaults, getChunkSize, getOrgName, recipientAppUrls, setChunkSize, setOrgName } from "../src/config.js";
+
+describe("company chunk size (D-31)", () => {
+  it("defaults to 500 USDC and persists a change", () => {
+    setChunkSize("");
+    expect(getChunkSize()).toBe(DEFAULT_CHUNK_USDC);
+    expect(DEFAULT_CHUNK_USDC).toBe("500");
+    setChunkSize(" 250 ");
+    expect(getChunkSize()).toBe("250");
+    setChunkSize("500");
+    expect(getChunkSize()).toBe("500");
+  });
+});
 
 const A = "0x1111111111111111111111111111111111111111";
 const B = "0x2222222222222222222222222222222222222222";

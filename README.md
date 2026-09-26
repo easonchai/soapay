@@ -12,7 +12,7 @@
 
 Our first use case is **recurring payroll on Base**. Today one batch transaction shows every recipient and every amount next to each other. With Soapay, coworkers see a list of never-before-seen addresses.
 
-**Navigate:** [PRD](PRD.md) · [Threat model](#threat-model) · [How it works](#how-it-works) · [Uniswap](#uniswap-integration) · [StealthDisperse plan](contracts/PLAN.md) · [PRD analysis](docs/prd-analysis.md) · [Roadmap](#roadmap) · [Getting started](#getting-started) · [Repository](#repository)
+**Navigate:** [PRD](PRD.md) · [Threat model](#threat-model) · [Privacy model](docs/privacy-model.md) · [How it works](#how-it-works) · [Uniswap](#uniswap-integration) · [StealthDisperse plan](contracts/PLAN.md) · [PRD analysis](docs/prd-analysis.md) · [Roadmap](#roadmap) · [Getting started](#getting-started) · [Repository](#repository)
 
 ## What's here
 
@@ -26,7 +26,7 @@ This is the monorepo before M1:
 
 ## Threat model
 
-The team's agreed model. Where it differs from the PRD, this model wins ([`CLAUDE.md`](CLAUDE.md#agreed-threat-model-overrides-prdmd-where-they-differ)).
+The team's agreed model. Where it differs from the PRD, this model wins ([`CLAUDE.md`](CLAUDE.md#agreed-threat-model-overrides-prdmd-where-they-differ)). Who sees what, and what is and isn't guaranteed: [`docs/privacy-model.md`](docs/privacy-model.md).
 
 | Party | Trusted? | What they must not learn |
 | --- | --- | --- |
@@ -65,13 +65,13 @@ flowchart LR
 
 - **One userOp per address.** The stealth address delegates to `Simple7702Account` (EIP-7702) on first use and runs one batch: exact `USDC.approve(Permit2)`, then exact `Permit2.approve(UniversalRouter)`, then the Universal Router swap, then a `BALANCE_CHECK_ERC20` floor. Both allowances end at zero.
 - **Gas in USDC.** The Circle Paymaster takes gas from the same USDC balance, so the address never needs ETH, which would itself have to come from somewhere linkable.
-- **Quotes** come from the Uniswap Trading API (`/quote` then `/swap`, AMM routes only, Universal Router 2.1.2). Without a key, the SDK falls back to direct Universal Router calldata priced by QuoterV2.
+- **Quotes never reveal the address** (D-27). On Base mainnet the SDK asks the Uniswap Trading API `/quote` for a **random placeholder swapper**, then re-encodes the quoted V2/V3 route itself as Universal Router 2.1.2 commands paying the stealth address; it never calls `/swap`, and a guard refuses any request containing the stealth address. On Base Sepolia (where the API times out), or without a key, it quotes on-chain with QuoterV2.
 - **Nothing pays a third party.** The SDK decodes every Universal Router command, v4 actions included, and refuses to sign if any output could go anywhere but the stealth address: a transfer, a fee portion, or a different recipient.
 - **Preferences stay local.** The conversion preference lives only in the recipient app, never in a public record ([spec §6](docs/mvp-spec.md#6-uniswap-convert-salary-in-place)).
 
 | What | Code |
 | --- | --- |
-| `quoteSwapInPlace`, `swapInPlace`, Trading API client, calldata checks | [`packages/sdk/src/swap.ts`](packages/sdk/src/swap.ts) (Trading API [L563-L644](packages/sdk/src/swap.ts#L563-L644), in-place checks [L314-L458](packages/sdk/src/swap.ts#L314-L458)) |
+| `quoteSwapInPlace`, `swapInPlace`, placeholder-swapper Trading API client, calldata checks | [`packages/sdk/src/swap.ts`](packages/sdk/src/swap.ts) (Trading API [L577-L840](packages/sdk/src/swap.ts#L577-L840), in-place checks [L350-L487](packages/sdk/src/swap.ts#L350-L487)) |
 | `executeFromStealth`: one 7702 userOp, any calls, gas in USDC | [`packages/sdk/src/spend.ts` L414-L497](packages/sdk/src/spend.ts#L414-L497) |
 | Base mainnet fork E2E | [`packages/sdk/test/fork.e2e.test.ts`](packages/sdk/test/fork.e2e.test.ts) |
 | Developer feedback for Uniswap | [`FEEDBACK.md`](FEEDBACK.md) |
@@ -83,7 +83,7 @@ FORK_E2E=1 pnpm --filter @soapay/sdk vitest run test/fork.e2e.test.ts
 # optional: FORK_RPC_URL=<Base RPC>, default https://mainnet.base.org
 ```
 
-The Trading API path is covered by mocked tests only so far (`pnpm --filter @soapay/sdk test`), because we have no API key yet. Keep the key server-side: the API proxies `POST /uniswap/{quote,swap,check_approval}` with `UNISWAP_API_KEY` ([`apps/api/src/routes/uniswap.ts`](apps/api/src/routes/uniswap.ts)), so apps pass `apiUrl: "<api>/uniswap"`. Without a key the proxy answers 503 `uniswap_disabled` and the SDK falls back to the Universal Router.
+With a running API that has a key, the same suite also takes a live Base mainnet `/quote` (placeholder swapper) and executes the locally built swap on the fork: `SWAP_API_URL=http://localhost:8787/uniswap FORK_E2E=1 …`. Keep the key server-side: the API proxies only `POST /uniswap/quote` with `UNISWAP_API_KEY` ([`apps/api/src/routes/uniswap.ts`](apps/api/src/routes/uniswap.ts)), so apps pass `apiUrl: "<api>/uniswap"`. Without a key the proxy answers 503 `uniswap_disabled` and the SDK falls back to the on-chain quote.
 
 ## ENSv2 integration
 
@@ -218,6 +218,7 @@ Base, chain `8453`.
 | --- | --- |
 | Product requirements | [`PRD.md`](PRD.md) |
 | Threat model, design decisions, sender-app invariants | [`CLAUDE.md`](CLAUDE.md) |
+| Who sees what; guaranteed vs not guaranteed | [`docs/privacy-model.md`](docs/privacy-model.md) |
 | `StealthDisperse` spec, invariants, test matrix, deploy | [`contracts/PLAN.md`](contracts/PLAN.md) |
 | PRD review and open questions | [`docs/prd-analysis.md`](docs/prd-analysis.md) |
 | Shared decision memory | [`.claude/memory/MEMORY.md`](.claude/memory/MEMORY.md) |

@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Fade, Presence, TopBar } from "@soapay/ui";
 import { CHAINS, PARENT_NAME } from "@soapay/sdk";
-import { getOrgName, setOrgName, txUrl } from "./config.js";
+import { getChunkSize, getOrgName, setChunkSize, setOrgName, txUrl } from "./config.js";
 import { useStore } from "./hooks/store.js";
 import { usePayPath, useWallet } from "./hooks/usePayPath.js";
 import { usePayRun } from "./hooks/usePayRun.js";
@@ -88,7 +88,7 @@ function InvitePoller() {
   return null;
 }
 
-function PayRunContainer({ go }: { go(r: Route): void }) {
+function PayRunContainer({ go, chunk }: { go(r: Route): void; chunk: string }) {
   const { app } = useStore();
   const run = usePayRun();
   const roster = useRoster();
@@ -116,6 +116,8 @@ function PayRunContainer({ go }: { go(r: Route): void }) {
       payPath={payPath}
       chainName={app.chain.name}
       onOpenRecipients={() => go({ page: "roster" })}
+      chunk={chunk}
+      onOpenSettings={() => go({ page: "settings" })}
       onReview={(d: Denomination | null) => {
         setEditing(false);
         // Re-plans with fresh addresses every time; a plan is never reused.
@@ -151,7 +153,17 @@ function RunContainer({ id, go }: { id: string; go(r: Route): void }) {
   return <RunDetailPage {...actions} txUrl={(h) => txUrl(chainId, h)} onBack={() => go({ page: "history" })} />;
 }
 
-function SettingsContainer({ org, onOrgChange }: { org: string; onOrgChange(v: string): void }) {
+function SettingsContainer({
+  org,
+  onOrgChange,
+  chunk,
+  onChunkChange,
+}: {
+  org: string;
+  onOrgChange(v: string): void;
+  chunk: string;
+  onChunkChange(v: string): void;
+}) {
   const s = useSettings();
   const { app, vaultMode, lock, destroyVault, employees, invites, runs } = useStore();
   return (
@@ -161,6 +173,8 @@ function SettingsContainer({ org, onOrgChange }: { org: string; onOrgChange(v: s
       chainName={chainName}
       org={org}
       onOrgChange={onOrgChange}
+      chunk={chunk}
+      onChunkChange={onChunkChange}
       vaultMode={vaultMode}
       counts={{ employees: employees.length, invites: invites.length, runs: runs.length }}
       onLock={lock}
@@ -225,11 +239,13 @@ export function App() {
   const [route, go] = useRoute();
   const [loggedOut, setLoggedOut] = useState(session.get);
   const [org, setOrg] = useState(getOrgName);
+  const [chunk, setChunk] = useState(getChunkSize);
 
   if (!wallet.isConnected || loggedOut) {
     return (
       <Landing
         wallet={wallet}
+        employeeUrl={app.otherAppUrl}
         onLogin={() => {
           session.set(false);
           setLoggedOut(false);
@@ -247,7 +263,7 @@ export function App() {
 
   let body: ReactNode;
   if (phase !== "ready") body = <VaultContainer />;
-  else if (route.page === "pay") body = <PayRunContainer go={go} />;
+  else if (route.page === "pay") body = <PayRunContainer go={go} chunk={chunk} />;
   else if (route.page === "history") body = <HistoryContainer go={go} />;
   else if (route.page === "run") body = <RunContainer id={route.id} go={go} />;
   else if (route.page === "settings")
@@ -257,6 +273,11 @@ export function App() {
         onOrgChange={(v) => {
           setOrgName(v);
           setOrg(v.trim());
+        }}
+        chunk={chunk}
+        onChunkChange={(v) => {
+          setChunkSize(v);
+          setChunk(getChunkSize());
         }}
       />
     );

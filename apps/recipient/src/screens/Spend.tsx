@@ -2,17 +2,89 @@ import { useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { offersExit, type ExitPrefill } from "../features/exit/entry.js";
 import { useExit } from "../hooks/useExit.js";
+import type { QueueWindow } from "@soapay/sdk";
+import { useQueue } from "../hooks/useQueue.js";
 import { useSpendFlow } from "../hooks/useSpendFlow.js";
 import { useWallet } from "../hooks/useWallet.js";
 import { explorerTxUrl } from "../config.js";
 import { useServices } from "../services/ServicesProvider.js";
 import { Addr, Alert, Button, Card, CardHeader, Field, Input, PageHeader } from "../ui/kit.js";
-import { formatUsdc } from "../ui/format.js";
+import { formatUsdc, windowTime } from "../ui/format.js";
 import { ExitOffer } from "./ExitOffer.js";
 import { GuardDecision, canSend } from "./GuardDecision.js";
 
+const hours = (w: QueueWindow) => `${Math.round(w.minMs / 3_600_000)}–${Math.round(w.maxMs / 3_600_000)} h`;
+
+/**
+ * The timing queue (D-28) inside the current card: what's waiting, when each window opens, and the
+ * "send now" override. `groupId` narrows it to one Send.
+ */
+export function QueueList({ groupId }: { groupId?: string }) {
+  const q = useQueue();
+  const items = q.pending.filter((i) => i.kind === "spend" && (!groupId || i.groupId === groupId));
+  const failed = q.recent.filter((i) => i.kind === "spend" && i.status === "failed" && (!groupId || i.groupId === groupId));
+  const sent = groupId ? q.recent.filter((i) => i.groupId === groupId && i.status === "sent") : [];
+  if (items.length === 0 && failed.length === 0 && sent.length === 0) return null;
+  const groups = [...new Set(items.filter((i) => i.status === "queued").map((i) => i.groupId))];
+  const next = items.find((i) => i.status === "queued");
+  return (
+    <div className="space-y-2 border-t px-4 py-3 text-sm" data-testid="spend-queue">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="font-medium">
+          Queued · {items.length} {items.length === 1 ? "transfer" : "transfers"}
+          {next ? <span className="font-normal text-muted-foreground"> · next window {windowTime(next.opensAt)}</span> : null}
+        </span>
+        {groups.length > 0 && (
+          <Button size="sm" variant="outline" loading={q.sending} onClick={() => void Promise.all(groups.map((g) => q.sendNow(g)))}>
+            Send now
+          </Button>
+        )}
+      </div>
+      <ul className="divide-y">
+        {items.map((i) => (
+          <li key={i.id} className="flex flex-wrap items-center justify-between gap-2 py-1.5">
+            <span>
+              <Addr address={i.from} /> → <Addr address={i.to} /> · <span className="tabular-nums">{formatUsdc(BigInt(i.amount))} USDC</span>
+            </span>
+            <span className="flex items-center gap-2 text-xs text-muted-foreground">
+              {i.status === "released" ? "sending…" : windowTime(i.opensAt)}
+              {i.status === "queued" && (
+                <Button size="sm" variant="ghost" onClick={() => void q.cancel(i.id)}>
+                  Cancel
+                </Button>
+              )}
+            </span>
+          </li>
+        ))}
+        {failed.map((i) => (
+          <li key={i.id} className="flex flex-wrap items-center justify-between gap-2 py-1.5">
+            <span>
+              <Addr address={i.from} /> · <span className="text-destructive">{i.error}</span>
+            </span>
+            <Button size="sm" variant="ghost" onClick={() => void q.retry(i.id)}>
+              Retry
+            </Button>
+          </li>
+        ))}
+        {sent.map((i) => (
+          <li key={i.id} className="flex justify-between gap-2 py-1.5 text-muted-foreground">
+            <span>
+              <Addr address={i.from} /> → <Addr address={i.to} /> · {formatUsdc(BigInt(i.amount))} USDC
+            </span>
+            <span className="text-xs">sent</span>
+          </li>
+        ))}
+      </ul>
+      {groups.length > 0 && (
+        <p className="text-xs text-muted-foreground">Send now sends these within a minute of each other, so a coworker can link the addresses.</p>
+      )}
+    </div>
+  );
+}
+
 export function Spend() {
   const flow = useSpendFlow();
+  const queue = useQueue();
   const wallet = useWallet();
   const svc = useServices();
   const exit = useExit();
@@ -33,7 +105,7 @@ export function Spend() {
       <PageHeader
         eyebrow="Send"
         title="Send"
-        description="Each source address sends in its own transaction, at random intervals, with gas paid in USDC. The guard keeps your addresses from being linked."
+        description="Each source address sends in its own transaction, with gas paid in USDC. Sends are queued, one address per random window of hours, so your addresses aren't linked by timing."
       />
       {!flow.ready && <Alert variant="warning">{flow.unavailableReason}</Alert>}
 
@@ -55,6 +127,7 @@ export function Spend() {
               {s.step === "preparing" ? "Picking sources and quoting fees…" : "Review"}
             </Button>
           </form>
+          <QueueList />
         </Card>
       )}
 
@@ -74,7 +147,10 @@ export function Spend() {
             </ul>
             <p className="border-t px-4 py-2 text-xs text-muted-foreground">
               {s.draft.allocation.parts.length} transaction{s.draft.allocation.parts.length === 1 ? "" : "s"}, total fees at most{" "}
-              {formatUsdc(s.draft.allocation.fees, { precise: true })} USDC (unused fee is refunded).
+              {formatUsdc(s.draft.allocation.fees, { precise: true })} USDC (unused fee is refunded).{" "}
+              {s.draft.allocation.parts.length > 1
+                ? `Queued: one address per window of ${hours(queue.window)}, in random order, while the app is open. Send now links them by timing.`
+                : "Queued for the next window; Send now skips the wait."}
             </p>
           </Card>
           {!s.draft.allocation.sufficient && (
@@ -95,7 +171,15 @@ export function Spend() {
           {s.error && <Alert variant="destructive">{s.error}</Alert>}
           <div className="flex gap-2">
             <Button className="flex-1" onClick={() => void flow.send()} disabled={!canSend(s.draft.plan)}>
-              Send
+              Queue send
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => void flow.sendNow()}
+              disabled={!canSend(s.draft.plan)}
+              title="Sends every source within a minute: a coworker watching the chain can link these addresses."
+            >
+              Send now
             </Button>
             <Button variant="ghost" onClick={flow.reset}>
               Back
@@ -108,6 +192,25 @@ export function Spend() {
         <Alert variant="info" title="Sending…">
           {s.done} of {s.total} sent. Keep this tab open: sends are spaced out on purpose so they don't share a block.
         </Alert>
+      )}
+
+      {s.step === "queued" && (
+        <div className="space-y-4">
+          <Card>
+            <CardHeader
+              title={`Queued ${formatUsdc(s.draft.amount)} USDC`}
+              description={
+                <>
+                  to <Addr address={s.draft.to} chars={6} />, one address per window, in random order. Keep the app open, or come back later.
+                </>
+              }
+            />
+            <QueueList groupId={s.groupId} />
+          </Card>
+          <Button variant="outline" onClick={flow.reset}>
+            New send
+          </Button>
+        </div>
       )}
 
       {s.step === "result" && (

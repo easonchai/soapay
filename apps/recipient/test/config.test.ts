@@ -19,10 +19,10 @@ describe("readEnv: CK's env names are accepted as aliases, ours win", () => {
     expect(readEnv({}).apiUrl).toBe("http://localhost:8787");
   });
 
-  it("VITE_OTHER_APP_URL, else the sender dev server in dev and /sender/ in a build", () => {
+  it("VITE_OTHER_APP_URL, else the sender dev server in dev and / in a build", () => {
     expect(readEnv({ VITE_OTHER_APP_URL: "https://pay.example" }).otherAppUrl).toBe("https://pay.example");
     expect(readEnv({ DEV: true }).otherAppUrl).toBe("http://localhost:5174");
-    expect(readEnv({ DEV: false }).otherAppUrl).toBe("/sender/");
+    expect(readEnv({ DEV: false }).otherAppUrl).toBe("/");
   });
 
   it("apiFromRelayUrl ignores junk", () => {

@@ -13,14 +13,18 @@
  * recipient, a fee portion, a transfer) is rejected before signing, because moving value to another
  * address would link it to this one. Tokens never leave the address, so no clusters merge.
  *
- * Two quote sources:
- * - "trading-api": the Uniswap Trading API (`/quote` + `/swap`, API key required). Classic AMM
- *   routes only (V2/V3/V4); UniswapX orders are signed off-chain orders, not batchable calls.
- * - "universal-router": a direct Universal Router V3 exact-input encoding priced by QuoterV2. No API
- *   key; used by tests and the fork demo.
+ * Two quote sources, and neither lets the Trading API or the Soapay platform see the stealth address
+ * (D-27, docs/privacy-model.md):
+ * - "trading-api": Uniswap Trading API `/quote` only (API key, usually added by our proxy), asked
+ *   with a fresh random PLACEHOLDER swapper. We never call `/swap`: the quoted V2/V3 route is
+ *   re-encoded here as Universal Router commands with the stealth address as recipient. Every
+ *   request body passes `assertNoStealthAddress` first. Default on Base mainnet.
+ * - "universal-router": QuoterV2 over the public client + our own V3 exact-input encoding. No API at
+ *   all. Default on Base Sepolia, where the Trading API times out, and the fallback everywhere.
  */
 import {
   decodeAbiParameters,
+  bytesToHex,
   decodeFunctionData,
   encodeAbiParameters,
   encodeFunctionData,
@@ -28,6 +32,7 @@ import {
   erc20Abi,
   getAddress,
   hexToBytes,
+  isAddress,
   isAddressEqual,
   parseAbi,
   parseAbiParameters,
@@ -153,6 +158,18 @@ export class SwapProxyDisabledError extends SwapError {
 export class SwapRecipientError extends SwapError {
   override name = "SwapRecipientError";
 }
+/** A request to the quote service would have carried the stealth address. Never falls back silently. */
+export class SwapPrivacyError extends SwapError {
+  override name = "SwapPrivacyError";
+}
+/** The Trading API route uses pools we don't re-encode (V4, mixed) or doesn't add up; use the fallback. */
+export class SwapRouteUnsupportedError extends SwapError {
+  override name = "SwapRouteUnsupportedError";
+}
+/** The Trading API (or the proxy in front of it) failed with a 5xx, e.g. Base Sepolia routing timeouts. */
+export class SwapUpstreamError extends SwapError {
+  override name = "SwapUpstreamError";
+}
 
 export type SwapSource = "trading-api" | "universal-router";
 
@@ -175,8 +192,13 @@ export type SwapQuoteParams = {
   slippageBps: number;
   /** Trading API key (server-side only). Without it or `apiUrl`, the Universal Router fallback is used. */
   apiKey?: string;
-  /** Force a source. Default: "trading-api" when `apiKey` or `apiUrl` is set, else "universal-router". */
+  /**
+   * Force a source. Default (`defaultSwapSource`): "trading-api" when `apiKey` or `apiUrl` is set AND
+   * the chain is in `TRADING_API_ROUTED_CHAINS`, else "universal-router".
+   */
   source?: SwapSource;
+  /** The throwaway `/quote` swapper. Default: a fresh random address per quote. Injectable for tests. */
+  placeholderSwapper?: () => Address;
   /** Needed for the fallback quote and the ERC-20 balance guard. */
   publicClient?: PublicClient<Transport, Chain>;
   /** V3 pool fee for the fallback. Default 500. */
@@ -552,14 +574,54 @@ async function quoteViaUniversalRouter(params: SwapQuoteParams, r: Resolved): Pr
   };
 }
 
-type ApiTx = { to: string; from?: string; data: string; value?: string; chainId?: number };
+// ---------------------------------------------------------------------------------------------
+// Trading API, platform-free (D-27): quote with a placeholder swapper, build the swap ourselves
+// ---------------------------------------------------------------------------------------------
+
+/** Chains where the Trading API actually routes. Base Sepolia is listed but times out upstream. */
+export const TRADING_API_ROUTED_CHAINS: readonly number[] = [8453];
+
+/**
+ * Pool types we re-encode as Universal Router commands. V4 is not requested: its path keys need
+ * hooks and tick spacing, and a route we can't rebuild exactly is one we won't sign.
+ */
+export const TRADING_API_PROTOCOLS = ["V2", "V3"] as const;
+
+/**
+ * A fresh random address used as the `/quote` swapper. It holds nothing, signs nothing and is
+ * thrown away after the quote, so the quote service (and our proxy) never learns the stealth address.
+ */
+export function randomPlaceholderSwapper(): Address {
+  const c = (globalThis as unknown as { crypto?: { getRandomValues(a: Uint8Array): Uint8Array } }).crypto;
+  if (!c?.getRandomValues) throw new SwapError("Soapay swap: no secure randomness for the placeholder swapper");
+  return getAddress(bytesToHex(c.getRandomValues(new Uint8Array(20))));
+}
+
+/**
+ * The privacy guard for every request to the Trading API or our proxy: throws `SwapPrivacyError`
+ * if the URL or body contains the stealth address in any casing, with or without `0x`.
+ */
+export function assertNoStealthAddress(stealthAddress: Address, ...parts: string[]): void {
+  const needle = getAddress(stealthAddress).slice(2).toLowerCase();
+  if (parts.some((p) => p.toLowerCase().includes(needle)))
+    throw new SwapPrivacyError("Soapay swap: refusing to send the stealth address to the quote service");
+}
+
+/** The default source: the Trading API only where it routes and a key or proxy is configured. */
+export function defaultSwapSource(params: Pick<SwapQuoteParams, "chainId" | "apiKey" | "apiUrl">): SwapSource {
+  if (!params.apiKey && !params.apiUrl) return "universal-router";
+  return TRADING_API_ROUTED_CHAINS.includes(params.chainId) ? "trading-api" : "universal-router";
+}
+
+type ApiToken = { address?: string };
+type ApiPool = { type?: string; tokenIn?: ApiToken; tokenOut?: ApiToken; fee?: string | number; amountIn?: string; amountOut?: string };
 type ApiQuoteResponse = {
   routing?: string;
   permitData?: unknown;
   quote?: {
     input?: { token?: string; amount?: string };
-    output?: { token?: string; amount?: string; recipient?: string; minimumAmount?: string };
-    aggregatedOutputs?: { token?: string; amount?: string; recipient?: string; minAmount?: string; bps?: number }[];
+    output?: { token?: string; amount?: string };
+    route?: unknown;
     routeString?: string;
     swapper?: string;
     slippage?: number;
@@ -567,10 +629,108 @@ type ApiQuoteResponse = {
   };
 };
 
-async function apiPost(params: SwapQuoteParams, path: string, body: unknown): Promise<unknown> {
+const MAX_SPLITS = 8;
+const MAX_HOPS = 4;
+
+/**
+ * Re-encodes a Trading API `quote.route` (splits of V2 or V3 pools) as one `UniversalRouter.execute`
+ * whose outputs all land at `recipient`. Each split is an exact-input swap of its quoted amount;
+ * the splits must add up to `amountIn`. Native ETH out: swaps pay the router in WETH, then one
+ * UNWRAP_WETH to `recipient` enforces the total floor. Anything else (V4 or mixed pools, broken
+ * token chains, a mismatched total) throws `SwapRouteUnsupportedError`.
+ *
+ * Only pool types, tokens and fee tiers come from the quote. The router derives pool addresses
+ * itself, so a quoted pool address can't redirect funds.
+ */
+export function encodeQuotedRouteExactIn(args: {
+  route: unknown;
+  tokenIn: Address;
+  tokenOut: Address;
+  weth: Address;
+  amountIn: bigint;
+  /** Total floor for all splits together. */
+  minOut: bigint;
+  slippageBps: number;
+  recipient: Address;
+  deadline: bigint;
+}): Hex {
+  const bad = (why: string): never => {
+    throw new SwapRouteUnsupportedError(`Soapay swap: can't rebuild the quoted route (${why})`);
+  };
+  const splits = args.route;
+  if (!Array.isArray(splits) || splits.length === 0) bad("no route");
+  if ((splits as unknown[]).length > MAX_SPLITS) bad("too many splits");
+  const native = isNative(args.tokenOut);
+  const out = native ? args.weth : args.tokenOut;
+  const single = (splits as unknown[]).length === 1;
+  const commands: number[] = [];
+  const inputs: Hex[] = [];
+  let total = 0n;
+
+  const addr = (t: ApiToken | undefined): Address => {
+    if (!t?.address || !isAddress(t.address, { strict: false })) bad("pool token is not an address");
+    return getAddress(t!.address!);
+  };
+  const uint = (v: unknown, what: string): bigint => {
+    if (typeof v !== "string" || !/^\d+$/.test(v)) bad(`${what} is not an integer`);
+    return BigInt(v as string);
+  };
+
+  for (const split of splits as unknown[]) {
+    if (!Array.isArray(split) || split.length === 0 || split.length > MAX_HOPS) bad("split has no pools or too many hops");
+    const pools = split as ApiPool[];
+    const kind = pools[0]!.type;
+    if (kind !== "v3-pool" && kind !== "v2-pool") bad(`pool type ${String(kind)}`);
+    if (pools.some((p) => p.type !== kind)) bad("mixed pool types in one split");
+    const hops = pools.map((p) => ({ from: addr(p.tokenIn), to: addr(p.tokenOut), pool: p }));
+    if (!isAddressEqual(hops[0]!.from, args.tokenIn)) bad("route does not start at tokenIn");
+    if (!isAddressEqual(hops[hops.length - 1]!.to, out)) bad("route does not end at tokenOut");
+    for (let i = 1; i < hops.length; i++) if (!isAddressEqual(hops[i - 1]!.to, hops[i]!.from)) bad("broken token chain");
+
+    const splitIn = uint(pools[0]!.amountIn, "split amountIn");
+    if (splitIn === 0n) bad("zero split");
+    total += splitIn;
+    const splitMin = single ? args.minOut : minOutFor(uint(pools[pools.length - 1]!.amountOut, "split amountOut"), args.slippageBps);
+    const to = native ? UR_ADDRESS_THIS : args.recipient;
+    // One split: its floor is the total (for native out, the UNWRAP_WETH below enforces it).
+    // Several splits: each gets its own slippage floor, and the total is enforced after them.
+    const floor = native && single ? 0n : splitMin;
+    if (kind === "v3-pool") {
+      const types: ("address" | "uint24")[] = ["address"];
+      const values: (Address | number)[] = [hops[0]!.from];
+      for (const h of hops) {
+        const fee = Number(h.pool.fee);
+        if (!Number.isInteger(fee) || fee <= 0 || fee >= 1 << 24) bad("v3 fee tier");
+        types.push("uint24", "address");
+        values.push(fee, h.to);
+      }
+      commands.push(UrCommand.V3_SWAP_EXACT_IN);
+      inputs.push(encodeAbiParameters(V3_EXACT_IN_PARAMS, [to, splitIn, floor, encodePacked(types, values), true, []]));
+    } else {
+      const path = [hops[0]!.from, ...hops.map((h) => h.to)];
+      commands.push(UrCommand.V2_SWAP_EXACT_IN);
+      inputs.push(encodeAbiParameters(V2_EXACT_IN_PARAMS, [to, splitIn, floor, path, true, []]));
+    }
+  }
+  if (total !== args.amountIn) bad("split amounts do not add up to amountIn");
+  if (native) {
+    commands.push(UrCommand.UNWRAP_WETH);
+    inputs.push(encodeAbiParameters(RECIPIENT_AMOUNT, [args.recipient, args.minOut]));
+  }
+  return encodeFunctionData({
+    abi: universalRouterAbi,
+    functionName: "execute",
+    args: [encodePacked(commands.map(() => "uint8" as const), commands), inputs, args.deadline],
+  });
+}
+
+async function apiPost(params: SwapQuoteParams, stealthAddress: Address, path: string, body: unknown): Promise<unknown> {
   const f = params.fetch ?? ((globalThis as unknown as { fetch?: SwapFetch }).fetch as SwapFetch | undefined);
   if (!f) throw new SwapError("Soapay swap: no fetch available");
-  const res = await f(`${params.apiUrl ?? TRADING_API_URL}${path}`, {
+  const url = `${params.apiUrl ?? TRADING_API_URL}${path}`;
+  const json = JSON.stringify(body);
+  assertNoStealthAddress(stealthAddress, url, json);
+  const res = await f(url, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -580,34 +740,37 @@ async function apiPost(params: SwapQuoteParams, path: string, body: unknown): Pr
       "x-universal-router-version": UNIVERSAL_ROUTER_VERSION,
       "x-agent-info": TRADING_API_AGENT_INFO,
     },
-    body: JSON.stringify(body),
+    body: json,
   });
   if (!res.ok && res.status === 503 && params.apiUrl) {
     const text = await res.text();
     if (text.includes('"uniswap_disabled"')) throw new SwapProxyDisabledError();
-    throw new SwapError(`Soapay swap: Trading API ${path} returned 503: ${text.slice(0, 300)}`);
+    throw new SwapUpstreamError(`Soapay swap: Trading API ${path} returned 503: ${text.slice(0, 300)}`);
   }
-  if (!res.ok) throw new SwapError(`Soapay swap: Trading API ${path} returned ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  if (!res.ok) {
+    const msg = `Soapay swap: Trading API ${path} returned ${res.status}: ${(await res.text()).slice(0, 300)}`;
+    throw res.status >= 500 ? new SwapUpstreamError(msg) : new SwapError(msg);
+  }
   return res.json();
 }
 
 async function quoteViaTradingApi(params: SwapQuoteParams, r: Resolved): Promise<SwapQuote> {
   if (!params.apiKey && !params.apiUrl) throw new SwapError("Soapay swap: the Trading API needs apiKey, or apiUrl pointing at a proxy that adds it");
-  const quoteRes = (await apiPost(params, "/quote", {
+  const swapper = getAddress((params.placeholderSwapper ?? randomPlaceholderSwapper)());
+  if (isAddressEqual(swapper, r.stealthAddress)) throw new SwapPrivacyError("Soapay swap: the placeholder swapper must not be the stealth address");
+  const quoteRes = (await apiPost(params, r.stealthAddress, "/quote", {
     type: "EXACT_INPUT",
     amount: r.amountIn.toString(),
     tokenInChainId: r.chainId,
     tokenOutChainId: r.chainId,
     tokenIn: r.tokenIn,
     tokenOut: r.tokenOut,
-    swapper: r.stealthAddress,
-    recipient: r.stealthAddress,
+    // A throwaway address: the quote only needs *a* swapper, and routing doesn't depend on it.
+    swapper,
     slippageTolerance: r.slippageBps / 100,
     routingPreference: "BEST_PRICE",
-    // AMM only: UniswapX orders are signed off-chain and filled by someone else, not a batchable call.
-    protocols: ["V2", "V3", "V4"],
-    // "When using a 7702-delegated wallet, set this field to true": no Permit2 signature in the
-    // swap calldata. We ignore the returned permit tx and build an exact-amount one ourselves.
+    // AMM only (UniswapX orders aren't batchable calls), and only pools we can re-encode.
+    protocols: [...TRADING_API_PROTOCOLS],
     generatePermitAsTransaction: true,
     permitAmount: "EXACT",
   })) as ApiQuoteResponse;
@@ -618,25 +781,27 @@ async function quoteViaTradingApi(params: SwapQuoteParams, r: Resolved): Promise
   if (!q?.output?.amount || !q.input?.amount) throw new SwapError("Soapay swap: malformed quote");
   if (BigInt(q.input.amount) !== r.amountIn) throw new SwapError("Soapay swap: quote input amount differs from the request");
   if (!q.output.token || !isAddressEqual(getAddress(q.output.token), r.tokenOut)) throw new SwapError("Soapay swap: quote output token differs");
-  if (q.swapper && !isAddressEqual(getAddress(q.swapper), r.stealthAddress)) throw new SwapRecipientError("Soapay swap: quote swapper is not the stealth address");
-  if (q.output.recipient && !isAddressEqual(getAddress(q.output.recipient), r.stealthAddress))
-    throw new SwapRecipientError(`Soapay swap: quote recipient ${q.output.recipient} is not the stealth address`);
-  for (const o of q.aggregatedOutputs ?? []) {
-    if (o.recipient && !isAddressEqual(getAddress(o.recipient), r.stealthAddress))
-      throw new SwapRecipientError(`Soapay swap: quote pays ${o.amount ?? "?"} to ${o.recipient}, not the stealth address`);
-  }
+  if (q.swapper && !isAddressEqual(getAddress(q.swapper), swapper)) throw new SwapError("Soapay swap: quote is for a different swapper");
   if (typeof q.slippage === "number" && Math.round(q.slippage * 100) > r.slippageBps) throw new SwapError("Soapay swap: quote slippage above request");
   const amountOut = BigInt(q.output.amount);
+  if (amountOut === 0n) throw new SwapError("Soapay swap: no liquidity");
   const minOut = minOutFor(amountOut, r.slippageBps);
 
-  const swapRes = (await apiPost(params, "/swap", { quote: q, deadline: Number(r.deadline) })) as { swap?: ApiTx };
-  const tx = swapRes.swap;
-  if (!tx?.data || tx.data === "0x" || !tx.to) throw new SwapError("Soapay swap: /swap returned no calldata");
-  if (tx.from && !isAddressEqual(getAddress(tx.from), r.stealthAddress)) throw new SwapRecipientError("Soapay swap: /swap tx is not from the stealth address");
-  const value = BigInt(tx.value ?? "0");
-  const swapCall = { to: getAddress(tx.to), value, data: tx.data as Hex };
+  // No `/swap`: its calldata would be built for (and name) the swapper. We encode the quoted route
+  // with the stealth address as recipient, then run the same in-place check as any other calldata.
+  const data = encodeQuotedRouteExactIn({
+    route: q.route,
+    tokenIn: r.tokenIn,
+    tokenOut: r.tokenOut,
+    weth: WETH_BASE,
+    amountIn: r.amountIn,
+    minOut,
+    slippageBps: r.slippageBps,
+    recipient: r.stealthAddress,
+    deadline: r.deadline,
+  });
+  const swapCall = { to: r.router, value: 0n, data };
   assertSwapStaysInPlace({ chainId: r.chainId, stealthAddress: r.stealthAddress, tx: swapCall });
-  if (!isAddressEqual(swapCall.to, r.router)) throw new SwapError("Soapay swap: /swap targets a different router version");
 
   return {
     source: "trading-api",
@@ -657,17 +822,22 @@ async function quoteViaTradingApi(params: SwapQuoteParams, r: Resolved): Promise
 
 /**
  * Quote a swap that stays inside `stealthAddress`. Returns the calls for one userOp; nothing is
- * signed or sent. Rejects any quote that would pay a different address.
+ * signed or sent. Rejects any calldata that would pay a different address.
+ *
+ * Default source (D-27): the Trading API (placeholder swapper, route re-encoded here) on chains
+ * where it routes and a key or proxy is set; otherwise, and whenever the API is unavailable or its
+ * route can't be rebuilt exactly, the on-chain QuoterV2 + Universal Router path.
  */
 export async function quoteSwapInPlace(params: SwapQuoteParams): Promise<SwapQuote> {
   const r = resolve(params);
-  const source = params.source ?? (params.apiKey || params.apiUrl ? "trading-api" : "universal-router");
+  const source = params.source ?? defaultSwapSource(params);
   if (source !== "trading-api") return quoteViaUniversalRouter(params, r);
   try {
     return await quoteViaTradingApi(params, r);
   } catch (e) {
-    // A proxy without a key: fall back, unless the caller forced the Trading API.
-    if (e instanceof SwapProxyDisabledError && params.source === undefined) return quoteViaUniversalRouter(params, r);
+    // Fall back unless the caller forced the Trading API. Never on a privacy-guard failure.
+    const recoverable = e instanceof SwapProxyDisabledError || e instanceof SwapRouteUnsupportedError || e instanceof SwapUpstreamError;
+    if (recoverable && params.source === undefined) return quoteViaUniversalRouter(params, r);
     throw e;
   }
 }

@@ -14,7 +14,9 @@ import { useServices } from "../services/ServicesProvider.js";
 import { stealthKeyFor } from "../spend/flow.js";
 import { errorMessage } from "../ui/kit.js";
 import { useUnlocked } from "../vault/VaultProvider.js";
-import { chainState, type VaultData } from "../vault/types.js";
+import { chainState, settingsOf, type VaultData } from "../vault/types.js";
+import { lockedAddresses, release, windowOpensAt } from "@soapay/sdk";
+import { enqueueExitLegs, isLegQueued, queueOf, queueWindow } from "../spend/queue.js";
 import { useChain, useKeyRing } from "./useChain.js";
 import { useWallet } from "./useWallet.js";
 
@@ -44,6 +46,10 @@ export type ExitApi = {
   retry(exitId: string, legId: string): Promise<void>;
   /** Run one polling round now. */
   tick(): Promise<void>;
+  /** Per leg id: when its timing-queue window opens (D-28), for legs still waiting to deposit. */
+  queuedAt: Readonly<Record<string, number>>;
+  /** Override: start every queued leg of this exit now (links those addresses by timing). */
+  startNow(exitId: string): Promise<void>;
 };
 
 const ExitContext = createContext<ExitApi | null>(null);
@@ -112,6 +118,7 @@ export function ExitProvider({ children, random }: { children: ReactNode; random
         ...(random ? { random } : {}),
         save,
         onError,
+        isQueued: (legId) => isLegQueued(queueOf(chainState(dataRef.current, chainId)), legId),
       });
     } finally {
       running.current = false;
@@ -127,10 +134,24 @@ export function ExitProvider({ children, random }: { children: ReactNode; random
     return () => clearInterval(t);
   }, [service, hasActive, tick]);
 
+  const queue = useMemo(() => queueOf(state), [state]);
   const busy = useMemo(
-    () => new Set(records.flatMap((r) => r.legs).filter((l) => l.status !== "failed").map((l) => l.stealthAddress.toLowerCase())),
-    [records],
+    () =>
+      new Set([
+        ...records.flatMap((r) => r.legs).filter((l) => l.status !== "failed").map((l) => l.stealthAddress.toLowerCase()),
+        // Addresses waiting in the timing queue for a Send are taken too.
+        ...lockedAddresses(queue),
+      ]),
+    [records, queue],
   );
+
+  const minGapMs = queueWindow(settingsOf(v.data)).minMs;
+  const queuedAt = useMemo(() => {
+    const out: Record<string, number> = {};
+    const w = { minMs: minGapMs, maxMs: minGapMs };
+    for (const i of queue.items) if (i.kind === "exit" && i.status === "queued" && i.meta?.legId) out[i.meta.legId] = windowOpensAt(queue, i, w);
+    return out;
+  }, [queue, minGapMs]);
 
   const sources = useMemo(
     () =>
@@ -188,10 +209,16 @@ export function ExitProvider({ children, random }: { children: ReactNode; random
           };
           const cs = chainState(d, chainId);
           const maxIndex = Math.max(first - 1, ...plan.legs.map((l) => l.poolIndex));
+          // Each leg's deposit waits for its own timing-queue window (D-28), like a Send.
+          const q = enqueueExitLegs(queueOf(cs), id, plan.legs, {
+            now,
+            window: queueWindow(settingsOf(d)),
+            ...(random ? { random } : {}),
+          });
           return {
             ...d,
             profile: { ...d.profile, nextExitPoolIndex: maxIndex + 1 },
-            chains: { ...d.chains, [String(chainId)]: { ...cs, exits: [...(cs.exits ?? []), record] } },
+            chains: { ...d.chains, [String(chainId)]: { ...cs, exits: [...(cs.exits ?? []), record], queue: q } },
           };
         });
         return { id };
@@ -199,7 +226,22 @@ export function ExitProvider({ children, random }: { children: ReactNode; random
         return { error: errorMessage(e) };
       }
     },
-    [service, sources, wallet.balances, state.matches, update, chainId],
+    [service, sources, wallet.balances, state.matches, update, chainId, random],
+  );
+
+  const startNow = useCallback(
+    async (exitId: string) => {
+      await update((d) => {
+        const cs = chainState(d, chainId);
+        const q = queueOf(cs);
+        const ids = q.items.filter((i) => i.kind === "exit" && i.meta?.exitId === exitId && i.status === "queued").map((i) => i.id);
+        if (ids.length === 0) return d;
+        const next = release(q, ids, { now: Date.now(), window: queueWindow(settingsOf(d)), ...(random ? { random } : {}) });
+        return { ...d, chains: { ...d.chains, [String(chainId)]: { ...cs, queue: next } } };
+      });
+      await tick();
+    },
+    [update, chainId, random, tick],
   );
 
   const withdrawNow = useCallback(
@@ -253,6 +295,8 @@ export function ExitProvider({ children, random }: { children: ReactNode; random
     withdrawNow,
     retry,
     tick,
+    queuedAt,
+    startNow,
   };
   return <ExitContext.Provider value={api}>{children}</ExitContext.Provider>;
 }

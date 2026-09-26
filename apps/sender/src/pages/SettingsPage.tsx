@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { ErrorLine, PageHead, toast } from "@soapay/ui";
 import type { SettingsState } from "../hooks/useSettings.js";
-import type { AppConfig } from "../config.js";
+import { DEFAULT_CHUNK_USDC, type AppConfig } from "../config.js";
+import { tryParseUsdc } from "../lib/amount.js";
 import type { VaultMode } from "../lib/vault.js";
 import { Notice } from "../ui/kit.js";
 
@@ -10,6 +11,9 @@ export type SettingsPageProps = SettingsState & {
   chainName(id: number): string;
   org: string;
   onOrgChange(v: string): void;
+  /** Company-wide denomination chunk size (D-31), USDC as typed. */
+  chunk?: string;
+  onChunkChange(v: string): void;
   vaultMode: VaultMode | null;
   counts: { employees: number; invites: number; runs: number };
   onLock(): void;
@@ -19,6 +23,7 @@ export type SettingsPageProps = SettingsState & {
 /** CK's Settings (company name, network facts) plus ours: per-browser chain, StealthDisperse and RPCs, attester, vault. */
 export function SettingsPage(p: SettingsPageProps) {
   const [name, setName] = useState(p.org);
+  const [chunk, setChunk] = useState(p.chunk ?? DEFAULT_CHUNK_USDC);
   const { app } = p;
   return (
     <div className="stack-lg" style={{ maxWidth: 760 }}>
@@ -40,6 +45,27 @@ export function SettingsPage(p: SettingsPageProps) {
               Save
             </button>
           </div>
+        </label>
+        <label className="field" style={{ maxWidth: 420, marginTop: 16 }}>
+          <span>Chunk size for denominated payouts, the same for every employee</span>
+          <div className="actions">
+            <div className="addon" style={{ flex: 1 }}>
+              <input className="mono-in" aria-label="Chunk size" value={chunk} inputMode="decimal" onChange={(e) => setChunk(e.target.value.replace(/[^\d.]/g, ""))} />
+              <span className="suffix">USDC</span>
+            </div>
+            <button
+              className="btn-primary"
+              onClick={() => {
+                const c = tryParseUsdc(chunk || DEFAULT_CHUNK_USDC);
+                if (!c.ok || c.value <= 0n) return toast.error("Chunk size must be a positive USDC amount");
+                p.onChunkChange(chunk || DEFAULT_CHUNK_USDC);
+                toast.success("Chunk size saved");
+              }}
+            >
+              Save
+            </button>
+          </div>
+          <span className="hint">Every full line in a run is this amount; each salary&apos;s remainder is one smaller line. Default {DEFAULT_CHUNK_USDC} USDC.</span>
         </label>
       </div>
 

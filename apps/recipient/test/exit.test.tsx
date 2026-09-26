@@ -12,6 +12,7 @@ import { buildCtx, createSdkExitService, destBundlerUrl, type ExitSdkModule } fr
 import { timelineOf } from "../src/features/exit/timeline.js";
 import type { ExitLeg, ExitRecord } from "../src/features/exit/types.js";
 import { ExitProvider, useExit, type ExitApi } from "../src/hooks/useExit.js";
+import { QueueProvider } from "../src/hooks/useQueue.js";
 import { Exit } from "../src/screens/Exit.js";
 import { ExitOffer } from "../src/screens/ExitOffer.js";
 import { ServicesProvider, buildServices } from "../src/services/ServicesProvider.js";
@@ -225,14 +226,16 @@ function Harness({ exitSvc, vaultRef, exitRef, screen: showScreen }: { exitSvc: 
   if (vault.status !== "unlocked") return null;
   return (
     <ServicesProvider override={{ ...buildServices({ ...defaultSettings(), apiUrl: "http://mock" }, true), exit: exitSvc }}>
-      <ExitProvider random={() => 0}>
-        <Probe exitRef={exitRef} />
-        {showScreen && (
-          <MemoryRouter>
-            <Exit />
-          </MemoryRouter>
-        )}
-      </ExitProvider>
+      <QueueProvider pollMs={10} random={() => 0}>
+        <ExitProvider random={() => 0}>
+          <Probe exitRef={exitRef} />
+          {showScreen && (
+            <MemoryRouter>
+              <Exit />
+            </MemoryRouter>
+          )}
+        </ExitProvider>
+      </QueueProvider>
     </ServicesProvider>
   );
 }
@@ -258,7 +261,12 @@ describe("useExit", () => {
     await act(async () => {
       await vaultRef.current!.update((d) => {
         const cs = chainState(d);
-        return { ...d, chains: { ...d.chains, [String(d.settings.chainId)]: { ...cs, balances: [BAL(A, 500n * USDC), BAL(B, 300n * USDC), BAL(DUST, USDC)] } } };
+        return {
+          ...d,
+          // No timing-queue wait in this test (the queue itself is tested below and in the SDK).
+          settings: { ...d.settings, queueWindowHours: [0, 0] },
+          chains: { ...d.chains, [String(d.settings.chainId)]: { ...cs, balances: [BAL(A, 500n * USDC), BAL(B, 300n * USDC), BAL(DUST, USDC)] } },
+        };
       });
     });
     await waitFor(() => expect(exitRef.current?.sources).toHaveLength(3));
@@ -310,5 +318,44 @@ describe("useExit", () => {
     expect(burnLink?.getAttribute("href")).toMatch(/^https:\/\/sepolia\.basescan\.org\/tx\/0x/);
     // Below-minimum source shows why it's disabled.
     expect(screen.getByTestId("below-minimum").textContent).toMatch(/pool minimum/);
+  });
+
+  it("queues each leg's deposit in its own window (D-28); Start now overrides", async () => {
+    const vaultRef: { current: VaultApi | null } = { current: null };
+    const exitRef: { current: ExitApi | null } = { current: null };
+    const svc = createMockExitService({ durations: { planned: 0, burning: 0, "awaiting-mint": 0, minted: 0, depositing: 0, "pending-asp": 1e12 }, pollMs: 10 });
+    render(
+      <VaultProvider>
+        <Harness exitSvc={svc} vaultRef={vaultRef} exitRef={exitRef} screen />
+      </VaultProvider>,
+    );
+    // The previous test left a vault in this IndexedDB: start from a clean one.
+    await waitFor(() => expect(["empty", "locked"]).toContain(vaultRef.current?.status));
+    if (vaultRef.current!.status === "locked") await act(() => vaultRef.current!.wipe());
+    await waitFor(() => expect(vaultRef.current?.status).toBe("empty"));
+    await act(() => vaultRef.current!.create(generateMnemonic(), PASS));
+    await act(async () => {
+      await vaultRef.current!.update((d) => {
+        const cs = chainState(d);
+        return { ...d, chains: { ...d.chains, [String(d.settings.chainId)]: { ...cs, balances: [BAL(A, 500n * USDC), BAL(B, 300n * USDC)] } } };
+      });
+    });
+    await waitFor(() => expect(exitRef.current?.sources).toHaveLength(2));
+    const r = await act(() => exitRef.current!.start({ sources: [A, B], destination: MAIN, privacy: { randomDelay: true, roundWithdrawals: true } }));
+    const id = (r as { id: string }).id;
+
+    // Default window (2–12 h): one leg starts now, the other waits, showing when.
+    await waitFor(() => expect(exitRef.current!.exits[0]!.legs.filter((l) => l.status === "pending-asp")).toHaveLength(1), { timeout: 10_000 });
+    const waiting = exitRef.current!.exits[0]!.legs.find((l) => l.status === "planned")!;
+    expect(exitRef.current!.queuedAt[waiting.id]).toBeGreaterThanOrEqual(Date.now() + 2 * 3_600_000 - 5_000);
+    expect(screen.getByTestId("exit-queued").textContent).toMatch(/Queued: this deposit starts in \d+ h/);
+    await new Promise((res) => setTimeout(res, 60));
+    expect(exitRef.current!.exits[0]!.legs.find((l) => l.id === waiting.id)!.status).toBe("planned");
+
+    await act(() => exitRef.current!.startNow(id));
+    await waitFor(() => expect(exitRef.current!.exits[0]!.legs.every((l) => l.status === "pending-asp")).toBe(true), { timeout: 10_000 });
+    const q = chainState(vaultRef.current!.data!).queue!;
+    await waitFor(() => expect(chainState(vaultRef.current!.data!).queue!.items.every((i) => i.status === "sent")).toBe(true), { timeout: 10_000 });
+    expect(q.items.map((i) => i.meta?.exitId)).toEqual([id, id]);
   });
 });

@@ -28,6 +28,15 @@ export function shortAddr(a: string, chars = 4): string {
   return a.length <= 2 + chars * 2 ? a : `${a.slice(0, 2 + chars)}…${a.slice(-chars)}`;
 }
 
+/** A future queue window: "now", "in 40 min", or "in 5 h · Sat 14:30". */
+export function windowTime(ts: number, now = Date.now()): string {
+  const m = Math.round((ts - now) / 60_000);
+  if (m <= 0) return "now";
+  if (m < 60) return `in ${m} min`;
+  const clock = new Date(ts).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" });
+  return `in ${Math.round(m / 60)} h · ${clock}`;
+}
+
 export function relativeTime(ts: number, now = Date.now()): string {
   const s = Math.round((now - ts) / 1000);
   if (s < 45) return "just now";

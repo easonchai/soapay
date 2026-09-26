@@ -21,19 +21,25 @@ import {
   NATIVE_ETH,
   PERMIT2_ADDRESS,
   SwapError,
+  SwapPrivacyError,
   SwapRecipientError,
   SwapProxyDisabledError,
+  SwapRouteUnsupportedError,
+  SwapUpstreamError,
   UNIVERSAL_ROUTER,
   UR_ADDRESS_THIS,
   UR_MSG_SENDER,
   UrCommand,
   V4Action,
   WETH_BASE,
+  assertNoStealthAddress,
   assertSwapStaysInPlace,
+  defaultSwapSource,
   encodeV3ExactInSwap,
   minOutFor,
   permit2Abi,
   quoteSwapInPlace,
+  randomPlaceholderSwapper,
   universalRouterAbi,
   type SwapFetch,
 } from "../src/swap.js";
@@ -127,7 +133,7 @@ describe("assertSwapStaysInPlace", () => {
 });
 
 // ---------------------------------------------------------------------------------------------
-// Trading API path (mocked HTTP)
+// Trading API path (mocked HTTP). D-27: the stealth address never reaches the quote service.
 // ---------------------------------------------------------------------------------------------
 
 const AMOUNT_OUT = 7_000_000_000_000_000n;
@@ -151,39 +157,45 @@ function chainClient() {
   });
 }
 
-function mockApi(over: { quote?: Record<string, unknown>; top?: Record<string, unknown>; swapData?: Hex; swapTo?: Address } = {}) {
-  const requests: { url: string; headers: Record<string, string>; body: Record<string, unknown> }[] = [];
+const PLACEHOLDER = getAddress("0x00000000000000000000000000000000000f1a7e");
+const v2In = parseAbiParameters("address, uint256, uint256, address[], bool, uint256[]");
+const DAI = getAddress("0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb");
+const tok = (address: Address) => ({ address, chainId: CHAIN_ID, symbol: "T", decimals: "18" });
+const pool = (type: string, tokenIn: Address, tokenOut: Address, fee: string | undefined, amountIn?: bigint, amountOut?: bigint) => ({
+  type,
+  address: MALLORY, // ignored: the router derives pool addresses itself
+  tokenIn: tok(tokenIn),
+  tokenOut: tok(tokenOut),
+  ...(fee !== undefined ? { fee } : {}),
+  ...(amountIn !== undefined ? { amountIn: amountIn.toString() } : {}),
+  ...(amountOut !== undefined ? { amountOut: amountOut.toString() } : {}),
+});
+const ONE_V3_SPLIT = [[pool("v3-pool", USDC, WETH_BASE, "100", 20_000_000n, AMOUNT_OUT)]];
+
+function mockApi(over: { quote?: Record<string, unknown>; top?: Record<string, unknown> } = {}) {
+  const requests: { url: string; headers: Record<string, string>; body: Record<string, unknown>; raw: string }[] = [];
   const fetch: SwapFetch = async (url, init) => {
     const body = JSON.parse(init.body) as Record<string, unknown>;
-    requests.push({ url, headers: init.headers, body });
-    const json = url.endsWith("/quote")
-      ? {
-          requestId: "r1",
-          routing: "CLASSIC",
-          permitData: null,
-          permitTransaction: { to: PERMIT2_ADDRESS, from: STEALTH, data: "0x", value: "0", chainId: CHAIN_ID },
-          quote: {
-            chainId: CHAIN_ID,
-            swapper: STEALTH,
-            input: { token: USDC, amount: String(body.amount) },
-            output: { token: WETH_BASE, amount: AMOUNT_OUT.toString(), recipient: STEALTH },
-            aggregatedOutputs: [{ token: WETH_BASE, amount: AMOUNT_OUT.toString(), recipient: STEALTH }],
-            slippage: 0.5,
-            routeString: "[V3] 100.00% = USDC -- 0.05% [0xd0b5...] --> WETH",
-            ...over.quote,
-          },
-          ...over.top,
-        }
-      : {
-          requestId: "r2",
-          swap: {
-            to: over.swapTo ?? ROUTER,
-            from: STEALTH,
-            data: over.swapData ?? execute([UrCommand.V3_SWAP_EXACT_IN], [v3Swap(STEALTH)]),
-            value: "0",
-            chainId: CHAIN_ID,
-          },
-        };
+    requests.push({ url, headers: init.headers, body, raw: init.body });
+    if (!url.endsWith("/quote")) throw new Error(`the SDK must only call /quote, got ${url}`);
+    const json = {
+      requestId: "r1",
+      routing: "CLASSIC",
+      permitData: null,
+      permitTransaction: { to: PERMIT2_ADDRESS, from: body.swapper, data: "0x", value: "0", chainId: CHAIN_ID },
+      quote: {
+        chainId: CHAIN_ID,
+        swapper: body.swapper,
+        input: { token: USDC, amount: String(body.amount) },
+        output: { token: String(body.tokenOut), amount: AMOUNT_OUT.toString(), recipient: body.swapper },
+        aggregatedOutputs: [{ token: String(body.tokenOut), amount: AMOUNT_OUT.toString(), recipient: body.swapper, bps: 10000 }],
+        route: ONE_V3_SPLIT,
+        slippage: 0.5,
+        routeString: "[V3] 100.00% = USDC -- 0.01% [0xb4CB...] --> WETH",
+        ...over.quote,
+      },
+      ...over.top,
+    };
     return { ok: true, status: 200, json: async () => json, text: async () => JSON.stringify(json) };
   };
   return { fetch, requests };
@@ -198,28 +210,35 @@ const apiParams = (fetch: SwapFetch) => ({
   apiKey: "test-key",
   fetch,
   publicClient: chainClient() as never,
+  placeholderSwapper: () => PLACEHOLDER,
   now: () => 1_900_000_000,
 });
 
-describe("quoteSwapInPlace via the Trading API", () => {
-  it("asks for an in-place, AMM-only, permit-as-transaction quote and returns the batched calls", async () => {
+const decodeSwap = (data: Hex) => {
+  const { args } = decodeFunctionData({ abi: universalRouterAbi, data });
+  return { commands: args![0] as Hex, inputs: args![1] as Hex[] };
+};
+
+describe("quoteSwapInPlace via the Trading API (placeholder swapper, route re-encoded locally)", () => {
+  it("quotes with the placeholder swapper, never calls /swap, and builds the swap to the stealth address", async () => {
     const { fetch, requests } = mockApi();
     const q = await quoteSwapInPlace(apiParams(fetch));
     expect(q.source).toBe("trading-api");
-    expect(requests.map((r) => r.url)).toEqual(["https://trade-api.gateway.uniswap.org/v1/quote", "https://trade-api.gateway.uniswap.org/v1/swap"]);
+    expect(requests.map((r) => r.url)).toEqual(["https://trade-api.gateway.uniswap.org/v1/quote"]);
     expect(requests[0]!.headers["x-api-key"]).toBe("test-key");
     expect(requests[0]!.headers["x-universal-router-version"]).toBe("2.1.2");
     expect(JSON.parse(requests[0]!.headers["x-agent-info"]!)).toMatchObject({ decision_origin: "human_mediated" });
     expect(requests[0]!.body).toMatchObject({
       type: "EXACT_INPUT",
       amount: "20000000",
-      swapper: STEALTH,
-      recipient: STEALTH,
+      swapper: PLACEHOLDER,
       slippageTolerance: 0.5,
-      protocols: ["V2", "V3", "V4"],
+      protocols: ["V2", "V3"],
       generatePermitAsTransaction: true,
       permitAmount: "EXACT",
     });
+    expect(requests[0]!.body).not.toHaveProperty("recipient");
+    expect(requests[0]!.raw.toLowerCase()).not.toContain(STEALTH.slice(2).toLowerCase());
     expect(q.amountOut).toBe(AMOUNT_OUT);
     expect(q.minOut).toBe(minOutFor(AMOUNT_OUT, 50));
 
@@ -227,25 +246,95 @@ describe("quoteSwapInPlace via the Trading API", () => {
     expect(q.calls.map((c) => getAddress(c.to))).toEqual([getAddress(USDC), PERMIT2_ADDRESS, ROUTER, ROUTER]);
     expect(decodeFunctionData({ abi: erc20Abi, data: q.calls[0]!.data! }).args).toEqual([PERMIT2_ADDRESS, 20_000_000n]);
     expect(decodeFunctionData({ abi: permit2Abi, data: q.calls[1]!.data! }).args).toEqual([getAddress(USDC), ROUTER, 20_000_000n, 1_900_000_000 + 1800]);
+    const swap = decodeSwap(q.calls[2]!.data!);
+    expect(swap.commands).toBe("0x00");
+    const [recipient, amountIn, minOut, path, payerIsUser] = decodeAbiParameters(v3In, swap.inputs[0]!);
+    expect([recipient, amountIn, minOut, payerIsUser]).toEqual([STEALTH, 20_000_000n, q.minOut, true]);
+    expect(path.toLowerCase()).toBe(`${USDC.toLowerCase()}000064${WETH_BASE.slice(2).toLowerCase()}`);
     const guard = decodeFunctionData({ abi: universalRouterAbi, data: q.calls[3]!.data! });
     expect(guard.args![0]).toBe("0x0e");
     expect(decodeAbiParameters(tra, (guard.args![1] as Hex[])[0]!)).toEqual([STEALTH, WETH_BASE, WETH_BEFORE + q.minOut]);
     expect(q.calls.every((c) => (c.value ?? 0n) === 0n)).toBe(true);
   });
 
-  it("rejects a quote or calldata that pays anyone but the stealth address", async () => {
-    await expect(quoteSwapInPlace(apiParams(mockApi({ quote: { output: { token: WETH_BASE, amount: "1", recipient: MALLORY } } }).fetch))).rejects.toBeInstanceOf(
-      SwapRecipientError,
-    );
-    await expect(
-      quoteSwapInPlace(
-        apiParams(mockApi({ quote: { aggregatedOutputs: [{ token: WETH_BASE, amount: "1", recipient: STEALTH }, { token: WETH_BASE, amount: "1", recipient: MALLORY, fee: "INTEGRATOR" }] } }).fetch),
-      ),
-    ).rejects.toBeInstanceOf(SwapRecipientError);
-    await expect(quoteSwapInPlace(apiParams(mockApi({ swapData: execute([UrCommand.V3_SWAP_EXACT_IN], [v3Swap(MALLORY)]) }).fetch))).rejects.toBeInstanceOf(
-      SwapRecipientError,
-    );
-    await expect(quoteSwapInPlace(apiParams(mockApi({ swapTo: MALLORY }).fetch))).rejects.toBeInstanceOf(SwapRecipientError);
+  it("uses a fresh random placeholder swapper for every quote, never the stealth address", async () => {
+    const { fetch, requests } = mockApi();
+    const { placeholderSwapper: _unused, ...params } = apiParams(fetch);
+    await quoteSwapInPlace(params);
+    await quoteSwapInPlace(params);
+    const swappers = requests.map((r) => getAddress(String(r.body.swapper)));
+    expect(new Set(swappers).size).toBe(2);
+    for (const s of swappers) expect(s).not.toBe(STEALTH);
+    expect(randomPlaceholderSwapper()).not.toBe(randomPlaceholderSwapper());
+  });
+
+  it("the privacy guard: a request that would carry the stealth address is refused before any fetch", async () => {
+    const lower = STEALTH.toLowerCase();
+    expect(() => assertNoStealthAddress(STEALTH, `{"swapper":"${lower}"}`)).toThrow(SwapPrivacyError);
+    expect(() => assertNoStealthAddress(STEALTH, `{"x":"${STEALTH.slice(2).toUpperCase()}"}`)).toThrow(SwapPrivacyError);
+    expect(() => assertNoStealthAddress(STEALTH, `https://api/q?to=${lower}`)).toThrow(SwapPrivacyError);
+    expect(() => assertNoStealthAddress(STEALTH, `{"swapper":"${PLACEHOLDER}"}`)).not.toThrow();
+
+    const { fetch, requests } = mockApi();
+    // A placeholder that equals the stealth address.
+    await expect(quoteSwapInPlace({ ...apiParams(fetch), placeholderSwapper: () => STEALTH })).rejects.toBeInstanceOf(SwapPrivacyError);
+    // The stealth address smuggled into the body another way (here as the output token).
+    await expect(quoteSwapInPlace({ ...apiParams(fetch), tokenOut: STEALTH })).rejects.toBeInstanceOf(SwapPrivacyError);
+    // ...and a proxy URL that names it. The guard is never swallowed by the fallback.
+    const { apiKey: _k, ...noKey } = apiParams(fetch);
+    await expect(quoteSwapInPlace({ ...noKey, apiUrl: `https://api.soapay.test/${lower}` })).rejects.toBeInstanceOf(SwapPrivacyError);
+    expect(requests).toHaveLength(0);
+  });
+
+  it("ignores where the quote says output goes: the calldata always pays the stealth address", async () => {
+    const { fetch } = mockApi({ quote: { output: { token: WETH_BASE, amount: AMOUNT_OUT.toString(), recipient: MALLORY } } });
+    const q = await quoteSwapInPlace(apiParams(fetch));
+    expect(assertSwapStaysInPlace({ chainId: CHAIN_ID, stealthAddress: STEALTH, tx: { to: q.calls[2]!.to, data: q.calls[2]!.data! } }).recipients).toEqual([STEALTH]);
+  });
+
+  it("re-encodes split, multi-hop V3 and V2 routes, and native ETH out via UNWRAP_WETH", async () => {
+    const route = [
+      [pool("v3-pool", USDC, DAI, "100", 12_000_000n), pool("v3-pool", DAI, WETH_BASE, "3000", undefined, 4_000n)],
+      [pool("v2-pool", USDC, WETH_BASE, undefined, 8_000_000n, 3_000n)],
+    ];
+    const { fetch } = mockApi({ quote: { route, output: { token: NATIVE_ETH, amount: "7000" } } });
+    const q = await quoteSwapInPlace({ ...apiParams(fetch), tokenOut: NATIVE_ETH });
+    expect(q.calls).toHaveLength(3); // no ERC-20 balance guard for native out
+    const swap = decodeSwap(q.calls[2]!.data!);
+    expect(swap.commands).toBe("0x00080c");
+    const v3 = decodeAbiParameters(v3In, swap.inputs[0]!);
+    expect([v3[0], v3[1], v3[2]]).toEqual([UR_ADDRESS_THIS, 12_000_000n, minOutFor(4_000n, 50)]);
+    expect(v3[3].toLowerCase()).toBe(`${USDC.toLowerCase()}000064${DAI.slice(2).toLowerCase()}000bb8${WETH_BASE.slice(2).toLowerCase()}`);
+    const v2 = decodeAbiParameters(v2In, swap.inputs[1]!);
+    expect([v2[0], v2[1], v2[2], v2[3]]).toEqual([UR_ADDRESS_THIS, 8_000_000n, minOutFor(3_000n, 50), [getAddress(USDC), WETH_BASE]]);
+    expect(decodeAbiParameters(ra, swap.inputs[2]!)).toEqual([STEALTH, minOutFor(7_000n, 50)]);
+  });
+
+  it("a route it can't rebuild exactly falls back to the on-chain path, or throws when the source is forced", async () => {
+    const bad = [
+      [[pool("v4-pool", USDC, WETH_BASE, "500", 20_000_000n, 1n)]],
+      [[pool("v3-pool", USDC, WETH_BASE, "500", 19_000_000n, 1n)]], // doesn't add up
+      [[pool("v3-pool", USDC, DAI, "500", 20_000_000n), pool("v2-pool", DAI, WETH_BASE, undefined, undefined, 1n)]], // mixed
+      [[pool("v3-pool", DAI, WETH_BASE, "500", 20_000_000n, 1n)]], // wrong start
+      [],
+    ];
+    for (const route of bad) {
+      const { fetch } = mockApi({ quote: { route } });
+      await expect(quoteSwapInPlace({ ...apiParams(fetch), source: "trading-api" })).rejects.toBeInstanceOf(SwapRouteUnsupportedError);
+      // Default source: falls through to QuoterV2, which this mock chain doesn't have.
+      const err = await quoteSwapInPlace(apiParams(fetch)).catch((e: unknown) => e);
+      expect(err).not.toBeInstanceOf(SwapRouteUnsupportedError);
+    }
+  });
+
+  it("defaults to the on-chain path on Base Sepolia, where the Trading API doesn't route", async () => {
+    expect(defaultSwapSource({ chainId: 84532, apiUrl: "https://api.soapay.test/uniswap" })).toBe("universal-router");
+    expect(defaultSwapSource({ chainId: CHAIN_ID, apiUrl: "https://api.soapay.test/uniswap" })).toBe("trading-api");
+    expect(defaultSwapSource({ chainId: CHAIN_ID })).toBe("universal-router");
+    const { fetch, requests } = mockApi();
+    const { publicClient: _p, ...noClient } = apiParams(fetch);
+    await quoteSwapInPlace({ ...noClient, chainId: 84532 }).catch(() => undefined);
+    expect(requests).toHaveLength(0);
   });
 
   it("rejects UniswapX routing, Permit2 signature requests and a different input amount", async () => {
@@ -274,24 +363,30 @@ describe("quoteSwapInPlace via the Trading API", () => {
     const { apiKey: _unused, ...noKey } = apiParams(fetch);
     const q = await quoteSwapInPlace({ ...noKey, apiUrl: "https://api.soapay.test/uniswap" });
     expect(q.source).toBe("trading-api");
-    expect(requests.map((r) => r.url)).toEqual(["https://api.soapay.test/uniswap/quote", "https://api.soapay.test/uniswap/swap"]);
+    expect(requests.map((r) => r.url)).toEqual(["https://api.soapay.test/uniswap/quote"]);
     for (const r of requests) expect(r.headers).not.toHaveProperty("x-api-key");
   });
 
-  it("a proxy without a key (503 uniswap_disabled) falls back to the Universal Router unless the source is forced", async () => {
-    const calls: string[] = [];
-    const fetch: SwapFetch = async (url) => {
-      calls.push(url);
-      const text = JSON.stringify({ code: "uniswap_disabled", error: { code: "uniswap_disabled", message: "off" } });
-      return { ok: false, status: 503, json: async () => JSON.parse(text), text: async () => text };
-    };
-    const { apiKey: _unused, ...noKey } = apiParams(fetch);
-    const proxied = { ...noKey, apiUrl: "https://api.soapay.test/uniswap" };
-    await expect(quoteSwapInPlace({ ...proxied, source: "trading-api" })).rejects.toBeInstanceOf(SwapProxyDisabledError);
-    // Default source: the fallback runs (this mock chain has no QuoterV2, so it fails there instead).
-    const err = await quoteSwapInPlace(proxied).catch((e: unknown) => e);
-    expect(err).not.toBeInstanceOf(SwapProxyDisabledError);
-    expect(calls).toEqual(["https://api.soapay.test/uniswap/quote", "https://api.soapay.test/uniswap/quote"]);
+  it("a proxy without a key (503 uniswap_disabled) or an upstream 5xx falls back unless the source is forced", async () => {
+    const cases: [number, string][] = [
+      [503, JSON.stringify({ code: "uniswap_disabled", error: { code: "uniswap_disabled", message: "off" } })],
+      [504, '{"errorCode":"UpstreamTimeoutError"}'],
+    ];
+    for (const [status, text] of cases) {
+      const calls: string[] = [];
+      const fetch: SwapFetch = async (url) => {
+        calls.push(url);
+        return { ok: false, status, json: async () => JSON.parse(text), text: async () => text };
+      };
+      const { apiKey: _unused, ...noKey } = apiParams(fetch);
+      const proxied = { ...noKey, apiUrl: "https://api.soapay.test/uniswap" };
+      await expect(quoteSwapInPlace({ ...proxied, source: "trading-api" })).rejects.toBeInstanceOf(status === 503 ? SwapProxyDisabledError : SwapUpstreamError);
+      // Default source: the fallback runs (this mock chain has no QuoterV2, so it fails there instead).
+      const err = await quoteSwapInPlace(proxied).catch((e: unknown) => e);
+      expect(err).not.toBeInstanceOf(SwapProxyDisabledError);
+      expect(err).not.toBeInstanceOf(SwapUpstreamError);
+      expect(calls).toEqual(["https://api.soapay.test/uniswap/quote", "https://api.soapay.test/uniswap/quote"]);
+    }
   });
 });
 

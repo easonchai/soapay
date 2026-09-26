@@ -42,6 +42,7 @@ export function Settings() {
       l1RpcUrl: draft.l1RpcUrl.trim(),
       useRpcAnnouncements: draft.useRpcAnnouncements,
       swapViaApi: draft.swapViaApi,
+      queueWindowHours: [Math.max(0, draft.queueWindowHours[0]), Math.max(draft.queueWindowHours[0], draft.queueWindowHours[1])],
     });
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
@@ -118,9 +119,18 @@ export function Settings() {
           <Checkbox
             checked={draft.swapViaApi}
             onChange={(v) => setDraft({ ...draft, swapViaApi: v })}
-            label="Convert through the Soapay API's Uniswap proxy"
-            description="Better routes via the Uniswap Trading API. Off = quote directly from the Universal Router."
+            label="Use Uniswap Trading API quotes (Base mainnet)"
+            description="Better routes. The quote uses a random stand-in address, never yours, and the swap is built on this device. Off, or on testnet = quote on-chain."
           />
+          <Field label="Spend window (hours)" hint="Queued sends and exit deposits go out one address per random window between these bounds.">
+            {({ id }) => (
+              <div className="actions">
+                <Input id={id} aria-label="Window minimum (hours)" inputMode="decimal" className="w-20" value={String(draft.queueWindowHours[0])} onChange={(e) => setDraft({ ...draft, queueWindowHours: [Number(e.target.value) || 0, draft.queueWindowHours[1]] })} />
+                <span className="muted">to</span>
+                <Input aria-label="Window maximum (hours)" inputMode="decimal" className="w-20" value={String(draft.queueWindowHours[1])} onChange={(e) => setDraft({ ...draft, queueWindowHours: [draft.queueWindowHours[0], Number(e.target.value) || 0] })} />
+              </div>
+            )}
+          </Field>
           <div className="actions">
             <Button type="submit">{saved ? "Saved" : "Save"}</Button>
           </div>

@@ -1,4 +1,4 @@
-# Soapay web: recipient app at /, sender app at /sender/, /api proxied to the API service.
+# Soapay web: company app + landing at /, employee app at /app/, /api proxied to the API service.
 # Build from the repo root. Public settings arrive as build args (Railway passes service variables).
 FROM node:24-slim AS build
 WORKDIR /repo

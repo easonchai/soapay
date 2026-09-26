@@ -6,6 +6,7 @@ import { Onboarding } from "./onboarding/Onboarding.js";
 import { Convert } from "./screens/Convert.js";
 import { Exit } from "./screens/Exit.js";
 import { ExitProvider } from "./hooks/useExit.js";
+import { QueueProvider } from "./hooks/useQueue.js";
 import { Home } from "./screens/Home.js";
 import { Labels } from "./screens/Labels.js";
 import { Layout } from "./screens/Layout.js";
@@ -49,6 +50,7 @@ function Gate() {
       if (invite.kind === "pending" && !vault.data.profile.name) return <Onboarding claimInvite />;
       return (
         <ScannerProvider>
+          <QueueProvider>
           <ExitProvider>
             <HashRouter>
               <Routes>
@@ -65,6 +67,7 @@ function Gate() {
               </Routes>
             </HashRouter>
           </ExitProvider>
+          </QueueProvider>
         </ScannerProvider>
       );
   }

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { compareAddresses, generateMnemonic, keysFromMnemonic, MAX_LINES_PER_TX } from "@soapay/sdk";
 import {
   attemptFromPlan,
+  companyDenomination,
   MAX_RUN_LABEL,
   normalizeRunLabel,
   runTitle,
@@ -14,6 +15,7 @@ import {
   type PlanRecipient,
   type RunRecord,
 } from "../src/lib/run.js";
+import { DEFAULT_CHUNK_USDC } from "../src/config.js";
 
 const metas = Array.from({ length: 3 }, () => keysFromMnemonic(generateMnemonic()).metaAddressURI);
 
@@ -88,6 +90,32 @@ describe("run planning", () => {
     expect(plan.lines.every((l) => l.amount === 500_000_000n)).toBe(true);
     expect(plan.total).toBe(1_000_000_000n);
     expect(plan.carryOut.get("e0")).toBe(200_000_000n);
+  });
+});
+
+describe("company-wide denomination (D-31)", () => {
+  it("is ON with the Settings chunk, exact mode, and off only per run", () => {
+    expect(companyDenomination(true, DEFAULT_CHUNK_USDC)).toEqual({ chunkSize: 500_000_000n, mode: "exact" });
+    expect(companyDenomination(true, "250.5")).toEqual({ chunkSize: 250_500_000n, mode: "exact" });
+    expect(companyDenomination(false, "500")).toBeNull();
+    expect(() => companyDenomination(true, "0")).toThrow(/positive/);
+    expect(() => companyDenomination(true, "abc")).toThrow(/positive/);
+  });
+
+  it("applies ONE chunk to every employee: every full line identical, one exact remainder each, never carried", () => {
+    const salaries = [4_200_000_000n, 3_850_000_000n, 5_000_000_000n];
+    const plan = planRun(
+      recipients(3, (i) => salaries[i]!),
+      companyDenomination(true, DEFAULT_CHUNK_USDC),
+    );
+    const full = plan.lines.filter((l) => l.amount === 500_000_000n);
+    const rest = plan.lines.filter((l) => l.amount !== 500_000_000n);
+    expect(full).toHaveLength(8 + 7 + 10);
+    expect(rest.map((l) => l.amount).sort((a, b) => Number(a - b))).toEqual([200_000_000n, 350_000_000n]);
+    expect(plan.total).toBe(salaries.reduce((a, b) => a + b));
+    for (const [i, s] of salaries.entries()) expect(plan.perEmployee.get(`e${i}`)!.amount).toBe(s);
+    expect([...plan.carryOut.values()].every((v) => v === 0n)).toBe(true);
+    expect(plan.denomStats).toMatchObject({ distinctiveRemainderCount: 2 });
   });
 });
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// One-origin demo server: recipient app at /, sender app at /sender/, API proxied at /api.
+// One-origin demo server: company app + CK's landing at /, employee app at /app/, API proxied at /api.
+// The old layout (/sender/, and invite links at /#/join) redirects to the new one.
 // Put it behind `tailscale serve` (HTTPS, so WebCrypto works) to use the apps from another device.
 //
 //   node scripts/serve-demo.mjs            # PORT=4300, API_TARGET=http://localhost:8787
@@ -14,8 +15,8 @@ const HOST = process.env.HOST ?? "127.0.0.1";
 const API = new URL(process.env.API_TARGET ?? "http://localhost:8787");
 const ROOT = new URL("..", import.meta.url).pathname;
 const MOUNTS = [
-  { prefix: "/sender/", dir: join(ROOT, "apps/sender/dist") },
-  { prefix: "/", dir: join(ROOT, "apps/recipient/dist") },
+  { prefix: "/app/", dir: join(ROOT, "apps/recipient/dist") },
+  { prefix: "/", dir: join(ROOT, "apps/sender/dist") },
 ];
 const TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -40,7 +41,8 @@ function sendFile(res, path) {
 
 function serveStatic(req, res) {
   const url = new URL(req.url, "http://x");
-  if (url.pathname === "/sender") return res.writeHead(301, { location: "/sender/" }).end();
+  if (url.pathname === "/app") return res.writeHead(301, { location: "/app/" }).end();
+  if (url.pathname === "/sender" || url.pathname.startsWith("/sender/")) return res.writeHead(301, { location: "/" }).end();
   const mount = MOUNTS.find((m) => url.pathname.startsWith(m.prefix));
   const rel = normalize(decodeURIComponent(url.pathname.slice(mount.prefix.length))).replace(/^(\.\.[/\\])+/, "");
   const candidate = join(mount.dir, rel);
@@ -69,5 +71,5 @@ function proxyApi(req, res) {
 createServer((req, res) => (req.url.startsWith("/api/") || req.url === "/api" ? proxyApi(req, res) : serveStatic(req, res))).listen(
   PORT,
   HOST,
-  () => console.log(`demo server on http://${HOST}:${PORT} (recipient /, sender /sender/, api /api → ${API.origin})`),
+  () => console.log(`demo server on http://${HOST}:${PORT} (company /, employee /app/, api /api → ${API.origin})`),
 );

@@ -3,16 +3,19 @@
  * that stays in the SAME address. One 7702 userOp (approve + swap + balance guard), gas in USDC via the
  * paymaster. No funds move between addresses, so no clusters merge and the guard has nothing to decide.
  *
- * All swap logic is the SDK's (`quoteSwapInPlace` / `swapInPlace`, packages/sdk/src/swap.ts). Routing:
- * - `proxyUrl` set (default `${VITE_API_URL}/uniswap`): Trading API through the Soapay API proxy, which
- *   adds UNISWAP_API_KEY server-side. The key never ships in this bundle.
- * - no proxy: the SDK's Universal Router V3 fallback, priced by QuoterV2 over the public client.
+ * All swap logic is the SDK's (`quoteSwapInPlace` / `swapInPlace`, packages/sdk/src/swap.ts). Routing
+ * (D-27: neither path shows the stealth address to Soapay or Uniswap):
+ * - `proxyUrl` set (default `${VITE_API_URL}/uniswap`) on a chain where the Trading API routes (Base):
+ *   a `/quote` through the Soapay API proxy (which adds UNISWAP_API_KEY server-side) for a random
+ *   placeholder swapper; the swap itself is built here, paying the stealth address.
+ * - otherwise (no proxy, or Base Sepolia): QuoterV2 over the public client + the Universal Router.
  */
 import {
   MAX_SLIPPAGE_BPS,
   NATIVE_ETH,
   WETH_BASE,
   createSpendClient,
+  defaultSwapSource,
   getChainConfig,
   quoteSwapInPlace,
   swapInPlace,
@@ -31,7 +34,7 @@ export type ConvertRequest = { stealthKey: Hex; tokenOut: Address; amountIn: big
 export interface SwapService {
   readonly ready: boolean;
   readonly unavailableReason?: string;
-  /** "trading-api (proxy)" or "universal-router", for display. */
+  /** Which quote path runs by default, for display. */
   readonly route: string;
   quote(req: ConvertRequest): Promise<SwapQuote>;
   swap(req: ConvertRequest): Promise<SwapInPlaceResult>;
@@ -96,12 +99,13 @@ export function createSdkSwapService(opts: {
   const spendClient = () =>
     (client ??= createSpendClient({ chainId: opts.chainId, bundlerUrl: opts.bundlerUrl, publicClient: opts.publicClient }));
   const proxyUrl = opts.proxyUrl.replace(/\/+$/, "");
-  // With a proxy the SDK picks the Trading API and falls back to the Universal Router by itself when
-  // the proxy answers 503 `uniswap_disabled` (no key configured). No `source`, or that fallback is off.
+  // With a proxy the SDK picks the Trading API where it routes, and falls back to the on-chain path by
+  // itself (no key, upstream error, a route it can't rebuild). No `source`, or that fallback is off.
   const routing = proxyUrl ? { apiUrl: proxyUrl, ...(opts.fetch ? { fetch: opts.fetch } : {}) } : { source: "universal-router" as const };
+  const viaApi = proxyUrl !== "" && defaultSwapSource({ chainId: opts.chainId, apiUrl: proxyUrl }) === "trading-api";
   return {
     ready: true,
-    route: proxyUrl ? "Uniswap Trading API (via Soapay API)" : "Uniswap Universal Router (direct)",
+    route: viaApi ? "Uniswap Trading API quote (anonymous), swap built on this device" : "Uniswap Universal Router (on-chain quote)",
     quote: (r) =>
       quoteSwapInPlace({
         chainId: opts.chainId,

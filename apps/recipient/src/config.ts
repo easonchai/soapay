@@ -12,8 +12,9 @@ export type EnvConfig = {
   /** Ethereum Sepolia RPC, for the ENSv2 record write on rotation. */
   l1RpcUrl: string;
   /**
-   * Route Convert quotes through the Soapay API's Uniswap proxy (`${apiUrl}/uniswap`), which adds
-   * UNISWAP_API_KEY server-side. Off = the SDK's Universal Router fallback. The key is never in the bundle.
+   * Ask the Uniswap Trading API for Convert quotes through the Soapay API's proxy (`${apiUrl}/uniswap`),
+   * which adds UNISWAP_API_KEY server-side, with a placeholder swapper (never the stealth address; D-27).
+   * Only where the API routes (Base mainnet). Off = the SDK's on-chain path. The key is never in the bundle.
    */
   swapViaApi: boolean;
   /** The company (sender) app, for the top bar's "Pay" link (VITE_OTHER_APP_URL). */
@@ -47,8 +48,8 @@ export function readEnv(env: Record<string, string | boolean | undefined> = impo
     mockApi: str("VITE_MOCK_API") === "1" || str("VITE_MOCK_API") === "true",
     l1RpcUrl: str("VITE_L1_RPC_URL"),
     swapViaApi: str("VITE_SWAP_VIA_API") !== "0" && str("VITE_SWAP_VIA_API") !== "false",
-    // Dev: the sender's dev server. Build: scripts/build-demo.sh serves the sender at /sender/.
-    otherAppUrl: str("VITE_OTHER_APP_URL") || (dev ? "http://localhost:5174" : "/sender/"),
+    // Dev: the sender's dev server. Build: scripts/build-demo.sh serves the company app (and landing) at /.
+    otherAppUrl: str("VITE_OTHER_APP_URL") || (dev ? "http://localhost:5174" : "/"),
   };
 }
 
