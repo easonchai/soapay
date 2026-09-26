@@ -130,7 +130,7 @@ Per name: its `session_id`, when it was attached, and how (`enroll` or `attach`)
 
 ## Integration debrief
 
-**Time to first success:** *(fill in after the first live World App run)*. The first successful server-side verification against a mocked Developer Portal took about half a day, most of it spent on the design change below.
+**Time to first success:** *(fill in after the first live World App run)*.
 
 **The one improvement with the greatest impact:** make the session docs match IDKit 4.3's types (sessions take `constraints`, not `preset`), with one end-to-end Selfie Check session example that includes the server check. That single fix would have saved us the most time.
 
