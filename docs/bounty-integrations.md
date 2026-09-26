@@ -5,7 +5,7 @@ A single page for checking each integration against the prize criteria. Status a
 | | ENSv2 | World ID (IDKit) | Uniswap API |
 | --- | --- | --- | --- |
 | Role in the product | Pay-by-name identity; the employee alone controls where salary goes | Self-service key rotation (salary-redirect protection) | Convert salary *in place* inside a stealth address |
-| Live on testnet | **Yes**, end to end | **Partly**: RP and action live, full proof flow not yet run live | **No**: verified on a Base mainnet fork only |
+| Live on testnet | **Yes**, end to end | **Partly**: RP and action live, full proof flow not yet run live | **Yes** for swap-in-place (Base Sepolia); Trading API live on Base mainnet quotes |
 | Deep docs | `contracts/ENSV2.md` | `docs/worldid.md` | `FEEDBACK.md` |
 
 ---
@@ -78,7 +78,7 @@ node -e 'import("viem").then(async({createPublicClient,http})=>{const{sepolia}=a
 
 ---
 
-## Uniswap Trading API: fork-verified, not yet live
+## Uniswap: swap-in-place live on Base Sepolia; Trading API live on mainnet
 
 **What:** an employee converts part of a stealth address's USDC (e.g. to ETH or WETH) **inside the same address**, in one EIP-7702 userOp: `approve` → Permit2 → Universal Router swap, with gas paid in USDC by the Circle paymaster. No funds move between addresses, so no privacy clusters merge. The conversion preference stays local, never in a public record.
 

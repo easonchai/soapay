@@ -173,3 +173,7 @@ metadata:
   - A live run needs about 18 USDC per leg (the deployer has 14.2): `EXIT_LIVE=1 EMPLOYER_KEY=… vitest run test/exit.live.test.ts`.
   - Known gaps: recipient runner.ts doesn't pass `persist` (crash mid-send could double-send); the planner's destination gas estimate is too low (the real minimum leg is about 16.5 USDC).
   - Totals: SDK 216 · API 122 · sender 118 · recipient 76 · mcp 54 · contracts 31.
+- Checkpoint 18 (2026-09-26): Uniswap LIVE.
+  - Swap-in-place on Base Sepolia through the Universal Router fallback (tx 0x2bf66ce2…c81), gasless, the stealth address held no ETH.
+  - The Trading API key is in the gitignored apps/api/.env and works on Base mainnet quotes, including with a throwaway swapper (the privacy-friendly quote approach). Base Sepolia /quote always times out upstream (recorded in FEEDBACK.md).
+  - The demo server was restarted: `node scripts/serve-demo.mjs`; the API runs as `node --env-file=.env dist/index.js`.

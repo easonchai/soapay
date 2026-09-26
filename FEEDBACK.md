@@ -62,3 +62,9 @@ Base Sepolia (84532) is in the API's `ChainId` enum, and the supported-chains pa
 - **The OpenAPI spec is complete and precise.** Enums for protocols, `permitAmount`, router versions and chain IDs were enough to write the client. `protocols: ["V2","V3","V4"]` cleanly keeps UniswapX orders out, since they can't be batched calls.
 - **The `x-agent-info` header is well scoped.** It's analytics only, explicitly never carries addresses or keys, and never changes the response. That makes it safe to send from a privacy product.
 - Permit2 and WETH live at the same addresses on Base and Base Sepolia, so our address table is small.
+
+## Live testing with an API key (2026-09-26)
+
+- **Base Sepolia (84532) `/quote` fails every time with `UpstreamTimeoutError`** ("A routing dependency timed out or failed; the request may succeed on retry"). 3 of 3 retries failed, for USDC→WETH, while Base mainnet `/quote` with the same key and body succeeded right away. The chain is listed as supported, and v3 pools on Base Sepolia do have liquidity (QuoterV2 `quoteExactInputSingle` returns quotes at the 0.01%, 0.05%, 0.3% and 1% fee tiers). A clear "no route on this testnet" error, or working testnet routing, would save integrators a lot of time. We fell back to on-chain QuoterV2 + Universal Router for the testnet demo.
+- **The quote works with a placeholder `swapper`**, which matters for privacy apps: you can route without revealing the paying address to the quoting service. A documented "quote-only, no swapper" mode (or an explicit `recipient` separate from `swapper` on `/swap`) would make privacy-preserving integrations first-class.
+
