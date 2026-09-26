@@ -8,6 +8,7 @@ import { demoEoaWallet, demoSmartWallet, deriveWalletKeys, injectedKeyWallet, in
 import { useServices } from "../services/ServicesProvider.js";
 import { useVault } from "../vault/VaultProvider.js";
 import { MIN_PASSPHRASE_LENGTH } from "../vault/crypto.js";
+import { PasskeyUnsupportedError } from "../vault/passkey.js";
 import { Alert, Badge, Button, Card, Checkbox, CopyButton, Field, Input, Textarea, cn, errorMessage } from "../ui/kit.js";
 import { HumanCheck, sessionIdOf, sessionSignal, type HumanCheckResult } from "../worldid/index.js";
 import { claimName, fullName, registerMetaAddress } from "./actions.js";
@@ -159,7 +160,7 @@ function Step({ state, dispatch, headingRef }: StepProps) {
         <Frame
           headingRef={headingRef}
           title="Get paid without broadcasting your balance"
-          lead="Your employer pays a fresh address every time. Only you can find and spend those payments, from this device, with one recovery phrase."
+          lead="You get one private key. Your employer pays a fresh address every time; only you can open them."
         >
           <InviteBanner />
           <div className="actions">
@@ -171,21 +172,25 @@ function Step({ state, dispatch, headingRef }: StepProps) {
             </Button>
           </div>
           <p className="hint">
-            Keys are created and stored in this browser, encrypted with your passphrase. Nothing secret is ever sent anywhere. A recovery
-            phrase is the default and the safest backup.
+            Your keys are created in this browser and stay encrypted here; you unlock them with a passkey (or a passphrase). Nothing secret is
+            ever sent anywhere.
           </p>
-          <hr />
-          <div className="stack-sm">
-            <p className="muted">
-              Or derive your keys from a wallet signature instead of a phrase. Plain EOA wallets only (MetaMask, Rabby, a hardware wallet);
-              recovery is signing again with the same wallet.
-            </p>
-            <div>
-              <Button variant="ghost" onClick={() => dispatch({ type: "USE_WALLET" })} data-testid="use-wallet">
-                Use a wallet signature (plain EOA wallets only)
-              </Button>
+          <details className="stack-sm">
+            <summary className="muted" style={{ cursor: "pointer" }}>
+              Advanced
+            </summary>
+            <div className="stack-sm" style={{ marginTop: 8 }}>
+              <p className="muted">
+                Or derive your keys from a wallet signature instead of a phrase. Plain EOA wallets only (MetaMask, Rabby, a hardware wallet);
+                recovery is signing again with the same wallet.
+              </p>
+              <div>
+                <Button variant="ghost" onClick={() => dispatch({ type: "USE_WALLET" })} data-testid="use-wallet">
+                  Use a wallet signature (plain EOA wallets only)
+                </Button>
+              </div>
             </div>
-          </div>
+          </details>
         </Frame>
       );
     case "backup":
@@ -197,7 +202,7 @@ function Step({ state, dispatch, headingRef }: StepProps) {
     case "wallet":
       return <WalletStep error={state.error} dispatch={dispatch} headingRef={headingRef} />;
     case "passphrase":
-      return <PassphraseStep secret={state.wallet ?? state.mnemonic} dispatch={dispatch} headingRef={headingRef} />;
+      return <LockStep secret={state.wallet ?? state.mnemonic} dispatch={dispatch} headingRef={headingRef} />;
     case "register":
       return <RegisterStep dispatch={dispatch} headingRef={headingRef} />;
     case "name":
@@ -218,12 +223,12 @@ function BackupStep({ mnemonic, dispatch, headingRef }: { mnemonic: string } & O
     <Frame
       headingRef={headingRef}
       title="Write down your recovery phrase"
-      lead="These 12 words are the only way to recover your payments. You'll see them once."
+      lead="These 12 words are the one key to every payment you'll get, even if Soapay disappears. You'll see them once."
       onBack={() => dispatch({ type: "BACK" })}
     >
       <Alert variant="warning" title="Losing the seed loses the funds.">
-        Nobody can reset it: not Soapay, not your employer. Write it on paper and keep it somewhere safe. Never type it into a
-        website or share it.
+        Day to day you'll unlock with your passkey, so you only need these words on a new device or if this one is lost. Nobody can reset
+        them: not Soapay, not your employer. Write them on paper and keep them somewhere safe. Never type them into a website or share them.
       </Alert>
       <div className="relative">
         <ol
@@ -391,7 +396,7 @@ function WalletStep({ error, dispatch, headingRef }: { error: string | null } & 
     <Frame
       headingRef={headingRef}
       title="Create keys from a wallet signature"
-      lead="Your wallet signs one fixed message. The keys come from that signature and are stored in this browser, encrypted with your passphrase. Nothing goes on-chain."
+      lead="Your wallet signs one fixed message. The keys come from that signature and are stored in this browser, encrypted. Nothing goes on-chain."
       onBack={() => dispatch({ type: "BACK" })}
     >
       <Alert variant="warning" title="Plain EOA wallets only">
@@ -425,7 +430,107 @@ function WalletStep({ error, dispatch, headingRef }: { error: string | null } & 
   );
 }
 
-function PassphraseStep({ secret, dispatch, headingRef }: { secret: KeySecret } & Omit<StepProps, "state">) {
+const backupNote = (secret: KeySecret, lock: "passkey" | "passphrase") =>
+  typeof secret === "string"
+    ? `The ${lock} only protects this device. Your recovery phrase is still the only backup.`
+    : `The ${lock} only protects this device. Signing again with the same wallet is your backup.`;
+
+/**
+ * CK's "Lock" step (D-35): a passkey (WebAuthn PRF) by default, the passphrase as the fallback when the
+ * browser has no passkey/PRF support or the user prefers it.
+ */
+function LockStep({ secret, dispatch, headingRef }: { secret: KeySecret } & Omit<StepProps, "state">) {
+  const vault = useVault();
+  const svc = useServices();
+  const [mode, setMode] = useState<"checking" | "passkey" | "passphrase">("checking");
+  const [canPasskey, setCanPasskey] = useState(false);
+  const [fallback, setFallback] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { passkeyAvailable } = vault;
+
+  useEffect(() => {
+    let cancelled = false;
+    void passkeyAvailable().then((ok) => {
+      if (cancelled) return;
+      setCanPasskey(ok);
+      setMode(ok ? "passkey" : "passphrase");
+      if (!ok) setFallback("This browser can't use a passkey here, so set a passphrase instead.");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [passkeyAvailable]);
+
+  if (mode === "passphrase") {
+    return (
+      <PassphraseStep
+        secret={secret}
+        dispatch={dispatch}
+        headingRef={headingRef}
+        notice={fallback}
+        onUsePasskey={
+          canPasskey
+            ? () => {
+                setError(null);
+                setMode("passkey");
+              }
+            : undefined
+        }
+      />
+    );
+  }
+
+  const usePasskey = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await vault.createWithPasskey(secret);
+      dispatch({ type: "VAULT_CREATED" });
+    } catch (err) {
+      if (err instanceof PasskeyUnsupportedError) {
+        setCanPasskey(false);
+        setFallback(`${err.message} Set a passphrase instead.`);
+        setMode("passphrase");
+      } else {
+        setError(errorMessage(err));
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Frame
+      headingRef={headingRef}
+      title="Lock this device"
+      lead="Unlock Soapay with Face ID, your fingerprint or your device PIN. Your keys stay encrypted in this browser."
+      onBack={() => dispatch({ type: "BACK" })}
+    >
+      {error && <Alert variant="destructive">{error}</Alert>}
+      <Button size="lg" className="w-full" loading={busy || mode === "checking"} disabled={busy || mode === "checking"} onClick={() => void usePasskey()} data-testid="use-passkey">
+        {busy ? "Waiting for your passkey…" : "Use Face ID / fingerprint (passkey)"}
+      </Button>
+      <div className="text-center">
+        <button type="button" className="btn-text" onClick={() => setMode("passphrase")} disabled={busy} data-testid="use-passphrase">
+          Use a passphrase instead
+        </button>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {backupNote(secret, "passkey")}
+        {svc.mock && " Mock mode: the passkey is simulated, with no real prompt."}
+      </p>
+    </Frame>
+  );
+}
+
+function PassphraseStep({
+  secret,
+  dispatch,
+  headingRef,
+  notice,
+  onUsePasskey,
+}: { secret: KeySecret; notice?: string | null; onUsePasskey?: (() => void) | undefined } & Omit<StepProps, "state">) {
   const vault = useVault();
   const [pass, setPass] = useState("");
   const [again, setAgain] = useState("");
@@ -457,6 +562,11 @@ function PassphraseStep({ secret, dispatch, headingRef }: { secret: KeySecret } 
       lead="Your passphrase encrypts your keys in this browser. You'll enter it each time you open Soapay."
       onBack={() => dispatch({ type: "BACK" })}
     >
+      {notice && (
+        <Alert variant="info">
+          <span data-testid="passkey-fallback">{notice}</span>
+        </Alert>
+      )}
       <form onSubmit={submit} className="space-y-4" noValidate>
         {/* Helps password managers attach the passphrase to this app. */}
         <input type="text" autoComplete="username" value="soapay-vault" readOnly hidden />
@@ -496,11 +606,14 @@ function PassphraseStep({ secret, dispatch, headingRef }: { secret: KeySecret } 
         <Button type="submit" size="lg" className="w-full" loading={busy} disabled={busy || tooShort || pass !== again}>
           {busy ? "Encrypting…" : "Encrypt and continue"}
         </Button>
-        <p className="text-xs text-muted-foreground">
-          {typeof secret === "string"
-            ? "The passphrase only protects this device. Your recovery phrase is still the only backup."
-            : "The passphrase only protects this device. Signing again with the same wallet is your backup."}
-        </p>
+        {onUsePasskey && (
+          <div className="text-center">
+            <button type="button" className="btn-text" onClick={onUsePasskey} disabled={busy}>
+              Use a passkey instead
+            </button>
+          </div>
+        )}
+        <p className="text-xs text-muted-foreground">{backupNote(secret, "passphrase")}</p>
       </form>
     </Frame>
   );

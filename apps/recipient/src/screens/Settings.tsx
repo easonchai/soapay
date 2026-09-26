@@ -6,6 +6,7 @@ import { useSettings } from "../hooks/useSettings.js";
 import { useServices } from "../services/ServicesProvider.js";
 import { Addr, Alert, Button, Checkbox, Field, Input, PageHeader, errorMessage } from "../ui/kit.js";
 import type { Settings as S } from "../vault/types.js";
+import { LockSetting } from "./LockSetting.js";
 
 /** CK's Settings layout (Network facts, Receiving, Reset) with our items: known payers, editable network, backups. */
 export function Settings() {
@@ -199,6 +200,7 @@ export function Settings() {
 
       <section className="stack-sm">
         <h2>This device</h2>
+        <LockSetting />
         <div className="actions">
           <Button variant="outline" onClick={() => void st.exportBackup()}>
             Download encrypted backup

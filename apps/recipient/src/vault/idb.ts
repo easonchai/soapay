@@ -1,8 +1,8 @@
 /**
  * Minimal IndexedDB wrapper: one object store, one record. Only the *encrypted* envelope is ever
- * written here (see vault/crypto.ts). Nothing else in the app touches persistent storage.
+ * written here (see vault/crypto.ts and vault/passkeyCrypto.ts). Nothing else in the app touches persistent storage.
  */
-import type { VaultEnvelope } from "./crypto.js";
+import type { StoredEnvelope } from "./passkeyCrypto.js";
 
 const DB_NAME = "soapay-recipient";
 const STORE = "vault";
@@ -35,12 +35,12 @@ async function tx<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => I
   }
 }
 
-export async function loadEnvelope(): Promise<VaultEnvelope | null> {
-  const v = await tx<VaultEnvelope | undefined>("readonly", (s) => s.get(KEY));
+export async function loadEnvelope(): Promise<StoredEnvelope | null> {
+  const v = await tx<StoredEnvelope | undefined>("readonly", (s) => s.get(KEY));
   return v ?? null;
 }
 
-export async function saveEnvelope(envelope: VaultEnvelope): Promise<void> {
+export async function saveEnvelope(envelope: StoredEnvelope): Promise<void> {
   await tx("readwrite", (s) => s.put(envelope, KEY));
 }
 

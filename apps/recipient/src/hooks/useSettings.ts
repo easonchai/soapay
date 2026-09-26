@@ -38,7 +38,7 @@ export function useSettings() {
     [v],
   );
 
-  /** The encrypted vault as a JSON file: safe to store anywhere, useless without the passphrase. */
+  /** The encrypted vault as a JSON file: safe to store anywhere, useless without the passphrase or passkey. */
   const exportBackup = useCallback(async () => {
     const env = await vault.exportEnvelope();
     if (!env) throw new Error("No vault to export.");

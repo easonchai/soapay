@@ -5,22 +5,27 @@ import { useVault } from "../vault/VaultProvider.js";
 
 export function Unlock() {
   const vault = useVault();
+  const passkey = vault.lockKind === "passkey";
   const [pass, setPass] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmWipe, setConfirmWipe] = useState(false);
 
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
+  const run = async (open: () => Promise<void>) => {
     setBusy(true);
     setError(null);
     try {
-      await vault.unlock(pass);
+      await open();
     } catch (err) {
       setError(errorMessage(err));
     } finally {
       setBusy(false);
     }
+  };
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    void run(() => vault.unlock(pass));
   };
 
   return (
@@ -34,27 +39,40 @@ export function Unlock() {
             <div>
               <span className="eyebrow">Locked</span>
               <h1 style={{ marginTop: 6 }}>Unlock Soapay</h1>
-              <p className="lead">Your keys are encrypted in this browser with your passphrase.</p>
+              <p className="lead">
+                {passkey
+                  ? "Your keys are encrypted in this browser. Unlock them with your passkey."
+                  : "Your keys are encrypted in this browser with your passphrase."}
+              </p>
             </div>
-            <form onSubmit={submit} className="stack">
-              <Field label="Passphrase">
-                {({ id, describedBy }) => (
-                  <Input
-                    id={id}
-                    type="password"
-                    autoComplete="current-password"
-                    autoFocus
-                    aria-describedby={describedBy}
-                    value={pass}
-                    onChange={(e) => setPass(e.target.value)}
-                  />
-                )}
-              </Field>
-              {error && <Alert variant="destructive">{error}</Alert>}
-              <Button type="submit" size="lg" className="w-full" loading={busy} disabled={!pass}>
-                {busy ? "Decrypting…" : "Unlock"}
-              </Button>
-            </form>
+            {passkey ? (
+              <div className="stack">
+                {error && <Alert variant="destructive">{error}</Alert>}
+                <Button size="lg" className="w-full" loading={busy} disabled={busy} autoFocus onClick={() => void run(vault.unlockWithPasskey)}>
+                  {busy ? "Waiting for your passkey…" : "Unlock with passkey"}
+                </Button>
+              </div>
+            ) : (
+              <form onSubmit={submit} className="stack">
+                <Field label="Passphrase">
+                  {({ id, describedBy }) => (
+                    <Input
+                      id={id}
+                      type="password"
+                      autoComplete="current-password"
+                      autoFocus
+                      aria-describedby={describedBy}
+                      value={pass}
+                      onChange={(e) => setPass(e.target.value)}
+                    />
+                  )}
+                </Field>
+                {error && <Alert variant="destructive">{error}</Alert>}
+                <Button type="submit" size="lg" className="w-full" loading={busy} disabled={!pass}>
+                  {busy ? "Decrypting…" : "Unlock"}
+                </Button>
+              </form>
+            )}
           </div>
           <div className="text-center text-xs text-muted-foreground">
             {confirmWipe ? (
@@ -74,7 +92,9 @@ export function Unlock() {
               </div>
             ) : (
               <button type="button" className="btn-text" onClick={() => setConfirmWipe(true)}>
-                Forgot the passphrase? Restore from your recovery phrase or wallet
+                {passkey
+                  ? "Passkey not working? Restore from your recovery phrase or wallet"
+                  : "Forgot the passphrase? Restore from your recovery phrase or wallet"}
               </button>
             )}
           </div>
