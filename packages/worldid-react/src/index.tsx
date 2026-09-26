@@ -54,12 +54,15 @@ export type RpContextResponse = {
   environment: "production" | "staging" | "sandbox";
 };
 
+/** The World ID credential Soapay asks for (Proof of Human, D-54). Keep in sync with `WORLD_ID_CREDENTIAL` in @soapay/sdk. */
+export const HUMAN_CHECK_CREDENTIAL = "proof_of_human" as const;
+
 /**
- * The Selfie Check credential as a session constraint. IDKit 4.3's `IDKitSessionWidget`
+ * The required credential as a session constraint. IDKit 4.3's `IDKitSessionWidget`
  * takes `constraints` (not `preset={selfieCheck()}` as the session-proof docs show).
  */
-export function selfieCheckConstraint(signal: string): ConstraintNode {
-  return CredentialRequest("selfie", { signal });
+export function humanCheckConstraint(signal: string): ConstraintNode {
+  return CredentialRequest(HUMAN_CHECK_CREDENTIAL, { signal });
 }
 
 /** POST {apiUrl}/worldid/rp-context: a fresh, single-use RP signature for one session request. */
@@ -141,8 +144,8 @@ export function HumanCheck(props: HumanCheckProps) {
         };
         const builder = mode === "rotate" && sessionId ? IDKit.proveSession(sessionId, config) : IDKit.createSession(config);
         // IDKit 4.3 rejects presets for session flows ("Use .constraints() instead"), although
-        // World's session docs show `.preset(selfieCheck())`.
-        request = await builder.constraints(selfieCheckConstraint(signal));
+        // World's session docs show `.preset(...)`.
+        request = await builder.constraints(humanCheckConstraint(signal));
         activeRequest.current = request;
       } catch (e) {
         if (ac.signal.aborted) return;
@@ -207,7 +210,7 @@ export function HumanCheck(props: HumanCheckProps) {
       )}
       {open && (
         <div role="dialog" aria-label="Verify with World ID" data-testid="worldid-panel" style={panel}>
-          <strong>{mode === "rotate" ? "Confirm it's you with World ID" : "Link World ID (Selfie Check)"}</strong>
+          <strong>{mode === "rotate" ? "Confirm it's you with World ID" : "Link World ID (Proof of Human)"}</strong>
           {status === "starting" && <span>Preparing the request…</span>}
           {status !== "starting" && uri && (
             <>
@@ -246,3 +249,6 @@ const panel = {
   borderRadius: 2,
   textAlign: "center",
 } as const;
+
+/** @deprecated Renamed to `humanCheckConstraint` (the credential is now Proof of Human, D-54). */
+export const selfieCheckConstraint = humanCheckConstraint;

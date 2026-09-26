@@ -6,7 +6,7 @@
  *          └restore→ restore ─valid (typed or kit file)→ passphrase ─┘                  └──skip name──────────┘
  *                    └wallet (older signature accounts only)→ wallet ─signed→ passphrase
  *
- * `recovery` is OPTIONAL (docs/mvp-spec.md §5): a World ID Selfie Check session for self-service key
+ * `recovery` is OPTIONAL (docs/mvp-spec.md §5): a World ID Proof of Human session for self-service key
  * rotation later. The session signal binds label + registrant, so it comes after the label is chosen,
  * and the name is claimed in that step (with `worldIdSession`, or without it on skip).
  *

@@ -31,7 +31,7 @@ export type NameClaimBody = {
   /** uint256 unix seconds as a decimal string. */
   deadline: string;
   signature: Hex;
-  /** Optional World ID Selfie Check session result (§5), unchanged from IDKit. Only on a new name. */
+  /** Optional World ID Proof of Human session result (§5), unchanged from IDKit. Only on a new name. */
   worldIdSession?: unknown;
   /** Invite code (0x, 32 bytes) for a label the employer reserved (§7). */
   inviteCode?: Hex;

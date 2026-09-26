@@ -51,7 +51,7 @@ async function signedBy(address: Address, typed: TypedDataDefinition, signature:
 
 /**
  * World ID session routes (docs/worldid.md, docs/mvp-spec.md §2.1 and §5):
- * - POST /names/:label/session attaches a Selfie Check session to a name claimed without one.
+ * - POST /names/:label/session attaches a Proof of Human session to a name claimed without one.
  * - POST /names/:label/rotation re-verifies that session (proveSession), signs the
  *   MetaRotation attestation sender apps require before auto-accepting a changed pin,
  *   relays the registrant's ERC-6538 `registerKeysOnBehalf` for the new meta-address (so

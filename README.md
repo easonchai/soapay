@@ -255,9 +255,9 @@ Live on Base Sepolia and ENSv2 Sepolia (2026-09-25): an agent created `mcp-agent
 
 ## World ID integration
 
-**One trust moment: key rotation.** A name's meta-address decides where future salary goes, and the registrant key can change it. When an employee sets up their name, they may create a World ID **session** with the **Selfie Check** credential. To rotate keys later, they prove that same session. The API verifies the proof and signs a `MetaRotation` attestation, and the payer's app then auto-accepts the new meta-address with a "re-verified by World ID" badge. A stolen key alone gets no attestation, so the line is blocked until the employer approves it by hand. There's no World ID gate on onboarding and no Orb requirement.
+**One trust moment: key rotation.** A name's meta-address decides where future salary goes, and the registrant key can change it. When an employee sets up their name, they may create a World ID **session** with the **Proof of Human** credential. To rotate keys later, they prove that same session. The API verifies the proof and signs a `MetaRotation` attestation, and the payer's app then auto-accepts the new meta-address with a "re-verified by World ID" badge. A stolen key alone gets no attestation, so the line is blocked until the employer approves it by hand. There's no World ID gate on onboarding and no Orb requirement.
 
-- **Why Selfie Check:** rotation asks "is this the same person who enrolled?", which is continuity, not uniqueness. Sessions answer it, and the World docs recommend them for repeated verification. Proof of Human would add an Orb visit without answering it any better.
+- **Why Proof of Human:** recovery moves all future salary, the highest-stakes action in the product. World calls Selfie Check a medium-assurance signal, so the strongest same-human proof is proportionate; passport-level identity would collect data we don't need (D-54, [docs/worldid.md](docs/worldid.md)).
 - **Where it matters most:** pseudonymous DAO contributors. The payer has no phone number or face on file, so World ID is the only continuity signal, and it never reveals who the contributor is.
 - **Rotation also relays** the employee's ERC-6538 re-registration for the new meta-address and tops up their Sepolia gas for their own `setText`.
 
