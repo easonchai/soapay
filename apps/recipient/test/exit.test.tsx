@@ -374,6 +374,8 @@ describe("useExit", () => {
     // Below-minimum source shows why it's disabled.
     expect(screen.getByTestId("below-minimum").textContent).toMatch(/exit minimum.*Add \d+\.\d\d USDC/);
     expect(screen.getByTestId("exit-minimum").textContent).toMatch(/^16\.\d\d USDC$/);
+    // Testnet (D-47): pay runs default to 5 USDC chunks, so the screen says how to fund one exit line.
+    expect(screen.getByTestId("exit-testnet-hint").textContent).toMatch(/5 USDC chunks.*at least 16\.\d\d USDC/);
   });
 
   it("queues each leg's deposit in its own window (D-28); Start now overrides", async () => {

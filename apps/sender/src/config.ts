@@ -4,7 +4,7 @@
 // history do not.
 import { getAddress, isAddress, type Address, type Chain } from "viem";
 import { base, baseSepolia } from "viem/chains";
-import { CHAINS, DEFAULT_CHAIN_ID, type SoapayChainConfig } from "@soapay/sdk";
+import { CHAINS, DEFAULT_CHAIN_ID, isTestnetChain, type SoapayChainConfig } from "@soapay/sdk";
 
 export const SUPPORTED_CHAIN_IDS = [baseSepolia.id, base.id] as const;
 export type SupportedChainId = (typeof SUPPORTED_CHAIN_IDS)[number];
@@ -129,17 +129,29 @@ export function setOrgName(v: string): void {
 // Company-wide chunk size for denominated payouts (D-31): one size for every employee, so every full
 // line in a batch is identical. Not a secret: plain localStorage, like the company name.
 const CHUNK_KEY = "soapay:chunk";
+/** Mainnet default chunk size. */
 export const DEFAULT_CHUNK_USDC = "500";
+/** Testnet default (D-47): faucet USDC is scarce (20 per address per 2 hours), so chunks are small. */
+export const TESTNET_CHUNK_USDC = "5";
 
-export function getChunkSize(): string {
-  return safeStorage()?.getItem(CHUNK_KEY) || DEFAULT_CHUNK_USDC;
+/** The default chunk for a chain: 5 USDC on a testnet, 500 USDC elsewhere. */
+export function defaultChunkUsdc(chainId: number = loadSettings().chainId): string {
+  return isTestnetChain(chainId) ? TESTNET_CHUNK_USDC : DEFAULT_CHUNK_USDC;
 }
 
-export function setChunkSize(v: string): void {
+/**
+ * The company's chunk size: a value it saved, else the chain's default. Only a value that differs
+ * from the default is ever stored, so a saved value is always a real choice and is never overridden.
+ */
+export function getChunkSize(chainId: number = loadSettings().chainId): string {
+  return safeStorage()?.getItem(CHUNK_KEY) || defaultChunkUsdc(chainId);
+}
+
+export function setChunkSize(v: string, chainId: number = loadSettings().chainId): void {
   const s = safeStorage();
   if (!s) return;
   const t = v.trim();
-  if (t && t !== DEFAULT_CHUNK_USDC) s.setItem(CHUNK_KEY, t);
+  if (t && t !== defaultChunkUsdc(chainId)) s.setItem(CHUNK_KEY, t);
   else s.removeItem(CHUNK_KEY);
 }
 

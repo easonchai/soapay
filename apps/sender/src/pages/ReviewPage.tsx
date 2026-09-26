@@ -5,6 +5,7 @@ import type { PayPathState, WalletState } from "../hooks/usePayPath.js";
 import type { PayRunState } from "../hooks/usePayRun.js";
 import { USDC_DECIMALS } from "../lib/amount.js";
 import type { RunPlan } from "../lib/run.js";
+import { testnetRunConfirmation } from "../lib/testnet.js";
 import { Notice, plural, short, usdc } from "../ui/kit.js";
 
 export type ReviewPageProps = {
@@ -13,14 +14,19 @@ export type ReviewPageProps = {
   wallet: WalletState;
   payPath: PayPathState;
   chainName: string;
+  /** On a testnet, a run above 50 USDC asks for a confirmation first (D-47). */
+  testnet?: boolean;
   onBack(): void;
 };
 
 const trim = (s: string) => s.replace(/\.00$/, "");
 
 /** CK's Review & sign over our plan: pay on the wallet's path, or export the run for a Safe. */
-export function ReviewPage({ run, plan, wallet, payPath, chainName, onBack }: ReviewPageProps) {
+export function ReviewPage({ run, plan, wallet, payPath, chainName, testnet = false, onBack }: ReviewPageProps) {
   const [safe, setSafe] = useState("");
+  const bigTestRun = testnetRunConfirmation(plan.total, testnet);
+  const [bigRunOk, setBigRunOk] = useState(false);
+  const confirmed = !bigTestRun || bigRunOk;
   const [showSafe, setShowSafe] = useState(false);
   const path = payPath.probe?.path;
   const canPay = path?.kind === "batch" || path?.kind === "disperse";
@@ -137,13 +143,22 @@ export function ReviewPage({ run, plan, wallet, payPath, chainName, onBack }: Re
           </Notice>
         ))}
         {wallet.wrongChain && <Notice tone="warn">Your wallet is on another chain; it will be asked to switch to {chainName}.</Notice>}
+        {bigTestRun && (
+          <Notice tone="warn">
+            <span data-testid="testnet-big-run">{bigTestRun}</span>{" "}
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 6 }}>
+              <input type="checkbox" checked={bigRunOk} onChange={(e) => setBigRunOk(e.target.checked)} />
+              Send it anyway
+            </label>
+          </Notice>
+        )}
         <Dots mode="diamond" style={{ flex: 1, minHeight: 80, width: "100%" }} />
         <ErrorLine error={run.error} />
         <div className="actions">
           <button className="btn-lg" onClick={onBack} disabled={sending}>
             Back to edit
           </button>
-          <button className="btn-primary btn-lg" style={{ flex: 1 }} onClick={() => void run.execute()} disabled={sending || !canPay}>
+          <button className="btn-primary btn-lg" style={{ flex: 1 }} onClick={() => void run.execute()} disabled={sending || !canPay || !confirmed}>
             {sending ? "Sending… confirm in your wallet" : path?.kind === "disperse" ? "Approve and send" : "Sign and send"}
           </button>
         </div>

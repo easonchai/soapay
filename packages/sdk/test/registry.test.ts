@@ -7,6 +7,7 @@ import {
   ComplianceError,
   erc20Asset,
   getChain,
+  isTestnetChain,
   listChains,
   noopComplianceHook,
   registerChain,
@@ -47,6 +48,20 @@ describe("chain registry", () => {
     expect(resolveAsset(other.id, "TOK").kind).toBe("erc20");
     expect(() => resolveAsset(other.id, "nope")).toThrow(/no asset/);
     expect(resolveAsset(other.id, "0x00000000000000000000000000000000000000bb")).toMatchObject({ kind: "erc20" });
+  });
+});
+
+describe("isTestnetChain", () => {
+  it("is true on Base Sepolia and Sepolia, false on Base and unknown chains", () => {
+    expect(isTestnetChain(baseSepolia.id)).toBe(true);
+    expect(isTestnetChain(11155111)).toBe(true);
+    expect(isTestnetChain(base.id)).toBe(false);
+    expect(isTestnetChain(other.id)).toBe(false);
+  });
+
+  it("follows a registered chain's viem testnet flag", () => {
+    registerChain({ chain: { ...other, testnet: true } });
+    expect(isTestnetChain(other.id)).toBe(true);
   });
 });
 

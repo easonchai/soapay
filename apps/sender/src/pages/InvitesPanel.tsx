@@ -3,8 +3,9 @@ import { Copy, ErrorLine, Pill, toast } from "@soapay/ui";
 import type { InvitesState } from "../hooks/useInvites.js";
 import { Notice, usdc } from "../ui/kit.js";
 import { QrCode } from "../ui/QrCode.js";
+import { exampleSalaries } from "../lib/testnet.js";
 
-export type InvitesPanelProps = InvitesState & { parentName: string; defaultOrg?: string };
+export type InvitesPanelProps = InvitesState & { parentName: string; defaultOrg?: string; /** Testnet: a small example salary (D-47). */ testnet?: boolean };
 
 /** Invite an employee by label: sign, show the link + QR, list pending invites (docs/mvp-spec.md §7). */
 export function InvitesPanel(p: InvitesPanelProps) {
@@ -40,7 +41,7 @@ export function InvitesPanel(p: InvitesPanelProps) {
         <label className="field">
           <span>Salary per run</span>
           <div className="addon">
-            <input className="mono-in" placeholder="4200" value={amount} onChange={(e) => setAmount(e.target.value)} aria-label="Invite amount" />
+            <input className="mono-in" placeholder={exampleSalaries(p.testnet ?? false)[0]} value={amount} onChange={(e) => setAmount(e.target.value)} aria-label="Invite amount" />
             <span className="suffix">USDC</span>
           </div>
         </label>
