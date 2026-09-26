@@ -1,5 +1,5 @@
 import { HashRouter, Navigate, Route, Routes } from "react-router";
-import { Loader2 } from "lucide-react";
+import { Loading } from "@soapay/ui";
 import { ScannerProvider } from "./hooks/scanner.js";
 import { InviteProvider, useInvite } from "./hooks/useInvite.js";
 import { Onboarding } from "./onboarding/Onboarding.js";
@@ -34,7 +34,7 @@ function Gate() {
     case "loading":
       return (
         <div className="grid min-h-dvh place-items-center" aria-busy>
-          <Loader2 className="size-6 animate-spin text-muted-foreground" aria-label="Loading" />
+          <Loading label="Opening Soapay…" />
         </div>
       );
     case "error":

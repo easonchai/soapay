@@ -215,7 +215,8 @@ describe("sync and restore", () => {
     const buttons = screen.getAllByRole("button", { name: "Restore from recovery phrase" });
     expect(buttons).toHaveLength(2);
     await user.click(buttons[1]!);
-    expect(screen.queryByRole("button", { name: "Unlock with passkey" })).toBeNull();
+    // The welcome step animates out (UX pass #54), so wait for it to leave.
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Unlock with passkey" })).toBeNull());
   });
 
   it("PRF unsupported (or no discoverable passkeys): the passkey restore option is hidden", async () => {

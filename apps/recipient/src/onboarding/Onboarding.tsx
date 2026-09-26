@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useReducer, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useId, useMemo, useReducer, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { REGISTRY_ADDRESS, generateMnemonic, getChainConfig, validateMnemonic } from "@soapay/sdk";
-import { Lockup, Steps, TopBar } from "@soapay/ui";
-import { CheckCircle2, Download, Eye, FileText, Loader2, ShieldAlert } from "lucide-react";
+import { BLOOM_OUT_S, Bloom, Copy, Fade, LogoLoader, Lockup, Presence, Steps, TopBar, motionOff, toast } from "@soapay/ui";
+import { CheckCircle2, Download, Eye, FileText, ScanFace, ShieldAlert } from "lucide-react";
 import { createPublicClient, http, isAddressEqual } from "viem";
 import { chainName } from "../config.js";
 import { demoEoaWallet, demoSmartWallet, deriveWalletKeys, injectedKeyWallet, injectedProvider, type KeyWallet } from "./walletKeys.js";
@@ -9,7 +10,7 @@ import { useServices } from "../services/ServicesProvider.js";
 import { BackupNotFoundError, useVault } from "../vault/VaultProvider.js";
 import { MIN_PASSPHRASE_LENGTH } from "../vault/crypto.js";
 import { PasskeyUnsupportedError } from "../vault/passkey.js";
-import { Alert, Badge, Button, Card, Checkbox, CopyButton, Field, Input, Textarea, cn, errorMessage } from "../ui/kit.js";
+import { Alert, Badge, Button, Checkbox, CopyButton, Field, Input, Textarea, cn, errorMessage } from "../ui/kit.js";
 import { HumanCheck, sessionIdOf, sessionSignal, type HumanCheckResult } from "../worldid/index.js";
 import { claimName, fullName, registerMetaAddress } from "./actions.js";
 import { initialState, progressOf, reduce, resumeState, words, type OnboardingState } from "./machine.js";
@@ -22,13 +23,18 @@ import { attachSession } from "../features/recovery/attach.js";
 import { fetchLinkedSession } from "../features/recovery/restore.js";
 import { withInvitePayer } from "./invite.js";
 
+/** A small inline brand loader for "Checking…" lines. */
+function InlineLoader({ label }: { label: string }) {
+  return <LogoLoader size={12} label={label} style={{ display: "inline-block", marginRight: 6, verticalAlign: -1 }} />;
+}
+
 /** "Invited by <org>", or why the invite can't be used. Renders nothing without an invite link. */
 export function InviteBanner() {
   const { state } = useInvite();
   if (state.kind === "loading") {
     return (
       <Alert variant="info">
-        <Loader2 className="mr-1 inline size-3 animate-spin" aria-hidden /> Checking your invite…
+        <InlineLoader label="Checking" /> Checking your invite…
       </Alert>
     );
   }
@@ -51,6 +57,20 @@ export function InviteBanner() {
   return null;
 }
 
+/**
+ * The onboarding grid: text column on the left, the step's "object" on the right, one halo that
+ * stays put across steps. Steps hand their object to `Frame`, which portals it into the slot; the
+ * Share step asks the halo to flow out before leaving. Absent (e.g. `ClaimNameLater` inside Name
+ * settings) the steps render their text column only.
+ */
+type OnbFrame = {
+  slot: HTMLElement | null;
+  progress: [number, number];
+  /** Flows the halo out (1.1 s, instant when motion is off), then resolves. */
+  leave(): Promise<void>;
+};
+const OnbFrameContext = createContext<OnbFrame | null>(null);
+
 /** `claimInvite`: an existing, onboarded vault opened an invite link: go straight to the name step. */
 export function Onboarding({ claimInvite = false }: { claimInvite?: boolean } = {}) {
   const vault = useVault();
@@ -60,11 +80,15 @@ export function Onboarding({ claimInvite = false }: { claimInvite?: boolean } = 
   const [cur, total] = progressOf(state);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const svc = useServices();
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  const [leaving, setLeaving] = useState(false);
 
-  // Move focus to the new step's heading so screen readers announce it.
-  useEffect(() => {
-    headingRef.current?.focus();
-  }, [state.step]);
+  const leave = useCallback(() => {
+    setLeaving(true);
+    if (motionOff()) return Promise.resolve();
+    return new Promise<void>((resolve) => window.setTimeout(resolve, BLOOM_OUT_S * 1000));
+  }, []);
+  const frame = useMemo<OnbFrame>(() => ({ slot, progress: [cur, total], leave }), [slot, cur, total, leave]);
 
   return (
     <div className="page">
@@ -81,13 +105,23 @@ export function Onboarding({ claimInvite = false }: { claimInvite?: boolean } = 
         }
       />
       <main className="app-main">
-        <div className="onb mx-auto">
+        <div className="onb-grid">
           {state.step !== "welcome" && (
-            <div aria-label={`Step ${cur} of ${total}`}>
+            <div aria-label={`Step ${cur} of ${total}`} style={{ gridColumn: "1 / -1" }}>
               <Steps current={STEP_OF[state.step]} labels={STEP_LABELS} />
             </div>
           )}
-          <Step state={state} dispatch={dispatch} headingRef={headingRef} />
+          <OnbFrameContext.Provider value={frame}>
+            <Presence mode="wait" initial={false}>
+              <Fade key={state.step} x={16} duration={0.35}>
+                <Step state={state} dispatch={dispatch} headingRef={headingRef} />
+              </Fade>
+            </Presence>
+          </OnbFrameContext.Provider>
+          <div className="object">
+            <Bloom className="halo" mode="diamond" leaving={leaving} />
+            <div ref={setSlot} className="stack" />
+          </div>
         </div>
       </main>
     </div>
@@ -123,64 +157,83 @@ type StepProps = {
   headingRef: React.RefObject<HTMLHeadingElement | null>;
 };
 
+/**
+ * One step's text column (Back, "Step n of m", title, lead, body). `object` is what the right column
+ * shows for this step; it is portalled into the grid's slot so the halo behind it never remounts.
+ */
 function Frame({
   title,
   lead,
   children,
   headingRef,
   onBack,
+  object,
 }: {
   title: string;
   lead?: ReactNode;
   children: ReactNode;
   headingRef: StepProps["headingRef"];
   onBack?: () => void;
+  object?: ReactNode;
 }) {
+  const frame = useContext(OnbFrameContext);
+  const [cur, total] = frame?.progress ?? [0, 0];
+
+  // Move focus to the new step's heading once it mounts, so screen readers announce it (onboarding only).
+  const focused = useRef(false);
+  useEffect(() => {
+    if (!frame || focused.current) return;
+    focused.current = true;
+    headingRef.current?.focus();
+  }, [frame, headingRef]);
+
   return (
-    <section className="stack">
-      {onBack && (
+    <>
+      <section className="stack">
+        {onBack && (
+          <div>
+            <Button variant="ghost" size="sm" onClick={onBack}>
+              ← Back
+            </Button>
+          </div>
+        )}
         <div>
-          <Button variant="ghost" size="sm" onClick={onBack}>
-            ← Back
-          </Button>
+          {cur > 0 && (
+            <span className="eyebrow" style={{ display: "block", marginBottom: 8 }}>
+              Step {cur} of {total}
+            </span>
+          )}
+          <h1 ref={headingRef} tabIndex={-1} className="outline-none">
+            {title}
+          </h1>
+          {lead && <p className="lead">{lead}</p>}
         </div>
-      )}
-      <div>
-        <h1 ref={headingRef} tabIndex={-1} className="outline-none">
-          {title}
-        </h1>
-        {lead && <p className="lead">{lead}</p>}
-      </div>
-      {children}
-    </section>
+        {children}
+      </section>
+      {object !== undefined && object !== null && frame?.slot && createPortal(<Fade x={16} duration={0.35}>{object}</Fade>, frame.slot)}
+    </>
+  );
+}
+
+/** The right-column checklist: `done` filled, `active` tinted, `todo` greyed, none = a plain fact. */
+function Checklist({ items, label }: { items: { text: string; state?: "done" | "active" | "todo" }[]; label?: string }) {
+  return (
+    <ul className="checklist" {...(label ? { "aria-label": label } : {})}>
+      {items.map((it) => (
+        <li key={it.text} {...(it.state ? { className: it.state } : {})}>
+          <span className="sq" aria-hidden />
+          <span>{it.text}</span>
+          <span className="hint">{it.state === "done" ? "Done" : it.state === "active" ? "Now" : ""}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
 function Step({ state, dispatch, headingRef }: StepProps) {
   switch (state.step) {
     case "welcome":
-      return (
-        <Frame
-          headingRef={headingRef}
-          title="Get paid without broadcasting your balance"
-          lead="You get one private key. Your employer pays a fresh address every time; only you can open them."
-        >
-          <InviteBanner />
-          <div className="actions">
-            <Button size="lg" onClick={() => dispatch({ type: "CREATE", mnemonic: generateMnemonic() })}>
-              Create a new account
-            </Button>
-            <Button size="lg" variant="outline" onClick={() => dispatch({ type: "RESTORE" })}>
-              Restore from recovery phrase
-            </Button>
-          </div>
-          <PasskeyRestore dispatch={dispatch} />
-          <p className="hint">
-            Your keys are created in this browser and stay encrypted here; you unlock them with a passkey (or a passphrase). Nothing secret is
-            ever sent anywhere.
-          </p>
-        </Frame>
-      );
+      return <WelcomeStep dispatch={dispatch} headingRef={headingRef} />;
     case "backup":
       return <RecoveryKitStep mnemonic={state.mnemonic} saved={state.saved ?? false} dispatch={dispatch} headingRef={headingRef} />;
     case "restore":
@@ -199,6 +252,46 @@ function Step({ state, dispatch, headingRef }: StepProps) {
     case "done":
       return <ShareStep dispatch={dispatch} headingRef={headingRef} />;
   }
+}
+
+/** Two `.opt` choices; the description is exposed through aria-describedby so the button's name stays the title. */
+function ChoiceButton({ title, description, onClick }: { title: string; description: string; onClick: () => void }) {
+  const id = useId();
+  return (
+    <button type="button" className="opt" aria-label={title} aria-describedby={id} onClick={onClick}>
+      <span>
+        <span className="t">{title}</span>
+        <span className="d" id={id} style={{ display: "block" }}>
+          {description}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+function WelcomeStep({ dispatch, headingRef }: Omit<StepProps, "state">) {
+  return (
+    <Frame
+      headingRef={headingRef}
+      title="Get paid without broadcasting your balance"
+      lead="You get one private key. Your employer pays a fresh address every time; only you can open them."
+    >
+      <InviteBanner />
+      <div className="choice">
+        <ChoiceButton
+          title="Create a new account"
+          description="New keys, made in this browser and saved as a recovery kit."
+          onClick={() => dispatch({ type: "CREATE", mnemonic: generateMnemonic() })}
+        />
+        <ChoiceButton title="Restore from recovery phrase" description="From your recovery kit or your 12 or 24 words." onClick={() => dispatch({ type: "RESTORE" })} />
+      </div>
+      <PasskeyRestore dispatch={dispatch} />
+      <p className="hint">
+        Your keys are created in this browser and stay encrypted here; you unlock them with a passkey (or a passphrase). Nothing secret is
+        ever sent anywhere.
+      </p>
+    </Frame>
+  );
 }
 
 /**
@@ -291,6 +384,7 @@ function RecoveryKitStep({ mnemonic, saved, dispatch, headingRef }: { mnemonic: 
         title="Recovery kit saved"
         lead="You already saved the recovery kit for these keys. It isn't shown again."
         onBack={() => dispatch({ type: "BACK" })}
+        object={<Checklist items={[{ text: "Recovery kit saved", state: "done" }, { text: "Lock this device", state: "active" }, { text: "Publish your payment address", state: "todo" }]} />}
       >
         <Alert variant="info">
           Continue to lock this device. If you didn't keep the kit, go back and start again: that makes new keys and a new kit.
@@ -309,12 +403,35 @@ function RecoveryKitStep({ mnemonic, saved, dispatch, headingRef }: { mnemonic: 
     setDownloaded(true);
   };
 
+  // The words stay out of the DOM (and out of the accessibility tree) until "Show words".
+  const seed = (
+    <div className="seed-card">
+      <ol className="seed" aria-label="Recovery phrase" aria-hidden={!revealed || undefined}>
+        {list.map((w, i) => (
+          <li key={i}>
+            <span className="n">{String(i + 1).padStart(2, "0")}</span>
+            <span>{revealed ? w : "· · · ·"}</span>
+          </li>
+        ))}
+      </ol>
+      {!revealed && (
+        <div className="veil">
+          <p className="hint">Make sure nobody can see your screen.</p>
+          <Button variant="outline" onClick={() => setRevealed(true)}>
+            <Eye className="size-4" aria-hidden /> Show words
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <Frame
       headingRef={headingRef}
       title="Save your recovery kit"
       lead="Your recovery phrase is the one key to every payment you'll get, even if Soapay disappears. You don't need to remember it: just save it somewhere safe."
       onBack={() => dispatch({ type: "BACK" })}
+      object={seed}
     >
       <Alert variant="warning" title="Losing the seed loses the funds.">
         Save the kit in your password manager, iCloud Keychain or Google Password Manager notes, or a file you keep. Day to day you unlock
@@ -326,11 +443,6 @@ function RecoveryKitStep({ mnemonic, saved, dispatch, headingRef }: { mnemonic: 
           <Download className="size-4" aria-hidden /> Download recovery kit
         </Button>
         <CopyButton value={mnemonic} label="Copy phrase" onCopied={() => setCopied(true)} />
-        {!revealed && (
-          <Button variant="outline" onClick={() => setRevealed(true)}>
-            <Eye className="size-4" aria-hidden /> Show words
-          </Button>
-        )}
       </div>
       {downloaded && (
         <p className="hint" data-testid="kit-downloaded">
@@ -342,16 +454,6 @@ function RecoveryKitStep({ mnemonic, saved, dispatch, headingRef }: { mnemonic: 
           Copied. Paste it into a password manager note, then clear your clipboard (copy something else).
         </p>
       )}
-      {revealed && (
-        <ol aria-label="Recovery phrase" className="grid grid-cols-2 gap-2 rounded-lg border bg-card p-3 sm:grid-cols-3">
-          {list.map((w, i) => (
-            <li key={i} className="flex items-baseline gap-2 rounded-md bg-muted px-3 py-2 font-mono text-sm">
-              <span className="w-5 text-right text-xs text-muted-foreground tabular-nums">{i + 1}</span>
-              <span>{w}</span>
-            </li>
-          ))}
-        </ol>
-      )}
       <Checkbox checked={confirmed} onChange={setConfirmed} label="I saved my recovery kit somewhere safe" />
       <Button size="lg" className="w-full" disabled={!acted || !confirmed} onClick={() => dispatch({ type: "BACKED_UP" })}>
         Continue
@@ -360,6 +462,8 @@ function RecoveryKitStep({ mnemonic, saved, dispatch, headingRef }: { mnemonic: 
     </Frame>
   );
 }
+
+const restoreChecklist = (first: string) => <Checklist items={[{ text: first }, { text: "Derive your keys on this device" }, { text: "Nothing leaves the browser" }]} />;
 
 function RestoreStep({ error, dispatch, headingRef }: { error: string | null } & Omit<StepProps, "state">) {
   const [phrase, setPhrase] = useState("");
@@ -392,6 +496,7 @@ function RestoreStep({ error, dispatch, headingRef }: { error: string | null } &
       title="Restore your account"
       lead="Open your recovery kit, or enter your 12 or 24 word recovery phrase. Every payment you ever received will be found again from the chain."
       onBack={() => dispatch({ type: "BACK" })}
+      object={restoreChecklist("Read the kit or phrase")}
     >
       <div className="stack-sm">
         <input
@@ -486,6 +591,7 @@ function WalletStep({ error, dispatch, headingRef }: { error: string | null } & 
       title="Restore from a wallet signature"
       lead="For accounts made with a wallet signature. Your wallet signs the same fixed message again; the keys come from that signature and are stored in this browser, encrypted. Nothing goes on-chain."
       onBack={() => dispatch({ type: "BACK" })}
+      object={restoreChecklist("Sign the fixed Soapay message twice")}
     >
       <Alert variant="warning" title="Plain EOA wallets only">
         Use the same wallet you made the account with. Smart-account and passkey wallets (Coinbase Smart Wallet, Safe, 7702-delegated
@@ -523,6 +629,44 @@ const backupNote = (secret: KeySecret, lock: "passkey" | "passphrase") =>
     ? `The ${lock} only protects this device. Your recovery kit is still the only backup.`
     : `The ${lock} only protects this device. Signing again with the same wallet is your backup.`;
 
+/** The Lock step's object: the two lock methods as radio cards, mirroring the buttons in the text column. */
+function LockChoice({
+  mode,
+  canPasskey,
+  disabled,
+  onPasskey,
+  onPassphrase,
+}: {
+  mode: "passkey" | "passphrase";
+  canPasskey: boolean;
+  disabled: boolean;
+  onPasskey: () => void;
+  onPassphrase: () => void;
+}) {
+  return (
+    <div role="radiogroup" aria-label="How this device unlocks" className="choice">
+      <button type="button" role="radio" aria-checked={mode === "passkey"} className="opt" disabled={disabled || !canPasskey} onClick={onPasskey}>
+        <span className="radio" />
+        <span>
+          <span className="t">Passkey</span>
+          <span className="d" style={{ display: "block" }}>
+            Face ID, fingerprint or device PIN. Fastest.
+          </span>
+        </span>
+      </button>
+      <button type="button" role="radio" aria-checked={mode === "passphrase"} className="opt" disabled={disabled} onClick={onPassphrase}>
+        <span className="radio" />
+        <span>
+          <span className="t">Passphrase</span>
+          <span className="d" style={{ display: "block" }}>
+            Survives cleared site data; works on another device.
+          </span>
+        </span>
+      </button>
+    </div>
+  );
+}
+
 /**
  * CK's "Lock" step (D-35): a passkey (WebAuthn PRF) by default, the passphrase as the fallback when the
  * browser has no passkey/PRF support or the user prefers it.
@@ -536,6 +680,7 @@ function LockStep({ secret, dispatch, headingRef }: { secret: KeySecret } & Omit
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { passkeyAvailable } = vault;
+  const invite = useInvite().state;
 
   useEffect(() => {
     let cancelled = false;
@@ -550,6 +695,12 @@ function LockStep({ secret, dispatch, headingRef }: { secret: KeySecret } & Omit
     };
   }, [passkeyAvailable]);
 
+  const usePasskeyMode = () => {
+    setError(null);
+    setMode("passkey");
+  };
+  const usePassphraseMode = () => setMode("passphrase");
+
   if (mode === "passphrase") {
     return (
       <PassphraseStep
@@ -557,19 +708,12 @@ function LockStep({ secret, dispatch, headingRef }: { secret: KeySecret } & Omit
         dispatch={dispatch}
         headingRef={headingRef}
         notice={fallback}
-        onUsePasskey={
-          canPasskey
-            ? () => {
-                setError(null);
-                setMode("passkey");
-              }
-            : undefined
-        }
+        onUsePasskey={canPasskey ? usePasskeyMode : undefined}
+        choice={(disabled) => <LockChoice mode="passphrase" canPasskey={canPasskey} disabled={disabled} onPasskey={usePasskeyMode} onPassphrase={usePassphraseMode} />}
       />
     );
   }
 
-  const invite = useInvite().state;
   // Name the passkey after the pay name when an invite already reserved one, so it's recognisable later.
   const account = invite.kind === "pending" ? fullName(invite.label) : undefined;
   const usePasskey = async () => {
@@ -597,6 +741,7 @@ function LockStep({ secret, dispatch, headingRef }: { secret: KeySecret } & Omit
       title="Lock this device"
       lead="Unlock Soapay with Face ID, your fingerprint or your device PIN. Your keys stay encrypted in this browser."
       onBack={() => dispatch({ type: "BACK" })}
+      object={<LockChoice mode="passkey" canPasskey={canPasskey || mode === "checking"} disabled={busy} onPasskey={usePasskeyMode} onPassphrase={usePassphraseMode} />}
     >
       {error && <Alert variant="destructive">{error}</Alert>}
       <Alert variant="info" title="Your device will ask to save a passkey">
@@ -610,7 +755,7 @@ function LockStep({ secret, dispatch, headingRef }: { secret: KeySecret } & Omit
         {busy ? "Waiting for your passkey…" : "Use Face ID / fingerprint (passkey)"}
       </Button>
       <div className="text-center">
-        <button type="button" className="btn-text" onClick={() => setMode("passphrase")} disabled={busy} data-testid="use-passphrase">
+        <button type="button" className="btn-text" onClick={usePassphraseMode} disabled={busy} data-testid="use-passphrase">
           Use a passphrase instead
         </button>
       </div>
@@ -628,7 +773,14 @@ function PassphraseStep({
   headingRef,
   notice,
   onUsePasskey,
-}: { secret: KeySecret; notice?: string | null; onUsePasskey?: (() => void) | undefined } & Omit<StepProps, "state">) {
+  choice,
+}: {
+  secret: KeySecret;
+  notice?: string | null;
+  onUsePasskey?: (() => void) | undefined;
+  /** The right-column lock cards, given whether the form is busy. */
+  choice?: (disabled: boolean) => ReactNode;
+} & Omit<StepProps, "state">) {
   const vault = useVault();
   const [pass, setPass] = useState("");
   const [again, setAgain] = useState("");
@@ -659,6 +811,7 @@ function PassphraseStep({
       title="Lock this device"
       lead="Your passphrase encrypts your keys in this browser. You'll enter it each time you open Soapay."
       onBack={() => dispatch({ type: "BACK" })}
+      object={choice?.(busy)}
     >
       {notice && (
         <Alert variant="info">
@@ -859,6 +1012,23 @@ function RecoveryStep({ label, inviteCode, dispatch, headingRef }: { label: stri
     );
   }
 
+  const worldId = (
+    <div className="card">
+      <div className="flex items-start gap-3">
+        <div className="rounded-full bg-accent p-2.5">
+          <ScanFace className="size-5 text-accent-foreground" aria-hidden />
+        </div>
+        <div className="space-y-1">
+          <p className="font-medium">Proof of Human with World ID</p>
+          <p className="text-sm text-muted-foreground">
+            Links a private World ID session to your name, so you can move it to new keys later without asking your employer.
+          </p>
+          <p className="text-sm text-muted-foreground">No passport, no Orb. Soapay never learns who you are.</p>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <Frame
       headingRef={headingRef}
@@ -870,14 +1040,16 @@ function RecoveryStep({ label, inviteCode, dispatch, headingRef }: { label: stri
           <span className="font-mono">{fullName(label)}</span> to new keys without asking your employer.
         </>
       }
+      object={worldId}
     >
       {standing === "checking" ? (
         <p className="hint" role="status" data-testid="name-standing-checking">
-          <Loader2 className="mr-1 inline size-3 animate-spin" aria-hidden /> Checking {fullName(label)}…
+          <InlineLoader label="Checking" /> Checking {fullName(label)}…
         </p>
       ) : (
         <HumanCheck
           mode="create-session"
+          compact
           apiUrl={svc.settings.apiUrl}
           signal={sessionSignal(label, keys.registrantAddress)}
           onError={(e) => setError(errorMessage(e))}
@@ -901,6 +1073,7 @@ function RegisterStep({ dispatch, headingRef }: Omit<StepProps, "state">) {
   const vault = useVault();
   const svc = useServices();
   const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const keys = vault.keys!;
   const passkeySaved = vault.lockKind === "passkey";
@@ -925,6 +1098,7 @@ function RegisterStep({ dispatch, headingRef }: Omit<StepProps, "state">) {
           ...(r.generation ? { keyGeneration: r.generation } : {}),
         },
       }));
+      setDone(true);
       dispatch({ type: "REGISTERED" });
     } catch (e) {
       setError(errorMessage(e));
@@ -932,17 +1106,12 @@ function RegisterStep({ dispatch, headingRef }: Omit<StepProps, "state">) {
       setBusy(false);
     }
   };
-  return (
-    <Frame
-      headingRef={headingRef}
-      title="Publish your payment address"
-      lead="We register your stealth meta-address on the public ERC-6538 registry. It lets employers derive a fresh address for every payment. We pay the gas."
-    >
-      {passkeySaved && (
-        <Alert variant="success" title="Passkey saved on this device">
-          <span data-testid="passkey-saved">Next time you open Soapay (or after it locks), it asks for this passkey to unlock.</span>
-        </Alert>
-      )}
+
+  // Sign · Relay · Confirmed follow the button: idle → signing next; "Signing and relaying…" → signed, relaying; success → all done.
+  const phase = done ? 2 : busy ? 1 : 0;
+  const at = (i: number): "done" | "active" | "todo" => (i < phase ? "done" : i === phase ? "active" : "todo");
+  const object = (
+    <>
       <div className="card">
         <dl className="facts">
           <dt>Registered by</dt>
@@ -960,6 +1129,29 @@ function RegisterStep({ dispatch, headingRef }: Omit<StepProps, "state">) {
           </dd>
         </dl>
       </div>
+      <Checklist
+        label="Registration progress"
+        items={[
+          { text: "Sign", state: at(0) },
+          { text: "Relay", state: at(1) },
+          { text: "Confirmed", state: done ? "done" : at(2) },
+        ]}
+      />
+    </>
+  );
+
+  return (
+    <Frame
+      headingRef={headingRef}
+      title="Publish your payment address"
+      lead="We register your stealth meta-address on the public ERC-6538 registry. It lets employers derive a fresh address for every payment. We pay the gas."
+      object={object}
+    >
+      {passkeySaved && (
+        <Alert variant="success" title="Passkey saved on this device">
+          <span data-testid="passkey-saved">Next time you open Soapay (or after it locks), it asks for this passkey to unlock.</span>
+        </Alert>
+      )}
       {error && (
         <Alert variant="destructive" title="Registration didn't go through">
           {error}
@@ -969,15 +1161,6 @@ function RegisterStep({ dispatch, headingRef }: Omit<StepProps, "state">) {
         {busy ? "Signing and relaying…" : error ? "Try again" : "Register for free"}
       </Button>
     </Frame>
-  );
-}
-
-function Row({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="grid gap-1 sm:grid-cols-[8rem_1fr] sm:gap-3">
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      {children}
-    </div>
   );
 }
 
@@ -1026,7 +1209,7 @@ function NameStep({ dispatch, headingRef, later = false }: { later?: boolean } &
       case "checking":
         return (
           <span className="inline-flex items-center gap-1">
-            <Loader2 className="size-3 animate-spin" aria-hidden /> Checking…
+            <LogoLoader size={12} label="Checking" /> Checking…
           </span>
         );
       case "available":
@@ -1041,11 +1224,39 @@ function NameStep({ dispatch, headingRef, later = false }: { later?: boolean } &
   const fieldError =
     status.kind === "invalid" ? status.message : status.kind === "taken" ? "That name is taken. Try another." : status.kind === "error" ? status.message : null;
 
+  // The preview: the name as the employer will type it, with its availability underneath.
+  const availability = invited ? (
+    <span className="hint">Reserved for you by your invite.</span>
+  ) : status.kind === "checking" ? (
+    <span className="hint inline-flex items-center gap-1">
+      <LogoLoader size={12} label="Checking" /> Checking…
+    </span>
+  ) : status.kind === "available" ? (
+    <span className="text-success text-xs">Available</span>
+  ) : status.kind === "yours" ? (
+    <span className="text-success text-xs">Already yours</span>
+  ) : fieldError ? (
+    <span className="text-destructive text-xs">{fieldError}</span>
+  ) : (
+    <span className="hint">Type a name to check it.</span>
+  );
+  const preview = (
+    <div className="card stack-sm" style={{ padding: 24 }}>
+      <span className="eyebrow">Pay name</span>
+      <div className="font-mono" style={{ fontSize: 24, lineHeight: 1.3, wordBreak: "break-all" }} aria-hidden>
+        <span style={{ fontWeight: 600 }}>{label || "yourname"}</span>
+        <span className="text-muted-foreground">.soapay.eth</span>
+      </div>
+      {availability}
+    </div>
+  );
+
   return (
     <Frame
       headingRef={headingRef}
       title={invited ? "Your pay name" : "Pick your pay name"}
       lead={invited ? "Your employer reserved this name for you. It points to your meta-address, not to any wallet." : "Something your employer can type. It points to your meta-address, not to any wallet."}
+      object={preview}
     >
       <InviteBanner />
       <form onSubmit={submit} className="space-y-4" noValidate>
@@ -1090,21 +1301,34 @@ function NameStep({ dispatch, headingRef, later = false }: { later?: boolean } &
 
 function ShareStep({ dispatch, headingRef }: Omit<StepProps, "state">) {
   const vault = useVault();
+  const frame = useContext(OnbFrameContext);
+  const [leaving, setLeaving] = useState(false);
   const profile = vault.data!.profile;
   const value = profile.name?.name ?? vault.keys!.metaAddressURI;
   const finish = async () => {
+    if (leaving) return;
+    setLeaving(true);
+    // The halo flows out first; then the vault marks onboarding done and the app takes over.
+    await frame?.leave();
     await vault.update((d) => ({ ...d, profile: { ...d.profile, onboardedAt: Date.now() } }));
     dispatch({ type: "FINISH" });
   };
-  return (
-    <Frame headingRef={headingRef} title="Share this one string with your employer" lead="That's all they need to pay you. Each payday lands at a new address only you can link.">
-      <div className="share">
-        <div className="label">{profile.name ? "Your pay name" : "Your meta-address"}</div>
-        <div className={cn("value", profile.name && "text-2xl font-semibold")} data-testid="share-string">
-          {value}
-        </div>
-        <CopyButton value={value} label="Copy" />
+  const share = (
+    <div className="share">
+      <div className="label">{profile.name ? "Your pay name" : "Your meta-address"}</div>
+      <div className={cn("value", profile.name && "text-2xl font-semibold")} data-testid="share-string">
+        {value}
       </div>
+      <Copy value={value} label="Copy" onCopied={() => toast.success("Copied")} />
+    </div>
+  );
+  return (
+    <Frame
+      headingRef={headingRef}
+      title="Share this one string with your employer"
+      lead="That's all they need to pay you. Each payday lands at a new address only you can link."
+      object={share}
+    >
       {profile.name && (
         <div className="card">
           <dl className="facts">
@@ -1128,7 +1352,7 @@ function ShareStep({ dispatch, headingRef }: Omit<StepProps, "state">) {
           Without a name, anyone who changes this string in your employer's records could redirect your pay. Claim a name later in Name settings.
         </Alert>
       )}
-      <Button size="lg" className="w-full" onClick={finish}>
+      <Button size="lg" className="w-full" onClick={() => void finish()} loading={leaving}>
         Go to my payments
       </Button>
     </Frame>

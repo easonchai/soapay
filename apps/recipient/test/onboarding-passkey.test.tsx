@@ -52,7 +52,9 @@ function mount(pk: PasskeyAuthenticator) {
 /** Welcome → Keys (save the recovery kit: show the words, tick the box; no quiz, D-44) → the Lock step. */
 async function throughKeys(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: "Create a new account" }));
-  expect(screen.getByText(/the one key to every payment/)).toBeTruthy();
+  // Steps swap through Presence/Fade, so the new step arrives a beat after the click.
+  expect(await screen.findByText(/the one key to every payment/)).toBeTruthy();
+  expect(screen.getByText("Step 1 of 6")).toBeTruthy();
   expect(screen.getByText("Losing the seed loses the funds.")).toBeTruthy();
   await user.click(screen.getByRole("button", { name: /Show words/ }));
   const list = screen.getByRole("list", { name: "Recovery phrase" });

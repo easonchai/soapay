@@ -24,9 +24,15 @@ const unavailable = (reason: string): EnsWriter => ({
   setStealthRecord: () => Promise.reject(new Error(reason)),
 });
 
+/**
+ * Used when no Ethereum Sepolia RPC is configured. viem's own default for Sepolia refuses browser
+ * requests ("Failed to fetch"), which broke the last step of key rotation.
+ */
+export const DEFAULT_L1_RPC_URL = "https://ethereum-sepolia-rpc.publicnode.com";
+
 export function createEnsWriter(opts: { l1RpcUrl: string; build?: BuildSetStealthRecordCall }): EnsWriter {
   const build = opts.build ?? buildSetStealthRecordCall;
-  const transport = http(opts.l1RpcUrl || undefined, { retryCount: 2 });
+  const transport = http(opts.l1RpcUrl || DEFAULT_L1_RPC_URL, { retryCount: 2 });
   const publicClient = createPublicClient({ chain: sepolia, transport });
   return {
     ready: true,
