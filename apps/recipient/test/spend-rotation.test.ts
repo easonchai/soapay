@@ -4,13 +4,12 @@ import {
   SpendManyError,
   generateMnemonic,
   keysFromMnemonic,
-  attachWorldIdTypedData,
+  attachSessionTypedData,
   nameClaimDomain,
   planSpend,
   recoverRegisterKeysSigner,
   rotationClaimTypedData,
   rotationSignal,
-  worldIdNullifierOf,
   type SpendResult,
 } from "@soapay/sdk";
 import { recoverTypedDataAddress, type Address, type Hex } from "viem";
@@ -20,8 +19,7 @@ import { finishRotation, prepareRotation, submitRotation } from "../src/features
 import { keyRing } from "../src/features/rotation/keys.js";
 import { createMockEnsWriter, createMockFetch } from "../src/services/mock.js";
 import { executeSpend, type SpendDraft } from "../src/spend/flow.js";
-import { MOCK_IDENTITY, mockNullifier, mockProofResult } from "../src/worldid/MockHumanCheck.js";
-import { worldIdLinkOf } from "../src/worldid/types.js";
+import { mockSessionResult } from "../src/worldid/MockHumanCheck.js";
 import { rotationPathOf, sessionCooldownUntil } from "../src/hooks/useRotation.js";
 
 const A = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as Address;
@@ -90,7 +88,7 @@ describe("rotation", () => {
       return new Response(JSON.stringify({ attestation: { label: "alex" } }), { status: 200 });
     });
     const registry = { readContract: async () => 7n } as never;
-    const idkit = mockProofResult({ signal: rotationSignal("alex", d.newMeta, d.deadline) });
+    const idkit = { session_id: "session_ab12", responses: [] };
     const res = await submitRotation({ api, registry, chainId, draft: d, registrant: ring.current, worldId: idkit });
     expect(url).toBe("https://api.test/names/alex/rotation");
     expect(res.attestation?.label).toBe("alex");
@@ -105,30 +103,30 @@ describe("rotation", () => {
     expect(regSigner).toBe(ring.current.registrantAddress);
   });
 
-  it("attachSession signs the SDK AttachWorldId typed data over the proof's nullifier and returns the cooldown", async () => {
+  it("attachSession signs the SDK AttachSession typed data and returns the cooldown", async () => {
     let body: Record<string, unknown> = {};
     const api = createApi("https://api.test", async (_u, init) => {
       body = JSON.parse(String(init?.body));
-      return new Response(JSON.stringify({ label: "alex", attachedAt: 10, rotationAllowedFrom: 10 + 72 * 3600 }), { status: 201 });
+      return new Response(JSON.stringify({ label: "alex", sessionId: "session_ab", attachedAt: 10, rotationAllowedFrom: 10 + 72 * 3600 }), { status: 201 });
     });
-    const result = mockProofResult({ signal: "soapay:session:alex:0x1" });
+    const result = { session_id: "session_ab", protocol_version: "4.0" };
     const res = await attachSession({ api, chainId, label: "alex", result, registrantKey: ring.current.registrantKey, now: 0 });
     expect(res.rotationAllowedFrom).toBe(10 + 72 * 3600);
     expect(body.worldIdResult).toEqual(result); // forwarded unchanged
     const signer = await recoverTypedDataAddress({
-      ...attachWorldIdTypedData({ label: "alex", nullifier: mockNullifier(), deadline: BigInt(body.deadline as string), chainId }),
+      ...attachSessionTypedData({ label: "alex", sessionId: "session_ab", deadline: BigInt(body.deadline as string), chainId }),
       signature: body.signature as Hex,
     });
     expect(signer).toBe(ring.current.registrantAddress);
-    await expect(attachSession({ api, chainId, label: "alex", result: {}, registrantKey: ring.current.registrantKey })).rejects.toThrow(/nullifier/);
+    await expect(attachSession({ api, chainId, label: "alex", result: {}, registrantKey: ring.current.registrantKey })).rejects.toThrow(/session id/);
   });
 
-  it("rotation is attested only with a World ID link (nullifier) past its cooldown", () => {
+  it("rotation is attested only with an attached session past its cooldown", () => {
     const name = { label: "alex", name: "alex.soapay.eth", at: 0 };
     expect(rotationPathOf({ name })).toBe("manual");
-    // A legacy session id (D-16/D-57) no longer backs a rotation.
-    expect(rotationPathOf({ name, recovery: { kind: "world-id", at: 0, sessionId: "session_ab", attachedTo: "alex" } })).toBe("manual");
-    const rec = { kind: "world-id" as const, at: 0, nullifier: mockNullifier(), attachedTo: "alex" };
+    // A D-58 link (a nullifier, no session id) counts as unlinked (D-59).
+    expect(rotationPathOf({ name, recovery: { kind: "world-id", at: 0, nullifier: "0x0a", attachedTo: "alex" } })).toBe("manual");
+    const rec = { kind: "world-id" as const, at: 0, sessionId: "session_ab", attachedTo: "alex" };
     expect(rotationPathOf({ name, recovery: rec })).toBe("attested");
     const late = { ...rec, rotationAllowedFrom: 1_000 };
     expect(rotationPathOf({ name, recovery: late }, 999_000)).toBe("manual");
@@ -137,31 +135,35 @@ describe("rotation", () => {
     expect(rotationPathOf({ name, recovery: { ...rec, attachedTo: "other" } })).toBe("manual");
   });
 
-  it("the mock HumanCheck returns IDKit-shaped one-time results with a deterministic nullifier per identity", () => {
-    const created = mockProofResult({ signal: "soapay:session:alex:0x1" });
-    expect(created).toMatchObject({ protocol_version: "4.0", action: "soapay-recovery" });
-    expect(created).not.toHaveProperty("session_id");
-    const again = mockProofResult({ signal: "soapay:rotate:alex" });
-    expect(worldIdNullifierOf(again)).toBe(worldIdNullifierOf(created)); // same person, same nullifier
-    expect(worldIdLinkOf(created)).toBe(mockNullifier(MOCK_IDENTITY));
-    expect(worldIdNullifierOf(mockProofResult({ signal: "x" }, "someone-else"))).not.toBe(worldIdNullifierOf(created));
+  it("the mock HumanCheck returns IDKit-shaped session results", () => {
+    const created = mockSessionResult({ mode: "create-session", signal: "soapay:session:alex:0x1" });
+    expect(created.session_id).toMatch(/^session_[0-9a-f]+$/);
+    expect(created).toMatchObject({ protocol_version: "4.0", responses: [{ identifier: "proof_of_human", issuer_schema_id: 1 }] });
+    expect(created).not.toHaveProperty("action");
+    const proved = mockSessionResult({ mode: "rotate", sessionId: "session_ab", signal: "x" });
+    expect(proved.session_id).toBe("session_ab");
+    expect((proved.responses as any)[0].session_nullifier[0]).not.toBe((created.responses as any)[0].session_nullifier[0]);
   });
 
-  it("the mock API links the nullifier and rotates only for the same human", async () => {
+  it("the mock API stores the session and rotates only for the same session", async () => {
     const f = createMockFetch(chainId);
     const keys = ring.current;
     await f("https://api.test/register", { method: "POST", body: JSON.stringify({ registrant: keys.registrantAddress, metaAddress: keys.metaAddressURI }) });
     const claim = { label: "alexmock", registrant: keys.registrantAddress, metaAddress: keys.metaAddressURI, deadline: "9999999999", signature: "0x" };
-    const linked = await f("https://api.test/names", { method: "POST", body: JSON.stringify({ ...claim, worldIdSession: mockProofResult({ signal: "s" }) }) });
+    const created = mockSessionResult({ mode: "create-session", signal: "s" });
+    const linked = await f("https://api.test/names", { method: "POST", body: JSON.stringify({ ...claim, worldIdSession: created }) });
     expect(linked.status).toBe(201);
     const body = (worldIdResult: unknown) => ({
       method: "POST",
       body: JSON.stringify({ newMeta: "st:eth:0x01", deadline: "9999999999", registrantSig: "0x1", registerSig: "0x2", worldIdResult }),
     });
-    const other = await f("https://api.test/names/alexmock/rotation", body(mockProofResult({ signal: "r" }, "someone-else")));
+    const other = await f("https://api.test/names/alexmock/rotation", body(mockSessionResult({ mode: "rotate", sessionId: "session_cd", signal: "r" })));
     expect(other.status).toBe(403);
-    expect((await other.json()).error.code).toBe("human_mismatch");
-    const same = await f("https://api.test/names/alexmock/rotation", body(mockProofResult({ signal: "r" })));
+    expect((await other.json()).error.code).toBe("session_mismatch");
+    const same = await f(
+      "https://api.test/names/alexmock/rotation",
+      body(mockSessionResult({ mode: "rotate", sessionId: created.session_id!, signal: "r" })),
+    );
     expect(same.status).toBe(201);
   });
 
@@ -172,10 +174,9 @@ describe("rotation", () => {
     expect(spy).toHaveBeenCalledWith({ name: "alex.soapay.eth", metaAddress: "st:eth:0xabc", registrantKey: ring.current.registrantKey });
   });
 
-  it("AttachWorldId uses the Soapay Names domain", () => {
-    const td = attachWorldIdTypedData({ label: "alex", nullifier: mockNullifier(), deadline: 1n, chainId });
+  it("AttachSession uses the Soapay Names domain", () => {
+    const td = attachSessionTypedData({ label: "alex", sessionId: "session_ab", deadline: 1n, chainId });
     expect(td.domain).toEqual(nameClaimDomain(chainId));
-    expect(td.types.AttachWorldId.map((f) => f.name)).toEqual(["label", "nullifier", "deadline"]);
-    expect(td.message.nullifier).toBe(BigInt(mockNullifier()));
+    expect(td.types.AttachSession.map((f) => f.name)).toEqual(["label", "sessionId", "deadline"]);
   });
 });

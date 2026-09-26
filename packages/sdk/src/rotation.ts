@@ -35,64 +35,8 @@ export function metaRotationDomain(chainId: number) {
 }
 
 /**
- * AttachWorldId (signed by the registrant key): links a World ID to a name that was claimed
- * without one (D-58). `nullifier` is the verified Proof of Human proof's nullifier on the
- * `soapay-recovery` action (uint256; IDKit returns it as hex). Same domain as NameClaim /
- * RotationClaim.
- */
-export const attachWorldIdTypes = {
-  AttachWorldId: [
-    { name: "label", type: "string" },
-    { name: "nullifier", type: "uint256" },
-    { name: "deadline", type: "uint256" },
-  ],
-} as const;
-
-export type AttachWorldId = {
-  label: string;
-  /** The proof's nullifier (IDKit's `responses[].nullifier`, hex or decimal, or a bigint). */
-  nullifier: bigint | string;
-  /** Unix seconds. */
-  deadline: bigint;
-  chainId: number;
-};
-
-export function attachWorldIdTypedData(a: AttachWorldId) {
-  if (!isValidLabel(a.label)) throw new Error(`Soapay: invalid label "${a.label}"`);
-  const nullifier = parseFieldElement(a.nullifier);
-  if (nullifier === undefined) throw new Error("Soapay: nullifier must be a uint256 field element");
-  return {
-    domain: rotationClaimDomain(a.chainId),
-    types: attachWorldIdTypes,
-    primaryType: "AttachWorldId",
-    message: { label: a.label, nullifier, deadline: a.deadline },
-  } as const;
-}
-
-function parseFieldElement(v: unknown): bigint | undefined {
-  if (typeof v === "bigint") return v >= 0n && v < 1n << 256n ? v : undefined;
-  if (typeof v !== "string" || !/^(0x[0-9a-fA-F]{1,64}|\d{1,78})$/.test(v)) return undefined;
-  const n = BigInt(v);
-  return n < 1n << 256n ? n : undefined;
-}
-
-/**
- * The Proof of Human nullifier in an IDKit v4 one-time (uniqueness) result, as a bigint, or
- * undefined if there is none. Stable per (human, RP, action): Soapay's World ID link (D-58).
- */
-export function worldIdNullifierOf(result: unknown): bigint | undefined {
-  if (!result || typeof result !== "object") return undefined;
-  const responses = (result as { responses?: unknown }).responses;
-  if (!Array.isArray(responses)) return undefined;
-  const item = responses.find(
-    (i) => !!i && typeof i === "object" && (i as any).identifier === WORLD_ID_CREDENTIAL && (i as any).issuer_schema_id === WORLD_ID_SCHEMA_ID,
-  ) as { nullifier?: unknown } | undefined;
-  return item ? parseFieldElement(item.nullifier) : undefined;
-}
-
-/**
- * @deprecated D-16/D-57 session link, replaced by AttachWorldId (D-58). Kept so old clients and
- * tests still build; the API no longer accepts it.
+ * AttachSession (signed by the registrant key): binds a World ID session to a name that was
+ * claimed without one. Same domain as NameClaim / RotationClaim.
  */
 export const attachSessionTypes = {
   AttachSession: [
@@ -189,23 +133,21 @@ export type AttestationsResponse = { attester: Address; items: MetaRotationAttes
 // ---------------------------------------------------------------------------
 
 /**
- * World ID credential Soapay requires: Proof of Human (issuer schema 1). Moving future salary is
- * the highest-stakes action in the product, and World describes Selfie Check as a
- * medium-assurance signal, so recovery asks for the strongest "same human" proof (D-54).
- * Since D-58 every proof is a one-time request on `WORLD_ID_ACTION`; its nullifier is stable per
- * (human, RP, action), so "same nullifier" means "same human". See docs/worldid.md.
+ * World ID credential Soapay requires: Proof of Human (issuer schema 1), in a session. Moving future
+ * salary is the highest-stakes action in the product, and World describes Selfie Check as a
+ * medium-assurance signal, so rotation asks for the strongest "same human" proof (D-54).
+ * Rotation is a continuity question ("same person who enrolled?"), which sessions answer
+ * without an Orb. See docs/worldid.md.
  */
 export const WORLD_ID_CREDENTIAL = "proof_of_human" as const;
-/** The World ID 4.0 action for account recovery, linking and rotating alike (D-58). The API's `WORLD_ACTION` default. */
-export const WORLD_ID_ACTION = "soapay-recovery" as const;
 export const WORLD_ID_SCHEMA_ID = 1;
 
-/** Signal for the proof that links a World ID at enrollment (or later): binds it to name + key. */
+/** Signal for the session created at enrollment (or attached later): binds it to name + key. */
 export function sessionSignal(label: string, registrant: Address): string {
   return `soapay:session:${label}:${registrant.toLowerCase()}`;
 }
 
-/** Signal for the proof that authorises one rotation. */
+/** Signal for the session proof that authorises one rotation. */
 export function rotationSignal(label: string, newMeta: string, deadline: bigint): string {
   return `soapay:rotate:${label}:${formatMetaAddressURI(newMeta)}:${deadline}`;
 }

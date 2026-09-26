@@ -10,7 +10,7 @@ import { useVault } from "../vault/VaultProvider.js";
 import { MIN_PASSPHRASE_LENGTH } from "../vault/crypto.js";
 import { PasskeyUnsupportedError } from "../vault/passkey.js";
 import { Alert, Badge, Button, Card, Checkbox, CopyButton, Field, Input, Textarea, cn, errorMessage } from "../ui/kit.js";
-import { HumanCheck, sessionSignal, worldIdLinkOf, type HumanCheckResult } from "../worldid/index.js";
+import { HumanCheck, sessionIdOf, sessionSignal, type HumanCheckResult } from "../worldid/index.js";
 import { claimName, fullName, registerMetaAddress } from "./actions.js";
 import { initialState, progressOf, reduce, resumeState, words, type OnboardingState } from "./machine.js";
 import { downloadText, parseRecoveryKit, readFileText, recoveryKitFilename, recoveryKitText } from "./recoveryKit.js";
@@ -653,13 +653,13 @@ function RecoveryStep({ label, inviteCode, dispatch, headingRef }: { label: stri
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  /** Claims the name, with the World ID proof (the link) when there is one. */
+  /** Claims the name, with the World ID session when there is one. */
   const claim = async (session: HumanCheckResult | undefined) => {
     setBusy(true);
     setError(null);
     try {
       const rec = await claimName({ api: svc.api, keys, chainId: svc.settings.chainId, label, session, inviteCode });
-      const nullifier = worldIdLinkOf(session);
+      const sessionId = sessionIdOf(session);
       // The inviting employer becomes a known payer (its payroll isn't "Unknown payer").
       const inv = invite.state.kind === "pending" && inviteCode && invite.state.code === inviteCode ? invite.state : null;
       await vault.update((d) => ({
@@ -668,8 +668,8 @@ function RecoveryStep({ label, inviteCode, dispatch, headingRef }: { label: stri
         profile: {
           ...d.profile,
           name: { label, name: rec.name ?? fullName(label), at: Date.now() },
-          ...(nullifier
-            ? { recovery: { kind: "world-id" as const, at: Date.now(), nullifier, attachedTo: label } }
+          ...(sessionId
+            ? { recovery: { kind: "world-id" as const, at: Date.now(), sessionId, attachedTo: label } }
             : { recoverySkipped: true }),
         },
       }));

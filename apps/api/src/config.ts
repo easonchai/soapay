@@ -102,13 +102,13 @@ export type WorldEnvironment = (typeof WORLD_ENVIRONMENTS)[number];
 export type WorldIdConfig = {
   /** Dev only: skip World ID (allow-all). Rotation is refused while disabled. */
   disabled: boolean;
-  appId: `app_${string}`;
-  rpId: string;
+  /** Developer Portal app id (WORLD_APP_ID). Required unless disabled; never hard-coded. */
+  appId: `app_${string}` | undefined;
+  /** World ID 4.0 RP id (WORLD_RP_ID). Required unless disabled; never hard-coded. */
+  rpId: string | undefined;
   /** RP signing key. Server-only: never logged, never returned. */
   signingKey: Hex | undefined;
   environment: WorldEnvironment;
-  /** The World ID 4.0 action every recovery proof is for (D-58). Nullifiers are per (human, RP, action). */
-  action: string;
   /**
    * Developer Portal staging verification token, sent as `x-staging-verification-token` when
    * `environment` is staging. Server-only: never logged, never returned.
@@ -121,13 +121,6 @@ export type WorldIdConfig = {
   rpTtlSeconds: number;
   rpContextPerIp: number;
 };
-
-/** Public Developer Portal app id (not a secret). */
-export const DEFAULT_WORLD_APP_ID = "app_0cc7167efe114ac2e0ef7d9827098353";
-/** Soapay's registered World ID 4.0 RP (public; the signing key is not). */
-export const DEFAULT_WORLD_RP_ID = "rp_3ede5fe1cab9af48";
-/** The World ID 4.0 action for account recovery (link + rotate), in staging and production (D-58). */
-export const DEFAULT_WORLD_ACTION = "soapay-recovery";
 
 export class ConfigError extends Error {
   constructor(message: string) {
@@ -216,17 +209,16 @@ export function loadConfig(env: Env = process.env): Config {
   }
 
   const worldDisabled = bool(env, "WORLD_ID_DISABLED", false);
-  const appId = str(env, "WORLD_APP_ID") ?? DEFAULT_WORLD_APP_ID;
-  if (!/^app_[A-Za-z0-9_]+$/.test(appId)) throw new ConfigError(`WORLD_APP_ID must look like app_…, got "${appId}"`);
-  const rpId = str(env, "WORLD_RP_ID") ?? DEFAULT_WORLD_RP_ID;
+  // App and RP ids come from the environment only (D-59: the RP was replaced once already).
+  const appId = str(env, "WORLD_APP_ID");
+  if (appId !== undefined && !/^app_[A-Za-z0-9_]+$/.test(appId)) throw new ConfigError(`WORLD_APP_ID must look like app_…, got "${appId}"`);
+  const rpId = str(env, "WORLD_RP_ID");
   if (rpId !== undefined && !/^rp_[A-Za-z0-9_]+$/.test(rpId)) throw new ConfigError("WORLD_RP_ID must look like rp_…");
   const signingKey = privateKey(env, "WORLD_RP_SIGNING_KEY");
   const worldEnv = (str(env, "WORLD_ENV") ?? "staging").toLowerCase();
   if (!(WORLD_ENVIRONMENTS as readonly string[]).includes(worldEnv)) {
     throw new ConfigError(`WORLD_ENV must be production, staging or sandbox, got "${worldEnv}"`);
   }
-  const worldAction = str(env, "WORLD_ACTION") ?? DEFAULT_WORLD_ACTION;
-  if (!/^[A-Za-z0-9_.:-]{1,64}$/.test(worldAction)) throw new ConfigError(`WORLD_ACTION must be an action id, got "${worldAction}"`);
   // The pay token (PAY_TOKEN, testnets only) must be applied before reading defaults that depend on it.
   const payToken = chainId === TESTNET_SPONSOR_CHAIN_ID ? address(env, "PAY_TOKEN") : undefined;
   configurePayToken(TESTNET_SPONSOR_CHAIN_ID, payToken);
@@ -253,7 +245,7 @@ export function loadConfig(env: Env = process.env): Config {
   const faucetUsdc = str(env, "FAUCET_USDC_AMOUNT") ?? "1000000000000";
   if (!/^\d{1,30}$/.test(faucetUsdc)) throw new ConfigError(`FAUCET_USDC_AMOUNT must be base units, got "${faucetUsdc}"`);
 
-  // WORLD_RP_ID / WORLD_RP_SIGNING_KEY are required by the server entrypoint (src/index.ts)
+  // WORLD_APP_ID / WORLD_RP_ID / WORLD_RP_SIGNING_KEY are required by the server entrypoint (src/index.ts)
   // unless WORLD_ID_DISABLED=true; loadConfig stays lenient so tests can build partial configs.
 
   return {
@@ -291,11 +283,10 @@ export function loadConfig(env: Env = process.env): Config {
     receiptTimeoutMs: int(env, "RECEIPT_TIMEOUT_MS", 60_000, 1_000),
     worldId: {
       disabled: worldDisabled,
-      appId: appId as `app_${string}`,
+      appId: appId as `app_${string}` | undefined,
       rpId,
       signingKey,
       environment: worldEnv as WorldEnvironment,
-      action: worldAction,
       stagingVerifyToken: str(env, "WORLD_STAGING_VERIFY_TOKEN"),
       attachCooldownSeconds: int(env, "WORLD_ATTACH_COOLDOWN_SECONDS", 72 * 3600, 0),
       verifyBaseUrl: (url(env, "WORLD_VERIFY_BASE_URL", false) ?? "https://developer.world.org").replace(/\/+$/, ""),

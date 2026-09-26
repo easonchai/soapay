@@ -6,7 +6,7 @@ import { jsonBody, type AppDeps } from "../app.js";
 import { readStealthMetaAddress } from "../chain.js";
 import { tx, type Db } from "../db.js";
 import { requireHuman } from "../hooks.js";
-import type { VerifiedProof } from "../worldid/verifier.js";
+import type { VerifiedSession } from "../worldid/verifier.js";
 import { checkInviteForClaim, markInviteClaimed, parseInviteCode } from "./invites.js";
 import { ApiError, enforceRateLimits, parseMetaAddress, redactSig, requireHex, sameBytes } from "../util.js";
 
@@ -28,7 +28,7 @@ export function getName(db: Db, label: string): NameRow | undefined {
 }
 
 function present(row: NameRow, parent: string, db: Db) {
-  const session = db.prepare("SELECT attached_at FROM name_sessions WHERE label = ? AND nullifier IS NOT NULL").get(row.label) as
+  const session = db.prepare("SELECT attached_at FROM name_sessions WHERE label = ? AND session_id IS NOT NULL").get(row.label) as
     | { attached_at: number }
     | undefined;
   return {
@@ -40,10 +40,7 @@ function present(row: NameRow, parent: string, db: Db) {
     txHash: row.issue_tx_hash,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    /**
-     * Whether a World ID link (a Proof of Human nullifier, D-58) backs rotations of this name
-     * (never the nullifier itself). The field keeps its historical name for clients.
-     */
+    /** Whether a World ID session backs rotations of this name (never the session id itself). */
     worldIdSession: session ? { attachedAt: session.attached_at } : null,
   };
 }
@@ -176,15 +173,14 @@ export function nameRoutes(deps: AppDeps): Hono {
       deadline,
     });
 
-    // Optional World ID link (a one-time Proof of Human proof, D-58) made at enrollment, bound to
-    // label + registrant. The body field keeps its historical name `worldIdSession`.
-    let session: VerifiedProof | undefined;
+    // Optional World ID session (Proof of Human) created at enrollment, bound to label + registrant.
+    let session: VerifiedSession | undefined;
     if (body.worldIdSession !== undefined && body.worldIdSession !== null) {
       if (existing) {
-        throw new ApiError(400, "use_session_route", "link a World ID to an existing name with POST /names/:label/session");
+        throw new ApiError(400, "use_session_route", "attach a session to an existing name with POST /names/:label/session");
       }
       if (!deps.worldId) throw new ApiError(503, "worldid_disabled", "World ID is disabled on this server");
-      session = await deps.worldId.verifyLink({
+      session = await deps.worldId.verifyNewSession({
         label,
         signal: sessionSignal(label, registrant),
         result: body.worldIdSession,

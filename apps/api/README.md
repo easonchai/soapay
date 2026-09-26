@@ -1,6 +1,6 @@
 # @soapay/api
 
-Hono on Node 24. It runs the ERC-6538 registration relayer, stores `*.soapay.eth` name claims and issues them on ENSv2 Sepolia, verifies World ID Proof of Human proofs for account recovery (key rotation) and signs the rotation attestations, proxies the Uniswap Trading API, and indexes ERC-5564 announcements. State lives in SQLite through the built-in `node:sqlite`, so there are no native dependencies. The server is esbuild-bundled, because the ScopeLift SDK can't load in plain Node.
+Hono on Node 24. It runs the ERC-6538 registration relayer, stores `*.soapay.eth` name claims and issues them on ENSv2 Sepolia, verifies World ID Proof of Human sessions for account recovery (key rotation) and signs the rotation attestations, proxies the Uniswap Trading API, and indexes ERC-5564 announcements. State lives in SQLite through the built-in `node:sqlite`, so there are no native dependencies. The server is esbuild-bundled, because the ScopeLift SDK can't load in plain Node.
 
 Interface contract: `docs/mvp-spec.md` §2.1, §4 and §5. World ID design: [`docs/worldid.md`](../../docs/worldid.md).
 
@@ -35,15 +35,14 @@ docker run -p 8787:8787 -v soapay-data:/data --env-file apps/api/.env soapay-api
 | `PARENT_NAME` | `soapay.eth` | Subnames are issued under it |
 | `ISSUER_PRIVATE_KEY` | unset | With `L1_RPC_URL`, `POST /names` issues `<label>.soapay.eth` on ENSv2 Sepolia through `@soapay/sdk/ensv2`. Unset → names are stored only, with a startup warning. Needs only `ROLE_REGISTRAR` on the subname registry, and never writes `stealth` |
 | `ENS_SUBNAME_REGISTRY`, `ENS_RESOLVER_ADMIN` | looked up on-chain | Printed by `ensv2:setup-parent` (step 2 of [`contracts/ENSV2.md`](../../contracts/ENSV2.md)) |
-| `WORLD_APP_ID` | `app_0cc7167efe114ac2e0ef7d9827098353` | Soapay's Developer Portal app (public) |
-| `WORLD_RP_ID` | `rp_3ede5fe1cab9af48` | Soapay's World ID 4.0 RP (public) |
+| `WORLD_APP_ID` | required unless disabled | Soapay's Developer Portal app (public, not hard-coded) |
+| `WORLD_RP_ID` | required unless disabled | Soapay's World ID 4.0 RP (public, not hard-coded). It must accept session requests (docs/worldid.md) |
 | `WORLD_RP_SIGNING_KEY` | required unless disabled | RP signer. Server-only, never logged or returned; keep it out of git |
 | `WORLD_ENV` | `staging` | `staging` (simulator, the demo), `production` (World App) or `sandbox` (Selfie Check sandbox). Proofs from another environment are refused |
-| `WORLD_ACTION` | `soapay-recovery` | The World ID 4.0 action every proof (link and rotate) is for (D-58). Nullifiers are per (human, RP, action), so it must stay the same for a name's lifetime |
 | `WORLD_STAGING_VERIFY_TOKEN` | unset | Staging only: sent as `x-staging-verification-token` to the Developer Portal verify endpoint. Secret; never logged. Not sent in production |
-| `WORLD_ID_DISABLED` | `false` | `true` runs without World ID: no links and no attestations, so every meta change needs the employer's approval |
+| `WORLD_ID_DISABLED` | `false` | `true` runs without World ID: no sessions and no attestations, so every meta change needs the employer's approval |
 | `WORLD_RP_TTL_SECONDS` | `300` | RP context lifetime |
-| `WORLD_ATTACH_COOLDOWN_SECONDS` | `259200` (72 h) | A World ID linked after enrollment can back a rotation only after this delay |
+| `WORLD_ATTACH_COOLDOWN_SECONDS` | `259200` (72 h) | A session linked after enrollment can back a rotation only after this delay |
 | `RATE_LIMIT_RP_CONTEXT_PER_IP` | `60` | Per window |
 | `ATTESTER_PRIVATE_KEY` | unset | Signs `MetaRotation` attestations. Unset → rotation returns 503. Sender apps pin its address (`VITE_ATTESTER`) |
 | `L1_RELAYER_PRIVATE_KEY` | unset | Sepolia gas top-up for the registrant's own `setText` after a rotation. Unset → no top-ups |
@@ -126,8 +125,8 @@ Body: `{label, registrant, metaAddress, deadline, signature, worldIdSession?, pr
 - **Checks.** The deadline must be in the future. `stealthMetaAddressOf(registrant, 1)` must equal the meta-address (409 `meta_mismatch`). The label must be free (409 `label_taken`).
 - **Updating.** The same registrant can change its meta-address with a new claim that has a later deadline (409 `stale_claim` otherwise). The change is logged as a warning and recorded in `name_history`.
 - **Hooks.** The `HumanVerifier` runs with `action: "name"` for a new label and `"update-meta"` for an update, and any nullifier it returns is stored. `NameIssuer.issue` runs for a new label and `NameIssuer.updateMeta?` for an update. If the issuer throws, the response is 502 and nothing is stored.
-- **World ID (optional).** `worldIdSession` (historical name) is an IDKit one-time Proof of Human result on `WORLD_ACTION`, made with `signal = sessionSignal(label, registrant)`. It's verified with the Developer Portal before anything is issued, and its `nullifier` becomes the name's World ID link. Not allowed on updates; use `POST /names/:label/session`.
-- **Responses.** 201 when a label is created, 200 on update or an identical retry: `{label, name, registrant, metaAddress, deadline, txHash, createdAt, updatedAt, worldIdSession: {attachedAt} | null}`. The nullifier itself is never served.
+- **World ID (optional).** `worldIdSession` is an IDKit Proof of Human session result (`IDKit.createSession`), requested with an RP context bound to `sessionSignal(label, registrant)`. It's verified with the Developer Portal before anything is issued, and its `session_id` is stored for the name. Not allowed on updates; use `POST /names/:label/session`.
+- **Responses.** 201 when a label is created, 200 on update or an identical retry: `{label, name, registrant, metaAddress, deadline, txHash, createdAt, updatedAt, worldIdSession: {attachedAt} | null}`. The session id itself is never served here.
 
 - **Invites (§7).** Optional `inviteCode` (0x-hex, 32 bytes). A new label reserved by an unexpired invite needs the code whose `keccak256` matches: no code → 403 `label_reserved`, another code → 403 `invalid_invite_code`. The invite is marked claimed in the same transaction as the name insert, so a failed issuance leaves it pending. A code for an expired invite → 409 `invite_expired` (the label is free again; claim it without the code), a claimed one → 409 `invite_claimed`, a code for another label → 403 `invite_label_mismatch`. Unreserved labels need no code; updates of an existing name ignore invites.
 - **Agent records (§8).** Optional `agent: {context, endpoints?, registrations?}` on a new name. It is validated with the SDK's `agentTextRecords` (400 `invalid_agent`) and passed to `NameIssuer.issue`, which writes the ENSIP-26 `agent-context` and `agent-endpoint[<protocol>]` records and the ENSIP-25 `agent-registration[<registry>][<id>] = "1"` records in the resolver's `initialize`, next to `stealth` and `soapay:registrant`. They are set once: `agent` on an update of an existing name → 400 `agent_immutable`. The NameClaim signature does not cover them, and they can never touch `stealth` or `soapay:registrant`.
@@ -147,15 +146,15 @@ Body: `{label, employer, codeHash, expiresAt, signature, org?}`. The employer's 
 
 ### `GET /worldid/config`
 
-`{enabled, app_id, rp_id, environment, action, credential: "proof_of_human", attach_cooldown_seconds, attester}`. Never includes the signing key.
+`{enabled, app_id, rp_id, environment, credential: "proof_of_human", attach_cooldown_seconds, attester}`. Never includes the signing key.
 
 ### `POST /worldid/rp-context`
 
-Body `{bind?}` (the old `{kind: "session", bind?}` shape is still accepted). Returns `{rp_context: {rp_id, nonce, created_at, expires_at, signature}, app_id, environment, action, kind: "uniqueness"}`, a fresh `signRequest({action: WORLD_ACTION})` signature for one IDKit Proof of Human request. `bind` (the Soapay signal the proof is for) is stored with the nonce (D-57). Each nonce is accepted once. 503 when World ID is disabled.
+Body `{}`, `{bind}` or `{kind: "session", bind?}`. Returns `{rp_context: {rp_id, nonce, created_at, expires_at, signature}, app_id, environment, kind: "session"}`, a fresh `signRequest` signature (no action: sessions take none) for one IDKit session request (create or prove). `bind` (the Soapay signal the proof is for) is stored with the nonce (D-57). Each nonce is accepted once. 503 when World ID is disabled.
 
 ### `POST /names/:label/session`
 
-Links World ID to a name claimed without it (the path keeps its historical name). Body `{deadline, signature, worldIdResult}`: `signature` is the registrant's EIP-712 `AttachWorldId(string label, uint256 nullifier, uint256 deadline)` in the Soapay Names domain (SDK `attachWorldIdTypedData`), over the proof's nullifier; `worldIdResult` is a Proof of Human result made with `signal = sessionSignal(label, registrant)`. 201 `{label, attachedAt, rotationAllowedFrom}`. A name keeps its first link (409 `session_exists`); the same human may link several names. A late link backs a rotation only after `WORLD_ATTACH_COOLDOWN_SECONDS`. A name that only has a pre-D-58 session row counts as unlinked and may be linked here.
+Links a World ID session to a name claimed without one. Body `{deadline, signature, worldIdResult}`: `signature` is the registrant's EIP-712 `AttachSession(string label, string sessionId, uint256 deadline)` in the Soapay Names domain (SDK `attachSessionTypedData`); `worldIdResult` is a new Proof of Human session, requested with an RP context bound to `sessionSignal(label, registrant)`. 201 `{label, sessionId, attachedAt, rotationAllowedFrom}`. A name keeps its first session (409 `session_exists`); one session may back several names. A late link backs a rotation only after `WORLD_ATTACH_COOLDOWN_SECONDS`. A name linked under D-58 (a nullifier only) counts as unlinked and may be linked here.
 
 ### `POST /names/:label/rotation`
 
@@ -163,13 +162,13 @@ Key rotation, option A (`docs/mvp-spec.md` §2.1). Body `{newMeta, deadline, reg
 
 - `registrantSig`: EIP-712 `RotationClaim(string label, string oldMeta, string newMeta, uint256 deadline)`, Soapay Names domain, from the name's registrant key.
 - `registerSig`: the registrant's ERC-6538 `registerKeysOnBehalf` signature for `newMeta`.
-- `worldIdResult`: a one-time Proof of Human result on `WORLD_ACTION` with `signal = rotationSignal(label, newMeta, deadline)`.
+- `worldIdResult`: `IDKit.proveSession(savedSessionId)` with an RP context bound to `rotationSignal(label, newMeta, deadline)`.
 
-The API checks the deadline, the rate limit and the RotationClaim, then the proof locally (v4, `WORLD_ENV`, `action === WORLD_ACTION`, Proof of Human, a known, unused and unexpired RP nonce, the signal or the nonce's `bind`), that its `nullifier` equals the one linked to the name, and that the Developer Portal verifies it (forwarded unchanged; the staging token header in staging). It then simulates the registry call (a bad `registerSig` fails here, without burning the proof), signs the `MetaRotation(string label, string oldMeta, string newMeta, uint256 verifiedAt)` attestation (Soapay Attestations domain), updates the stored meta-address, relays `registerKeysOnBehalf` through the same relayer queue as `/register` (it doesn't count against anything `/register` limits), and tops up the registrant's Sepolia gas.
+The API checks the deadline, the rate limit and the RotationClaim, then the proof locally (v4, `WORLD_ENV`, a `session_id` equal to the one stored for the name, Proof of Human, an unused `session_nullifier`, a known, unused and unexpired RP nonce, the signal or the nonce's `bind`), and that the Developer Portal verifies it (forwarded unchanged; the staging token header in staging). It then simulates the registry call (a bad `registerSig` fails here, without burning the proof), signs the `MetaRotation(string label, string oldMeta, string newMeta, uint256 verifiedAt)` attestation (Soapay Attestations domain), updates the stored meta-address, relays `registerKeysOnBehalf` through the same relayer queue as `/register` (it doesn't count against anything `/register` limits), and tops up the registrant's Sepolia gas.
 
 201 `{attester, attestation: {label, oldMeta, newMeta, verifiedAt, signature}, registry: {status, txHash?}, topup: {status, …}}`. Re-sending the same request after success returns 200 `{…, idempotent: true}` and only finishes the registry relay (no second proof).
 
-Refusals, all without an attestation (the sender app then blocks the line until the employer approves): 409 `no_worldid_link` (was `no_session`), 409 `session_cooldown`, 403 `human_mismatch` (a different person: another nullifier), 403 `request_used` (a replayed proof) / `request_expired` / `unknown_request`, 403 `proof_cancelled` / `proof_missing` / `proof_malformed` (including a session proof), 403 `environment_mismatch`, 403 `action_mismatch`, 403 `wrong_credential` (not Proof of Human), 403 `signal_mismatch`, 403 `proof_invalid` (Portal rejected), 503 `worldid_unavailable`, 400 `expired`, 401 `bad_signature`, 400 `registration_rejected`, 409 `no_change` / `stale_rotation`, 429 `rate_limited`.
+Refusals, all without an attestation (the sender app then blocks the line until the employer approves): 409 `no_session`, 409 `session_cooldown`, 403 `session_mismatch` (another World ID session), 403 `session_replayed`, 403 `request_used` / `request_expired` / `unknown_request`, 403 `proof_cancelled` / `proof_missing` / `proof_malformed`, 403 `environment_mismatch`, 403 `wrong_credential` (not Proof of Human), 403 `signal_mismatch`, 403 `proof_invalid` (Portal rejected), 503 `worldid_unavailable`, 400 `expired`, 401 `bad_signature`, 400 `registration_rejected`, 409 `no_change` / `stale_rotation`, 429 `rate_limited`.
 
 ### `GET /names/:label/attestations`
 
