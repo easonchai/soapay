@@ -76,28 +76,3 @@
   /* Narrow phones: keep "Private distribution." on one line. */
   .land-hero { --hero-size: clamp(36px, 6.4vw, 112px); }
 }
-
-
-/* Top bar. At the top of the page it is the full-width bar; past 40px of scroll (`is-island`, set by
-   ScrollTrigger) it becomes CK's floating island: a centred pill with the links either side of the lockup.
-   The bar stays in flow, so the page never jumps between the two states. */
-.land-bar .bar-inner { display: flex; align-items: center; justify-content: space-between; width: 100%; }
-.land-bar .links-a, .land-bar .links-b { display: contents; }
-.land-bar .bar-login { height: 36px; padding: 0 16px; }
-.land-bar.is-island { background: transparent; backdrop-filter: none; border-bottom-color: transparent; justify-content: center; align-items: flex-start; padding: 8px 16px 0; overflow: visible; pointer-events: none; }
-.land-bar.is-island .bar-inner { pointer-events: auto; width: auto; max-width: 100%; justify-content: center; gap: 28px; height: 52px; padding: 0 8px 0 26px; background: rgba(255, 255, 255, 0.94); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid var(--line); border-radius: 999px; box-shadow: 0 1px 2px rgba(15, 23, 32, 0.05), 0 12px 32px rgba(15, 23, 32, 0.1); }
-.land-bar.is-island .links { display: contents; }
-.land-bar.is-island .links-a, .land-bar.is-island .links-b { display: flex; align-items: center; gap: 24px; }
-.land-bar.is-island .links-a { order: 1; }
-.land-bar.is-island .brand { order: 2; margin: 0 6px; }
-.land-bar.is-island .links-b { order: 3; }
-.land-bar.is-island .bar-login { order: 4; border-radius: 999px; padding: 0 18px; margin-left: 4px; }
-.land-bar.is-island .links a { font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; transition: color 0.2s; }
-.land-bar.is-island .links .link-with-mark { display: inline-flex; align-items: center; gap: 6px; }
-.land-bar.is-island :focus-visible { outline-offset: 0; border-radius: 999px; }
-@media (max-width: 700px) {
-  .land-bar.is-island { padding: 6px 10px 0; }
-  .land-bar.is-island .bar-inner { gap: 16px; padding-left: 18px; }
-  /* The section links are hidden on phones, so the left group would only add a gap. */
-  .land-bar.is-island .links-a { display: none; }
-}
