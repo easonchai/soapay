@@ -15,7 +15,8 @@ import tailwindcss from "@tailwindcss/vite";
  */
 export const CSP = [
   "default-src 'self'",
-  "script-src 'self'",
+  // 'wasm-unsafe-eval' lets IDKit core compile its WebAssembly; JavaScript eval stays blocked.
+  "script-src 'self' 'wasm-unsafe-eval'",
   "worker-src 'self'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data:",
