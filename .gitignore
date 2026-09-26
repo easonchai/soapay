@@ -19,3 +19,4 @@ scripts/*.local.env
 scripts/.demo-state/
 # soapay distribute meta-address pins (next to each CSV)
 .soapay/
+.playwright-mcp/
