@@ -8,8 +8,15 @@
  * (seeded by the meta-address), so a reload yields the same payments.
  */
 import {
+  CIRCLE_PAYMASTER_V08,
+  ENTRYPOINT_V08,
+  SIMPLE_7702_ACCOUNT,
   SpendManyError,
+  announcerAbi,
   buildMetadata77,
+  compareAddresses,
+  erc20Abi,
+  userOperationEventAbi,
   derivePayRun,
   getChainConfig,
   isValidLabel,
@@ -18,7 +25,7 @@ import {
 } from "@soapay/sdk";
 import { secp256k1 } from "@noble/curves/secp256k1.js";
 import { keccak_256 } from "@noble/hashes/sha3.js";
-import { bytesToHex, getAddress, keccak256, toHex, type Address, type Hex } from "viem";
+import { bytesToHex, encodeAbiParameters, encodeEventTopics, getAddress, keccak256, toHex, type Address, type Hex } from "viem";
 import type { ApiFetch } from "../api/client.js";
 import type { SendProgress, SpendQuote, SpendService } from "./spend.js";
 import type { SpendParams, SpendResult, SwapQuote } from "@soapay/sdk";
@@ -40,7 +47,12 @@ type MockAnn = {
   caller: Address;
   ephemeralPubKey: Hex;
   metadata: Hex;
+  /** USDC moved to the stealth address in the same tx (a Transfer log in its receipt), if any. */
+  transfer?: { from: Address; amount: bigint };
 };
+
+/** A mock gasless spend, so the proof panel's receipt read has something to decode. */
+type MockSpendTx = { txHash: Hex; userOpHash: Hex; from: Address; to: Address; amount: bigint; fee: bigint; block: bigint };
 
 type World = { chainId: number; startBlock: bigint; anns: MockAnn[]; balances: Map<string, bigint> };
 
@@ -54,8 +66,22 @@ const state: {
   /** Invite code hashes already used. */
   claimedInvites: Set<string>;
   registered: Set<string>;
+  /** Stealth addresses (lowercase) that have a 7702 delegation after their first mock spend or swap. */
+  delegated: Set<string>;
+  spendTxs: Map<string, MockSpendTx>;
   bornAt: number;
-} = { meta: null, world: null, names: new Map(), rotations: [], sessions: new Map(), claimedInvites: new Set(), registered: new Set(), bornAt: Date.now() };
+} = {
+  meta: null,
+  world: null,
+  names: new Map(),
+  rotations: [],
+  sessions: new Map(),
+  claimedInvites: new Set(),
+  registered: new Set(),
+  delegated: new Set(),
+  spendTxs: new Map(),
+  bornAt: Date.now(),
+};
 
 /** Demo invite links (docs/mvp-spec.md §7): open `#/join?code=<code>` in mock mode. */
 export const MOCK_INVITES = {
@@ -116,6 +142,9 @@ function buildWorld(meta: string, chainId: number): World {
   const balances = new Map<string, bigint>();
   const keyFor = deterministicKeys(meta);
 
+  // Coworkers in the same payroll batch: salaries split into the same 500 USDC chunks (D-31), with keys
+  // nobody here holds, so their lines never match.
+  const COWORKER_SALARIES = [2_400n, 3_100n, 1_850n, 2_750n, 4_200n, 2_600n, 3_300n];
   const addRun = (block: bigint, runSeed: string, salary: bigint, payer: Address, caller: Address, lie?: bigint) => {
     const lines: PayRunLine[] = derivePayRun({
       recipients: [{ metaAddressURI: meta, amount: salary, id: "me" }],
@@ -123,28 +152,36 @@ function buildWorld(meta: string, chainId: number): World {
       randomEphemeralKey: keyFor,
     });
     const txHash = fakeTxHash(runSeed);
-    let logIndex = 0;
-    // Other employees' lines in the same batch (unrelated keys, never match).
-    const mine = lines.map((l) => ({ l, noise: false }));
-    const others = Array.from({ length: 40 }, () => ({ l: null, noise: true }));
-    const mixed = [...mine, ...others].sort(() => Math.random() - 0.5);
-    for (const row of mixed) {
-      if (row.noise || !row.l) {
-        anns.push(noiseAnnouncement(block, logIndex++, txHash));
-        continue;
-      }
-      const l = row.l;
-      anns.push({
+    const rows: Omit<MockAnn, "logIndex">[] = lines.map((l) => {
+      balances.set(l.stealthAddress.toLowerCase(), l.amount);
+      return {
         blockNumber: block,
         txHash,
-        logIndex: logIndex++,
         stealthAddress: l.stealthAddress,
         caller,
         ephemeralPubKey: l.ephemeralPublicKey,
         metadata: buildMetadata77({ viewTag: l.viewTag, token: usdc, amount: lie ?? l.amount, payer }),
-      });
-      balances.set(l.stealthAddress.toLowerCase(), l.amount);
+        transfer: { from: payer, amount: l.amount },
+      };
+    });
+    for (const salary of COWORKER_SALARIES) {
+      for (const amount of splitIntoDenominations(salary * USDC_UNIT, 500n * USDC_UNIT).chunks) {
+        const eph = secp256k1.getPublicKey(secp256k1.utils.randomSecretKey(), true);
+        rows.push({
+          blockNumber: block,
+          txHash,
+          stealthAddress: getAddress(bytesToHex(secp256k1.utils.randomSecretKey().slice(0, 20))),
+          caller,
+          ephemeralPubKey: bytesToHex(eph),
+          metadata: buildMetadata77({ viewTag: Math.floor(Math.random() * 256), token: usdc, amount, payer }),
+          transfer: { from: payer, amount },
+        });
+      }
     }
+    // StealthDisperse order: strictly ascending by stealth address, whoever the line belongs to.
+    rows.sort((a, b) => compareAddresses(a.stealthAddress, b.stealthAddress));
+    // Per line the contract logs transferFrom's Transfer, then the Announcement.
+    rows.forEach((r, i) => anns.push({ ...r, logIndex: 2 * i + 1 }));
   };
 
   addRun(start + 100n, `${meta}:run1`, 2_600n * USDC_UNIT, MOCK_EMPLOYER, MOCK_DISPERSE);
@@ -162,6 +199,7 @@ function buildWorld(meta: string, chainId: number): World {
       caller: MOCK_SPAMMER,
       ephemeralPubKey: l.ephemeralPublicKey,
       metadata: buildMetadata77({ viewTag: l.viewTag, token: usdc, amount: 10_000n * USDC_UNIT, payer: MOCK_EMPLOYER }),
+      transfer: { from: MOCK_SPAMMER, amount: USDC_UNIT },
     });
     balances.set(l.stealthAddress.toLowerCase(), USDC_UNIT);
   }
@@ -278,7 +316,8 @@ export function createMockFetch(chainId: number): ApiFetch {
       );
       const page = rows.slice(cursor, cursor + limit);
       return respond(200, {
-        items: page.map((a) => ({ ...a, blockNumber: a.blockNumber.toString() })),
+        // The indexer serves announcements only; the Transfer side lives in receipts.
+        items: page.map(({ transfer: _t, ...a }) => ({ ...a, blockNumber: a.blockNumber.toString() })),
         nextCursor: cursor + limit < rows.length ? String(cursor + limit) : null,
       });
     }
@@ -340,6 +379,43 @@ function present(row: { label: string; registrant: Address; metaAddress: string;
   return { ...row, name: `${row.label}.soapay.eth`, txHash: null, createdAt: now, updatedAt: now };
 }
 
+const ANNOUNCER: Address = "0x55649E01B5Df198D18D95b5cc5051630cfD45564";
+/** Stands in for the bundler that submits mock userOps (and fronts their ETH gas). */
+const MOCK_BUNDLER: Address = "0x4337012eaf1f862b8dbdc6b62a01782ae01ef038";
+
+function transferLog(token: Address, from: Address, to: Address, amount: bigint, logIndex: number) {
+  return {
+    address: getAddress(token),
+    topics: encodeEventTopics({ abi: erc20Abi, eventName: "Transfer", args: { from, to } }) as Hex[],
+    data: encodeAbiParameters([{ type: "uint256" }], [amount]),
+    logIndex,
+  };
+}
+
+/** Same shape as a real Circle-paymaster userOp receipt: fee to the paymaster, the transfer, the UserOperationEvent. */
+function spendReceipt(chainId: number, s: MockSpendTx) {
+  const cfg = getChainConfig(chainId);
+  const paymaster = getAddress((CIRCLE_PAYMASTER_V08 as Record<number, Address>)[chainId] ?? "0x3BA9A96eE3eFf3A69E2B18886AcF52027EFF8966");
+  const logs = [
+    transferLog(cfg.usdc, s.from, paymaster, s.fee, 0),
+    transferLog(cfg.usdc, s.from, s.to, s.amount, 1),
+    {
+      address: getAddress(ENTRYPOINT_V08),
+      topics: encodeEventTopics({
+        abi: userOperationEventAbi,
+        eventName: "UserOperationEvent",
+        args: { userOpHash: s.userOpHash, sender: s.from, paymaster },
+      }) as Hex[],
+      data: encodeAbiParameters(
+        [{ type: "uint256" }, { type: "bool" }, { type: "uint256" }, { type: "uint256" }],
+        [0n, true, 1_700_000_000_000n, 180_000n],
+      ),
+      logIndex: 2,
+    },
+  ];
+  return { transactionHash: s.txHash, blockNumber: s.block, from: MOCK_BUNDLER, to: getAddress(ENTRYPOINT_V08), status: "success" as const, logs };
+}
+
 /** Just enough of a viem PublicClient for the scanner, ledger and registration. */
 export function createMockPublicClient(chainId: number) {
   const cfg = getChainConfig(chainId);
@@ -371,6 +447,43 @@ export function createMockPublicClient(chainId: number) {
           },
         }));
     },
+    /** Stealth addresses never hold ETH here; gas is paid in USDC by the (mock) paymaster. */
+    async getBalance(_args: { address: Address }) {
+      await latency();
+      return 0n;
+    },
+    /** One nonce per 7702 authorization; stealth addresses send no transactions of their own. */
+    async getTransactionCount(args: { address: Address }) {
+      await latency();
+      return state.delegated.has(args.address.toLowerCase()) ? 1 : 0;
+    },
+    async getCode(args: { address: Address }): Promise<Hex | undefined> {
+      await latency();
+      return state.delegated.has(args.address.toLowerCase()) ? (`0xef0100${SIMPLE_7702_ACCOUNT.slice(2).toLowerCase()}` as Hex) : undefined;
+    },
+    /** Receipts built from the mock world: pay runs (Transfer + Announcement per line) and mock spends. */
+    async getTransactionReceipt(args: { hash: Hex }) {
+      await latency();
+      const spend = state.spendTxs.get(args.hash.toLowerCase());
+      if (spend) return spendReceipt(chainId, spend);
+      const lines = state.meta ? world(chainId).anns.filter((a) => a.txHash.toLowerCase() === args.hash.toLowerCase()) : [];
+      if (lines.length === 0) throw new Error(`mock: transaction ${args.hash} not found`);
+      const logs = lines.flatMap((a) => [
+        ...(a.transfer ? [transferLog(cfg.usdc, a.transfer.from, a.stealthAddress, a.transfer.amount, a.logIndex - 1)] : []),
+        {
+          address: getAddress(ANNOUNCER),
+          topics: encodeEventTopics({
+            abi: announcerAbi,
+            eventName: "Announcement",
+            args: { schemeId: 1n, stealthAddress: a.stealthAddress, caller: a.caller },
+          }) as Hex[],
+          data: encodeAbiParameters([{ type: "bytes" }, { type: "bytes" }], [a.ephemeralPubKey, a.metadata]),
+          logIndex: a.logIndex,
+        },
+      ]);
+      const payer = lines.find((a) => a.transfer)?.transfer?.from ?? MOCK_EMPLOYER;
+      return { transactionHash: args.hash, blockNumber: lines[0]!.blockNumber, from: payer, to: lines[0]!.caller, status: "success" as const, logs };
+    },
     async multicall(args: { contracts: { address: Address; args: readonly [Address] }[] }) {
       await latency();
       const w = state.world;
@@ -385,8 +498,19 @@ export function createMockPublicClient(chainId: number) {
 
 const MOCK_FEE = 21_450n; // ~0.02 USDC, typical for a first 7702 spend on Base
 
+/** Records a mock userOp so `getTransactionReceipt` and the proof panel's reads see it. */
+function recordSpend(from: Address, to: Address, amount: bigint, tag: string): { userOpHash: Hex; txHash: Hex } {
+  const now = Date.now();
+  const userOpHash = fakeTxHash(`${tag}op:${from}:${now}`);
+  const txHash = fakeTxHash(`${tag}tx:${from}:${now}`);
+  const block = state.world ? head(state.world.chainId) : 0n;
+  state.delegated.add(from.toLowerCase());
+  state.spendTxs.set(txHash.toLowerCase(), { txHash, userOpHash, from, to, amount, fee: MOCK_FEE, block });
+  return { userOpHash, txHash };
+}
+
 export function createMockSpendService(): SpendService {
-  const delegated = new Set<string>();
+  const delegated = state.delegated;
   const balanceOf = (a: string) => state.world?.balances.get(a.toLowerCase()) ?? 0n;
   return {
     ready: true,
@@ -411,11 +535,10 @@ export function createMockSpendService(): SpendService {
         }
         if (amount + MOCK_FEE > bal) throw new SpendManyError(out, i, new Error(`mock: insufficient balance in ${from}`));
         state.world?.balances.set(from.toLowerCase(), bal - amount - MOCK_FEE);
-        delegated.add(from.toLowerCase());
+        const hashes = recordSpend(from, s.to, amount, "");
         out.push({
           from,
-          userOpHash: fakeTxHash(`op:${from}:${Date.now()}`),
-          txHash: fakeTxHash(`tx:${from}:${Date.now()}`),
+          ...hashes,
           delegated: true,
           amount,
           feeEstimate: MOCK_FEE,
@@ -478,8 +601,7 @@ export function createMockSwapService(chainId: number): SwapService {
       state.world?.balances.set(from.toLowerCase(), bal - r.amountIn - MOCK_FEE);
       return {
         from,
-        userOpHash: fakeTxHash(`swapop:${from}:${Date.now()}`),
-        txHash: fakeTxHash(`swaptx:${from}:${Date.now()}`),
+        ...recordSpend(from, MOCK_ROUTER, r.amountIn, "swap"),
         delegated: true,
         feeEstimate: MOCK_FEE,
         quote: q,

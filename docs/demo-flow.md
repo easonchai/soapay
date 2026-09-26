@@ -64,12 +64,12 @@ Total 3:00. Time is the budget for each beat; the clicks are exactly CK's labels
 
 ### Beat 4: What a coworker sees vs what I see (1:20–1:50) · the core moment
 
-- **Screens, side by side:** left, the pay-run tx on Basescan (the **Logs** or ERC-20 transfers tab: N transfers of the same chunk size to unrelated addresses). Right, "Me" on **Payments**: "7,951.00 USDC across 19 addresses … Checked 3,139 announcements in 1894 ms on 4 workers; 19 new payments" ([r08](demo-screens/r08-payments.png)).
-- **Clicks:** **Rescan** on Payments, so the new lines from Beat 3 appear live.
-- **Say:** "Left is my coworker's view: a list of equal payments to strangers. They know their own lines, and that's all. Right is my app, the only place those addresses come together, because only my viewing key can find them. Even the unknown payer that faked a 10,000 USDC announcement shows its real balance, 1 USDC."
+- **Screen:** "Me" on **Payments**, scrolled to **Pay runs** (D-41). One row per pay-run transaction that paid me: block, payer, how many of my lines are in it, and the tx.
+- **Clicks:** **Rescan** (so Beat 3's lines appear) → **Two views** on the newest run. It opens on **Coworker view**: every line of that transaction as the chain shows it (short stealth address, amount from the USDC Transfer log, owner "unknown"), under "This is everything anyone can see on-chain: 50 payments totalling … USDC from 0x… in one transaction". Flip the toggle to **My view**: the same list, my lines highlighted **You**, and the honest count, "6 of 50 lines are yours (2,750.00 USDC)". **View on Basescan ↗** opens the same tx (live only; mock mode has no explorer link).
+- **Say:** "This is my coworker's view: fifty payments to strangers, rebuilt from the transaction's own logs. They know their own lines, and that's all. Now my view: the same transaction, and only my viewing key lights up my six lines. Nothing else about the other forty-four changes."
 - **Bounty:** none directly. This is the product claim (PRD Goal 2).
-- **Proposed visual (the owner's pending question):** a **"Coworker view / My view" toggle** on each pay-run group in Payments. Coworker view renders every line of that tx as Basescan shows it: amount plus a short address, with nothing highlighted. My view is the same list with my lines highlighted and every other line labelled "not mine, can't tell whose". The data is already there, because the scanner reads every announcement of the tx to find mine. Until it's built, use the two-window layout above. See Gaps #1.
-- **Fallback:** if Basescan throws its Cloudflare check, show the same tx in the pre-warmed tab, or the StealthDisperse contract's token-transfer list.
+- **Pre-staged:** "Me" already paid by 2–3 runs from the Acme payer (mock mode fabricates three runs of 50 lines each, 44 of them coworkers' 500 USDC chunks).
+- **Fallback:** if the RPC stalls reading the receipt ("Reading the transaction's logs…" for more than a few seconds), open the pre-warmed Basescan tab for the live pay run (2 lines: 3.0 and 2.5 USDC). The sender's run page shows the same list under **What coworkers see**, with names beside it only on the employer's screen.
 
 ### Beat 4b: Plug it into anything (terminal, 10–20 s) · CLI + MCP, live on Base Sepolia
 
@@ -92,8 +92,8 @@ Total 3:00. Time is the budget for each beat; the clicks are exactly CK's labels
 
 ### Beat 5: Spend gaslessly, and the guard → compliant exit (1:50–2:25) · Send → Exit · (Privacy Pools)
 
-- **Clicks, gasless spend:** **Send** tab ([r09](demo-screens/r09-send-form.png)) → To = a fresh address, Amount `80` → **Review**: "No new links. This spend doesn't connect any of your stealth addresses to each other or to an identifiable wallet" ([r14](demo-screens/r14-send-review-ok.png)) → **Send** → "Sent · 1 transaction confirmed" ([r15](demo-screens/r15-send-done.png)).
-- **Say:** "No ETH ever touches a stealth address: gas is paid in USDC through a 7702 smart account and Circle's paymaster."
+- **Clicks, gasless spend:** **Send** tab ([r09](demo-screens/r09-send-form.png)) → To = a fresh address, Amount `80` → **Review**: "No new links. This spend doesn't connect any of your stealth addresses to each other or to an identifiable wallet" ([r14](demo-screens/r14-send-review-ok.png)) → **Send now** → "Sent · 1 transaction confirmed" ([r15](demo-screens/r15-send-done.png)), with the navy **Gas proof** panel under it (D-41), read live: "0 ETH here. Gas was paid in USDC by the paymaster." Rows: ETH balance now `0 ETH`; Account "Upgraded to a smart account via EIP-7702, delegate = Simple7702Account"; Nonce "1: used by the 7702 authorization; no transaction of its own"; the spend tx and userOp; Submitted by the bundler; Gas paid by "Circle Paymaster 0x3BA9…8966"; Gas fee in USDC. Each links to Basescan (live only). The same panel is in the address's **Details** on Payments after it spent.
+- **Say:** "Zero ETH on this address. The chain shows who paid the gas: the bundler fronted it, and Circle's paymaster took the fee from this address in USDC. Every line here is a chain read." (Don't say "never received ETH": the panel deliberately doesn't claim it.)
 - **Clicks, guard:** Send again, To = my main wallet (labelled under **Labels** beforehand, [r10](demo-screens/r10-labels.png)), Amount `1200` → **Review** → "**Blocked by the privacy guard.** Spending from 3 unlinked clusters in one operation links them to each other. Sending here ties these funds to you" ([r11](demo-screens/r11-send-guard-block.png)) → **Exit through Privacy Pools** → the Exit screen plans one leg per address ([r12](demo-screens/r12-exit-plan.png)). Scroll to the pre-approved **Finished exit** ([r13](demo-screens/r13-exit-done.png)).
 - **Say:** "My coworkers know my main wallet, so the app refuses to link my salary to it. The way out is a screened pool: each address deposits on its own, and the withdrawal to my wallet can't be matched to a deposit."
 - **Bounty:** none of the three. This beat evidences PRD Goals 3 and 5: the gasless spend, the guard and the compliant exit.
@@ -123,11 +123,11 @@ The demo is UI-only: judges follow a person, not a library. The SDK appears in *
 
 ## Gaps that weaken the story (recommendations; no app code changed)
 
-1. **No coworker-view visual.** Beat 4 is the core claim, and today it needs two windows and Basescan. Build the "Coworker view / My view" toggle proposed in Beat 4 (recipient Payments, per pay-run tx). It needs no new data, because the scanner already fetches every announcement of the tx.
+1. ~~**No coworker-view visual.**~~ Done (D-41): Payments → Pay runs → **Two views**, and the sender's run page **What coworkers see**.
 2. **The landing overclaim is still live.** The live sender landing says "…and the payroll never shows up on a block explorer" ([live-sender-landing](demo-screens/live-sender-landing.png)). Beat 4 shows the opposite. Change it with CK before judging, e.g. "…so nobody can tell which line is whose."
 3. **Onboarding is too long to show live.** Save the recovery kit, then lock with a passkey (the 3-word backup check is gone since D-44, so it is shorter than it was). Pre-stage it (Beat 2). Consider a "demo account" restore, or skipping straight to Register for a pre-made profile.
 4. **The mock wallet can't sign a pay run** ("Not sent: the approval didn't go through"), so the pay run is the one beat with no offline fallback that actually sends. Keep the live tx link ready.
 5. **The invite's org name doesn't match in mock mode.** The link carries `org=Acme Labs`, but onboarding shows "Invited by Acme Robotics" (the mock fixture). Check that the live path shows the employer's own org.
 6. **After an exit, mock balances aren't refreshed.** The exited addresses still show 500 USDC under Convert's From address. Confirm it's mock-only before showing Exit and Convert back to back.
-7. **Guard copy exposes a raw pay-run tx hash** ("…same pay run (0x681f…)") on the block screen. Consider a short hash, or "the September run".
-8. **Run and History pages have no Basescan link** in mock (the Tx column shows "—" before sending). Check that live runs link each tx, because Beat 3's fallback depends on it.
+7. ~~**Guard copy exposes a raw pay-run tx hash.**~~ Done (D-41): hashes in guard copy render short (`0x681f…9e2a`) and link to Basescan outside mock mode.
+8. **Run pages and Basescan:** live runs already link each step's tx (Tx column), and the **What coworkers see** panel links each landed tx (D-41). Mock runs never send, so they show "—" and a labelled preview instead.

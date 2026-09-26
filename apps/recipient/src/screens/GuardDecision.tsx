@@ -1,5 +1,38 @@
+import type { ReactNode } from "react";
 import type { SpendPlan } from "@soapay/sdk";
 import { Alert, Checkbox } from "../ui/kit.js";
+import { shortAddr } from "../ui/format.js";
+
+const TX_HASH = /0x[0-9a-fA-F]{64}/g;
+
+/**
+ * Guard copy names pay runs by their tx hash. Shows each hash short (0x681f…9e2a), linked to the
+ * explorer when `txUrl` gives a link, instead of 66 raw characters (docs/demo-flow.md gap 7).
+ */
+export function linkTxHashes(text: string, txUrl?: (hash: string) => string | undefined): ReactNode[] {
+  const out: ReactNode[] = [];
+  let last = 0;
+  for (const m of text.matchAll(TX_HASH)) {
+    const i = m.index ?? 0;
+    if (i > last) out.push(text.slice(last, i));
+    const url = txUrl?.(m[0]);
+    const label = shortAddr(m[0], 4);
+    out.push(
+      url ? (
+        <a key={i} href={url} target="_blank" rel="noreferrer" title={m[0]}>
+          {label}
+        </a>
+      ) : (
+        <code key={i} title={m[0]}>
+          {label}
+        </code>
+      ),
+    );
+    last = i + m[0].length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
 
 /**
  * Renders the privacy guard's decision for a spend. Props-only, so any UI can reuse or replace it.
@@ -11,10 +44,13 @@ export function GuardDecision({
   plan,
   override,
   onOverride,
+  txUrl,
 }: {
   plan: SpendPlan;
   override: boolean;
   onOverride: (v: boolean) => void;
+  /** Explorer link for a pay-run tx hash named in the guard's copy (omit in mock mode). */
+  txUrl?: ((hash: string) => string | undefined) | undefined;
 }) {
   const warnings = plan.warnings.filter((w) => w.code !== "override-used");
   const blocked = plan.decision === "block";
@@ -28,18 +64,18 @@ export function GuardDecision({
       )}
       {plan.decision === "warn" && (
         <Alert variant="warning" title={overridden ? "Sending with override" : "Privacy warning"}>
-          <p>{plan.reason}</p>
+          <p>{linkTxHashes(plan.reason, txUrl)}</p>
         </Alert>
       )}
       {blocked && (
         <Alert variant="destructive" title="Blocked by the privacy guard">
-          <p>{plan.reason}</p>
+          <p>{linkTxHashes(plan.reason, txUrl)}</p>
         </Alert>
       )}
       {warnings.length > 0 && (
         <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
           {warnings.map((w) => (
-            <li key={w.code}>{w.message}</li>
+            <li key={w.code}>{linkTxHashes(w.message, txUrl)}</li>
           ))}
         </ul>
       )}
