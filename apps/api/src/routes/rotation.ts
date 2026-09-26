@@ -281,6 +281,21 @@ export function rotationRoutes(deps: AppDeps, relay: RegistrationRelay): Hono {
     return c.json({ attester: attester.address, attestation: present(row), registry, topup }, 201);
   });
 
+  // Finishing a rotation (the registrant's own ENS `setText`) ran out of gas: top the registrant up again.
+  // Only right after an attested rotation, within the same per-registrant/day limits as the first top-up.
+  r.post("/names/:label/rotation/gas", async (c) => {
+    const label = c.req.param("label").toLowerCase();
+    const name = loadName(label);
+    const last = db.prepare("SELECT verified_at FROM attestations WHERE label = ? ORDER BY id DESC LIMIT 1").get(label) as
+      | { verified_at: number }
+      | undefined;
+    if (!last || deps.now() - last.verified_at > 86_400) {
+      throw new ApiError(409, "no_recent_rotation", "gas is only topped up to finish a rotation from the last 24 hours");
+    }
+    const topup = await topUpRegistrant(deps, name.registrant);
+    return c.json({ topup });
+  });
+
   r.get("/names/:label/attestations", (c) => {
     const label = c.req.param("label").toLowerCase();
     loadName(label);
