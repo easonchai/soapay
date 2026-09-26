@@ -7,6 +7,7 @@ Pitch materials for ETHGlobal Tokyo 2026.
 - `deck/assets/`: screenshots of the cited sources and sponsor logos used on the slides.
 - `PITCH.md`: talk track with timings, Q&A sheet, slide-by-slide notes, and every quote with its source URL.
 - `SUBMISSION.md`: the ETHGlobal project page text, short description, full description and how it's made, in the deck's framing.
+- `PRIZES.md`: paste-ready answers for the sponsor prize fields (World, ENS, Curvegrid): why we qualify, code permalinks, ease-of-use score and feedback.
 - `evidence/`: the six research digests behind the Problem slides. Every quote marked "verified" was matched word for word against the fetched page on Sep 25, 2026. Items marked "spot-check" came through a summarizing fetch and should be confirmed on the live page before use.
 
 ## Rebuild the PDF
