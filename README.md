@@ -1,4 +1,4 @@
-# Soapay: one name, infinite addresses
+# Soapay: privacy infrastructure for payments on chain
 
 [![Base](https://img.shields.io/badge/Base-Mainnet%208453-0052ff)](https://basescan.org/address/0x55649E01B5Df198D18D95b5cc5051630cfD45564)
 [![ERC-5564](https://img.shields.io/badge/ERC--5564-Stealth%20Addresses-111111)](https://eips.ethereum.org/EIPS/eip-5564)
@@ -8,11 +8,15 @@
 [![Foundry](https://img.shields.io/badge/Foundry-27%20tests%20%2B%204%20fork-bd4a1f)](contracts/PLAN.md#test-matrix-forge-test--vv)
 [![Status](https://img.shields.io/badge/status-pre--M1-orange)](#roadmap)
 
-**Soapay lets you get paid on-chain without publishing your bank statement.** An employee shares one ENS name. Every salary payment lands on a fresh stealth address that only they can open and spend from, and a coworker reading the same payroll batch can't tell which line is theirs.
+**Soapay is privacy infrastructure for payments on chain**: every payment lands on a fresh address that only you can open, and you can spend it without a trace. A recipient shares one ENS name. Each payment to it goes to a new ERC-5564 stealth address, so a coworker reading the same payroll batch sees a list of never-before-seen addresses and can't tell which line is theirs.
 
-Our first use case is **recurring payroll on Base**. Today one batch transaction shows every recipient and every amount next to each other. With Soapay, coworkers see a list of never-before-seen addresses.
+## Who sees what you earn?
 
-**Navigate:** [PRD](PRD.md) · [Threat model](#threat-model) · [Privacy model](docs/privacy-model.md) · [How it works](#how-it-works) · [Uniswap](#uniswap-integration) · [StealthDisperse plan](contracts/PLAN.md) · [PRD analysis](docs/prd-analysis.md) · [Roadmap](#roadmap) · [Getting started](#getting-started) · [Repository](#repository)
+On a public chain, everyone with a browser: one payroll batch on Base shows every recipient and every amount next to each other, readable forever. Your colleagues too: at Gitcoin DAO a contributor started from their own pay address and put names to fifteen salaries. So companies walk away, and the fixes built for them (Base Ledgers, Tempo Zones, Toku on Aleo) are private ledgers for enterprises: not for everyone, since you apply for access, and not fully private, since the operator sees everything. Everyone else still pays in public.
+
+Soapay is **built for payroll and ready for any payout**: salaries first, and the same rail for dividends, grants, bounties, vendor payments, airdrops and tips. Three apps on open standards, and nothing of ours holds money. The full argument, with sources, is in the [pitch deck](pitch/README.md).
+
+**Navigate:** [Pitch](pitch/README.md) · [PRD](PRD.md) · [Threat model](#threat-model) · [Privacy model](docs/privacy-model.md) · [How it works](#how-it-works) · [Uniswap](#uniswap-integration) · [StealthDisperse plan](contracts/PLAN.md) · [PRD analysis](docs/prd-analysis.md) · [Roadmap](#roadmap) · [Getting started](#getting-started) · [Repository](#repository)
 
 ## What's here
 
