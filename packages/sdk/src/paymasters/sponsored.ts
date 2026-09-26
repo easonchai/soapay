@@ -54,10 +54,18 @@ export function sponsoredPaymaster(options: SponsoredPaymasterOptions): Paymaste
 
   async function pm(method: "pm_getPaymasterStubData" | "pm_getPaymasterData", op: PaymasterUserOperation, ctx: PaymasterContext) {
     let res: RpcPaymasterFields;
+    // At stub time viem has not estimated gas yet; Pimlico's schema wants the fields present, so
+    // send zeros (the stub is only used to estimate, as ERC-7677 intends).
+    const filled = {
+      ...op,
+      callGasLimit: op.callGasLimit ?? 0n,
+      verificationGasLimit: op.verificationGasLimit ?? 0n,
+      preVerificationGas: op.preVerificationGas ?? 0n,
+    } as PaymasterUserOperation;
     try {
       res = (await client.request({
         method: method as never,
-        params: [formatUserOperationRequest(op), ctx.entryPoint, numberToHex(ctx.chainId), options.context ?? {}] as never,
+        params: [formatUserOperationRequest(filled), ctx.entryPoint, numberToHex(ctx.chainId), options.context ?? {}] as never,
       })) as RpcPaymasterFields;
     } catch (err) {
       if (isSponsorshipDisabled(err)) throw new SponsorshipUnavailableError();
