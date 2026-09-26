@@ -161,7 +161,9 @@ header.header {
   width: 100vw;
   margin-inline: calc(50% - 50vw);
   overflow-x: clip;
-  --ring: clamp(180px, calc((100% - 46rem) / 2 - 2.5rem), 360px);
+  /* ring diameter: the viewport gutter beside the 46rem copy, minus breathing room (percentages here
+     resolve against the width, so this var is only ever used in width and inset calculations) */
+  --ring: clamp(180px, calc((100% - 46rem) / 2 - 3rem), 340px);
 }
 .hero .sl-flex.stack {
   position: relative;
@@ -170,15 +172,17 @@ header.header {
   position: absolute;
   top: 50%;
   width: var(--ring);
-  height: var(--ring);
+  height: auto;
+  aspect-ratio: 1 / 1;
   transform: translateY(-50%);
   pointer-events: none;
 }
+/* Each ring hugs the copy column: its inner edge sits 2rem outside the 46rem text box, at any width. */
 .hero .sl-dots.l {
-  left: 1.5rem;
+  left: calc(50% - 23rem - 2rem - var(--ring));
 }
 .hero .sl-dots.r {
-  right: 1.5rem;
+  right: calc(50% - 23rem - 2rem - var(--ring));
 }
 @media (max-width: 76rem) {
   .hero .sl-dots {
