@@ -19,7 +19,8 @@ export function ensV2NameIssuer(inner: EnsV2NameIssuer): NameIssuer {
   return {
     async issue({ label, registrant, metaAddress, agent }) {
       const out = await inner.issue({ label, registrant, metaAddress, ...(agent ? { agent } : {}) });
-      return { txHash: out.txHash };
+      // `recovered`: an interrupted earlier request already issued exactly this name; just store it.
+      return out.txHash ? { txHash: out.txHash } : {};
     },
   };
 }
