@@ -13,6 +13,8 @@ export type ReadClient = {
   getLogs(args: any): Promise<Log[]>;
   /** EIP-712 check that also covers ERC-1271 / ERC-6492 smart wallets (invites). */
   verifyTypedData(args: any): Promise<boolean>;
+  /** EIP-191 check that also covers ERC-1271 / ERC-6492 / 7702-delegated wallets (backups). */
+  verifyMessage(args: any): Promise<boolean>;
 };
 
 /** The slice of a viem WalletClient (with a local relayer account) the API uses. */

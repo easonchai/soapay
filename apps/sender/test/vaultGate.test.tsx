@@ -56,4 +56,50 @@ describe("VaultGate", () => {
     settle();
     expect(onCreate).toHaveBeenLastCalledWith("passphrase", "long enough passphrase");
   });
+
+  it("wallet signature is the default when the wallet can lock the vault, and passphrase when it can't", () => {
+    const onCreate = vi.fn();
+    const { rerender } = render(
+      <VaultGate phase="new" vaultMode={null} minPassphrase={10} error={null} walletLock="available" backupEnabled onCreate={onCreate} onUnlock={() => {}} />,
+    );
+    expect(screen.getByRole("radio", { name: /wallet signature/i })).toHaveAttribute("aria-checked", "true");
+    // Signing twice showed a non-deterministic wallet: the option goes and the passphrase is selected.
+    rerender(
+      <VaultGate phase="new" vaultMode={null} minPassphrase={10} error="signs differently" walletLock="unavailable" backupEnabled onCreate={onCreate} onUnlock={() => {}} />,
+    );
+    expect(screen.queryByRole("radio", { name: /wallet signature/i })).toBeNull();
+    expect(screen.getByRole("radio", { name: /passphrase/i })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByLabelText(/new passphrase/i)).toBeInTheDocument();
+  });
+
+  it("restore: one button for a wallet backup, and Start fresh", () => {
+    const onRestore = vi.fn();
+    const onStartFresh = vi.fn();
+    render(
+      <VaultGate
+        phase="restore"
+        vaultMode={null}
+        minPassphrase={10}
+        error={null}
+        restore={{ mode: "wallet", version: 3, updatedAt: 1_800_000_000, address: "0x0000000000000000000000000000000000000001" }}
+        onRestore={onRestore}
+        onStartFresh={onStartFresh}
+        onCreate={() => {}}
+        onUnlock={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /restore with wallet/i }));
+    settle();
+    expect(onRestore).toHaveBeenCalledWith();
+    fireEvent.click(screen.getByRole("button", { name: /start a new vault instead/i }));
+    expect(onStartFresh).toHaveBeenCalled();
+  });
+
+  it("locked wallet vault: unlock with the wallet", () => {
+    const onUnlock = vi.fn();
+    render(<VaultGate phase="locked" vaultMode="wallet" minPassphrase={10} error={null} onCreate={() => {}} onUnlock={onUnlock} />);
+    fireEvent.click(screen.getByRole("button", { name: /unlock with wallet/i }));
+    settle();
+    expect(onUnlock).toHaveBeenCalledWith();
+  });
 });

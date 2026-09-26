@@ -1,3 +1,4 @@
+import type { Hex } from "viem";
 import { useCallback, useEffect, useState } from "react";
 import { attachSession } from "../features/recovery/attach.js";
 import {
@@ -17,6 +18,9 @@ import type { HumanCheckResult } from "../worldid/types.js";
 import { useKeyRing } from "./useChain.js";
 
 export type RotationPath = "attested" | "manual";
+
+/** A real 32-byte tx hash (the relayer answers "0x" when nothing had to be sent). */
+const isTxHash = (h: unknown): h is Hex => typeof h === "string" && /^0x[0-9a-fA-F]{64}$/.test(h);
 
 export type RotationState =
   | { step: "idle"; error: string | null }
@@ -114,6 +118,10 @@ export function useRotation() {
         name: name.name,
         newMeta: pending.newMeta,
         registrantKey: ring.current.registrantKey,
+        requestGas: async () => {
+          const { topup } = await svc.api.rotationGas(name.label);
+          return topup.status === "sent" && topup.txHash ? topup.txHash : null;
+        },
       });
       await v.update((d) => {
         const { pendingRotation: _p, ...rest } = d.profile;
@@ -131,6 +139,7 @@ export function useRotation() {
                 newMeta: pending.newMeta,
                 at: Date.now(),
                 setTextTx,
+                ...(pending.registryTx ? { registryTx: pending.registryTx } : {}),
                 ...(pending.attestation !== undefined ? { attestation: pending.attestation } : {}),
               },
             ],
@@ -149,8 +158,8 @@ export function useRotation() {
     async (pending: PendingRotation) => {
       if (!pending.registered) {
         setState({ step: "working", stage: "register", path: "manual" });
-        await registerRotatedMeta({ api: svc.api, registry: svc.client, chainId, registrant: ring.current, newMeta: pending.newMeta });
-        pending = { ...pending, registered: true };
+        const reg = await registerRotatedMeta({ api: svc.api, registry: svc.client, chainId, registrant: ring.current, newMeta: pending.newMeta });
+        pending = { ...pending, registered: true, ...(isTxHash(reg.txHash) ? { registryTx: reg.txHash } : {}) };
         await savePending(pending);
       }
       await complete(pending);
@@ -202,6 +211,9 @@ export function useRotation() {
           postedAt: Date.now(),
           path: "attested",
           ...(res.attestation ? { attestation: res.attestation } : {}),
+          ...(isTxHash((res.registry as { txHash?: unknown } | undefined)?.txHash)
+            ? { registryTx: (res.registry as { txHash: Hex }).txHash }
+            : {}),
         };
         await savePending(pending);
         await complete(pending);

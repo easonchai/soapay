@@ -1,5 +1,5 @@
 import { HashRouter, Navigate, Route, Routes } from "react-router";
-import { Loader2 } from "lucide-react";
+import { Loading } from "@soapay/ui";
 import { ScannerProvider } from "./hooks/scanner.js";
 import { InviteProvider, useInvite } from "./hooks/useInvite.js";
 import { Onboarding } from "./onboarding/Onboarding.js";
@@ -19,6 +19,7 @@ import { ServicesProvider, useServices } from "./services/ServicesProvider.js";
 import { exitOffered } from "./config.js";
 import { Alert } from "./ui/kit.js";
 import { VaultProvider, useVault } from "./vault/VaultProvider.js";
+import { BackupSync } from "./vault/BackupSync.js";
 
 /**
  * Vault gate: loading → onboarding (no vault / unfinished) → unlock (locked) → the app.
@@ -33,7 +34,7 @@ function Gate() {
     case "loading":
       return (
         <div className="grid min-h-dvh place-items-center" aria-busy>
-          <Loader2 className="size-6 animate-spin text-muted-foreground" aria-label="Loading" />
+          <Loading label="Opening Soapay…" />
         </div>
       );
     case "error":
@@ -83,9 +84,11 @@ export function App() {
   return (
     <VaultProvider>
       <ServicesProvider>
-        <InviteProvider>
-          <Gate />
-        </InviteProvider>
+        <BackupSync>
+          <InviteProvider>
+            <Gate />
+          </InviteProvider>
+        </BackupSync>
       </ServicesProvider>
     </VaultProvider>
   );

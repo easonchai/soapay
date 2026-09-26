@@ -68,6 +68,8 @@ docker run -p 8787:8787 -v soapay-data:/data --env-file apps/api/.env soapay-api
 | `RATE_LIMIT_REGISTER_PER_IP` / `_PER_REGISTRANT` | `3` / `3` | |
 | `RATE_LIMIT_NAMES_PER_IP` | `10` | Also covers `/names/:label/session` and `/rotation` |
 | `RATE_LIMIT_INVITES_PER_EMPLOYER` / `_PER_IP` | `50` / `20` | `POST /invites`. The employer bucket counts only validly signed invites |
+| `RATE_LIMIT_BACKUP_WRITES_PER_ADDRESS` / `_PER_IP` | `60` / `120` | `PUT /backups/:address`. The address bucket counts only validly signed writes |
+| `RATE_LIMIT_BACKUP_READS_PER_IP` | `300` | `GET /backups/:address` |
 | `INDEXER_ENABLED` | `true` | |
 | `INDEXER_START_BLOCK` | Announcer start block for the chain | |
 | `INDEXER_CHUNK_SIZE` | `10000` | Max `getLogs` range, halved on provider range errors (persisted) |
@@ -143,6 +145,14 @@ Body: `{label, employer, codeHash, expiresAt, signature, org?}`. The employer's 
 ### `GET /invites/:codeHash`
 
 `{codeHash, label, employer, org?, expiresAt, status: "pending" | "claimed" | "expired", name?}`; `name` (`<label>.<parent>`) once claimed. 404 when unknown. The sender app polls this; the recipient app reads it from the code in the link (the link's `label` and `org` are display hints only).
+
+### `PUT /backups/:address` and `GET /backups/:address` (encrypted backups, D-62)
+
+One opaque, client-encrypted blob per wallet, shared by the company and employee apps. The server never sees plaintext or keys.
+
+- **`PUT`** body `{version, ciphertext, signature}`: `ciphertext` is canonical base64, at most 512 KiB decoded (413 `too_large`; the route has its own body limit, not `BODY_LIMIT_BYTES`). `signature` is an EIP-191 `personal_sign` by `:address` over exactly `soapay-backup:v1:<checksummed address>:<version>:<keccak256(utf8 ciphertext)>` (SDK `backupMessage`), checked with the public client's `verifyMessage`, so ERC-1271, ERC-6492 and 7702-delegated wallets work. `version` must be a positive integer strictly greater than the stored one, else 409 `{error: {code: "stale_version"}, version: <current>}` (no rollback). 401 `bad_signature`, 400 `invalid_*`. Rate-limited per IP before the signature check, per address after it. 200 `{address, version}`.
+- **`GET`** → 200 `{address, version, ciphertext, updatedAt}` (unix seconds) or 404 `not_found`. Public by design: the blob is useless without the owner's key.
+- Stored in `vault_backups` (migration 8). The SDK's `httpBackupClient` wraps both calls.
 
 ### `GET /worldid/config`
 

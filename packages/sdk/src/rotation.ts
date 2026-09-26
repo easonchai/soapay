@@ -1,4 +1,5 @@
-import { keccak256, stringToBytes, type Address, type Hex, type TypedDataDomain } from "viem";
+import { isAddressEqual, keccak256, stringToBytes, type Address, type Hex, type TypedDataDomain } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import { formatMetaAddressURI } from "./keys.js";
 import { isValidLabel } from "./registration.js";
 
@@ -65,6 +66,60 @@ export function attachSessionTypedData(a: AttachSession) {
     message: { label: a.label, sessionId: a.sessionId, deadline: a.deadline },
   } as const;
 }
+
+/**
+ * SessionLookup (signed by the registrant key): asks the API for the World ID session id already
+ * linked to a name (`POST /names/:label/session/lookup`, D-64). A recovery-phrase restore recreates
+ * the registrant key but not the vault, so the app reads the id back to keep World ID rotation.
+ * Same domain as NameClaim / AttachSession. The session id is never public (`GET /names/:label`
+ * only says whether one exists), because it would show which names share one human.
+ */
+export const sessionLookupTypes = {
+  SessionLookup: [
+    { name: "label", type: "string" },
+    { name: "deadline", type: "uint256" },
+  ],
+} as const;
+
+/** The API refuses a SessionLookup whose deadline is further out than this (seconds from now). */
+export const SESSION_LOOKUP_MAX_TTL_SECONDS = 3_600;
+
+export type SessionLookup = {
+  label: string;
+  /** Unix seconds. */
+  deadline: bigint;
+  chainId: number;
+};
+
+export function sessionLookupTypedData(a: SessionLookup) {
+  if (!isValidLabel(a.label)) throw new Error(`Soapay: invalid label "${a.label}"`);
+  return {
+    domain: rotationClaimDomain(a.chainId),
+    types: sessionLookupTypes,
+    primaryType: "SessionLookup",
+    message: { label: a.label, deadline: a.deadline },
+  } as const;
+}
+
+/** Sign a SessionLookup with the registrant key (optionally checked against `registrant`). */
+export async function signSessionLookup(a: SessionLookup & { registrantKey: Hex; registrant?: Address }): Promise<Hex> {
+  const account = privateKeyToAccount(a.registrantKey);
+  if (a.registrant && !isAddressEqual(account.address, a.registrant)) {
+    throw new Error("Soapay: registrantKey does not match registrant");
+  }
+  return account.signTypedData(sessionLookupTypedData(a));
+}
+
+/** `POST /names/:label/session/lookup` response. */
+export type SessionLookupResult = {
+  label: string;
+  /** The IDKit `session_<hex>` id linked to the name. */
+  sessionId: string;
+  /** Unix seconds. */
+  attachedAt: number;
+  /** Unix seconds: when the session can back a rotation (after the attach cooldown for a late link). */
+  rotationAllowedFrom: number;
+};
 
 export type RotationClaim = {
   label: string;

@@ -101,12 +101,15 @@ export async function finishRotation(p: {
   newMeta: string;
   registrantKey: Hex;
   onStage?: (s: RotationStage) => void;
+  /** Asks the API to top the registrant's gas up again (returns the top-up tx), used once if it runs short. */
+  requestGas?: () => Promise<Hex | null>;
 }): Promise<{ setTextTx: Hex }> {
   p.onStage?.("setText");
   const { txHash } = await p.ens.setStealthRecord({
     name: p.name,
     metaAddress: canonicalMeta(p.newMeta),
     registrantKey: p.registrantKey,
+    ...(p.requestGas ? { requestGas: p.requestGas } : {}),
   });
   p.onStage?.("done");
   return { setTextTx: txHash };

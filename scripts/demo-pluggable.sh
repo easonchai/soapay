@@ -39,7 +39,7 @@ note() { printf '%s%s%s\n' "$D" "$1" "$R"; }
 # Prints the command as typed (no environment, so no secrets).
 show() { printf '%s$ %s%s\n' "$C" "$*" "$R"; }
 soapay() { node "$ROOT/apps/cli/dist/index.js" "$@"; }
-agent() { (cd "$ROOT/examples" && pnpm exec tsx demo/agent.ts "$@"); }
+agent() { (cd "$ROOT/examples" && pnpm exec tsx demo/pluggable-agent.ts "$@"); }
 
 [ -f "$LOCAL_FILE" ] || { echo "Missing $LOCAL_FILE: run pnpm --filter @soapay/examples demo:setup first." >&2; exit 1; }
 [ -f "$ROOT/apps/cli/dist/index.js" ] || pnpm --filter @soapay/cli build >/dev/null 2>&1

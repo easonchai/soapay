@@ -34,7 +34,9 @@ export async function topUpRegistrant(
   try {
     const fees = await l1Funder.estimateFeesPerGas();
     const price = fees.maxFeePerGas ?? fees.gasPrice ?? 0n;
-    const need = gas * price;
+    // 2x headroom: fees move between this estimate and the app's own send (a rotation once came up
+    // 8% short: "insufficient funds for gas * price").
+    const need = gas * price * 2n;
     const balance = await l1Funder.getBalance({ address: registrant });
     if (balance >= need) return { status: "skipped", reason: "sufficient_balance" };
     const value = need - balance > capWei ? capWei : need - balance;

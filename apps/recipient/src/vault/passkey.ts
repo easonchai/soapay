@@ -7,7 +7,7 @@
  * or authenticator has no PRF support it throws `PasskeyUnsupportedError`, and the caller falls back to the
  * passphrase lock.
  */
-import { toBase64 } from "./crypto.js";
+import { fromBase64, toBase64 } from "./crypto.js";
 
 export class PasskeyUnsupportedError extends Error {
   override name = "PasskeyUnsupportedError";
@@ -28,6 +28,12 @@ export interface PasskeyAuthenticator {
   register(prfSalt: Uint8Array<ArrayBuffer>, account?: string): Promise<{ credentialId: Uint8Array<ArrayBuffer>; prf: Uint8Array<ArrayBuffer> }>;
   /** Evaluates PRF over `prfSalt` with an existing passkey (one prompt). */
   evaluate(credentialId: Uint8Array<ArrayBuffer>, prfSalt: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>>;
+  /**
+   * D-63 restore: lets the user pick any Soapay passkey this device can use (a discoverable credential,
+   * e.g. one synced through iCloud Keychain or Google Password Manager; no allowCredentials) and evaluates
+   * PRF over `prfSalt`. One prompt. Optional so older test doubles keep compiling; absent = no restore.
+   */
+  discover?(prfSalt: Uint8Array<ArrayBuffer>): Promise<{ credentialId: Uint8Array<ArrayBuffer>; prf: Uint8Array<ArrayBuffer> }>;
 }
 
 type PrfOutputs = { enabled?: boolean; results?: { first?: BufferSource } };
@@ -54,14 +60,15 @@ function friendly(e: unknown): Error {
 
 export function browserPasskey(): PasskeyAuthenticator {
   const rpId = () => globalThis.location.hostname;
-  const evaluate = async (credentialId: Uint8Array<ArrayBuffer>, prfSalt: Uint8Array<ArrayBuffer>) => {
+  /** navigator.credentials.get with PRF; `credentialId` undefined = discoverable (any Soapay passkey). */
+  const get = async (credentialId: Uint8Array<ArrayBuffer> | undefined, prfSalt: Uint8Array<ArrayBuffer>) => {
     let cred: PublicKeyCredential | null;
     try {
       cred = (await navigator.credentials.get({
         publicKey: {
           challenge: random(32),
           rpId: rpId(),
-          allowCredentials: [{ type: "public-key", id: credentialId }],
+          ...(credentialId ? { allowCredentials: [{ type: "public-key", id: credentialId }] } : {}),
           userVerification: "required",
           timeout: 120_000,
           extensions: { prf: { eval: { first: prfSalt } } } as AuthenticationExtensionsClientInputs,
@@ -73,8 +80,9 @@ export function browserPasskey(): PasskeyAuthenticator {
     if (!cred) throw new Error("No passkey was used.");
     const first = prfOf(cred)?.results?.first;
     if (!first) throw new PasskeyUnsupportedError("This passkey didn't return its encryption secret (no PRF support).");
-    return toBytes(first);
+    return { credentialId: new Uint8Array(cred.rawId), prf: toBytes(first) };
   };
+  const evaluate = async (credentialId: Uint8Array<ArrayBuffer>, prfSalt: Uint8Array<ArrayBuffer>) => (await get(credentialId, prfSalt)).prf;
   return {
     mock: false,
     async available() {
@@ -120,13 +128,37 @@ export function browserPasskey(): PasskeyAuthenticator {
       return { credentialId, prf: await evaluate(credentialId, prfSalt) };
     },
     evaluate,
+    discover: (prfSalt) => get(undefined, prfSalt),
   };
 }
 
 /**
  * Mock mode (VITE_MOCK_API): no authenticator. The "PRF" is SHA-256 over a fixed label, the credential id
  * and the salt, so anyone with the browser profile can unlock. For demos only, like the rest of mock mode.
+ *
+ * `discover` returns the most recently registered mock credential (kept in memory and, best effort, in
+ * localStorage, standing in for a synced password manager).
  */
+const MOCK_CREDS_KEY = "soapay-mock-passkeys";
+const mockCreds: string[] = [];
+function rememberMockCred(id: Uint8Array): void {
+  mockCreds.push(toBase64(id));
+  try {
+    globalThis.localStorage?.setItem(MOCK_CREDS_KEY, JSON.stringify(mockCreds.slice(-5)));
+  } catch {
+    // storage blocked: memory only
+  }
+}
+function lastMockCred(): string | undefined {
+  if (mockCreds.length) return mockCreds[mockCreds.length - 1];
+  try {
+    const stored = JSON.parse(globalThis.localStorage?.getItem(MOCK_CREDS_KEY) ?? "[]") as unknown;
+    return Array.isArray(stored) && typeof stored.at(-1) === "string" ? (stored.at(-1) as string) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function mockPasskey(): PasskeyAuthenticator {
   const prf = async (id: Uint8Array, salt: Uint8Array) => {
     const label = new TextEncoder().encode(`soapay-mock-passkey:${toBase64(id)}:`);
@@ -140,8 +172,15 @@ export function mockPasskey(): PasskeyAuthenticator {
     available: async () => true,
     async register(prfSalt) {
       const credentialId = random(16);
+      rememberMockCred(credentialId);
       return { credentialId, prf: await prf(credentialId, prfSalt) };
     },
     evaluate: (credentialId, prfSalt) => prf(credentialId, prfSalt),
+    async discover(prfSalt) {
+      const id = lastMockCred();
+      if (!id) throw new Error("No Soapay passkey on this device.");
+      const credentialId = fromBase64(id);
+      return { credentialId, prf: await prf(credentialId, prfSalt) };
+    },
   };
 }
