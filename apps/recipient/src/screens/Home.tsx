@@ -82,6 +82,21 @@ export function Home() {
         </div>
       </div>
 
+      {!profile.name && (
+        <Alert
+          variant="warning"
+          title="No pay name yet"
+          action={
+            <Button size="sm" onClick={() => void navigate("/name")} data-testid="claim-name-banner">
+              Claim a name
+            </Button>
+          }
+        >
+          You're sharing your raw meta-address. A name is easier for your employer to type, and lets you change keys later without re-sending
+          anything.
+        </Alert>
+      )}
+
       {scanner.running && <Alert variant="info">{describePhase(scanner.phase) || "Scanning…"}</Alert>}
       {scanner.error && <Alert variant="warning">{scanner.error}</Alert>}
       {scanner.last && !scanner.running && (

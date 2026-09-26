@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { KeyRound, ShieldCheck, UserRound } from "lucide-react";
+import { KeyRound, ShieldCheck } from "lucide-react";
 import { useRotation } from "../hooks/useRotation.js";
 import { useServices } from "../services/ServicesProvider.js";
 import { Link } from "react-router";
 import { generateMnemonic } from "@soapay/sdk";
-import { Addr, Alert, Badge, Button, Card, CardHeader, Checkbox, CopyButton, EmptyState, PageHeader, errorMessage } from "../ui/kit.js";
+import { ClaimNameLater } from "../onboarding/Onboarding.js";
+import { Addr, Alert, Badge, Button, Card, CardHeader, Checkbox, CopyButton, PageHeader, errorMessage } from "../ui/kit.js";
 import { relativeTime } from "../ui/format.js";
 import { useUnlocked } from "../vault/VaultProvider.js";
 import { HumanCheck, sessionSignal } from "../worldid/index.js";
@@ -93,14 +94,13 @@ export function NameSettings() {
 
   if (!r.name) {
     return (
-      <>
-        <PageHeader eyebrow="Name" title="Name" />
-        <Card>
-          <EmptyState icon={UserRound} title="No name yet">
-            You're sharing your raw meta-address. A name lets you change keys later without re-sending anything to your employer.
-          </EmptyState>
-        </Card>
-      </>
+      <div className="onb stack-lg">
+        <Alert variant="info" title="You skipped this during setup">
+          You're sharing your raw meta-address. A name is easier for your employer to type, and lets you change keys later without re-sending
+          anything.
+        </Alert>
+        <ClaimNameLater />
+      </div>
     );
   }
 
