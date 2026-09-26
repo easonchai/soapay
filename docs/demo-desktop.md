@@ -92,20 +92,21 @@ Add `--pause` to wait for **Enter** before each step while you narrate, and `--y
 
 ## Before the demo
 
-0. **Seed the company** (once, from the repo root): `pnpm demo:seed-company` (`--dry` to preview; idempotent). It claims ten employees (`maya-ml` … `ines-ml`) on the live stack and writes `scripts/.demo-roster.local.csv` (the ten plus `sam-demo`, 59,750 USDC) and `scripts/maya-ml.recovery-kit.local.txt`. Both files hold secrets; never commit them.
+0. **Seed the company** (done on 2026-09-26; the two files below are in the presenter's checkout). To redo or check: `pnpm demo:seed-company` (`--dry` to preview; idempotent). It claims ten employees (`maya-ml` … `ines-ml`) on the live stack and writes `scripts/.demo-roster.local.csv` (the ten plus `sam-demo`, 59,750 USDC) and `scripts/maya-ml.recovery-kit.local.txt`. Both files hold secrets; never commit them.
 1. **Browser profiles** (Chrome or Dia):
    - **Employer:** MetaMask with the company wallet **`0xA872…8818`** (a plain account with Base Sepolia ETH and 1,000,000 mock USDC; decline MetaMask's smart-account switch). Log in to the company app, create the vault with **Wallet signature**. **Pay run → Import CSV** → the roster file (resolves and pins each name). **Settings:** chunk size **500** USDC, Denominated payouts on (about 125 lines in one tx; the testnet default of 5 would make ~12,000). **Back up now.** Use this **same wallet** for invites and pay runs (otherwise Alex sees "Unknown payer").
    - **Maya (the coworker):** employee app → **Restore from recovery phrase** → open `scripts/maya-ml.recovery-kit.local.txt` → set a passkey.
    - **Employee:** fresh, with no Soapay data, and Touch ID available. The live sign-up label must be unclaimed: `curl https://soapay.up.railway.app/api/names/alex-meridian` → `not_found` (`alex-demo` is already claimed live, so it can't be the live sign-up).
-   - **alex-demo:** the pre-onboarded fallback persona, fully signed up, World ID linked, in the roster (fallback for beats 2 and 7). `curl …/api/names/alex-demo` returns the name.
-2. **Phone:** World ID app open and verified; used only to scan QR codes.
-3. **Agent terminal**, from a clean clone of this branch after `pnpm install && pnpm build`:
+   - **alex-demo:** the pre-onboarded fallback persona, fully signed up, World ID linked (fallback for beats 2 and 7). It is not in the roster file: add it in the Employer profile with **Recipients → Add by name → Resolve and pin**. Keep a browser profile signed in as alex-demo (or restore it from its phrase). `curl …/api/names/alex-demo` returns the name.
+2. **Screen:** turn on **System Settings → Keyboard → Keyboard Shortcuts → Mission Control → "Switch to Desktop 1/2/3"** (Ctrl + 1/2/3). Desktop 1: the Employer browser, full screen, with a Basescan tab. Desktop 2: Alex's and Maya's browser windows in Split View (hold the green button → Tile Window to Left / Right). Desktop 3: the terminal with two tabs (agent, thief). Do Not Disturb on.
+3. **Phone:** World ID app open and verified; used only to scan QR codes.
+4. **Agent terminal**, from a clean clone of this branch after `pnpm install && pnpm build`:
    - `pnpm demo:agent init` once (fresh phrase, never shown), then `pnpm demo:agent status`: "no name yet", 0 USDC, and the payer's USDC and ETH.
    - `billing-agent` must be unclaimed: `curl …/api/names/billing-agent` → `not_found`.
-   - Rehearse `join` and `spend` on a **throwaway** label and env file (`pnpm demo:agent join --env /tmp/rehearsal.env`), never on `billing-agent`.
+   - Rehearse `join` and `spend` on a **throwaway** label (and Alex's sign-up on a throwaway name, not `alex-meridian`) and env file (`pnpm demo:agent join --env /tmp/rehearsal.env`), never on `billing-agent`.
    - The API allows **3 registrations per IP per hour** (`RATE_LIMIT_REGISTER_PER_IP`); the live `join` is one. Don't rehearse registrations from the venue network in the last hour.
    - Alternative: **Claude Code** with the Soapay MCP connected ([demo-flow.md](demo-flow.md), Before the demo, item 5), clean session, env hidden.
-4. **Thief terminal:** `pnpm demo:attacker sam-demo` typed, not run. After the demo: `pnpm demo:attacker sam-demo --restore`.
-5. **Tabs warm:** Basescan (pass its Cloudflare check by hand), Sepolia Etherscan.
-6. **Freeze merges to `main` an hour before:** every merge redeploys.
-7. **Rehearse once end to end** and record it; the recording is every fallback.
+5. **Thief terminal:** `pnpm demo:attacker sam-demo` typed, not run. After the demo: `pnpm demo:attacker sam-demo --restore`.
+6. **Tabs warm:** Basescan (pass its Cloudflare check by hand), Sepolia Etherscan.
+7. **Freeze merges to `main` an hour before:** every merge redeploys.
+8. **Rehearse once end to end** and record it; the recording is every fallback.
