@@ -21,7 +21,7 @@ World ID is how you recover your pay if your recovery phrase leaks, and why a th
 ## 1. Sign up and link World ID (0:00–0:35)
 
 - **Do (Employer):** **Recipients → Invite employee** `alex-meridian` → **Sign and create link** → **Copy link**.
-- **Do (Employee):** open the link → **Create a new account** → **Copy phrase** (save it: the thief uses it later), tick, **Continue** → passkey → **Register for free** → **Continue** → **Set up with World ID** → scan the QR with the phone → approve **Proof of Human**.
+- **Do (Employee):** open the link → **Create a new account** → **Copy phrase** (save it: the thief uses it later), tick, **Continue** → passkey → **Register for free** → **Continue** → **Protect with World ID** → scan the QR with the phone → approve **Proof of Human**.
 - **Say:** "Alex signs up and links a World ID session to `alex-meridian.soapay.eth`. World ID proves a real, unique human, without saying who."
 - **Fallback:** `alex-demo`, signed up and linked in rehearsal.
 
