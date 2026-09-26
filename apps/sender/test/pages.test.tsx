@@ -90,6 +90,12 @@ describe("Pay run screen (CK design on our hooks)", () => {
     expect(setLabel).toHaveBeenCalledWith("September payroll");
   });
 
+  it("empty pay run blooms its ring in like the vault gate", () => {
+    const { container } = render(<PayRunPage run={run()} roster={roster([])} wallet={wallet} payPath={payPath} chainName="Base Sepolia" onReview={() => undefined} onOpenRecipients={() => undefined} />);
+    expect(screen.getByText("Nothing to send yet")).toBeInTheDocument();
+    expect(container.querySelector(".empty .halo canvas.dots")).not.toBeNull();
+  });
+
   it("says the paste box is roster only", async () => {
     render(<PayRunPage run={run()} roster={roster([])} wallet={wallet} payPath={payPath} chainName="Base Sepolia" onReview={() => undefined} onOpenRecipients={() => undefined} />);
     fireEvent.click(screen.getAllByRole("button", { name: "Paste rows" })[0]!);

@@ -1,27 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Dots, ErrorLine, Loading, motionOff } from "@soapay/ui";
+import { Bloom, BLOOM_OUT_S, ErrorLine, Loading, motionOff } from "@soapay/ui";
 
 /** Exit sequence: content fades first, then the halo flows outward, then the loader takes over. */
 const CONTENT_OUT_S = 0.5;
-const HALO_OUT_S = 1.1;
-const LEAVE_MS = (CONTENT_OUT_S + HALO_OUT_S) * 1000;
-
-/** The diamond behind the gate: blooms in on arrival, flows outward once the content has gone. */
-function Halo({ leaving }: { leaving: boolean }) {
-  if (motionOff()) return <div className="halo" aria-hidden><Dots mode="diamond" className="dots" /></div>;
-  return (
-    <motion.div
-      className="halo"
-      aria-hidden
-      initial={{ scale: 0.55, opacity: 0 }}
-      animate={leaving ? { scale: 1.45, opacity: 0 } : { scale: 1, opacity: 0.55 }}
-      transition={leaving ? { duration: HALO_OUT_S, delay: CONTENT_OUT_S, ease: [0.4, 0, 0.6, 1] } : { duration: 2.4, ease: [0.16, 1, 0.3, 1] }}
-    >
-      <Dots mode="diamond" animate className="dots" />
-    </motion.div>
-  );
-}
+const LEAVE_MS = (CONTENT_OUT_S + BLOOM_OUT_S) * 1000;
 
 /** Copy and card rise in a beat after the halo starts, and sink away first when leaving. */
 function Rise({ children, delay = 0, className, leaving = false }: { children: React.ReactNode; delay?: number; className?: string; leaving?: boolean }) {
@@ -95,7 +78,7 @@ export function VaultGate(p: VaultGateProps) {
     return (
       <div className="gate-wrap">
         <div className="gate">
-          <Halo leaving={leaving} />
+          <Bloom className="halo" leaving={leaving} leaveDelay={CONTENT_OUT_S} />
           <Rise delay={0.6} leaving={leaving}>
             <span className="eyebrow">Payroll vault · locked</span>
             <h1 style={{ marginTop: 8 }}>Unlock your payroll</h1>
@@ -137,7 +120,7 @@ export function VaultGate(p: VaultGateProps) {
   return (
     <div className="gate-wrap">
       <div className="gate">
-        <Halo leaving={leaving} />
+        <Bloom className="halo" leaving={leaving} leaveDelay={CONTENT_OUT_S} />
         <Rise delay={0.6} leaving={leaving}>
           <span className="eyebrow">Payroll vault · new</span>
           <h1 style={{ marginTop: 8 }}>Set up the payroll vault</h1>

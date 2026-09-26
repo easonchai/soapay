@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Collapse, CountUp, Dots, ErrorLine, NavyPanel, PageHead, Presence, Stagger, StaggerItem, Toggle, toast } from "@soapay/ui";
+import { Bloom, Collapse, CountUp, ErrorLine, NavyPanel, PageHead, Presence, Reveal, Stagger, StaggerItem, Toggle, toast } from "@soapay/ui";
 import { smallTeamWarning } from "@soapay/sdk";
 import type { PayRunState } from "../hooks/usePayRun.js";
 import type { PayPathState, WalletState } from "../hooks/usePayPath.js";
@@ -149,19 +149,25 @@ export function PayRunPage({ run, roster, wallet, payPath, chainName, onReview, 
           <Collapse open={showPaste || rows.length === 0}>
             {rows.length === 0 && !showPaste ? (
               <div className="empty" style={{ marginBottom: 16 }}>
-                <Dots mode="diamond" />
-                <span className="eyebrow">Nothing to send yet</span>
-                <h2>Add your team, then pay them in one run.</h2>
-                <p className="ink2 pretty" style={{ maxWidth: 440 }}>
-                  One person per line: their Soapay or ENS name, a comma, and the salary in USDC. Each name is resolved once and its
-                  record pinned; every run re-checks it.
-                </p>
-                <div className="actions" style={{ marginTop: 8 }}>
+                <Bloom />
+                <Reveal delay={0.4}>
+                  <span className="eyebrow">Nothing to send yet</span>
+                </Reveal>
+                <Reveal delay={0.55}>
+                  <h2>Add your team, then pay them in one run.</h2>
+                </Reveal>
+                <Reveal delay={0.7}>
+                  <p className="ink2 pretty" style={{ maxWidth: 440 }}>
+                    One person per line: their Soapay or ENS name, a comma, and the salary in USDC. Each name is resolved once and its
+                    record pinned; every run re-checks it.
+                  </p>
+                </Reveal>
+                <Reveal delay={0.85} className="actions" style={{ marginTop: 8 }}>
                   <button className="btn-primary" onClick={openPaste}>
                     Paste rows
                   </button>
                   <button onClick={onOpenRecipients}>Invite employee</button>
-                </div>
+                </Reveal>
               </div>
             ) : (
               <div className="stack-sm" style={{ paddingBottom: 16 }}>
