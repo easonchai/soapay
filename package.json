@@ -14,7 +14,8 @@
     "demo:attacker": "pnpm --filter @soapay/examples exec tsx ../scripts/demo-attacker.ts",
     "demo:agent": "pnpm --filter @soapay/examples exec tsx ../scripts/demo-agent.ts",
     "demo:recovery-check": "pnpm --filter @soapay/examples exec tsx ../scripts/demo-recovery-check.ts",
-    "demo:ens": "pnpm --filter @soapay/examples exec tsx ../scripts/demo-ens.ts"
+    "demo:ens": "pnpm --filter @soapay/examples exec tsx ../scripts/demo-ens.ts",
+    "demo:bootstrap": "pnpm --filter @soapay/examples exec tsx ../scripts/demo-bootstrap.ts"
   },
   "devDependencies": {
     "turbo": "^2.11.4",
