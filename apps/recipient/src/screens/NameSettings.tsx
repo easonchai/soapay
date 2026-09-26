@@ -23,7 +23,7 @@ const STAGE_TEXT: Record<string, string> = {
  * Wallet-signature accounts rotate by moving to a recovery-phrase account (owner decision 2026-09-26):
  * 1. create a phrase (new keys), 2. optionally Exit or Send funds from the old stealth addresses (they
  * stay scanned and spendable here either way), 3. point the name at the new keys with the normal
- * rotation below (World ID session if linked, otherwise the employer re-approves).
+ * rotation below (World ID if linked, otherwise the employer re-approves).
  */
 export function MoveToPhrase({
   canRotate,
@@ -95,7 +95,7 @@ export function MoveToPhrase({
           You can also do this later: the old addresses stay in your ledger.
         </li>
         <li>
-          <strong>3. Point your name at the new keys</strong> with "Rotate to new keys" below. With a World ID session your employer's app accepts it
+          <strong>3. Point your name at the new keys</strong> with "Rotate to new keys" below. With World ID linked your employer's app accepts it
           automatically; otherwise your employer re-approves you by hand.
         </li>
       </ol>
@@ -141,17 +141,17 @@ export function NameSettings() {
           />
           <div className="space-y-3 px-4 py-3 text-sm">
             {r.path === "attested" ? (
-              <p>A World ID Proof of Human session is linked to this name. Key changes are attested and your employer's app accepts them automatically.</p>
+              <p>World ID (Proof of Human) is linked to this name. Key changes are attested and your employer's app accepts them automatically.</p>
             ) : r.cooldownUntil ? (
               <Alert variant="info" title="World ID linked, waiting period running">
-                A session added after the name was claimed can back a key change from{" "}
+                World ID linked after the name was claimed can back a key change from{" "}
                 <strong data-testid="cooldown-until">{new Date(r.cooldownUntil).toLocaleString()}</strong> (a 72-hour wait, so someone with a stolen key
                 can't add their own and rotate at once). Until then, a key change needs your employer's approval.
               </Alert>
             ) : (
               <>
-                <p>No World ID session is linked. You can still change keys, but your employer must approve the change by hand before paying you again.</p>
-                <p className="text-xs text-muted-foreground">A session added now can back a key change after a 72-hour waiting period.</p>
+                <p>No World ID is linked. You can still change keys, but your employer must approve the change by hand before paying you again.</p>
+                <p className="text-xs text-muted-foreground">World ID linked now can back a key change after a 72-hour waiting period.</p>
                 {attaching ? (
                   <HumanCheck
                     mode="create-session"
@@ -224,7 +224,7 @@ export function NameSettings() {
               </div>
             )}
             {s.step === "human" && (
-              <HumanCheck mode="rotate" apiUrl={svc.settings.apiUrl} {...(r.sessionId ? { sessionId: r.sessionId } : {})} signal={s.draft.signal} onResult={(res) => void r.onHuman(res)} onCancel={r.cancel} />
+              <HumanCheck mode="rotate" apiUrl={svc.settings.apiUrl} signal={s.draft.signal} onResult={(res) => void r.onHuman(res)} onCancel={r.cancel} />
             )}
             {s.step === "working" && <Alert variant="info">{STAGE_TEXT[s.stage] ?? "Working…"}</Alert>}
             {s.step === "done" && (

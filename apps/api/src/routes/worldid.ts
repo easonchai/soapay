@@ -15,6 +15,7 @@ export function worldIdRoutes(deps: AppDeps): Hono {
       app_id: cfg.appId,
       rp_id: cfg.rpId,
       environment: cfg.environment,
+      action: cfg.action,
       credential: WORLD_ID_CREDENTIAL,
       attach_cooldown_seconds: cfg.attachCooldownSeconds,
       attester: deps.attester?.address ?? null,
@@ -22,15 +23,16 @@ export function worldIdRoutes(deps: AppDeps): Hono {
   );
 
   /**
-   * Signs a fresh RP context (`signRequest` from @worldcoin/idkit-server) for one IDKit
-   * session request: creating a session or proving an existing one. Body: `{}` or
-   * `{kind: "session"}`. Sessions take no action, and Soapay has no uniqueness requests.
+   * Signs a fresh RP context (`signRequest` from @worldcoin/idkit-server) for one one-time
+   * Proof of Human request on WORLD_ACTION (D-58): linking a World ID to a name, or proving
+   * it's the same human at rotation. Body: `{}`, `{bind}`, or the old `{kind: "session", bind?}`
+   * / `{kind: "uniqueness", bind?}` shapes (kind is informational; every request is one-time now).
    */
   r.post("/worldid/rp-context", async (c) => {
     if (!deps.worldId) throw new ApiError(503, "worldid_disabled", "World ID is disabled on this server");
     const body = await jsonBody(c);
-    if (body.kind !== undefined && body.kind !== "session") {
-      throw new ApiError(400, "invalid_kind", 'kind must be "session" (Soapay only uses World ID sessions)');
+    if (body.kind !== undefined && body.kind !== "session" && body.kind !== "uniqueness") {
+      throw new ApiError(400, "invalid_kind", 'kind must be "uniqueness" (or the legacy "session"), or omitted');
     }
     enforceRateLimits(
       db,

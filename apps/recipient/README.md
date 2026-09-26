@@ -68,7 +68,7 @@ mode offers a demo EOA and a demo smart wallet (refused) instead of a browser wa
 | Flow | Logic | Spec |
 | --- | --- | --- |
 | Onboarding | `src/onboarding/machine.ts` (pure reducer), `actions.ts` | PRD Flow 1 |
-| Optional World ID recovery session | `src/worldid/` seam, `features/recovery/attach.ts` | mvp-spec §5 |
+| Optional World ID recovery link (Proof of Human nullifier, D-58) | `src/worldid/` seam, `features/recovery/attach.ts` | mvp-spec §5 |
 | Scan | `src/scan/` (worker pool + `runScan` + `mergeScanResult`) | §3 scan.ts |
 | Ledger / clusters | `hooks/useWallet.ts` over SDK `buildLedger` / `balanceView` | PRD Flow 3 |
 | Send with the guard | `src/spend/flow.ts` (`prepareSpend`, `executeSpend`) | PRD Flow 4 |

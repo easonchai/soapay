@@ -2,7 +2,7 @@
  * Meta-address rotation under option A (docs/mvp-spec.md §2.1), framework-free:
  *
  *   1. `prepareRotation`: the next key generation (./keys.ts), a deadline, and the World ID signal
- *   2. World ID: `<HumanCheck mode="rotate" sessionId signal>` (proveSession)   ← caller
+ *   2. World ID: `<HumanCheck mode="rotate" signal>` (a Proof of Human proof, same nullifier; D-58)   ← caller
  *   3. `submitRotation`: sign the RotationClaim AND a `registerKeysOnBehalf` for the new meta with the
  *      registrant key, POST /names/:label/rotation. The API attests, tops up Sepolia gas, and relays
  *      the ERC-6538 re-registration on Base (step 3 of §2.1).

@@ -31,7 +31,7 @@ export type NameClaimBody = {
   /** uint256 unix seconds as a decimal string. */
   deadline: string;
   signature: Hex;
-  /** Optional World ID Proof of Human session result (§5), unchanged from IDKit. Only on a new name. */
+  /** Optional World ID Proof of Human result (§5, D-58), unchanged from IDKit. Only on a new name. */
   worldIdSession?: unknown;
   /** Invite code (0x, 32 bytes) for a label the employer reserved (§7). */
   inviteCode?: Hex;
@@ -49,8 +49,8 @@ export type InviteRecord = {
 };
 
 /**
- * POST /names/:label/session: attach a World ID session to an existing name. `signature` is the
- * registrant's EIP-712 AttachSession (SDK `attachSessionTypedData`).
+ * POST /names/:label/session: link World ID to an existing name (D-58). `signature` is the
+ * registrant's EIP-712 AttachWorldId over the proof's nullifier (SDK `attachWorldIdTypedData`).
  */
 export type AttachSessionBody = {
   deadline: string;
@@ -59,9 +59,8 @@ export type AttachSessionBody = {
 };
 export type AttachSessionResult = {
   label: string;
-  sessionId: string;
   attachedAt: number;
-  /** Unix seconds. A late-attached session can back a rotation only from here (72 h cooldown by default). */
+  /** Unix seconds. A late link can back a rotation only from here (72 h cooldown by default). */
   rotationAllowedFrom: number;
 };
 
@@ -72,7 +71,7 @@ export type RotationBody = {
   deadline: string;
   /** EIP-712 RotationClaim signed by the registrant key. */
   registrantSig: Hex;
-  /** `proveSession` result for the enrolled session (signal = rotateSignal(label, newMeta, deadline)). */
+  /** Proof of Human result from the same human as the linked World ID (signal = rotationSignal(label, newMeta, deadline)), D-58. */
   worldIdResult?: unknown;
   /**
    * ERC-6538 `registerKeysOnBehalf` signature by the same registrant for `newMeta` (current registry

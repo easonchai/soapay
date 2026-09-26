@@ -1,12 +1,13 @@
 import { Hono } from "hono";
 import { verifyTypedData, type Address, type Hash, type Hex, type TypedDataDefinition } from "viem";
 import {
-  attachSessionTypedData,
+  attachWorldIdTypedData,
   isValidLabel,
   metaRotationTypedData,
   rotationClaimTypedData,
   rotationSignal,
   sessionSignal,
+  worldIdNullifierOf,
 } from "@soapay/sdk";
 import { jsonBody, type AppDeps } from "../app.js";
 import { tx, type Db } from "../db.js";
@@ -50,9 +51,10 @@ async function signedBy(address: Address, typed: TypedDataDefinition, signature:
 }
 
 /**
- * World ID session routes (docs/worldid.md, docs/mvp-spec.md §2.1 and §5):
- * - POST /names/:label/session attaches a Proof of Human session to a name claimed without one.
- * - POST /names/:label/rotation re-verifies that session (proveSession), signs the
+ * World ID recovery routes (docs/worldid.md, docs/mvp-spec.md §2.1 and §5, D-58):
+ * - POST /names/:label/session links a World ID (the nullifier of a one-time Proof of Human
+ *   proof) to a name claimed without one. The path keeps its historical name.
+ * - POST /names/:label/rotation needs a proof with the same nullifier, signs the
  *   MetaRotation attestation sender apps require before auto-accepting a changed pin,
  *   relays the registrant's ERC-6538 `registerKeysOnBehalf` for the new meta-address (so
  *   `resolveStealthMeta`'s registry cross-check keeps passing; this is part of the rotation,
@@ -108,7 +110,7 @@ export function rotationRoutes(deps: AppDeps, relay: RegistrationRelay): Hono {
   };
 
   // ---------------------------------------------------------------------------
-  // Attach a session to an existing name
+  // Link a World ID to an existing name (the route keeps its historical /session path)
 
   r.post("/names/:label/session", async (c) => {
     const worldId = requireWorldId();
@@ -118,29 +120,29 @@ export function rotationRoutes(deps: AppDeps, relay: RegistrationRelay): Hono {
     const deadline = parseDeadline(body.deadline);
     const signature = requireHex(body.signature, "signature", 65);
     if (deadline <= BigInt(deps.now())) throw new ApiError(400, "expired", "deadline has passed");
-    const result = body.worldIdResult as Record<string, unknown> | undefined;
-    const sessionId = result && typeof result === "object" ? result.session_id : undefined;
-    if (typeof sessionId !== "string" || !/^session_[0-9a-fA-F]+$/.test(sessionId)) {
-      throw new ApiError(403, result ? "proof_malformed" : "proof_missing", "worldIdResult must be an IDKit session result");
+    const result = body.worldIdResult;
+    const nullifier = worldIdNullifierOf(result);
+    if (nullifier === undefined) {
+      throw new ApiError(403, result ? "proof_malformed" : "proof_missing", "worldIdResult must be an IDKit Proof of Human result");
     }
-    if (worldId.sessionForLabel(label)) {
-      throw new ApiError(409, "session_exists", "this name already has a World ID session; it can't be replaced here");
+    if (worldId.linkForLabel(label)) {
+      throw new ApiError(409, "session_exists", "this name is already linked to a World ID; it can't be replaced here");
     }
     rateLimit(deps.getIp(c));
 
     const ok = await signedBy(
       name.registrant,
-      attachSessionTypedData({ label, sessionId, deadline, chainId: config.chainId }) as unknown as TypedDataDefinition,
+      attachWorldIdTypedData({ label, nullifier, deadline, chainId: config.chainId }) as unknown as TypedDataDefinition,
       signature,
     );
-    if (!ok) throw new ApiError(401, "bad_signature", "AttachSession signature does not recover to the name's registrant");
+    if (!ok) throw new ApiError(401, "bad_signature", "AttachWorldId signature does not recover to the name's registrant");
 
-    const v = await worldId.verifyNewSession({ label, signal: sessionSignal(label, name.registrant), result, via: "attach" });
+    const v = await worldId.verifyLink({ label, signal: sessionSignal(label, name.registrant), result, via: "attach" });
     tx(db, () => v.commit());
-    logger.warn("names: world id session attached", { label, signature: redactSig(signature) });
-    const bound = worldId.sessionForLabel(label)!;
+    logger.warn("names: world id linked", { label, signature: redactSig(signature) });
+    const bound = worldId.linkForLabel(label)!;
     return c.json(
-      { label, sessionId: bound.session_id, attachedAt: bound.attached_at, rotationAllowedFrom: bound.attached_at + config.worldId.attachCooldownSeconds },
+      { label, attachedAt: bound.attached_at, rotationAllowedFrom: bound.attached_at + config.worldId.attachCooldownSeconds },
       201,
     );
   });
@@ -211,7 +213,8 @@ export function rotationRoutes(deps: AppDeps, relay: RegistrationRelay): Hono {
           `INSERT INTO attestations (label, old_meta, new_meta, verified_at, attester, signature, session_nullifier)
            VALUES (?, ?, ?, ?, ?, ?, ?)`,
         )
-        .run(label, oldMeta, newMeta, verifiedAt, attester.address, signature, proof.sessionNullifier);
+        // session_nullifier (historical name) holds the proof's single-use request nonce (D-58).
+        .run(label, oldMeta, newMeta, verifiedAt, attester.address, signature, proof.nonce);
       db.prepare("UPDATE names SET meta_address = ?, meta_bytes = ?, updated_at = ? WHERE label = ?").run(
         newMeta,
         newBytes,

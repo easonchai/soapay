@@ -1,65 +1,66 @@
 import { describe, expect, it, vi } from "vitest";
 import { getAddress, verifyTypedData, type Address, type Hash, type Hex, type PrivateKeyAccount } from "viem";
-import { attachSessionTypedData, nameClaimTypedData, rotationClaimTypedData, rotationSignal, sessionSignal, worldIdSignalHash } from "@soapay/sdk";
+import { attachWorldIdTypedData, nameClaimTypedData, rotationClaimTypedData, rotationSignal, sessionSignal, worldIdSignalHash } from "@soapay/sdk";
 import { hashSignal } from "@worldcoin/idkit-core/hashing";
 import type { Fetch } from "../src/worldid/portal.js";
 import { topUpRegistrant, type L1Funder } from "../src/topup.js";
 import { attesterAccount, j, makeTestApp, metaHex, metaUri, NOW, other, registrant } from "./helpers.js";
 
 const CHAIN_ID = 84532;
-const SESSION_A = `session_${"ab".repeat(64)}`;
-const SESSION_B = `session_${"cd".repeat(64)}`;
+/** Two humans: each has one stable nullifier on (RP, action `soapay-recovery`). */
+const HUMAN_A = `0x${"0a".repeat(32)}`;
+const HUMAN_B = `0x${"0b".repeat(32)}`;
+const dec = (h: string) => BigInt(h).toString(10);
 const REGISTER_SIG = `0x${"12".repeat(65)}` as Hex;
 
 // ---------------------------------------------------------------------------
 // Mocked Developer Portal: POST /api/v4/verify/{rp_id}
 
-type PortalMode = "ok" | "reject" | "production" | "down";
+type PortalMode = "ok" | "reject" | "production" | "down" | "other-nullifier";
 
 function portal() {
   let mode: PortalMode = "ok";
-  const calls: { url: string; body: any }[] = [];
+  const calls: { url: string; body: any; headers: Record<string, string> }[] = [];
   const fetch: Fetch = async (url, init) => {
     const body = JSON.parse(String(init?.body));
-    calls.push({ url, body });
+    calls.push({ url, body, headers: { ...(init?.headers as Record<string, string>) } });
     if (mode === "down") throw new Error("ECONNREFUSED");
     if (mode === "reject") return Response.json({ success: false, code: "invalid_proof", detail: "bad" }, { status: 400 });
+    const nullifier = mode === "other-nullifier" ? HUMAN_B : body.responses?.[0]?.nullifier;
     return Response.json({
       success: true,
+      action: body.action,
+      nullifier,
       environment: mode === "production" ? "production" : body.environment,
-      session_id: body.session_id,
-      results: [{ identifier: "proof_of_human", success: true }],
+      results: [{ identifier: "proof_of_human", success: true, nullifier }],
     });
   };
   return { fetch, calls, setMode: (m: PortalMode) => (mode = m) };
 }
 
-let nullifierCounter = 1n;
-
-/** An IDKit 4.3 session result (IDKitResultSession) for a Proof of Human credential. */
-function sessionResult(o: {
+/** An IDKit 4.3 one-time (uniqueness) result, `IDKitResultV4`, for a Proof of Human credential. */
+function proofResult(o: {
   nonce: string;
   signal: string;
-  sessionId?: string;
+  nullifier?: string;
   environment?: string;
+  action?: string;
   identifier?: string;
   schema?: number;
-  sessionNullifier?: string;
 }) {
   return {
     protocol_version: "4.0",
     nonce: o.nonce,
-    session_id: o.sessionId ?? SESSION_A,
+    action: o.action ?? "soapay-recovery",
     environment: o.environment ?? "staging",
     responses: [
       {
         identifier: o.identifier ?? "proof_of_human",
         issuer_schema_id: o.schema ?? 1,
         signal_hash: o.signal === "" ? "0x0" : worldIdSignalHash(o.signal),
-        session_nullifier: [o.sessionNullifier ?? `0x${(nullifierCounter++).toString(16).padStart(64, "0")}`, "0x01"],
+        nullifier: o.nullifier ?? HUMAN_A,
         proof: ["0x1", "0x2", "0x3", "0x4", "0x5"],
         expires_at_min: NOW + 86_400,
-        sybil_score: 1,
       },
     ],
   };
@@ -88,12 +89,12 @@ async function claimBody(opts: { signer?: PrivateKeyAccount; label?: string; met
   return { ...msg, deadline: msg.deadline.toString(), signature };
 }
 
-/** Claims `alice` with a Proof of Human session created at enrollment. */
-async function enrollWithSession(t: T, sessionId = SESSION_A) {
+/** Claims `alice` with a World ID link (a Proof of Human proof) made at enrollment. */
+async function enrollWithLink(t: T, nullifier = HUMAN_A) {
   const nonce = await t.rpNonce();
   const res = await t.post("/names", {
     ...(await claimBody()),
-    worldIdSession: sessionResult({ nonce, signal: sessionSignal("alice", registrant.address), sessionId }),
+    worldIdSession: proofResult({ nonce, signal: sessionSignal("alice", registrant.address), nullifier }),
   });
   expect(res.status).toBe(201);
   return j(res);
@@ -101,7 +102,7 @@ async function enrollWithSession(t: T, sessionId = SESSION_A) {
 
 async function rotationBody(
   t: T,
-  o: { newMeta?: string; oldMeta?: string; deadline?: bigint; signer?: PrivateKeyAccount; result?: unknown; sessionId?: string; nonce?: string } = {},
+  o: { newMeta?: string; oldMeta?: string; deadline?: bigint; signer?: PrivateKeyAccount; result?: unknown; nullifier?: string; nonce?: string } = {},
 ) {
   const newMeta = o.newMeta ?? metaUri(2);
   const deadline = o.deadline ?? BigInt(NOW + 600);
@@ -111,10 +112,10 @@ async function rotationBody(
   const result =
     "result" in o
       ? o.result
-      : sessionResult({
+      : proofResult({
           nonce: o.nonce ?? (await t.rpNonce()),
           signal: rotationSignal("alice", newMeta, deadline),
-          ...(o.sessionId ? { sessionId: o.sessionId } : {}),
+          ...(o.nullifier ? { nullifier: o.nullifier } : {}),
         });
   return { newMeta, deadline: deadline.toString(), registrantSig, registerSig: REGISTER_SIG, worldIdResult: result };
 }
@@ -124,30 +125,33 @@ const rotate = (t: T, body: unknown) => t.post("/names/alice/rotation", body);
 // ---------------------------------------------------------------------------
 
 describe("World ID config and RP context", () => {
-  it("serves public parameters only, with the registered app and RP ids by default", async () => {
-    const t = setup();
+  it("serves public parameters only, with the registered app, RP and action by default", async () => {
+    const t = setup({ env: { WORLD_STAGING_VERIFY_TOKEN: "staging-token-test" } });
     const cfg = await j(await t.app.request("/worldid/config"));
     expect(cfg).toEqual({
       enabled: true,
       app_id: "app_0cc7167efe114ac2e0ef7d9827098353",
       rp_id: "rp_3ede5fe1cab9af48",
       environment: "staging",
+      action: "soapay-recovery",
       credential: "proof_of_human",
       attach_cooldown_seconds: 259_200,
       attester: attesterAccount.address,
     });
-    expect(JSON.stringify(cfg)).not.toMatch(/5555/);
+    expect(JSON.stringify(cfg)).not.toMatch(/5555|staging-token-test/);
   });
 
-  it("signs a session RP context and refuses uniqueness requests", async () => {
-    const t = setup();
-    const res = await j(await t.post("/worldid/rp-context", { kind: "session" }));
-    expect(res.kind).toBe("session");
+  it("signs a one-time request for the configured action, and still accepts the old body shape", async () => {
+    const t = setup({ env: { WORLD_ACTION: "soapay-recovery-test" } });
+    const res = await j(await t.post("/worldid/rp-context", {}));
+    expect(res.kind).toBe("uniqueness");
+    expect(res.action).toBe("soapay-recovery-test");
     expect(res.rp_context.rp_id).toBe("rp_3ede5fe1cab9af48");
     expect(res.rp_context.nonce).toMatch(/^0x[0-9a-f]+$/i);
     expect(res.rp_context.expires_at - res.rp_context.created_at).toBe(300);
-    expect(res).not.toHaveProperty("action");
-    expect((await t.post("/worldid/rp-context", { kind: "uniqueness" })).status).toBe(400);
+    expect((await t.post("/worldid/rp-context", { kind: "session", bind: "soapay:x" })).status).toBe(200);
+    expect((await t.post("/worldid/rp-context", { kind: "uniqueness" })).status).toBe(200);
+    expect((await t.post("/worldid/rp-context", { kind: "bogus" })).status).toBe(400);
   });
 
   it("returns 503 when World ID is disabled", async () => {
@@ -170,6 +174,29 @@ describe("World ID config and RP context", () => {
   });
 });
 
+describe("Developer Portal call", () => {
+  it("sends the staging verification token only in staging, and only when configured", async () => {
+    const t = setup({ env: { WORLD_STAGING_VERIFY_TOKEN: "staging-token-test" } });
+    await enrollWithLink(t);
+    expect(t.portal.calls[0]!.headers["x-staging-verification-token"]).toBe("staging-token-test");
+    expect(t.portal.calls[0]!.body).toMatchObject({ protocol_version: "4.0", action: "soapay-recovery" }); // forwarded unchanged
+    expect(JSON.stringify(t.logs)).not.toContain("staging-token-test");
+
+    const u = setup();
+    await enrollWithLink(u);
+    expect(u.portal.calls[0]!.headers).not.toHaveProperty("x-staging-verification-token");
+
+    const prod = setup({ env: { WORLD_ENV: "production", WORLD_STAGING_VERIFY_TOKEN: "staging-token-test" } });
+    const nonce = await prod.rpNonce();
+    const res = await prod.post("/names", {
+      ...(await claimBody()),
+      worldIdSession: proofResult({ nonce, signal: sessionSignal("alice", registrant.address), environment: "production" }),
+    });
+    expect(res.status).toBe(201);
+    expect(prod.portal.calls[0]!.headers).not.toHaveProperty("x-staging-verification-token");
+  });
+});
+
 describe("enrollment has no World ID gate", () => {
   it("claims a name and registers without any proof", async () => {
     const t = setup();
@@ -180,82 +207,109 @@ describe("enrollment has no World ID gate", () => {
     expect((await j(await t.app.request("/names/alice"))).worldIdSession).toBeNull();
   });
 
-  it("verifies an optional Proof of Human session at enrollment and binds it to the name", async () => {
+  it("verifies an optional Proof of Human proof at enrollment and links its nullifier to the name", async () => {
     const t = setup();
-    const name = await enrollWithSession(t);
+    const name = await enrollWithLink(t);
     expect(name.worldIdSession).toEqual({ attachedAt: NOW });
-    expect(JSON.stringify(name)).not.toContain(SESSION_A); // the session id is never served
+    expect(JSON.stringify(name)).not.toContain(dec(HUMAN_A)); // the nullifier is never served
+    expect(JSON.stringify(name)).not.toContain(HUMAN_A.slice(2));
     expect(t.portal.calls).toHaveLength(1);
     expect(t.portal.calls[0]!.url).toBe("https://developer.world.org/api/v4/verify/rp_3ede5fe1cab9af48");
-    expect(t.portal.calls[0]!.body.session_id).toBe(SESSION_A);
-    expect(t.worldId!.sessionForLabel("alice")?.session_id).toBe(SESSION_A);
+    expect(t.worldId!.linkForLabel("alice")).toMatchObject({ nullifier: dec(HUMAN_A), via: "enroll", attached_at: NOW });
   });
 
-  it("stores nothing when the enrollment session is invalid", async () => {
+  it("stores nothing when the enrollment proof is invalid", async () => {
     const t = setup();
     const nonce = await t.rpNonce();
     // Signal bound to another registrant.
     const res = await t.post("/names", {
       ...(await claimBody()),
-      worldIdSession: sessionResult({ nonce, signal: sessionSignal("alice", other.address) }),
+      worldIdSession: proofResult({ nonce, signal: sessionSignal("alice", other.address) }),
     });
     expect(res.status).toBe(403);
     expect((await j(res)).error.code).toBe("signal_mismatch");
     expect((await t.app.request("/names/alice")).status).toBe(404);
   });
+
+  it("refuses session proofs (D-58: one-time requests only)", async () => {
+    const t = setup();
+    const nonce = await t.rpNonce();
+    const res = await t.post("/names", {
+      ...(await claimBody()),
+      worldIdSession: { ...proofResult({ nonce, signal: sessionSignal("alice", registrant.address) }), session_id: `session_${"ab".repeat(64)}` },
+    });
+    expect(res.status).toBe(403);
+    expect((await j(res)).error.code).toBe("proof_malformed");
+    expect(t.portal.calls).toHaveLength(0);
+  });
+
+  it("lets the same human link several names", async () => {
+    const t = setup();
+    await enrollWithLink(t);
+    const nonce = await t.rpNonce();
+    const res = await t.post("/names", {
+      ...(await claimBody({ signer: other, label: "bob", meta: metaUri(3) })),
+      worldIdSession: proofResult({ nonce, signal: sessionSignal("bob", other.address) }),
+    });
+    expect(res.status).toBe(201);
+    expect(t.worldId!.linkForLabel("bob")?.nullifier).toBe(dec(HUMAN_A));
+  });
 });
 
-describe("POST /names/:label/session (attach later)", () => {
-  async function attachBody(t: T, o: { signer?: PrivateKeyAccount; sessionId?: string } = {}) {
-    const sessionId = o.sessionId ?? SESSION_A;
+describe("POST /names/:label/session (link later)", () => {
+  async function attachBody(t: T, o: { signer?: PrivateKeyAccount; nullifier?: string; label?: string; registrant?: Address } = {}) {
+    const nullifier = o.nullifier ?? HUMAN_A;
+    const label = o.label ?? "alice";
     const deadline = BigInt(NOW + 600);
-    const signature = await (o.signer ?? registrant).signTypedData(
-      attachSessionTypedData({ label: "alice", sessionId, deadline, chainId: CHAIN_ID }),
-    );
-    const worldIdResult = sessionResult({ nonce: await t.rpNonce(), signal: sessionSignal("alice", registrant.address), sessionId });
+    const signature = await (o.signer ?? registrant).signTypedData(attachWorldIdTypedData({ label, nullifier, deadline, chainId: CHAIN_ID }));
+    const worldIdResult = proofResult({ nonce: await t.rpNonce(), signal: sessionSignal(label, o.registrant ?? registrant.address), nullifier });
     return { deadline: deadline.toString(), signature, worldIdResult };
   }
 
-  it("attaches a verified session authorised by the registrant", async () => {
+  it("links a verified World ID authorised by the registrant", async () => {
     const t = setup();
     expect((await t.post("/names", await claimBody())).status).toBe(201);
     const res = await t.post("/names/alice/session", await attachBody(t));
     expect(res.status).toBe(201);
-    expect(await j(res)).toMatchObject({ label: "alice", sessionId: SESSION_A, attachedAt: NOW, rotationAllowedFrom: NOW + 259_200 });
+    expect(await j(res)).toEqual({ label: "alice", attachedAt: NOW, rotationAllowedFrom: NOW + 259_200 });
     expect((await j(await t.app.request("/names/alice"))).worldIdSession).toEqual({ attachedAt: NOW });
+    expect(t.worldId!.linkForLabel("alice")).toMatchObject({ nullifier: dec(HUMAN_A), via: "attach" });
   });
 
-  it("refuses a bad AttachSession signature before calling World ID", async () => {
+  it("refuses a bad AttachWorldId signature before calling World ID", async () => {
     const t = setup();
     await t.post("/names", await claimBody());
     const res = await t.post("/names/alice/session", await attachBody(t, { signer: other }));
     expect(res.status).toBe(401);
     expect((await j(res)).error.code).toBe("bad_signature");
     expect(t.portal.calls).toHaveLength(0);
-    expect(t.worldId!.sessionForLabel("alice")).toBeUndefined();
+    expect(t.worldId!.linkForLabel("alice")).toBeUndefined();
   });
 
-  it("never replaces an existing session, and a session backs one name only", async () => {
+  it("refuses a signature over another nullifier (someone else's World ID)", async () => {
     const t = setup();
-    await enrollWithSession(t);
-    const again = await t.post("/names/alice/session", await attachBody(t, { sessionId: SESSION_B }));
+    await t.post("/names", await claimBody());
+    const body = await attachBody(t, { nullifier: HUMAN_A });
+    body.worldIdResult = proofResult({ nonce: await t.rpNonce(), signal: sessionSignal("alice", registrant.address), nullifier: HUMAN_B });
+    const res = await t.post("/names/alice/session", body);
+    expect(res.status).toBe(401);
+    expect(t.worldId!.linkForLabel("alice")).toBeUndefined();
+  });
+
+  it("never replaces an existing link, but a human may link several names", async () => {
+    const t = setup();
+    await enrollWithLink(t);
+    const again = await t.post("/names/alice/session", await attachBody(t, { nullifier: HUMAN_B }));
     expect(again.status).toBe(409);
     expect((await j(again)).error.code).toBe("session_exists");
+    expect(t.worldId!.linkForLabel("alice")?.nullifier).toBe(dec(HUMAN_A));
 
-    // Bob tries to bind Alice's session to his own name.
     expect((await t.post("/names", await claimBody({ signer: other, label: "bob", meta: metaUri(3) }))).status).toBe(201);
-    const deadline = BigInt(NOW + 600);
-    const signature = await other.signTypedData(attachSessionTypedData({ label: "bob", sessionId: SESSION_A, deadline, chainId: CHAIN_ID }));
-    const res = await t.post("/names/bob/session", {
-      deadline: deadline.toString(),
-      signature,
-      worldIdResult: sessionResult({ nonce: await t.rpNonce(), signal: sessionSignal("bob", other.address) }),
-    });
-    expect(res.status).toBe(409);
-    expect((await j(res)).error.code).toBe("session_taken");
+    const bob = await t.post("/names/bob/session", await attachBody(t, { signer: other, label: "bob", registrant: other.address }));
+    expect(bob.status).toBe(201);
   });
 
-  it("a late-attached session backs rotations only after the cooldown", async () => {
+  it("a late link backs rotations only after the cooldown", async () => {
     const t = setup();
     await t.post("/names", await claimBody());
     expect((await t.post("/names/alice/session", await attachBody(t))).status).toBe(201);
@@ -264,6 +318,20 @@ describe("POST /names/:label/session (attach later)", () => {
     expect((await j(early)).error.code).toBe("session_cooldown");
     t.setNow(NOW + 259_200);
     expect((await rotate(t, await rotationBody(t, { deadline: BigInt(NOW + 259_200 + 600) }))).status).toBe(201);
+  });
+
+  it("a legacy session-only row is not a link: rotation refused, linking allowed (with the cooldown)", async () => {
+    const t = setup();
+    await t.post("/names", await claimBody());
+    t.db
+      .prepare("INSERT INTO name_sessions (label, session_id, nullifier, attached_at, via) VALUES ('alice', ?, NULL, ?, 'enroll')")
+      .run(`session_${"ab".repeat(64)}`, NOW - 10);
+    expect((await j(await t.app.request("/names/alice"))).worldIdSession).toBeNull();
+    const res = await rotate(t, await rotationBody(t));
+    expect(res.status).toBe(409);
+    expect((await j(res)).error.code).toBe("no_worldid_link");
+    expect((await t.post("/names/alice/session", await attachBody(t))).status).toBe(201);
+    expect(t.worldId!.linkForLabel("alice")).toMatchObject({ nullifier: dec(HUMAN_A), via: "attach" });
   });
 });
 
@@ -280,7 +348,7 @@ describe("POST /names/:label/rotation", () => {
       },
     };
     const t = setup({ l1Funder });
-    await enrollWithSession(t);
+    await enrollWithLink(t);
     const body = await rotationBody(t);
     const res = await rotate(t, body);
     expect(res.status).toBe(201);
@@ -329,7 +397,7 @@ describe("POST /names/:label/rotation", () => {
 
   it("is idempotent: a retry finishes the relay without a second proof", async () => {
     const t = setup();
-    await enrollWithSession(t);
+    await enrollWithLink(t);
     const body = await rotationBody(t);
     expect((await rotate(t, body)).status).toBe(201);
     const portalCalls = t.portal.calls.length;
@@ -346,7 +414,7 @@ describe("POST /names/:label/rotation", () => {
 
   it("lists attestations newest first", async () => {
     const t = setup();
-    await enrollWithSession(t);
+    await enrollWithLink(t);
     expect((await rotate(t, await rotationBody(t))).status).toBe(201);
     t.setNow(NOW + 10);
     expect((await rotate(t, await rotationBody(t, { oldMeta: metaUri(2), newMeta: metaUri(5), deadline: BigInt(NOW + 900) }))).status).toBe(201);
@@ -363,44 +431,40 @@ describe("POST /names/:label/rotation", () => {
       expect((await j(await t.app.request("/names/alice"))).metaAddress).toBe(metaUri(1));
     };
 
-    it("a name with no session", async () => {
+    it("a name with no World ID link", async () => {
       const t = setup();
       await t.post("/names", await claimBody());
-      await expectRefused(t, await rotate(t, await rotationBody(t)), 409, "no_session");
+      await expectRefused(t, await rotate(t, await rotationBody(t)), 409, "no_worldid_link");
     });
 
-    it("a different person (session mismatch)", async () => {
+    it("a different person (another nullifier)", async () => {
       const t = setup();
-      await enrollWithSession(t);
-      await expectRefused(t, await rotate(t, await rotationBody(t, { sessionId: SESSION_B })), 403, "session_mismatch");
+      await enrollWithLink(t);
+      await expectRefused(t, await rotate(t, await rotationBody(t, { nullifier: HUMAN_B })), 403, "human_mismatch");
       expect(t.portal.calls).toHaveLength(1); // refused before the portal call
     });
 
-    it("a replayed session_nullifier", async () => {
+    it("a portal-verified nullifier that differs from the proof", async () => {
       const t = setup();
-      await enrollWithSession(t);
+      await enrollWithLink(t);
+      t.portal.setMode("other-nullifier");
+      await expectRefused(t, await rotate(t, await rotationBody(t)), 403, "proof_invalid");
+    });
+
+    it("a replayed proof (its single-use nonce is spent)", async () => {
+      const t = setup();
+      await enrollWithLink(t);
       const first = await rotationBody(t);
       expect((await rotate(t, first)).status).toBe(201);
-      const replay = first.worldIdResult as any;
-      const deadline = BigInt(NOW + 700);
-      const body = await rotationBody(t, {
-        oldMeta: metaUri(2),
-        newMeta: metaUri(5),
-        deadline,
-        result: {
-          ...replay,
-          nonce: await t.rpNonce(),
-          responses: [{ ...replay.responses[0], signal_hash: worldIdSignalHash(rotationSignal("alice", metaUri(5), deadline)) }],
-        },
-      });
-      const res = await rotate(t, body);
+      // The exact same proof, for the next change: refused.
+      const res = await rotate(t, await rotationBody(t, { oldMeta: metaUri(2), newMeta: metaUri(5), result: first.worldIdResult }));
       expect(res.status).toBe(403);
-      expect((await j(res)).error.code).toBe("session_replayed");
+      expect(["request_used", "signal_mismatch"]).toContain((await j(res)).error.code);
     });
 
     it("a reused RP nonce", async () => {
       const t = setup();
-      await enrollWithSession(t);
+      await enrollWithLink(t);
       const nonce = await t.rpNonce();
       expect((await rotate(t, await rotationBody(t, { nonce }))).status).toBe(201);
       const res = await rotate(t, await rotationBody(t, { nonce, oldMeta: metaUri(2), newMeta: metaUri(5) }));
@@ -408,32 +472,55 @@ describe("POST /names/:label/rotation", () => {
       expect((await j(res)).error.code).toBe("request_used");
     });
 
+    it("the enrollment proof replayed for a rotation", async () => {
+      const t = setup();
+      const nonce = await t.rpNonce(rotationSignal("alice", metaUri(2), BigInt(NOW + 600)));
+      const enroll = proofResult({ nonce, signal: sessionSignal("alice", registrant.address) });
+      expect((await t.post("/names", { ...(await claimBody()), worldIdSession: enroll })).status).toBe(201);
+      await expectRefused(t, await rotate(t, await rotationBody(t, { result: enroll })), 403, "request_used");
+    });
+
+    it("a proof for another action", async () => {
+      const t = setup();
+      await enrollWithLink(t);
+      const deadline = BigInt(NOW + 600);
+      const result = proofResult({ nonce: await t.rpNonce(), signal: rotationSignal("alice", metaUri(2), deadline), action: "soapay-enroll" });
+      await expectRefused(t, await rotate(t, await rotationBody(t, { deadline, result })), 403, "action_mismatch");
+      expect(t.portal.calls).toHaveLength(1);
+    });
+
     it("an expired deadline", async () => {
       const t = setup();
-      await enrollWithSession(t);
+      await enrollWithLink(t);
       await expectRefused(t, await rotate(t, await rotationBody(t, { deadline: BigInt(NOW) })), 400, "expired");
     });
 
     it("an expired World ID request", async () => {
       const t = setup();
-      await enrollWithSession(t);
+      await enrollWithLink(t);
       const nonce = await t.rpNonce();
       t.setNow(NOW + 300 + 601);
       await expectRefused(t, await rotate(t, await rotationBody(t, { nonce, deadline: BigInt(NOW + 5000) })), 403, "request_expired");
     });
 
+    it("a nonce this server never issued", async () => {
+      const t = setup();
+      await enrollWithLink(t);
+      await expectRefused(t, await rotate(t, await rotationBody(t, { nonce: `0x${"77".repeat(32)}` })), 403, "unknown_request");
+    });
+
     it("a bad registrant signature", async () => {
       const t = setup();
-      await enrollWithSession(t);
+      await enrollWithLink(t);
       await expectRefused(t, await rotate(t, await rotationBody(t, { signer: other })), 401, "bad_signature");
     });
 
     it("an environment mismatch (in the result, or reported by the portal)", async () => {
       const t = setup();
-      await enrollWithSession(t);
+      await enrollWithLink(t);
       const nonce = await t.rpNonce();
       const deadline = BigInt(NOW + 600);
-      const result = sessionResult({ nonce, signal: rotationSignal("alice", metaUri(2), deadline), environment: "production" });
+      const result = proofResult({ nonce, signal: rotationSignal("alice", metaUri(2), deadline), environment: "production" });
       await expectRefused(t, await rotate(t, await rotationBody(t, { deadline, result })), 403, "environment_mismatch");
       t.portal.setMode("production");
       await expectRefused(t, await rotate(t, await rotationBody(t)), 403, "environment_mismatch");
@@ -441,19 +528,19 @@ describe("POST /names/:label/rotation", () => {
 
     it("a cancelled or missing proof", async () => {
       const t = setup();
-      await enrollWithSession(t);
+      await enrollWithLink(t);
       await expectRefused(t, await rotate(t, await rotationBody(t, { result: { error: "user_rejected" } })), 403, "proof_cancelled");
       await expectRefused(t, await rotate(t, await rotationBody(t, { result: undefined })), 403, "proof_missing");
     });
 
     it("a proof the portal rejects, the wrong credential, and a portal outage", async () => {
       const t = setup();
-      await enrollWithSession(t);
+      await enrollWithLink(t);
       t.portal.setMode("reject");
       await expectRefused(t, await rotate(t, await rotationBody(t)), 403, "proof_invalid");
       t.portal.setMode("ok");
       const deadline = BigInt(NOW + 600);
-      const selfie = sessionResult({ nonce: await t.rpNonce(), signal: rotationSignal("alice", metaUri(2), deadline), identifier: "selfie", schema: 11 });
+      const selfie = proofResult({ nonce: await t.rpNonce(), signal: rotationSignal("alice", metaUri(2), deadline), identifier: "selfie", schema: 11 });
       await expectRefused(t, await rotate(t, await rotationBody(t, { deadline, result: selfie })), 403, "wrong_credential");
       t.portal.setMode("down");
       await expectRefused(t, await rotate(t, await rotationBody(t)), 503, "worldid_unavailable");
@@ -461,7 +548,7 @@ describe("POST /names/:label/rotation", () => {
 
     it("a registry-rejected registerSig, without burning the proof", async () => {
       const t = setup();
-      await enrollWithSession(t);
+      await enrollWithLink(t);
       const body = await rotationBody(t);
       t.client.simulateContract.mockRejectedValueOnce(new Error("ERC6538Registry__InvalidSignature"));
       await expectRefused(t, await rotate(t, body), 400, "registration_rejected");
@@ -470,7 +557,7 @@ describe("POST /names/:label/rotation", () => {
 
     it("rate limits per IP", async () => {
       const t = setup({ env: { RATE_LIMIT_NAMES_PER_IP: "2" } });
-      await enrollWithSession(t);
+      await enrollWithLink(t);
       t.setIp("10.9.9.9");
       await rotate(t, await rotationBody(t, { signer: other }));
       await rotate(t, await rotationBody(t, { signer: other }));
@@ -527,23 +614,38 @@ describe("gas top-up", () => {
   });
 });
 
-describe("session proofs without a signal (World App runs sessions without one)", () => {
+describe("proofs without a signal hash (bound through the request instead, D-57)", () => {
   it("accepts a proof whose single-use request was bound to this exact signal", async () => {
     const t = setup();
     const nonce = await t.rpNonce(sessionSignal("alice", registrant.address));
-    const res = await t.post("/names", { ...(await claimBody()), worldIdSession: sessionResult({ nonce, signal: "" }) });
+    const res = await t.post("/names", { ...(await claimBody()), worldIdSession: proofResult({ nonce, signal: "" }) });
     expect(res.status).toBe(201);
   });
 
   it("refuses one bound to a different signal, or not bound at all", async () => {
     const t = setup();
     const other = await t.rpNonce(sessionSignal("mallory", registrant.address));
-    const a = await t.post("/names", { ...(await claimBody()), worldIdSession: sessionResult({ nonce: other, signal: "" }) });
+    const a = await t.post("/names", { ...(await claimBody()), worldIdSession: proofResult({ nonce: other, signal: "" }) });
     expect(a.status).toBe(403);
     expect((await j(a)).error.code).toBe("signal_mismatch");
     const unbound = await t.rpNonce();
-    const b = await t.post("/names", { ...(await claimBody()), worldIdSession: sessionResult({ nonce: unbound, signal: "" }) });
+    const b = await t.post("/names", { ...(await claimBody()), worldIdSession: proofResult({ nonce: unbound, signal: "" }) });
     expect(b.status).toBe(403);
     expect((await j(b)).error.code).toBe("signal_mismatch");
+  });
+});
+
+describe("link then rotate: same human accepted, another human refused", () => {
+  it("rotates twice with the same nullifier and refuses another person in between", async () => {
+    const t = setup();
+    await enrollWithLink(t);
+    expect((await rotate(t, await rotationBody(t))).status).toBe(201);
+    const mallory = await rotate(t, await rotationBody(t, { oldMeta: metaUri(2), newMeta: metaUri(5), nullifier: HUMAN_B }));
+    expect(mallory.status).toBe(403);
+    expect((await j(mallory)).error.code).toBe("human_mismatch");
+    t.setNow(NOW + 5);
+    expect((await rotate(t, await rotationBody(t, { oldMeta: metaUri(2), newMeta: metaUri(5), deadline: BigInt(NOW + 900) }))).status).toBe(201);
+    const rows = t.db.prepare("SELECT session_nullifier FROM attestations").all() as { session_nullifier: string }[];
+    expect(new Set(rows.map((r) => r.session_nullifier)).size).toBe(2); // one spent request nonce per proof
   });
 });
