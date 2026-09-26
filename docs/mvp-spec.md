@@ -164,7 +164,7 @@ Lets the employer pre-assign the label so the employee's onboarding is: open the
   - `scan` / `balance`;
   - `spend`: to an address or a name, with guard-checked 7702 + paymaster;
   - `swap_in_place`: through the Uniswap proxy;
-  - `create_agent_identity`.
+  - `create_agent_identity` (optionally with an employer `invite` link or code, which sets the label and marks the invite joined; D-56).
 - **Guardrails:**
   - per-call and per-day USDC caps (env);
   - `dry_run: true` by default for pay and spend (it returns the plan; a second call with `confirm: <planId>` executes it);

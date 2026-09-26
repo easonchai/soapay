@@ -5,12 +5,13 @@ import {
   CHAINS,
   buildMetadata77,
   derivePayRun,
+  inviteCodeHash,
   keysFromMnemonic,
   type AnnouncementRecord,
   type SwapQuote,
 } from "@soapay/sdk";
 import { loadConfig } from "../src/config.js";
-import type { Api, Chain, Ctx, FaucetResult } from "../src/context.js";
+import type { Api, Chain, Ctx, FaucetResult, InviteRecord } from "../src/context.js";
 import { Caps, PlanStore } from "../src/guardrails.js";
 import type { Logger } from "../src/log.js";
 import { memoryStateStore } from "../src/state.js";
@@ -117,14 +118,21 @@ export function makeCtx(opts: { env?: Record<string, string>; keys?: boolean; pa
   } as unknown as FakeChain;
 
   const registry = new Map<string, { label: string; name: string; registrant: Address; metaAddress: string; txHash: Hex | null }>();
+  // Invites by code hash; claimName with a matching inviteCode flips one to "claimed", like the API.
+  const invites = new Map<string, InviteRecord>();
   const api = {
     register: vi.fn(async (_b: unknown) => ({ txHash: hash(), status: "success" })),
-    claimName: vi.fn(async (b: { label: string; registrant: Address; metaAddress: string }) => {
+    claimName: vi.fn(async (b: { label: string; registrant: Address; metaAddress: string; inviteCode?: Hex }) => {
       const rec = { label: b.label, name: `${b.label}.soapay.eth`, registrant: b.registrant, metaAddress: b.metaAddress, txHash: hash() };
+      if (b.inviteCode) {
+        const inv = invites.get(inviteCodeHash(b.inviteCode));
+        if (inv) invites.set(inv.codeHash, { ...inv, status: "claimed", name: rec.name });
+      }
       registry.set(b.label, rec);
       return rec;
     }),
     getName: vi.fn(async (label: string) => registry.get(label) ?? null),
+    getInvite: vi.fn(async (codeHash: Hex) => invites.get(codeHash.toLowerCase()) ?? null),
     announcements: vi.fn(async () => opts.announcements ?? []),
     faucet: vi.fn(async (address: Address): Promise<FaucetResult> => ({
       status: "sent" as const,
@@ -149,5 +157,5 @@ export function makeCtx(opts: { env?: Record<string, string>; keys?: boolean; pa
     sleep: async () => {},
     spendDelayMs: 0,
   };
-  return { ctx, chain, api, state, logs, registry, advance: (s: number) => void (now += s), setAllowance: (a: bigint) => void (allowance = a) };
+  return { ctx, chain, api, state, logs, registry, invites, advance: (s: number) => void (now += s), setAllowance: (a: bigint) => void (allowance = a) };
 }

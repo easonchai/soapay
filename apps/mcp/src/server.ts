@@ -48,7 +48,8 @@ export function createServer(ctx: Ctx): McpServer {
       instructions:
         "Soapay: private USDC payments to ENS names on Base via stealth addresses. Value-moving tools (pay, spend, swap_in_place) " +
         "always return a plan first; execute by calling the same tool again with { confirm: planId } within 10 minutes. " +
-        "Per-call and per-day caps apply, and the consolidation guard's block cannot be overridden.",
+        "Per-call and per-day caps apply, and the consolidation guard's block cannot be overridden. " +
+        "An employer invite link (…/#/join?code=…) is joined with create_agent_identity({ invite }).",
     },
   );
 
@@ -80,9 +81,22 @@ export function createServer(ctx: Ctx): McpServer {
       title: "Create agent identity",
       description:
         "Register this agent's stealth meta-address (sponsored ERC-6538) and claim <label>.soapay.eth with ENSIP-26 agent records " +
-        "(agent-context, agent-endpoint[...]). Idempotent for a label this agent already owns.",
+        "(agent-context, agent-endpoint[...]). Idempotent for a label this agent already owns. " +
+        "To join an employer's payroll, pass the invite link the employer shared (e.g. " +
+        "\"https://…/#/join?code=0x…&label=invoice-agent&org=…\") or its bare code as `invite`: the label then comes from the invite " +
+        "(omit `label`, or pass the same one), and the employer's app sees the invite as joined.",
       inputSchema: {
-        label: z.string().regex(/^[a-z0-9-]{3,32}$/, "3-32 of [a-z0-9-]").describe("Subname label, e.g. ledger-bot"),
+        label: z
+          .string()
+          .regex(/^[a-z0-9-]{3,32}$/, "3-32 of [a-z0-9-]")
+          .optional()
+          .describe("Subname label, e.g. ledger-bot. Required unless `invite` is given (the invite reserves the label)"),
+        invite: z
+          .string()
+          .min(66)
+          .max(2048)
+          .optional()
+          .describe("Employer invite: the full join link (…/#/join?code=0x…&label=…&org=…) or the 0x-prefixed 32-byte code"),
         description: z.string().min(1).max(500).optional().describe("What the agent does (goes into agent-context)"),
         capabilities: z.array(z.string().min(1).max(40)).max(16).optional().describe("Short capability tags, e.g. [\"pay\",\"invoice\"]"),
         endpoints: z

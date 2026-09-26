@@ -108,6 +108,14 @@ export function liveApi(config: McpConfig): Api {
         throw e;
       }
     },
+    async getInvite(codeHash) {
+      try {
+        return await call(`${root}/invites/${codeHash}`);
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 404) return null;
+        throw e;
+      }
+    },
     async announcements() {
       return (await fetchAnnouncements({ apiUrl: root, limit: 1000 })).announcements;
     },
