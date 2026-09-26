@@ -10,7 +10,7 @@
 
 [![Soapay landing page: every wallet address is a public bank statement](docs/demo-screens/landing-hero.png)](https://soapay.up.railway.app/)
 
-**Live demo:** [soapay.up.railway.app](https://soapay.up.railway.app/) (company app) · [soapay.up.railway.app/app/](https://soapay.up.railway.app/app/) (employee app), on Base Sepolia.
+**Live demo:** [soapay.up.railway.app](https://soapay.up.railway.app/) (company app) · [soapay.up.railway.app/app/](https://soapay.up.railway.app/app/) (employee app), on Base Sepolia. **Docs:** [soapay.up.railway.app/docs/](https://soapay.up.railway.app/docs/).
 
 > [!NOTE]
 > **Testnet notes (D-52).** On Base Sepolia the apps pay in **Soapay's mock USDC** ([`0x028D…14Bb`](https://sepolia.basescan.org/address/0x028D969c20b740582428f5043954c380686214Bb)), not Circle's, so you don't need a faucet: the first time a wallet opens the company app it gets **1,000,000 test USDC** once. Stealth spends are **gas-sponsored** (on mainnet the Circle Paymaster takes gas in USDC), and smart-wallet employers paying by EIP-5792 batch are sponsored too; a plain EOA employer still needs a little Base Sepolia ETH. The compliant **exit is hidden** on the testnet build, because CCTP only bridges Circle USDC. Details: [docs/testnet-deployment.md](docs/testnet-deployment.md).
@@ -73,6 +73,7 @@ Fluidkey and Umbra use the same ERC-5564 and ERC-6538 standards, and both hide y
 - [Who we are](#team)
 
 **Documents**
+- [Docs site](https://soapay.up.railway.app/docs/) (source in [`apps/docs`](apps/docs/README.md))
 - [Pitch](pitch/README.md) · [PRD](PRD.md) · [Design brief](DESIGN_BRIEF.md) · [Privacy model](docs/privacy-model.md) · [Demo flow with screenshots](docs/demo-flow.md)
 - [StealthDisperse plan](contracts/PLAN.md) · [MVP spec](docs/mvp-spec.md) · [PRD analysis](docs/prd-analysis.md) · [Decision log](docs/decision-log.md) · [Testnet deployment](docs/testnet-deployment.md)
 
