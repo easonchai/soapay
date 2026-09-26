@@ -78,7 +78,7 @@ export type Profile = {
   registration?: { txHash: Hex; status: string; chainId: number; at: number };
   name?: { label: string; name: string; at: number };
   /**
-   * Optional self-service recovery (§5): a World ID Selfie Check session. With it, a key rotation is
+   * Optional self-service recovery (§5): a World ID Proof of Human session. With it, a key rotation is
    * attested by the API and auto-accepted by the employer; without it, the employer approves by hand.
    * `attachedTo` is the label the API has the session on (set with the name claim or attached later).
    */

@@ -81,7 +81,7 @@ export function RunDetailPage(p: RunDetailPageProps) {
       <ErrorLine error={p.error} />
       {!retry.ok && status !== "complete" && run.path !== "safe-export" && <span className="hint">{retry.reason}</span>}
       {run.excluded.length > 0 && (
-        <Notice tone="warn">Left out of this run: {run.excluded.map((x) => `${x.name} (${x.reason})`).join("; ")}</Notice>
+        <Notice tone="warn">Left out: {run.excluded.map((x) => `${x.name} (${x.reason})`).join("; ")}</Notice>
       )}
 
       <div className="split" style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 32, alignItems: "start" }}>
@@ -165,7 +165,7 @@ export function RunDetailPage(p: RunDetailPageProps) {
       <div className="stack-sm" style={{ gap: 12 }}>
         <div className="between" style={{ alignItems: "baseline" }}>
           <span style={{ fontWeight: 500 }}>Names → amounts</span>
-          <span className="ink2">Private to you. Stored addresses are records, never payment targets.</span>
+          <span className="ink2">Private to you; addresses are records, never payment targets.</span>
         </div>
         <div className="table">
           <div className="thead" style={{ gridTemplateColumns: "1.2fr 0.8fr 0.8fr 2.4fr" }}>

@@ -133,12 +133,14 @@ export type AttestationsResponse = { attester: Address; items: MetaRotationAttes
 // ---------------------------------------------------------------------------
 
 /**
- * World ID credential Soapay requires: Selfie Check (issuer schema 11), in a session.
+ * World ID credential Soapay requires: Proof of Human (issuer schema 1), in a session. Moving future
+ * salary is the highest-stakes action in the product, and World describes Selfie Check as a
+ * medium-assurance signal, so rotation asks for the strongest "same human" proof (D-54).
  * Rotation is a continuity question ("same person who enrolled?"), which sessions answer
  * without an Orb. See docs/worldid.md.
  */
-export const WORLD_ID_CREDENTIAL = "selfie" as const;
-export const WORLD_ID_SCHEMA_ID = 11;
+export const WORLD_ID_CREDENTIAL = "proof_of_human" as const;
+export const WORLD_ID_SCHEMA_ID = 1;
 
 /** Signal for the session created at enrollment (or attached later): binds it to name + key. */
 export function sessionSignal(label: string, registrant: Address): string {

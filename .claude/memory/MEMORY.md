@@ -7,7 +7,7 @@
 - [Gateway mode](decision-gateway-announce.md) — DEFERRED to the roadmap (PRD tier 2); announce-at-resolve design kept for later
 - [ScopeLift ESM quirk](scopelift-sdk-esm-quirk.md) — bundle/inline/tsx the SDK; plain Node can't load it
 - [Open questions](prd-open-questions.md) — items not already tracked in CLAUDE.md or contracts/PLAN.md
-- [Bounties](decision-bounties.md) — ENSv2 + World IDKit + Uniswap API; Intercepta rejected (needs agents)
+- [Bounties](decision-bounties.md) — ENSv2 + World IDKit (Uniswap dropped 09-26, D-53); Intercepta rejected
 - [CK's UI](team-ui-ck.md) — teammate CK builds a separate UI; keep ours simple with logic in hooks for a later merge/compare
 - [CK integration](decision-ck-integration.md) — CK's UI + our engine; keys, spend, sender-mode, backend and names decisions for the merge
 - [Privacy roadmap](decision-privacy-roadmap.md) — timing fix + swap-proxy fix; shielded rail post-hackathon (D-31); IDKit only; pre-submission order

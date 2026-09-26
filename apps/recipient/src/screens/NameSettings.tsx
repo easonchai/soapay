@@ -141,7 +141,7 @@ export function NameSettings() {
           />
           <div className="space-y-3 px-4 py-3 text-sm">
             {r.path === "attested" ? (
-              <p>A World ID Selfie Check session is linked to this name. Key changes are attested and your employer's app accepts them automatically.</p>
+              <p>A World ID Proof of Human session is linked to this name. Key changes are attested and your employer's app accepts them automatically.</p>
             ) : r.cooldownUntil ? (
               <Alert variant="info" title="World ID linked, waiting period running">
                 A session added after the name was claimed can back a key change from{" "}

@@ -55,9 +55,9 @@ export function ReviewPage({ run, plan, wallet, payPath, chainName, testnet = fa
   };
 
   const modeCard = !wallet.isConnected
-    ? { h: "Connect a wallet to pay", p: "Or export the run for a Safe below." }
+    ? { h: "Connect a wallet to pay", p: "Or export for a Safe below." }
     : payPath.loading
-      ? { h: "Checking what your wallet supports…", p: "" }
+      ? { h: "Checking your wallet…", p: "" }
       : path
         ? {
             h:
@@ -79,11 +79,10 @@ export function ReviewPage({ run, plan, wallet, payPath, chainName, testnet = fa
           to {plural(people.length, "person", "people")}, on {plural(plan.lines.length, "fresh address", "fresh addresses")}.
         </h1>
         <p className="ink2 pretty">
-          {txs === 1 ? "One transaction." : `${txs} transactions, cut from one globally sorted list.`} Each recipient&apos;s addresses are new and
-          known only to them.{" "}
+          {txs === 1 ? "One transaction." : `${txs} transactions from one sorted list.`} Addresses known only to each recipient.{" "}
           {chunk
-            ? `On chain this looks like ${plan.lines.length} payments of about ${chunkLabel} USDC to ${plan.lines.length} strangers.`
-            : `On chain this looks like ${plan.lines.length} payments to ${plan.lines.length} strangers.`}
+            ? `On chain: ${plan.lines.length} payments of about ${chunkLabel} USDC to ${plan.lines.length} strangers.`
+            : `On chain: ${plan.lines.length} payments to ${plan.lines.length} strangers.`}
         </p>
         <NavyPanel dots={false}>
           <div className="rows">
@@ -126,12 +125,11 @@ export function ReviewPage({ run, plan, wallet, payPath, chainName, testnet = fa
         </div>
         {plan.smallTeam && <Notice tone="warn">{plan.smallTeam}</Notice>}
         {!chunk && (
-          <Notice tone="warn">Denominated payouts are off for this run: every line is someone&apos;s whole salary, readable by coworkers on chain.</Notice>
+          <Notice tone="warn">Denominated payouts off: every line is a whole salary, readable by coworkers on chain.</Notice>
         )}
         {chunk && remainders > 0 && (
           <Notice tone="warn">
-            {remainders === 1 ? "1 remainder line" : `${remainders} remainder lines`} (smaller than {chunkLabel} USDC) {remainders === 1 ? "is the only line" : "are the only lines"} that
-            stand{remainders === 1 ? "s" : ""} out. Each is paid in full, never carried over.
+            {remainders === 1 ? "1 remainder line" : `${remainders} remainder lines`} under {chunkLabel} USDC stand{remainders === 1 ? "s" : ""} out: paid in full, never carried over.
           </Notice>
         )}
         {plan.denomStats && plan.denomStats.uniqueAmountCount > 0 && (
@@ -142,7 +140,7 @@ export function ReviewPage({ run, plan, wallet, payPath, chainName, testnet = fa
             {m}
           </Notice>
         ))}
-        {wallet.wrongChain && <Notice tone="warn">Your wallet is on another chain; it will be asked to switch to {chainName}.</Notice>}
+        {wallet.wrongChain && <Notice tone="warn">Wallet on another chain; it will be asked to switch to {chainName}.</Notice>}
         {bigTestRun && (
           <Notice tone="warn">
             <span data-testid="testnet-big-run">{bigTestRun}</span>{" "}
@@ -159,12 +157,12 @@ export function ReviewPage({ run, plan, wallet, payPath, chainName, testnet = fa
             Back to edit
           </button>
           <button className="btn-primary btn-lg" style={{ flex: 1 }} onClick={() => void run.execute()} disabled={sending || !canPay || !confirmed}>
-            {sending ? "Sending… confirm in your wallet" : path?.kind === "disperse" ? "Approve and send" : "Sign and send"}
+            {sending ? "Sending… confirm in wallet" : path?.kind === "disperse" ? "Approve and send" : "Sign and send"}
           </button>
         </div>
         <div className="stack-sm">
           <button className="btn-text" style={{ alignSelf: "flex-start" }} onClick={() => setShowSafe((s) => !s)}>
-            {showSafe ? "Hide Safe export" : "Paying from a Safe? Export for the Transaction Builder"}
+            {showSafe ? "Hide Safe export" : "Paying from a Safe? Export instead"}
           </button>
           {showSafe && (
             <div className="actions">
@@ -180,7 +178,7 @@ export function ReviewPage({ run, plan, wallet, payPath, chainName, testnet = fa
       <div className="stack-sm" style={{ gap: 12 }}>
         <div className="between" style={{ alignItems: "baseline" }}>
           <span style={{ fontWeight: 500 }}>What each person receives</span>
-          <span className="ink2">Addresses are kept in History for your audit trail. A run always derives new ones.</span>
+          <span className="ink2">History keeps them for audit; every run derives new ones.</span>
         </div>
         <div className="table">
           <div className="thead" style={{ gridTemplateColumns: "1.2fr 0.9fr 1.5fr 1.3fr" }}>
@@ -209,7 +207,7 @@ export function ReviewPage({ run, plan, wallet, payPath, chainName, testnet = fa
               {chunk
                 ? plan.denomination?.mode === "carry"
                   ? "Carry mode: every line is a whole chunk."
-                  : "rem. = the remainder, sent as one smaller final line: the only line that stands out."
+                  : "rem. = remainder: one smaller final line, the only one that stands out."
                 : "One line per recipient."}
             </span>
           </div>

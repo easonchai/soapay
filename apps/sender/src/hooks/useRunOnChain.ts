@@ -4,8 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 import { useConfig } from "wagmi";
 import { getTransactionReceipt } from "wagmi/actions";
 import { payRunBatchFromReceipt, type BatchReceipt } from "@soapay/sdk";
-import { landedTxs, onChainRows, plannedRows, type OnChainRow } from "../lib/onchain.js";
+import { demoBatches, landedTxs, onChainRows, plannedRows, type OnChainRow } from "../lib/onchain.js";
 import type { RunRecord } from "../lib/run.js";
+import { useStore } from "./store.js";
 
 export type RunOnChain = {
   /** Lines as the chain shows them, one per Announcement in each landed tx. */
@@ -18,11 +19,13 @@ export type RunOnChain = {
 };
 
 export function useRunOnChain(run: RunRecord | undefined): RunOnChain {
+  const { app } = useStore();
   const config = useConfig();
   const txs = run ? landedTxs(run) : [];
   const q = useQuery({
     queryKey: ["run-onchain", run?.chainId, run?.token, txs],
-    enabled: !!run && txs.length > 0,
+    // Demo: no chain to read; the landed lines are rebuilt from the record itself (demoBatches).
+    enabled: !!run && txs.length > 0 && !app.demo,
     staleTime: Infinity, // receipts don't change once mined
     queryFn: async () =>
       Promise.all(
@@ -32,11 +35,12 @@ export function useRunOnChain(run: RunRecord | undefined): RunOnChain {
         }),
       ),
   });
+  const batches = app.demo && run ? demoBatches(run) : q.data;
   return {
-    rows: run && q.data ? onChainRows(run, q.data) : [],
+    rows: run && batches ? onChainRows(run, batches) : [],
     planned: run ? plannedRows(run) : [],
     landed: txs.length,
-    loading: q.isLoading && txs.length > 0,
+    loading: !app.demo && q.isLoading && txs.length > 0,
     error: q.error ? (q.error instanceof Error ? q.error.message.split("\n")[0]! : String(q.error)) : null,
   };
 }

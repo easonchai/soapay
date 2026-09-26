@@ -17,12 +17,15 @@ export function Dots({
   mode = 'right',
   color = '30,58,95',
   animate = false,
+  minWidth = 0,
   className,
   style,
 }: {
   mode?: DotsMode;
   color?: string;
   animate?: boolean;
+  /** Draw nothing when the canvas is narrower than this (avoids a stray blob in tight headers). */
+  minWidth?: number;
   className?: string;
   style?: React.CSSProperties;
 }) {
@@ -45,6 +48,12 @@ export function Dots({
       const W = c.offsetWidth;
       const H = c.offsetHeight;
       if (!W || !H) return;
+      if (W < minWidth) {
+        const ctx = c.getContext('2d');
+        ctx?.clearRect(0, 0, c.width, c.height);
+        size = '';
+        return;
+      }
       const key = `${W}x${H}`;
       if (key !== size) {
         size = key;
@@ -110,8 +119,9 @@ export function Dots({
       }
     };
 
+    let visible = true;
     const frame = (t: number) => {
-      if (!document.hidden && t - last >= 33) {
+      if (!document.hidden && visible && t - last >= 33) {
         last = t;
         paint(t);
       }
@@ -136,6 +146,14 @@ export function Dots({
     const t0 = window.setTimeout(() => paint(live ? performance.now() : 0), 300);
     const ro = new ResizeObserver(() => paint(live ? performance.now() : 0));
     ro.observe(c);
+    // Off-screen canvases skip their frames (a long page can hold several animated textures).
+    const io =
+      live && typeof IntersectionObserver !== 'undefined'
+        ? new IntersectionObserver((entries) => {
+            for (const e of entries) visible = e.isIntersecting;
+          })
+        : null;
+    io?.observe(c);
     if (live) {
       raf = requestAnimationFrame(frame);
       window.addEventListener('mousemove', onMove, { passive: true });
@@ -145,11 +163,12 @@ export function Dots({
     return () => {
       window.clearTimeout(t0);
       ro.disconnect();
+      io?.disconnect();
       cancelAnimationFrame(raf);
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseleave', onLeave);
       document.removeEventListener('mouseleave', onLeave);
     };
-  }, [mode, color, animate]);
+  }, [mode, color, animate, minWidth]);
   return <canvas ref={ref} className={`dots${className ? ` ${className}` : ''}`} style={style} aria-hidden />;
 }

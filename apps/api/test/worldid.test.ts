@@ -28,7 +28,7 @@ function portal() {
       success: true,
       environment: mode === "production" ? "production" : body.environment,
       session_id: body.session_id,
-      results: [{ identifier: "selfie", success: true }],
+      results: [{ identifier: "proof_of_human", success: true }],
     });
   };
   return { fetch, calls, setMode: (m: PortalMode) => (mode = m) };
@@ -36,7 +36,7 @@ function portal() {
 
 let nullifierCounter = 1n;
 
-/** An IDKit 4.3 session result (IDKitResultSession) for a Selfie Check credential. */
+/** An IDKit 4.3 session result (IDKitResultSession) for a Proof of Human credential. */
 function sessionResult(o: {
   nonce: string;
   signal: string;
@@ -53,8 +53,8 @@ function sessionResult(o: {
     environment: o.environment ?? "staging",
     responses: [
       {
-        identifier: o.identifier ?? "selfie",
-        issuer_schema_id: o.schema ?? 11,
+        identifier: o.identifier ?? "proof_of_human",
+        issuer_schema_id: o.schema ?? 1,
         signal_hash: worldIdSignalHash(o.signal),
         session_nullifier: [o.sessionNullifier ?? `0x${(nullifierCounter++).toString(16).padStart(64, "0")}`, "0x01"],
         proof: ["0x1", "0x2", "0x3", "0x4", "0x5"],
@@ -87,7 +87,7 @@ async function claimBody(opts: { signer?: PrivateKeyAccount; label?: string; met
   return { ...msg, deadline: msg.deadline.toString(), signature };
 }
 
-/** Claims `alice` with a Selfie Check session created at enrollment. */
+/** Claims `alice` with a Proof of Human session created at enrollment. */
 async function enrollWithSession(t: T, sessionId = SESSION_A) {
   const nonce = await t.rpNonce();
   const res = await t.post("/names", {
@@ -131,7 +131,7 @@ describe("World ID config and RP context", () => {
       app_id: "app_0cc7167efe114ac2e0ef7d9827098353",
       rp_id: "rp_3ede5fe1cab9af48",
       environment: "staging",
-      credential: "selfie",
+      credential: "proof_of_human",
       attach_cooldown_seconds: 259_200,
       attester: attesterAccount.address,
     });
@@ -179,7 +179,7 @@ describe("enrollment has no World ID gate", () => {
     expect((await j(await t.app.request("/names/alice"))).worldIdSession).toBeNull();
   });
 
-  it("verifies an optional Selfie Check session at enrollment and binds it to the name", async () => {
+  it("verifies an optional Proof of Human session at enrollment and binds it to the name", async () => {
     const t = setup();
     const name = await enrollWithSession(t);
     expect(name.worldIdSession).toEqual({ attachedAt: NOW });
@@ -452,8 +452,8 @@ describe("POST /names/:label/rotation", () => {
       await expectRefused(t, await rotate(t, await rotationBody(t)), 403, "proof_invalid");
       t.portal.setMode("ok");
       const deadline = BigInt(NOW + 600);
-      const poh = sessionResult({ nonce: await t.rpNonce(), signal: rotationSignal("alice", metaUri(2), deadline), identifier: "proof_of_human", schema: 1 });
-      await expectRefused(t, await rotate(t, await rotationBody(t, { deadline, result: poh })), 403, "wrong_credential");
+      const selfie = sessionResult({ nonce: await t.rpNonce(), signal: rotationSignal("alice", metaUri(2), deadline), identifier: "selfie", schema: 11 });
+      await expectRefused(t, await rotate(t, await rotationBody(t, { deadline, result: selfie })), 403, "wrong_credential");
       t.portal.setMode("down");
       await expectRefused(t, await rotate(t, await rotationBody(t)), 503, "worldid_unavailable");
     });

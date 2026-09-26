@@ -21,7 +21,7 @@
 
 On a public chain, everyone with a browser: one payroll batch on Base shows every recipient and every amount next to each other, readable forever. Your colleagues too: at Gitcoin DAO a contributor started from their own pay address and put names to fifteen salaries. So companies walk away, and the fixes built for them (Base Ledgers, Tempo Zones, Toku on Aleo) are private ledgers for enterprises: not for everyone, since you apply for access, and not fully private, since every payment goes through the company running them, which sees it and decides what you can withdraw. Everyone else still pays in public.
 
-Three apps on open standards, and nothing of ours holds money. The full argument, with sources, is in the [pitch deck](pitch/README.md).
+Soapay fixes both on the public chain itself. Nothing sits between payer and recipient: the sender's browser derives a fresh stealth address for every line, pays it directly on Base and throws the ephemeral key away. Only you can open that address and spend from it, so nobody but the payer and you sees the payment, and nobody decides what you can withdraw. There is nothing to apply for either: share an ENS name and you can be paid, with no account at Soapay and no server of ours in the loop. The money lands in a wallet only you control, and it all runs on open standards with a public SDK. Nothing of ours holds money, and the one contract we wrote keeps no state and has no owner.
 
 ## Built for payroll. Ready for any payout.
 
@@ -39,7 +39,7 @@ The SDK already treats these as one thing. [`packages/sdk/src/distribute.ts`](pa
 
 ## Not another stealth wallet
 
-Fluidkey and Umbra use the same ERC-5564 and ERC-6538 standards, and both hide your wallet from strangers. They are wallets for an individual receiving payments: a server derives your addresses at name resolution and holds your viewing key, so it sees every payment you receive, and it never touches the batch, which is where a coworker reads your salary. Soapay is the rail for the payer side of the same standards. The sender's browser derives every address and throws the ephemeral key away, only you hold your viewing key, and nothing of ours sees more than public chain data. One transaction pays and announces every recipient, amounts are chunked and sorted so per-transaction totals never leak, a consolidation guard and a timing queue keep spends from linking your addresses, a compliant exit through Privacy Pools lets you cash out, and everything rebuilds from your seed with the public SDK. Row by row: [Compared with Fluidkey](#compared-with-fluidkey).
+Fluidkey and Umbra use the same ERC-5564 and ERC-6538 standards, and both hide your wallet from strangers. They are wallets for an individual receiving payments: a server derives your addresses at name resolution and holds your viewing key, so it sees every payment you receive, and it never touches the batch, which is where a coworker reads your salary. Soapay is the rail for the payer side of the same standards. The sender's browser derives every address and throws the ephemeral key away, only you hold your viewing key, and nothing of ours sees more than public chain data. One transaction pays and announces every recipient, amounts are chunked and sorted so per-transaction totals never leak, a consolidation guard and a timing queue keep spends from linking your addresses, a compliant exit through Privacy Pools lets you cash out, and everything rebuilds from your seed with the public SDK. It is also permissionless: no account with us, any ENS name that carries the stealth records can be paid, and the one contract we wrote has no owner. Row by row: [Compared with Fluidkey](#compared-with-fluidkey).
 
 ## Contents
 
@@ -144,6 +144,7 @@ Both are built on ERC-5564 and ERC-6538, and both hide your wallet from stranger
 | Who derives your stealth address | Fluidkey's server, at name resolution | The sender's browser; the ephemeral key is thrown away |
 | Who holds your viewing key | Fluidkey | Only you |
 | What the company's server can see | Every payment you receive | Nothing beyond public chain data |
+| Account with the company | Required: a Fluidkey name, resolved by Fluidkey's off-chain resolver | None: any ENS name that carries the stealth records, with no server of ours in the loop |
 | What your employer learns | n/a | Name → stealth address → amount, never your main wallet |
 | Batch payments | No | One transaction, N recipients, pays and announces atomically |
 | Amounts in the batch | Visible per person | Split into identical chunks, sorted so per-tx totals never leak |
@@ -261,9 +262,9 @@ Live on Base Sepolia and ENSv2 Sepolia (2026-09-25): an agent created `mcp-agent
 
 ## World ID integration
 
-**One trust moment: key rotation.** A name's meta-address decides where future salary goes, and the registrant key can change it. When an employee sets up their name, they may create a World ID **session** with the **Selfie Check** credential. To rotate keys later, they prove that same session. The API verifies the proof and signs a `MetaRotation` attestation, and the payer's app then auto-accepts the new meta-address with a "re-verified by World ID" badge. A stolen key alone gets no attestation, so the line is blocked until the employer approves it by hand. There's no World ID gate on onboarding and no Orb requirement.
+**One trust moment: key rotation.** A name's meta-address decides where future salary goes, and the registrant key can change it. When an employee sets up their name, they may create a World ID **session** with the **Proof of Human** credential. To rotate keys later, they prove that same session. The API verifies the proof and signs a `MetaRotation` attestation, and the payer's app then auto-accepts the new meta-address with a "re-verified by World ID" badge. A stolen key alone gets no attestation, so the line is blocked until the employer approves it by hand. There's no World ID gate on onboarding and no Orb requirement.
 
-- **Why Selfie Check:** rotation asks "is this the same person who enrolled?", which is continuity, not uniqueness. Sessions answer it, and the World docs recommend them for repeated verification. Proof of Human would add an Orb visit without answering it any better.
+- **Why Proof of Human:** recovery moves all future salary, the highest-stakes action in the product. World calls Selfie Check a medium-assurance signal, so the strongest same-human proof is proportionate; passport-level identity would collect data we don't need (D-54, [docs/worldid.md](docs/worldid.md)).
 - **Where it matters most:** pseudonymous DAO contributors. The payer has no phone number or face on file, so World ID is the only continuity signal, and it never reveals who the contributor is.
 - **Rotation also relays** the employee's ERC-6538 re-registration for the new meta-address and tops up their Sepolia gas for their own `setText`.
 

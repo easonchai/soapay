@@ -4,7 +4,7 @@ import type { Context } from "hono";
 import { createPublicClient, createWalletClient, http } from "viem";
 import { nonceManager, privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
-import { getChainConfig } from "@soapay/sdk";
+import { WORLD_ID_CREDENTIAL, getChainConfig } from "@soapay/sdk";
 import { buildApp } from "./app.js";
 import type { ReadClient, WriteClient } from "./chain.js";
 import { ConfigError, loadConfig, type Config } from "./config.js";
@@ -144,7 +144,7 @@ function main() {
     port: config.port,
     chainId: config.chainId,
     relayer: relayer?.account.address ?? null,
-    worldId: worldId ? { environment: w.environment, rpId: w.rpId, credential: "selfie" } : "DISABLED",
+    worldId: worldId ? { environment: w.environment, rpId: w.rpId, credential: WORLD_ID_CREDENTIAL } : "DISABLED",
     uniswapProxy: config.uniswap.apiKey ? "enabled" : "disabled (UNISWAP_API_KEY unset)",
     paymaster: config.paymaster.pimlicoApiKey ? "enabled" : "disabled (PIMLICO_API_KEY unset)",
     faucet: faucetWallet ? { usdc: config.faucet.usdcAmount.toString(), ethWei: config.faucet.ethDripWei.toString() } : "disabled",

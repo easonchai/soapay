@@ -1,5 +1,5 @@
 /**
- * Attach a World ID Selfie Check session to a name AFTER it was claimed (docs/worldid.md):
+ * Attach a World ID Proof of Human session to a name AFTER it was claimed (docs/worldid.md):
  * POST /names/:label/session with the registrant's AttachSession signature (SDK typed data).
  *
  * The API makes a late-attached session wait `WORLD_ATTACH_COOLDOWN_SECONDS` (72 h by default) before it

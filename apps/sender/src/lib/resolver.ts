@@ -70,6 +70,11 @@ export function mockMetaFor(name: string, rotation: number): string {
   return formatMetaAddressURI(`0x${bytesToHex(spend).slice(2)}${bytesToHex(view).slice(2)}`);
 }
 
+/** DEV ONLY: the registrant the mock resolver reports for `name` (stable, so seeded pins match a later resolve). */
+export function mockRegistrantFor(name: string): Address {
+  return privateKeyToAddress(mockKey(`soapay-mock:registrant:${name}`));
+}
+
 /**
  * DEV ONLY. Every name resolves to a meta-address generated from the name and a local
  * rotation counter, so "simulate a key rotation" in the UI exercises the pin-change block.
@@ -81,7 +86,7 @@ export function createMockResolver(rotations: RotationStore, delayMs = 250): Res
     if (name.split(".")[0]?.startsWith("missing")) throw new NameNotFound(name, 'no "stealth" text record');
     return {
       metaAddressURI: mockMetaFor(name, rotations.get(name)),
-      registrant: privateKeyToAddress(mockKey(`soapay-mock:registrant:${name}`)),
+      registrant: mockRegistrantFor(name),
     };
   };
 }

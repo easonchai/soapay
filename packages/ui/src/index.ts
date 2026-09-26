@@ -5,7 +5,8 @@ import '@fontsource/ibm-plex-mono/400.css';
 import '@fontsource/ibm-plex-mono/500.css';
 import './styles.css';
 
-export { Mark, Wordmark, Lockup } from './logo/Logo.js';
+export { Mark, Wordmark, Lockup, LogoLoader, Loading } from './logo/Logo.js';
+export { GitHubMark, WalletGlyph, CoinbaseMark } from './logo/Brands.js';
 export { Dots, type DotsMode } from './Dots.js';
 export { TopBar, type TopTab } from './TopBar.js';
 export { Shell, type ShellTab } from './Shell.js';
@@ -26,3 +27,6 @@ export { Skeleton } from './motion/Skeleton.js';
 export { Toaster, toast } from './motion/Toaster.js';
 export { Presence, motionOff } from './motion/Presence.js';
 export { Fade } from './motion/Fade.js';
+export { Bloom, BLOOM_IN_S, BLOOM_OUT_S } from './motion/Bloom.js';
+export { InView } from './motion/InView.js';
+export { useInViewLoop, useVisible } from './motion/useInViewLoop.js';

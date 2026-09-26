@@ -40,7 +40,7 @@ export type AppDeps = {
   nameIssuer: NameIssuer;
   /** Optional gate for /register and /names (docs/mvp-spec.md §5: no enrollment gate). Default: allow all. */
   humanVerifier: HumanVerifier;
-  /** World ID (IDKit 4, Selfie Check sessions). Undefined = disabled: rp-context, session and rotation return 503. */
+  /** World ID (IDKit 4, Proof of Human sessions). Undefined = disabled: rp-context, session and rotation return 503. */
   worldId: WorldId | undefined;
   /** Signs MetaRotation attestations. Undefined → rotation returns 503. */
   attester: LocalAccount | undefined;

@@ -25,6 +25,8 @@ const queryClient = new QueryClient();
 /** `?motion=off` disables every animation (QA, screenshots, automation). */
 const motionOff = typeof location !== "undefined" && new URLSearchParams(location.search).get("motion") === "off";
 
+if (new URLSearchParams(location.search).get('motion') === 'off') document.documentElement.dataset.motion = 'off';
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <WagmiProvider config={wagmiConfig}>

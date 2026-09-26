@@ -689,7 +689,7 @@ function RecoveryStep({ label, inviteCode, dispatch, headingRef }: { label: stri
       title="Enable self-service key recovery"
       lead={
         <>
-          Optional. If you ever lose this device or your keys leak, a World ID Selfie Check lets you move{" "}
+          Optional. If you ever lose this device or your keys leak, a World ID Proof of Human lets you move{" "}
           <span className="font-mono">{fullName(label)}</span> to new keys without asking your employer.
         </>
       }

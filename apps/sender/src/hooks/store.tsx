@@ -12,6 +12,9 @@ import type { InvitedEmployee } from "../lib/invites.js";
 import type { Services } from "../lib/services.js";
 import { idbKV, Vault, VaultError, type KV, type VaultMode } from "../lib/vault.js";
 import { wagmiExecDeps } from "../lib/wallet.js";
+import { demoExecDeps, demoLedger } from "../lib/demoChain.js";
+import { demoEmployees, demoRuns } from "../lib/demoSeed.js";
+import { DEMO_WALLET } from "../lib/wagmi.js";
 
 const ROSTER = "roster";
 const RUNS = "runs";
@@ -51,7 +54,8 @@ export function useStore(): Store {
 
 export function StoreProvider(props: { app: AppConfig; services: Services; kv?: KV; children: ReactNode }) {
   const { app, services } = props;
-  const kv = useMemo(() => props.kv ?? idbKV(), [props.kv]);
+  // Demo mode keeps its vault in a separate IndexedDB database, so sample data never mixes with a real roster.
+  const kv = useMemo(() => props.kv ?? (app.demo ? idbKV("soapay-sender-demo") : idbKV()), [props.kv, app.demo]);
   const wagmiConfig = useConfig();
   const [phase, setPhase] = useState<VaultPhase>("loading");
   const [vaultMode, setVaultMode] = useState<VaultMode | null>(null);
@@ -89,7 +93,13 @@ export function StoreProvider(props: { app: AppConfig; services: Services; kv?: 
       const roster = (await v.read<Employee[]>(ROSTER)) ?? [];
       const inv = (await v.read<InvitedEmployee[]>(INVITES)) ?? [];
       // After a reload nothing executes: in-flight steps become "unknown" (recheck them).
-      const stored = ((await v.read<RunRecord[]>(RUNS)) ?? []).map(normalizeInterrupted);
+      let stored = ((await v.read<RunRecord[]>(RUNS)) ?? []).map(normalizeInterrupted);
+      // Demo: an empty vault is seeded with sample employees and two completed payrolls.
+      if (app.demo && roster.length === 0 && stored.length === 0) {
+        roster.push(...demoEmployees());
+        stored = demoRuns(app, roster, DEMO_WALLET, demoLedger);
+        await v.write(ROSTER, roster);
+      }
       employeesRef.current = roster;
       invitesRef.current = inv;
       runsRef.current = stored;
@@ -100,7 +110,7 @@ export function StoreProvider(props: { app: AppConfig; services: Services; kv?: 
       setVaultMode(v.mode);
       setPhase("ready");
     },
-    [],
+    [app],
   );
 
   const createVault = useCallback(async (mode: VaultMode, passphrase?: string) => load(await Vault.create(kv, mode, passphrase)), [kv, load]);
@@ -177,7 +187,9 @@ export function StoreProvider(props: { app: AppConfig; services: Services; kv?: 
           attemptIndex,
           plan,
           payer,
-          deps: wagmiExecDeps(wagmiConfig, app),
+          deps: app.demo
+            ? demoExecDeps({ usdc: app.usdc, chunks: run.attempts.find((a) => a.index === attemptIndex)?.chunks ?? [] })
+            : wagmiExecDeps(wagmiConfig, app),
           onChange: (r) => void upsertRun(r),
         });
         await upsertRun(final);

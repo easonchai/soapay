@@ -5,8 +5,8 @@ import type { Db } from "../db.js";
 import { ApiError, type Logger } from "../util.js";
 import { portalVerify, type Fetch } from "./portal.js";
 
-/** Selfie Check's credential identifier; the portal also accepts the historical alias `face`. */
-const IDENTIFIERS = new Set<string>([WORLD_ID_CREDENTIAL, "face"]);
+/** The required credential's identifier (Proof of Human, D-54). */
+const IDENTIFIERS = new Set<string>([WORLD_ID_CREDENTIAL]);
 /** A proof may be verified this long after its RP context expired (the user was mid-flow). */
 const PROOF_GRACE_SECONDS = 600;
 const MAX_FIELD = (1n << 256n) - 1n;
@@ -50,7 +50,7 @@ export type VerifiedSession = { sessionId: string; sessionNullifier: string; com
 
 /**
  * World ID 4.0 through IDKit, a single trust moment (docs/worldid.md, docs/mvp-spec.md §5):
- * - A name MAY carry a World ID session with the Selfie Check credential, created at
+ * - A name MAY carry a World ID session with the Proof of Human credential, created at
  *   enrollment (POST /names) or attached later (POST /names/:label/session).
  * - Rotation (POST /names/:label/rotation) must prove that same session.
  * No enrollment gate, no uniqueness action; we store session ids and used session nullifiers only.
@@ -127,7 +127,7 @@ export class WorldId {
     }
     const items = Array.isArray(r.responses) ? r.responses : [];
     const item = items.find((i: any) => isObj(i) && IDENTIFIERS.has(i.identifier) && i.issuer_schema_id === WORLD_ID_SCHEMA_ID);
-    if (!item) throw new ApiError(403, "wrong_credential", "a Selfie Check credential is required");
+    if (!item) throw new ApiError(403, "wrong_credential", "a World ID Proof of Human credential is required");
     if (!sameField(item.signal_hash, worldIdSignalHash(signal))) {
       throw new ApiError(403, "signal_mismatch", "proof is not bound to this request (signal mismatch)");
     }
