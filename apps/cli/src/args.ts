@@ -1,0 +1,194 @@
+// Argument parsing for `soapay distribute` and `soapay scan`. Pure: no I/O, no network.
+import { parseArgs, type ParseArgsOptionsConfig } from "node:util";
+import { getAddress, isAddress, type Address } from "viem";
+
+export class UsageError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "UsageError";
+  }
+}
+
+export const USAGE = `Usage:
+  soapay distribute --csv <file> --asset <symbol|token> [--chain 84532] [--preset payroll|dividend|grant]
+                    [--total <amount>] [--decimals <n>] [--chunk <amount>] [--max-lines <n>]
+                    [--disperse <address>] [--rpc <url>] [--show-lines] [--json] [--dry-run | --execute]
+  soapay scan --mnemonic-env <VAR> [--chain 84532] [--api <url> | --rpc <url>] [--from <block>] [--to <block>]
+              [--no-balances] [--json]
+
+distribute
+  CSV header: recipient,amount[,id]   (payroll, grant)   amounts in whole token units, e.g. 1250.50
+              recipient,holdings[,id] (dividend)         holdings are any non-negative numbers
+  recipient is a meta-address (st:eth:0x…), a 0x address registered in ERC-6538, or an ENS name.
+  --preset dividend needs --total; for grant, --total is an optional budget.
+  --chunk pays whole denominations of that size plus one remainder line per recipient.
+  Dry run by default: prints the plan (lines, chunks, gas). --execute sends it via StealthDisperse
+  from PAYER_PRIVATE_KEY (read from the environment, never from flags).
+
+scan
+  Reads the recovery phrase from the named environment variable and prints received payments,
+  with real balances unless --no-balances.`;
+
+export type Preset = "payroll" | "dividend" | "grant";
+
+export type DistributeArgs = {
+  command: "distribute";
+  csv: string;
+  asset: string;
+  chainId: number;
+  preset: Preset;
+  total?: string;
+  decimals?: number;
+  chunk?: string;
+  maxLines?: number;
+  disperse?: Address;
+  rpc?: string;
+  showLines: boolean;
+  json: boolean;
+  execute: boolean;
+};
+
+export type ScanArgs = {
+  command: "scan";
+  mnemonicEnv: string;
+  chainId: number;
+  api?: string;
+  rpc?: string;
+  fromBlock?: bigint;
+  toBlock?: bigint;
+  balances: boolean;
+  json: boolean;
+};
+
+export type HelpArgs = { command: "help" };
+
+export type CliArgs = DistributeArgs | ScanArgs | HelpArgs;
+
+function positiveInt(v: string | undefined, flag: string): number | undefined {
+  if (v === undefined) return undefined;
+  if (!/^\d+$/.test(v) || Number(v) < 1 || !Number.isSafeInteger(Number(v))) throw new UsageError(`${flag} must be a positive integer`);
+  return Number(v);
+}
+
+function block(v: string | undefined, flag: string): bigint | undefined {
+  if (v === undefined) return undefined;
+  if (!/^\d+$/.test(v)) throw new UsageError(`${flag} must be a block number`);
+  return BigInt(v);
+}
+
+function decimalAmount(v: string | undefined, flag: string): string | undefined {
+  if (v === undefined) return undefined;
+  if (!/^\d+(\.\d+)?$/.test(v)) throw new UsageError(`${flag} must be a positive decimal number`);
+  return v;
+}
+
+function url(v: string | undefined, flag: string): string | undefined {
+  if (v === undefined) return undefined;
+  if (!/^https?:\/\//.test(v)) throw new UsageError(`${flag} must be an http(s) URL`);
+  return v;
+}
+
+function parse(argv: readonly string[], options: ParseArgsOptionsConfig) {
+  try {
+    return parseArgs({ args: [...argv], options, strict: true, allowPositionals: false });
+  } catch (e) {
+    throw new UsageError(e instanceof Error ? e.message : String(e));
+  }
+}
+
+export function parseCli(argv: readonly string[]): CliArgs {
+  const [command, ...rest] = argv;
+  if (command === undefined || command === "help" || command === "--help" || command === "-h") return { command: "help" };
+
+  if (command === "distribute") {
+    const { values: v } = parse(rest, {
+      csv: { type: "string" },
+      asset: { type: "string" },
+      chain: { type: "string", default: "84532" },
+      preset: { type: "string", default: "payroll" },
+      total: { type: "string" },
+      decimals: { type: "string" },
+      chunk: { type: "string" },
+      "max-lines": { type: "string" },
+      disperse: { type: "string" },
+      rpc: { type: "string" },
+      "show-lines": { type: "boolean", default: false },
+      json: { type: "boolean", default: false },
+      "dry-run": { type: "boolean", default: false },
+      execute: { type: "boolean", default: false },
+    });
+    const s = (k: string) => v[k] as string | undefined;
+    const b = (k: string) => v[k] === true;
+    if (!s("csv")) throw new UsageError("--csv is required");
+    if (!s("asset")) throw new UsageError("--asset is required");
+    if (b("execute") && b("dry-run")) throw new UsageError("--execute and --dry-run are mutually exclusive");
+    const preset = s("preset");
+    if (preset !== "payroll" && preset !== "dividend" && preset !== "grant") {
+      throw new UsageError("--preset must be payroll, dividend or grant (vesting schedules: use the SDK's vesting preset)");
+    }
+    const total = decimalAmount(s("total"), "--total");
+    if (preset === "dividend" && total === undefined) throw new UsageError("--preset dividend needs --total");
+    if (preset === "payroll" && total !== undefined) throw new UsageError("--total applies to dividend and grant only");
+    const disperse = s("disperse");
+    if (disperse !== undefined && !isAddress(disperse, { strict: false })) throw new UsageError("--disperse must be an address");
+    const decimals = s("decimals");
+    if (decimals !== undefined && (!/^\d+$/.test(decimals) || Number(decimals) > 36)) throw new UsageError("--decimals must be 0..36");
+
+    const out: DistributeArgs = {
+      command: "distribute",
+      csv: s("csv")!,
+      asset: s("asset")!,
+      chainId: positiveInt(s("chain"), "--chain")!,
+      preset,
+      showLines: b("show-lines"),
+      json: b("json"),
+      execute: b("execute"),
+    };
+    if (total !== undefined) out.total = total;
+    if (decimals !== undefined) out.decimals = Number(decimals);
+    const chunk = decimalAmount(s("chunk"), "--chunk");
+    if (chunk !== undefined) out.chunk = chunk;
+    const maxLines = positiveInt(s("max-lines"), "--max-lines");
+    if (maxLines !== undefined) out.maxLines = maxLines;
+    if (disperse !== undefined) out.disperse = getAddress(disperse);
+    const rpc = url(s("rpc"), "--rpc");
+    if (rpc !== undefined) out.rpc = rpc;
+    return out;
+  }
+
+  if (command === "scan") {
+    const { values: v } = parse(rest, {
+      "mnemonic-env": { type: "string" },
+      chain: { type: "string", default: "84532" },
+      api: { type: "string" },
+      rpc: { type: "string" },
+      from: { type: "string" },
+      to: { type: "string" },
+      "no-balances": { type: "boolean", default: false },
+      json: { type: "boolean", default: false },
+    });
+    const s = (k: string) => v[k] as string | undefined;
+    const env = s("mnemonic-env");
+    if (!env) throw new UsageError("--mnemonic-env is required (the name of the variable holding the phrase, not the phrase)");
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(env)) throw new UsageError("--mnemonic-env must be an environment variable name");
+    const out: ScanArgs = {
+      command: "scan",
+      mnemonicEnv: env,
+      chainId: positiveInt(s("chain"), "--chain")!,
+      balances: v["no-balances"] !== true,
+      json: v.json === true,
+    };
+    const api = url(s("api"), "--api");
+    if (api !== undefined) out.api = api;
+    const rpc = url(s("rpc"), "--rpc");
+    if (rpc !== undefined) out.rpc = rpc;
+    const from = block(s("from"), "--from");
+    if (from !== undefined) out.fromBlock = from;
+    const to = block(s("to"), "--to");
+    if (to !== undefined) out.toBlock = to;
+    if (from !== undefined && to !== undefined && to < from) throw new UsageError("--to must be >= --from");
+    return out;
+  }
+
+  throw new UsageError(`unknown command "${command}"`);
+}

@@ -55,6 +55,31 @@ importers:
         specifier: ^5.0.2
         version: 5.0.2(@types/node@26.6.2)(jsdom@30.1.1(@noble/hashes@2.4.0))(vite@8.3.1(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15))
 
+  apps/cli:
+    dependencies:
+      '@soapay/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
+      viem:
+        specifier: ^2.56.9
+        version: 2.56.9(typescript@7.0.2)(zod@4.6.5)
+    devDependencies:
+      '@types/node':
+        specifier: ^26.6.2
+        version: 26.6.2
+      esbuild:
+        specifier: ^0.28.2
+        version: 0.28.2
+      tsx:
+        specifier: ^4.23.15
+        version: 4.23.15
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^5.0.2
+        version: 5.0.2(@types/node@26.6.2)(jsdom@30.1.1(@noble/hashes@2.4.0))(vite@8.3.1(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15))
+
   apps/mcp:
     dependencies:
       '@modelcontextprotocol/sdk':
@@ -259,6 +284,25 @@ importers:
       tsx:
         specifier: ^4.23.15
         version: 4.23.15
+
+  examples:
+    dependencies:
+      '@soapay/sdk':
+        specifier: workspace:*
+        version: link:../packages/sdk
+      viem:
+        specifier: ^2.56.9
+        version: 2.56.9(typescript@7.0.2)(zod@4.6.5)
+    devDependencies:
+      '@types/node':
+        specifier: ^26.6.2
+        version: 26.6.2
+      tsx:
+        specifier: ^4.23.15
+        version: 4.23.15
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
 
   packages/sdk:
     dependencies:
