@@ -43,20 +43,23 @@ If the field takes more than one link, or in the feedback field:
 
 **How easy is it to use (1 to 10)**
 
-Suggested: **6**. The server side was easy (the Portal takes the IDKit result unchanged, `signRequest` made the RP context five lines). The client side cost the most time: the session widget's props do not match the session-proofs docs, a failure surfaces only as `generic_error`, the environment defaults silently, and Selfie Check sessions kept failing in the World App. Move it to 7 if the live Proof of Human run goes through first time.
+Suggested: **7**. The server side was easy (the Developer Portal v4 verify endpoint takes the IDKit result unchanged, `signRequest` made the RP context five lines, and its single-use nonce doubled as our replay guard). The client side cost the most time: the session-proofs docs show `preset={selfieCheck()}` but IDKit 4.3 sessions only accept `constraints`, a hand-built constraint surfaced only as `generic_error`, the environment defaults to production silently, and our first RP silently did not support sessions (`verification_rejected` in World App, `synced: false` in the portal, no hint), which cost most of a day and a wrong redesign. A fresh RP verified a live production session on the first try (2026-09-26), which is why this is a 7 and not a 6.
 
 **Additional feedback for the sponsor**
 
 ```text
-Time to first success: [fill in after the live World App run; docs/worldid.md holds the placeholder].
+Time to first success: a session verified at the Portal on the first try on a fresh RP (2026-09-26). Our first RP never got there.
 
-What went well: the Developer Portal v4 verify endpoint takes the IDKit result unchanged, so our server is local checks plus one call. signRequest from @worldcoin/idkit-server made the RP context a five-line route, and its single-use nonce doubled as our replay guard. The session_id / session_nullifier split maps directly onto "bind to the account" and "reject replays".
+Went well: the v4 verify endpoint takes the IDKit result unchanged, so our server is local checks plus one call. signRequest made the RP context five lines, and its nonce doubled as our replay guard.
 
-Friction: (1) The session-proofs page shows IDKitSessionWidget with preset={selfieCheck()}, but in IDKit 4.3 the session widget only accepts constraints (the request widget accepts either). That cost a round of type errors. (2) A hand-built Selfie Check constraint made the production World App answer generic_error with no cause, so we switched to IDKit core's createSession / proveSession and render the QR code and polling ourselves to get at the debug report. (3) Selfie Check sessions kept failing in the World App while Proof of Human verified; together with Selfie Check being medium-assurance, that is why we ended on Proof of Human for recovery. (4) Proof results, the Portal response and the IDKit config each carry an environment, and the Portal defaults to production, so a mismatch is easy to get wrong silently. We refuse it at both checkpoints.
+Friction:
+1. Our first RP silently did not support sessions: verification_rejected in World App, bad_request in the simulator, synced: false in the portal. Cost most of a day.
+2. The session docs show preset={selfieCheck()}, but IDKit 4.3 sessions only accept constraints. A hand-built constraint returned generic_error with no cause.
+3. Staging accepts repeat proofs with the same nullifier; production returns nullifier_replayed. Easy to miss.
+4. Staging verification needs x-staging-verification-token and the portal's staging window. Neither is documented.
+5. The Portal defaults environment to production, so a mismatch fails silently.
 
-Missing: a specific error code instead of generic_error, and a documented environment for testing sessions with each credential (sandbox versus the staging simulator).
-
-The one improvement with the greatest impact: let IDKitSessionWidget accept preset, or make the docs match the types, and return specific error codes instead of generic_error. That single fix would have saved us the most time.
+Biggest fix: make an RP that does not support sessions fail loudly.
 ```
 
 ## ENS ($10,000): Best Use of ENSv2
@@ -155,7 +158,7 @@ We did not use MultiBaas, so we have no integration feedback. Our README covers 
 
 ## Before you submit
 
-- **World:** run one live Proof of Human session (create at the name step, then rotate) with the World App against the running API, and fill in "Time to first success" in `docs/worldid.md`. Show the denied path in the demo video (a rotation without the session, blocked in the company app). Both are open items in `docs/bounty-integrations.md`.
+- **World:** a live production session verified on the fresh RP on 2026-09-26 and "Time to first success" is filled in `docs/worldid.md`. Still to do: run the full flow once with the World App against the running API (create at the name step, then rotate), and show the denied path in the demo video (a rotation without the session, blocked in the company app). Both are open items in `docs/bounty-integrations.md`.
 - **ENS:** nothing pending. The live demo link and the public repo are already on the project page.
 - **Curvegrid:** merge the README "Team" section first, since their checklist asks for the team and social handles in the README.
 - The long "why applicable" blocks run past "a sentence or two". Each has a strict two-sentence version right under it for a field that enforces the limit.
