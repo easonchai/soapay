@@ -18,24 +18,46 @@ const MARK = (
   </>
 );
 
+/**
+ * Wordmark geometry in its own 386×146 box (viewBox -8 -8 386 146 adds an 8 px bleed for the
+ * stroke). Shared with `DotWord`, which rasterises the same shapes into a dot texture.
+ */
+export const WORD_GEOMETRY = {
+  box: { x: -8, y: -8, w: 386, h: 146 },
+  strokeWidth: 12,
+  strokes: [
+    'M50 14 C42 4 10 4 10 24 C10 44 50 42 50 62 C50 82 14 84 4 70',
+    'M150 30 H172 V74 H150 A22 22 0 0 1 150 30 Z',
+    'M192 30 V112',
+    'M192 30 H214 A22 22 0 0 1 214 74 H192',
+    'M278 30 H300 V74 H278 A22 22 0 0 1 278 30 Z',
+    'M320 30 L342 74',
+    'M366 30 L336 88',
+  ],
+  circle: { cx: 92, cy: 52, r: 22 },
+  /** The y's tail: squares shrinking down the stroke line, each rotated 27° about its centre. */
+  squares: [
+    { x: 328.8, y: 91.6, s: 7 },
+    { x: 324.55, y: 102.15, s: 5.5 },
+    { x: 320.7, y: 111.8, s: 4 },
+    { x: 317.1, y: 120.2, s: 3 },
+    { x: 313.9, y: 127.8, s: 2 },
+  ],
+  squareAngle: 27,
+} as const;
+
 const WORD = (
   <>
-    <g fill="none" stroke="currentColor" strokeWidth="12" strokeLinecap="butt" strokeLinejoin="miter">
-      <path d="M50 14 C42 4 10 4 10 24 C10 44 50 42 50 62 C50 82 14 84 4 70" />
-      <circle cx="92" cy="52" r="22" />
-      <path d="M150 30 H172 V74 H150 A22 22 0 0 1 150 30 Z" />
-      <path d="M192 30 V112" />
-      <path d="M192 30 H214 A22 22 0 0 1 214 74 H192" />
-      <path d="M278 30 H300 V74 H278 A22 22 0 0 1 278 30 Z" />
-      <path d="M320 30 L342 74" />
-      <path d="M366 30 L336 88" />
+    <g fill="none" stroke="currentColor" strokeWidth={WORD_GEOMETRY.strokeWidth} strokeLinecap="butt" strokeLinejoin="miter">
+      {WORD_GEOMETRY.strokes.map((d) => (
+        <path key={d} d={d} />
+      ))}
+      <circle cx={WORD_GEOMETRY.circle.cx} cy={WORD_GEOMETRY.circle.cy} r={WORD_GEOMETRY.circle.r} />
     </g>
     <g fill="currentColor">
-      <rect x="328.8" y="91.6" width="7" height="7" transform="rotate(27 332.3 95.1)" />
-      <rect x="324.55" y="102.15" width="5.5" height="5.5" transform="rotate(27 327.3 104.9)" />
-      <rect x="320.7" y="111.8" width="4" height="4" transform="rotate(27 322.7 113.8)" />
-      <rect x="317.1" y="120.2" width="3" height="3" transform="rotate(27 318.6 121.7)" />
-      <rect x="313.9" y="127.8" width="2" height="2" transform="rotate(27 314.9 128.8)" />
+      {WORD_GEOMETRY.squares.map((q) => (
+        <rect key={q.y} x={q.x} y={q.y} width={q.s} height={q.s} transform={`rotate(${WORD_GEOMETRY.squareAngle} ${q.x + q.s / 2} ${q.y + q.s / 2})`} />
+      ))}
     </g>
   </>
 );

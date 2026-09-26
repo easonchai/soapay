@@ -8,6 +8,7 @@ import './styles.css';
 export { Mark, Wordmark, Lockup, LogoLoader, Loading } from './logo/Logo.js';
 export { GitHubMark, WalletGlyph, CoinbaseMark } from './logo/Brands.js';
 export { Dots, type DotsMode } from './Dots.js';
+export { DotWord } from './DotWord.js';
 export { TopBar, type TopTab } from './TopBar.js';
 export { Shell, type ShellTab } from './Shell.js';
 export { PageHead } from './PageHead.js';

@@ -40,3 +40,18 @@ describe("Landing", () => {
     expect(buttons[2]!.querySelector("svg")).not.toBeNull();
   });
 });
+
+describe("Landing chrome", () => {
+  it("header is a floating island with the lockup between the section links, and the footer draws the wordmark from dots", () => {
+    const { container } = mount([{ id: "a", name: "MetaMask", icon: ICON }]);
+    const island = container.querySelector(".land-bar nav.island");
+    expect(island).not.toBeNull();
+    const kids = [...island!.children].map((el) => el.className.split(" ")[0]);
+    expect(kids).toEqual(["links", "brand", "links", "btn-primary"]);
+    expect(island!.querySelector(".brand svg[aria-label=Soapay]")).not.toBeNull();
+    const foot = container.querySelector("footer.land-foot");
+    expect(foot).not.toBeNull();
+    expect(foot!.querySelector("canvas.dotword[role=img][aria-label=Soapay]")).not.toBeNull();
+    expect(foot!.textContent).toContain("© 2026 Soapay");
+  });
+});

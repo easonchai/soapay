@@ -3,12 +3,10 @@
 .land-wrap { max-width: 1200px; margin: 0 auto; padding: 88px 48px; }
 .land-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 32px; margin-bottom: 40px; }
 .land-head .text { max-width: 620px; display: flex; flex-direction: column; gap: 12px; }
-.land-head .dots { flex: 1; height: 120px; min-width: 0; align-self: stretch; }
+.land-head .dots { flex: 1; height: 150px; min-width: 0; align-self: stretch; }
 .land-h2 { font-size: 40px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.05; margin: 0; text-wrap: balance; }
 .land-h3 { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.15; margin: 0; }
 .land-body { font-size: 16px; color: var(--ink2); line-height: 1.55; text-wrap: pretty; margin: 0; }
-.land-bar .links a { cursor: pointer; }
-.land-bar .links a:hover { color: var(--ink); }
 .scroll-cue { position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 8px; font: 500 11px/1 var(--mono); color: var(--ink-disabled); letter-spacing: 0.04em; transition: opacity 0.4s; }
 .scroll-cue .line { width: 1px; height: 28px; background: var(--line-strong); overflow: hidden; position: relative; }
 .scroll-cue .line::after { content: ''; position: absolute; left: 0; top: -100%; width: 1px; height: 100%; background: var(--accent); animation: cue-sweep 2.4s ease-in-out infinite; }
@@ -22,8 +20,8 @@
 }
 html[data-motion='off'] .scroll-cue .line::after { animation: none; }
 @media (prefers-reduced-motion: reduce) { .scroll-cue .line::after { animation: none; } }
-.land-bar .links a { white-space: nowrap; }
-@media (max-width: 700px) {
-  .land-bar .links { gap: 16px; }
+@media (max-width: 760px) {
+  /* The island keeps the lockup, GitHub and Login; section links live in the footer. */
   .land-bar .links a:not(.link-with-mark) { display: none; }
+  .land-bar .links:empty, .land-bar .links:not(:has(.link-with-mark)) { display: none; }
 }

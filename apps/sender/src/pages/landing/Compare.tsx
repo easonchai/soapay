@@ -166,7 +166,7 @@ export function Compare() {
             <h2 className="land-h2" id="cmp-h2">One batch. Two ways to read it.</h2>
             <p className="land-body">Plain wallet, then Soapay, as a block explorer shows it.</p>
           </div>
-          <Dots mode="field" animate className="dots" />
+          <Dots mode="wave" animate className="dots" />
         </InView>
 
         <InView delay={0.1}>

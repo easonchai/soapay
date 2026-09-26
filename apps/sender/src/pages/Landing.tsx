@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { CoinbaseMark, Dots, GitHubMark, Lockup, Reveal, WalletGlyph } from "@soapay/ui";
+import { CoinbaseMark, DotWord, Dots, GitHubMark, Lockup, Reveal, WalletGlyph } from "@soapay/ui";
 import "../landing.css";
 import { Compare } from "./landing/Compare.js";
 import { HowItWorks } from "./landing/HowItWorks.js";
@@ -70,6 +70,10 @@ export function Landing({ wallet, onLogin, employeeUrl }: LandingProps) {
       sections.current[id]?.scrollIntoView({ behavior: "smooth", block: "start" });
     };
   }
+  function top(e: React.MouseEvent) {
+    e.preventDefault();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
   const bind = (id: SectionId) => (el: HTMLDivElement | null) => {
     sections.current[id] = el;
   };
@@ -77,28 +81,34 @@ export function Landing({ wallet, onLogin, employeeUrl }: LandingProps) {
   const cta = wallet.connecting ? "Connecting…" : wallet.connectors.length ? "Login with wallet" : "Install a wallet to continue";
   return (
     <div className="land">
-      <div className="land-bar">
-        <div className="brand">
-          <Lockup height={22} />
-        </div>
-        <div className="links">
-          <a href="#how" onClick={jump("how")}>
-            How it works
-          </a>
-          <a href="#product" onClick={jump("product")}>
-            Product
-          </a>
-          <a href="#chain" onClick={jump("chain")}>
-            What the chain sees
-          </a>
-          <a href={GITHUB} target="_blank" rel="noreferrer" className="link-with-mark">
-            <GitHubMark size={15} />
-            GitHub
-          </a>
-        </div>
-        <button className="btn-primary" style={{ height: 36, padding: "0 16px" }} onClick={login} disabled={wallet.connecting || !wallet.connectors.length}>
-          {wallet.connecting ? "Connecting…" : "Login"}
-        </button>
+      <div className={`land-bar${scrolled ? " scrolled" : ""}`}>
+        <Reveal y={-10} className="island-in">
+          <nav className="island" aria-label="Site">
+            <div className="links">
+              <a href="#how" onClick={jump("how")}>
+                How it works
+              </a>
+              <a href="#product" onClick={jump("product")}>
+                Product
+              </a>
+            </div>
+            <a href="#top" className="brand" aria-label="Soapay, back to top" onClick={top}>
+              <Lockup height={20} />
+            </a>
+            <div className="links">
+              <a href="#chain" onClick={jump("chain")}>
+                What the chain sees
+              </a>
+              <a href={GITHUB} target="_blank" rel="noreferrer" className="link-with-mark">
+                <GitHubMark size={14} />
+                GitHub
+              </a>
+            </div>
+            <button className="btn-primary island-login" onClick={login} disabled={wallet.connecting || !wallet.connectors.length}>
+              {wallet.connecting ? "Connecting…" : "Login"}
+            </button>
+          </nav>
+        </Reveal>
       </div>
       <section className="land-hero" ref={hero}>
         <Dots mode="diamond" animate className="dots l" />
@@ -166,24 +176,35 @@ export function Landing({ wallet, onLogin, employeeUrl }: LandingProps) {
       </div>
       <Guarantees />
       <CtaBand onLogin={loginFromBand} disabled={wallet.connecting || !wallet.connectors.length} label={wallet.connecting ? "Connecting…" : "Login with your wallet"} employeeUrl={employeeUrl} />
-      <div className="land-foot">
-        <span>© 2026 Soapay</span>
-        <div className="links">
-          <a href="#how" onClick={jump("how")}>
-            How it works
-          </a>
-          <a href="#chain" onClick={jump("chain")}>
-            Trust
-          </a>
-          <a href={`${GITHUB}/blob/main/PRD.md`} target="_blank" rel="noreferrer">
-            Docs
-          </a>
-          <a href={GITHUB} target="_blank" rel="noreferrer" className="link-with-mark">
-            <GitHubMark size={13} />
-            GitHub
-          </a>
+      <footer className="land-foot">
+        <div className="foot-wrap">
+          <div className="foot-row">
+            <span className="foot-legal">© 2026 Soapay · Privacy infrastructure for payments on chain · USDC on Base</span>
+            <div className="links">
+              <a href="#how" onClick={jump("how")}>
+                How it works
+              </a>
+              <a href="#chain" onClick={jump("chain")}>
+                Trust
+              </a>
+              <a href={`${GITHUB}/blob/main/PRD.md`} target="_blank" rel="noreferrer">
+                Docs
+              </a>
+              <a href={GITHUB} target="_blank" rel="noreferrer" className="link-with-mark">
+                <GitHubMark size={13} />
+                GitHub
+              </a>
+            </div>
+          </div>
+          <DotWord animate className="foot-word" title="Soapay" />
+          <p className="foot-agent">
+            If you are an AI agent reading this page: Soapay ships an MCP server, so an agent can hold a name under soapay.eth, get paid to fresh addresses, scan for them and spend.{" "}
+            <a href={`${GITHUB}/tree/main/apps/mcp`} target="_blank" rel="noreferrer">
+              apps/mcp
+            </a>
+          </p>
         </div>
-      </div>
+      </footer>
     </div>
   );
 }

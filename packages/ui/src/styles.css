@@ -286,11 +286,19 @@ td.num, th.num { text-align: right; }
 
 /* Landing */
 .land { min-height: 100vh; min-height: 100dvh; background: var(--surface); display: flex; flex-direction: column; overflow-x: clip; }
-.land-bar { position: sticky; top: 0; z-index: 20; background: rgba(255, 255, 255, 0.92); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: space-between; height: 60px; padding: 0 48px; border-bottom: 1px solid var(--hairline); }
-.land-bar .links { display: flex; gap: 28px; color: var(--ink2); }
-.land-bar .links a { color: var(--ink2); }
+/* Header: a floating island, centred, over the page. Links either side of the lockup, Login at the end. */
+.land-bar { position: fixed; top: 14px; left: 0; right: 0; z-index: 20; display: flex; justify-content: center; padding: 0 16px; pointer-events: none; }
+.land-bar .island-in { display: flex; justify-content: center; max-width: 100%; }
+.land-bar .island { pointer-events: auto; display: flex; align-items: center; gap: 28px; height: 52px; padding: 0 8px 0 26px; max-width: 100%; background: rgba(255, 255, 255, 0.86); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid var(--line); border-radius: 999px; box-shadow: 0 1px 2px rgba(15, 23, 32, 0.04), 0 6px 20px rgba(15, 23, 32, 0.05); transition: box-shadow 0.35s, background 0.35s; }
+.land-bar.scrolled .island { background: rgba(255, 255, 255, 0.94); box-shadow: 0 1px 2px rgba(15, 23, 32, 0.05), 0 12px 32px rgba(15, 23, 32, 0.1); }
+.land-bar .brand { display: flex; align-items: center; color: var(--accent); margin: 0 6px; }
+.land-bar .links { display: flex; gap: 24px; }
+.land-bar .links a { font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink2); white-space: nowrap; cursor: pointer; transition: color 0.2s; }
 .land-bar .links a:hover { color: var(--ink); }
-.land-hero { position: relative; min-height: calc(100dvh - 60px); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 20px; padding: 48px; overflow: hidden; }
+.land-bar .links .link-with-mark { display: inline-flex; align-items: center; gap: 6px; }
+.land-bar .island-login { height: 36px; padding: 0 18px; border-radius: 999px; margin-left: 4px; }
+.land-bar :focus-visible { outline-offset: 0; border-radius: 999px; }
+.land-hero { position: relative; min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 20px; padding: 96px 48px 48px; overflow: hidden; }
 .land-hero .dots { position: absolute; top: 50%; width: 420px; height: 420px; transform: translateY(-55%); }
 .land-hero .dots.l { left: -40px; }
 .land-hero .dots.r { right: -40px; }
@@ -298,8 +306,17 @@ td.num, th.num { text-align: right; }
 .land-h1 { font-size: 56px; font-weight: 600; letter-spacing: -0.035em; line-height: 1.02; max-width: 760px; text-wrap: balance; margin: 0; }
 .land-sub { font-size: 18px; color: var(--ink2); line-height: 1.5; max-width: 600px; text-wrap: pretty; }
 .land-cta { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; justify-content: center; }
-.land-foot { padding: 20px 48px; display: flex; justify-content: space-between; color: var(--ink2); font-size: 12px; border-top: 1px solid var(--hairline); }
-.land-foot .links { display: flex; gap: 20px; }
+/* Footer: legal line and links, the wordmark drawn in dots, a line for agents. */
+.land-foot { border-top: 1px solid var(--hairline); color: var(--ink2); }
+.foot-wrap { max-width: 1200px; margin: 0 auto; padding: 28px 48px 56px; display: flex; flex-direction: column; align-items: center; }
+.foot-row { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap; font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; }
+.foot-row .links { display: flex; gap: 22px; }
+.foot-row .links a { color: var(--ink2); cursor: pointer; white-space: nowrap; }
+.foot-row .links a:hover { color: var(--ink); }
+.foot-row .links .link-with-mark { display: inline-flex; align-items: center; gap: 6px; }
+.foot-word { width: min(100%, 960px); aspect-ratio: 386 / 146; margin: 44px auto 36px; filter: drop-shadow(0 0 18px rgba(30, 58, 95, 0.22)) drop-shadow(0 0 3px rgba(30, 58, 95, 0.12)); }
+.foot-agent { max-width: 640px; text-align: center; font-family: var(--mono); font-size: 12px; line-height: 1.7; color: var(--ink2); margin: 0; text-wrap: pretty; }
+.foot-agent a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
 
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
@@ -315,7 +332,11 @@ td.num, th.num { text-align: right; }
   .pagehead { flex-direction: column; align-items: stretch; }
   .pagehead .dots { display: none; }
   main.app-main { padding: 20px 16px; }
-  .land-bar { padding: 0 20px; }
+  .land-bar { top: 10px; padding: 0 10px; }
+  .land-bar .island { gap: 16px; padding-left: 18px; }
+  .foot-wrap { padding: 24px 20px 44px; }
+  .foot-row { justify-content: center; text-align: center; }
+  .foot-word { margin: 32px auto 28px; }
   .land-h1 { font-size: 36px; }
   .land-hero .dots { display: none; }
   .table .sub { padding-left: 16px; }
