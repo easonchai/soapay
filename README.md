@@ -12,7 +12,7 @@
 
 **Live demo:** [soapay.up.railway.app](https://soapay.up.railway.app/) (company app) · [soapay.up.railway.app/app/](https://soapay.up.railway.app/app/) (employee app), on Base Sepolia.
 
-**Soapay is privacy infrastructure for payments on chain**: every payment lands on a fresh address that only you can open, and you can spend it without a trace. A recipient shares one ENS name. Each payment to it goes to a new ERC-5564 stealth address, so a coworker reading the same payroll batch sees a list of never-before-seen addresses and can't tell which line is theirs.
+**Soapay is privacy infrastructure for payments on chain**: every payment lands on a fresh address that only you can open, and you can spend it without it ever linking back to you. A recipient shares one ENS name. Each payment to it goes to a new ERC-5564 stealth address, so a coworker reading the same payroll batch sees a list of never-before-seen addresses and can't tell which line is theirs.
 
 ## Who sees what you earn?
 
@@ -34,11 +34,16 @@ Payroll is the first use case because it is where public payments hurt most: one
 
 The SDK already treats these as one thing. [`packages/sdk/src/distribute.ts`](packages/sdk/src/distribute.ts) plans any distribution from a payer and a list of recipients, with presets for `payroll`, `dividend` (pro rata by largest remainder, so the allocations sum exactly to the total) and `grant` (checked against a budget), with `vesting` as a kind planned the same way. [`soapay distribute`](apps/cli) runs one from a CSV, dry run by default, and [`examples/dividend-run.ts`](examples/dividend-run.ts) and [`examples/grant-round.ts`](examples/grant-round.ts) show the same rail paying a cap table and a grant round.
 
+## Not another stealth wallet
+
+Fluidkey and Umbra use the same ERC-5564 and ERC-6538 standards, and both hide your wallet from strangers. They are wallets for an individual receiving payments: a server derives your addresses at name resolution and holds your viewing key, so it sees every payment you receive, and it never touches the batch, which is where a coworker reads your salary. Soapay is the rail for the payer side of the same standards. The sender's browser derives every address and throws the ephemeral key away, only you hold your viewing key, and nothing of ours sees more than public chain data. One transaction pays and announces every recipient, amounts are chunked and sorted so per-transaction totals never leak, a consolidation guard and a timing queue keep spends from linking your addresses, a compliant exit through Privacy Pools lets you cash out, and everything rebuilds from your seed with the public SDK. Row by row: [Compared with Fluidkey](#compared-with-fluidkey).
+
 ## Contents
 
 **The product**
 - [Who sees what you earn?](#who-sees-what-you-earn)
 - [Built for payroll. Ready for any payout.](#built-for-payroll-ready-for-any-payout)
+- [Not another stealth wallet](#not-another-stealth-wallet)
 - [Screens](#screens)
 - [Compared with Fluidkey](#compared-with-fluidkey)
 

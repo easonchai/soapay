@@ -191,10 +191,10 @@ Decisions taken Sep 25, 22:10, override if you disagree: the ENS DAO line is off
 
 ## Slide 4: Solution (LOCKED, Sep 25)
 
-Soapay IS **PRIVACY INFRASTRUCTURE FOR PAYMENTS ON CHAIN** WHERE **EVERY PAYMENT LANDS ON A FRESH ADDRESS THAT ONLY YOU CAN OPEN** AND **YOU CAN SPEND IT WITHOUT A TRACE**
+Soapay IS **PRIVACY INFRASTRUCTURE FOR PAYMENTS ON CHAIN** WHERE **EVERY PAYMENT LANDS ON A FRESH ADDRESS THAT ONLY YOU CAN OPEN** AND **YOU CAN SPEND IT WITHOUT IT EVER LINKING BACK TO YOU**
 
 Render: solution-slide-final.png in this folder. Source: solution-slide.html, variant "final".
-Accuracy note: the sender and the payment itself stay visible by design. "Without a trace" means no trace back to you. Softer alternative if a judge pushes: "without ever linking it back to you."
+Accuracy note: the sender and the payment itself stay visible by design. The third clause means no link back to you, your name or the wallet people already know. Marcus changed it from "without a trace" on Sep 26, since "trace" can sound like a mixer to a compliance-minded judge.
 
 Follow-on content for the Solution slide (below the sentence or on the next slide). Worded so each claim survives the prior art in evidence D:
 1. The batch is the anonymity set: one transaction, N fresh addresses, announcements atomic with payment, and denominated chunks so the batch reads as identical transfers to strangers.
@@ -283,7 +283,7 @@ Narrative arc (Sep 26, 10:40): slide 3 asks the question. Proofs 1 and 2 answer 
 
 ## Q&A sheet
 
-- "Isn't this Fluidkey?" Fluidkey holds your viewing key on its server and runs the only resolver; its FAQ admits consolidation links you. We derive in your browser, batch on the sender side, guard the spend, and offer a screened exit. Gateway mode is optional and audited.
+- "Isn't this Fluidkey?" Same standards, different side of the payment. Fluidkey is a wallet for an individual: its server derives your addresses at name resolution and holds your viewing key, so it sees every payment you receive, and it never touches the batch, which is where a coworker reads your salary. Its FAQ admits consolidation links you. We are the payer's rail: the sender's browser derives every address and throws the key away, only you hold your viewing key, one transaction pays and announces everyone with amounts chunked and sorted so totals never leak, a cluster guard and a timing queue watch every spend, the exit is a screened Privacy Pools deposit, and everything rebuilds from your seed with the public SDK. The row-by-row table is in the README.
 - "Isn't this Umbra?" Umbra v2 never shipped and v1 needs its relayer. We use 7702 with a USDC paymaster, no relayer, and a cluster guard rather than a warning box.
 - "Isn't this money laundering?" We hide the recipient from colleagues and the public, not the sender or the payment. Amounts are visible in v1. The only mixing is Privacy Pools, whose withdrawals are gated by an association set provider. Tornado was sanctioned for "no attempt to determine their origin." That is the line we stay behind.
 - "Why not Base Ledgers?" Enterprise early access by application, an operator that sees everything and decides withdrawals, and the payee must have an account inside that ledger. We need a wallet and a name.
