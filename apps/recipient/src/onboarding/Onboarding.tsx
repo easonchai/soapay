@@ -713,6 +713,11 @@ function RecoveryStep({ label, inviteCode, dispatch, headingRef }: { label: stri
       <Button variant="ghost" className="w-full" onClick={() => void claim(undefined)} loading={busy}>
         Skip and claim {fullName(label)}
       </Button>
+      {busy && (
+        <p className="hint" role="status" data-testid="claim-progress">
+          Creating {fullName(label)} on Ethereum. This takes about 15 seconds while the transactions are mined.
+        </p>
+      )}
     </Frame>
   );
 }
