@@ -3,12 +3,11 @@ import { decodeFunctionData, getAddress, isAddress, isHex, numberToHex, parseAbi
 import { ENTRYPOINT_V08, SIMPLE_7702_ACCOUNT } from "@soapay/sdk";
 import type { AppDeps } from "../app.js";
 import { TESTNET_SPONSOR_CHAIN_ID } from "../config.js";
-import { ApiError, enforceRateLimits, errorBody } from "../util.js";
+import { ApiError, errorBody } from "../util.js";
 
 /** ERC-7677 methods (viem's paymaster client) plus Pimlico's one-shot `pm_sponsorUserOperation`. */
 export const PAYMASTER_METHODS = new Set(["pm_getPaymasterStubData", "pm_getPaymasterData", "pm_sponsorUserOperation"]);
 const UPSTREAM_TIMEOUT_MS = 20_000;
-const DAY = 86_400;
 
 /**
  * EntryPoints we sponsor: v0.8 (stealth spends, 7702 + Simple7702Account), plus v0.6 / v0.7 for the
@@ -92,13 +91,13 @@ const rpcError = (id: unknown, code: number, message: string) => ({ jsonrpc: "2.
  * `PIMLICO_API_KEY`, which never leaves the server. Used by stealth spends (recipient app, MCP) and
  * as the `paymasterService` of the employer's EIP-5792 batch from a smart wallet. Only paymaster
  * methods, only chain 84532, only userOps whose calls target the allow-list (pay token, Permit2,
- * Universal Router, StealthDisperse, Announcer), with per-IP and daily limits. Without the key it
+ * Universal Router, StealthDisperse, Announcer). No rate limits (mock token, testnet). Without the key it
  * answers 503 `sponsorship_disabled`. CORS is open on this route: wallets call it from their own
  * origin (e.g. keys.coinbase.com).
  */
 export function paymasterRoutes(deps: AppDeps): Hono {
   const r = new Hono();
-  const { config, db, logger } = deps;
+  const { config, logger } = deps;
   const cfg = config.paymaster;
 
   r.post("/paymaster", async (c) => {
@@ -129,8 +128,6 @@ export function paymasterRoutes(deps: AppDeps): Hono {
       logger.warn("paymaster: refused", { method, reason: check.reason });
       return c.json(rpcError(id, -32602, `not sponsored: ${check.reason}`), 400);
     }
-    enforceRateLimits(db, [{ bucket: "paymaster:ip", key: deps.getIp(c), limit: cfg.perIpPerMinute }], 60, deps.now());
-    enforceRateLimits(db, [{ bucket: "paymaster:global", key: "all", limit: cfg.perDay }], DAY, deps.now());
 
     // The server owns the context: clients cannot pick another sponsorship policy.
     const context = cfg.sponsorshipPolicyId ? { sponsorshipPolicyId: cfg.sponsorshipPolicyId } : undefined;

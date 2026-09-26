@@ -29,7 +29,6 @@ export function faucetRoutes(deps: AppDeps): Hono {
         now: deps.now,
         wallet: deps.faucetWallet,
         payToken: getChainConfig(config.chainId).usdc,
-        ip: deps.getIp(c),
       },
       address as Address,
     );
