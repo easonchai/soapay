@@ -16,7 +16,8 @@ import { initialState, progressOf, reduce, resumeState, words, type OnboardingSt
 import { downloadText, parseRecoveryKit, readFileText, recoveryKitFilename, recoveryKitText } from "./recoveryKit.js";
 import { useLabelAvailability } from "./useLabelAvailability.js";
 import { useInvite } from "../hooks/useInvite.js";
-import { settingsOf, type KeySecret, type Profile } from "../vault/types.js";
+import { phraseOffsetOf, settingsOf, type KeySecret, type Profile } from "../vault/types.js";
+import { keyRing } from "../features/rotation/keys.js";
 import { attachSession } from "../features/recovery/attach.js";
 import { fetchLinkedSession } from "../features/recovery/restore.js";
 import { withInvitePayer } from "./invite.js";
@@ -733,6 +734,14 @@ function RecoveryStep({ label, inviteCode, dispatch, headingRef }: { label: stri
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [standing, setStanding] = useState<LabelStanding>("checking");
+  /** The name's current meta-address, when it's already ours (restore). */
+  const [nameMeta, setNameMeta] = useState<string | null>(null);
+  // The keys payments should go to now: a restored account that had rotated is past generation 0.
+  const currentMeta = useMemo(() => {
+    const d = vault.data;
+    const g = d?.profile.keyGeneration ?? 0;
+    return g > 0 && d?.mnemonic ? keyRing(d.mnemonic, g, keys, phraseOffsetOf(d)).current.metaAddressURI : keys.metaAddressURI;
+  }, [vault.data, keys]);
 
   useEffect(() => {
     let live = true;
@@ -740,6 +749,7 @@ function RecoveryStep({ label, inviteCode, dispatch, headingRef }: { label: stri
       (rec) => {
         if (!live) return;
         const mine = rec !== null && isAddressEqual(rec.registrant, keys.registrantAddress);
+        setNameMeta(mine ? rec.metaAddress : null);
         setStanding(!mine ? "new" : rec.worldIdSession ? "linked" : "yours");
       },
       // Can't tell: behave as before (a claim still works; the API refuses anything it shouldn't).
@@ -756,10 +766,20 @@ function RecoveryStep({ label, inviteCode, dispatch, headingRef }: { label: stri
     setError(null);
     try {
       // A retry after the claim landed (e.g. the attach below failed) doesn't claim again.
-      const claimed = vault.data?.profile.name?.label === label;
+      // Restoring a name that already points at our current keys needs no claim (re-claiming older keys
+      // would point the name back at them).
+      const claimed =
+        vault.data?.profile.name?.label === label || (standing !== "new" && nameMeta?.toLowerCase() === currentMeta.toLowerCase());
       const rec = claimed
         ? null
-        : await claimName({ api: svc.api, keys, chainId, label, session: standing === "new" ? session : undefined, inviteCode });
+        : await claimName({
+            api: svc.api,
+            keys: { ...keys, metaAddressURI: currentMeta },
+            chainId,
+            label,
+            session: standing === "new" ? session : undefined,
+            inviteCode,
+          });
       // The inviting employer becomes a known payer (its payroll isn't "Unknown payer").
       const inv = invite.state.kind === "pending" && inviteCode && invite.state.code === inviteCode ? invite.state : null;
       const saveName = (extra: Partial<Profile>) =>
@@ -888,10 +908,22 @@ function RegisterStep({ dispatch, headingRef }: Omit<StepProps, "state">) {
     setBusy(true);
     setError(null);
     try {
-      const r = await registerMetaAddress({ api: svc.api, client: svc.client, keys, chainId: svc.settings.chainId });
+      const mnemonic = vault.data?.mnemonic;
+      const r = await registerMetaAddress({
+        api: svc.api,
+        client: svc.client,
+        keys,
+        chainId: svc.settings.chainId,
+        // A restored account that had rotated keeps its later generation (never re-registers generation 0).
+        ...(mnemonic ? { restore: { mnemonic, phraseOffset: vault.data ? phraseOffsetOf(vault.data) : 0 } } : {}),
+      });
       await vault.update((d) => ({
         ...d,
-        profile: { ...d.profile, registration: { txHash: r.txHash, status: r.status, chainId: svc.settings.chainId, at: Date.now() } },
+        profile: {
+          ...d.profile,
+          registration: { txHash: r.txHash, status: r.status, chainId: svc.settings.chainId, at: Date.now() },
+          ...(r.generation ? { keyGeneration: r.generation } : {}),
+        },
       }));
       dispatch({ type: "REGISTERED" });
     } catch (e) {
