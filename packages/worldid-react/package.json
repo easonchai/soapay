@@ -21,7 +21,9 @@
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
-    "@worldcoin/idkit": "^4.3.0"
+    "@worldcoin/idkit": "^4.3.0",
+    "@worldcoin/idkit-core": "4.3.0",
+    "qrcode": "^1.5.4"
   },
   "peerDependencies": {
     "react": ">=18",
@@ -32,6 +34,7 @@
     "@types/react-dom": "^19.3.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "@types/qrcode": "^1.5.6"
   }
 }

@@ -371,7 +371,16 @@ importers:
       '@worldcoin/idkit':
         specifier: ^4.3.0
         version: 4.3.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@worldcoin/idkit-core':
+        specifier: 4.3.0
+        version: 4.3.0
+      qrcode:
+        specifier: ^1.5.4
+        version: 1.5.4
     devDependencies:
+      '@types/qrcode':
+        specifier: ^1.5.6
+        version: 1.5.6
       '@types/react':
         specifier: ^19.3.0
         version: 19.3.0
