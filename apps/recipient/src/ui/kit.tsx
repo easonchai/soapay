@@ -218,10 +218,10 @@ export function Skeleton({ className }: { className?: string }) {
 }
 
 /** CK's Copy text button ("Copy" → "Copied"). `className` is accepted for API compatibility. */
-export function CopyButton({ value, label = "Copy", className }: { value: string; label?: string; className?: string }) {
+export function CopyButton({ value, label = "Copy", className, onCopied }: { value: string; label?: string; className?: string; onCopied?: () => void }) {
   return (
     <span className={className}>
-      <LedgerCopy value={value} label={label} />
+      <LedgerCopy value={value} label={label} {...(onCopied ? { onCopied } : {})} />
     </span>
   );
 }

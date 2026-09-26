@@ -3,7 +3,7 @@
 - [App stack](decision-app-stack.md) — pnpm+turbo, Vite React SPAs, Hono api, Foundry contracts pkg, SDK-only code paths
 - [Naming](decision-naming.md) — ENSv2 on-chain subnames on Sepolia, EAC-scoped stealth record; sender pins meta-address
 - [Pay-run paths](decision-atomic-batch.md) — StealthDisperse for EOAs, EIP-5792 batch for smart accounts; ≤350 lines, global sort
-- [v1 scope](decision-scope-v1.md) — USDC on Base only; keys = recovery phrase default + EOA-only wallet-signature option
+- [v1 scope](decision-scope-v1.md) — USDC on Base only; keys = recovery phrase saved as a recovery kit (D-44); no wallet-signature onboarding (D-45)
 - [Gateway mode](decision-gateway-announce.md) — DEFERRED to the roadmap (PRD tier 2); announce-at-resolve design kept for later
 - [ScopeLift ESM quirk](scopelift-sdk-esm-quirk.md) — bundle/inline/tsx the SDK; plain Node can't load it
 - [Open questions](prd-open-questions.md) — items not already tracked in CLAUDE.md or contracts/PLAN.md

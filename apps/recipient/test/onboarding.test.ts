@@ -1,14 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { initialState, pickChallenge, progressOf, reduce, resumeState, type OnboardingEvent, type OnboardingState } from "../src/onboarding/machine.js";
+import { initialState, progressOf, reduce, resumeState, type OnboardingEvent, type OnboardingState } from "../src/onboarding/machine.js";
 
 const M = "legal winner thank year wave sausage worth useful legal winner thank yellow";
 const run = (events: OnboardingEvent[], from: OnboardingState = initialState) => events.reduce(reduce, from);
 
 describe("onboarding machine", () => {
-  it("create → backup → confirm → passphrase → register → name → recovery → share → done", () => {
-    let s = run([{ type: "CREATE", mnemonic: M }, { type: "BACKED_UP", challenge: [0, 5, 11] }]);
-    expect(s.step).toBe("confirm");
-    s = reduce(s, { type: "CONFIRM", answers: ["legal", "sausage", "yellow"] });
+  it("create → backup (save the kit) → passphrase → register → name → recovery → share → done", () => {
+    let s = run([{ type: "CREATE", mnemonic: M }]);
+    expect(s).toEqual({ step: "backup", mnemonic: M });
+    // D-44: saving the recovery kit goes straight to the Lock step; there is no word quiz.
+    s = reduce(s, { type: "BACKED_UP" });
     expect(s).toEqual({ step: "passphrase", mnemonic: M, origin: "create" });
     s = run([{ type: "VAULT_CREATED" }, { type: "REGISTERED" }], s);
     expect(s.step).toBe("name");
@@ -28,12 +29,11 @@ describe("onboarding machine", () => {
     expect(reduce({ step: "passphrase", mnemonic: M, origin: "create" }, { type: "VAULT_CREATED" })).toEqual({ step: "register" });
   });
 
-  it("rejects wrong confirmation words (normalised) and counts attempts", () => {
-    const c = run([{ type: "CREATE", mnemonic: M }, { type: "BACKED_UP", challenge: [0, 1] }]);
-    const bad = reduce(c, { type: "CONFIRM", answers: ["legal", "loser"] });
-    expect(bad.step).toBe("confirm");
-    if (bad.step === "confirm") expect(bad.attempts).toBe(1);
-    expect(reduce(c, { type: "CONFIRM", answers: ["  LEGAL ", "Winner"] }).step).toBe("passphrase");
+  it("back from the Lock step returns to the kit as already saved (the phrase isn't shown twice)", () => {
+    const back = reduce({ step: "passphrase", mnemonic: M, origin: "create" }, { type: "BACK" });
+    expect(back).toEqual({ step: "backup", mnemonic: M, saved: true });
+    expect(reduce(back, { type: "BACKED_UP" })).toEqual({ step: "passphrase", mnemonic: M, origin: "create" });
+    expect(reduce(back, { type: "BACK" })).toEqual({ step: "welcome" });
   });
 
   it("restore validates the phrase", () => {
@@ -44,6 +44,13 @@ describe("onboarding machine", () => {
 
   it("leaving backup discards the seed", () => {
     expect(reduce({ step: "backup", mnemonic: M }, { type: "BACK" })).toEqual({ step: "welcome" });
+  });
+
+  it("D-45: the wallet-signature step is not reachable from welcome, only from restore", () => {
+    expect(reduce(initialState, { type: "USE_WALLET" })).toBe(initialState);
+    expect(reduce({ step: "backup", mnemonic: M }, { type: "USE_WALLET" })).toEqual({ step: "backup", mnemonic: M });
+    expect(reduce({ step: "restore", error: null }, { type: "USE_WALLET" })).toEqual({ step: "wallet", error: null });
+    expect(reduce({ step: "wallet", error: null }, { type: "BACK" })).toEqual({ step: "restore", error: null });
   });
 
   it("ignores events that don't belong to the current step", () => {
@@ -60,11 +67,10 @@ describe("onboarding machine", () => {
     expect(resumeState({ onboardedAt: 1 })).toEqual({ step: "done" });
   });
 
-  it("picks distinct sorted challenge positions and reports progress", () => {
-    let i = 0;
-    const seq = [0.9, 0.1, 0.1, 0.5];
-    const c = pickChallenge(12, 3, () => seq[i++ % seq.length]!);
-    expect(c).toEqual([1, 6, 10]);
-    expect(progressOf({ step: "recovery", label: "a" })).toEqual([6, 7]);
+  it("reports progress without a confirm step", () => {
+    expect(progressOf({ step: "backup", mnemonic: M })).toEqual([1, 6]);
+    expect(progressOf({ step: "passphrase", mnemonic: M, origin: "create" })).toEqual([2, 6]);
+    expect(progressOf({ step: "recovery", label: "a" })).toEqual([5, 6]);
+    expect(progressOf({ step: "restore", error: null })).toEqual([1, 6]);
   });
 });

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useReducer, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { REGISTRY_ADDRESS, generateMnemonic, getChainConfig, validateMnemonic } from "@soapay/sdk";
 import { Lockup, Steps, TopBar } from "@soapay/ui";
-import { CheckCircle2, Eye, Loader2, ShieldAlert } from "lucide-react";
+import { CheckCircle2, Download, Eye, FileText, Loader2, ShieldAlert } from "lucide-react";
 import { createPublicClient, http } from "viem";
 import { chainName } from "../config.js";
 import { demoEoaWallet, demoSmartWallet, deriveWalletKeys, injectedKeyWallet, injectedProvider, type KeyWallet } from "./walletKeys.js";
@@ -12,7 +12,8 @@ import { PasskeyUnsupportedError } from "../vault/passkey.js";
 import { Alert, Badge, Button, Card, Checkbox, CopyButton, Field, Input, Textarea, cn, errorMessage } from "../ui/kit.js";
 import { HumanCheck, sessionIdOf, sessionSignal, type HumanCheckResult } from "../worldid/index.js";
 import { claimName, fullName, registerMetaAddress } from "./actions.js";
-import { initialState, pickChallenge, progressOf, reduce, resumeState, words, type OnboardingState } from "./machine.js";
+import { initialState, progressOf, reduce, resumeState, words, type OnboardingState } from "./machine.js";
+import { downloadText, parseRecoveryKit, readFileText, recoveryKitFilename, recoveryKitText } from "./recoveryKit.js";
 import { useLabelAvailability } from "./useLabelAvailability.js";
 import { useInvite } from "../hooks/useInvite.js";
 import { settingsOf, type KeySecret } from "../vault/types.js";
@@ -95,7 +96,6 @@ const STEP_LABELS = ["Keys", "Lock", "Register", "Name", "Recovery", "Share"];
 const STEP_OF: Record<OnboardingState["step"], number> = {
   welcome: 1,
   backup: 1,
-  confirm: 1,
   restore: 1,
   wallet: 1,
   passphrase: 2,
@@ -175,28 +175,10 @@ function Step({ state, dispatch, headingRef }: StepProps) {
             Your keys are created in this browser and stay encrypted here; you unlock them with a passkey (or a passphrase). Nothing secret is
             ever sent anywhere.
           </p>
-          <details className="stack-sm">
-            <summary className="muted" style={{ cursor: "pointer" }}>
-              Advanced
-            </summary>
-            <div className="stack-sm" style={{ marginTop: 8 }}>
-              <p className="muted">
-                Or derive your keys from a wallet signature instead of a phrase. Plain EOA wallets only (MetaMask, Rabby, a hardware wallet);
-                recovery is signing again with the same wallet.
-              </p>
-              <div>
-                <Button variant="ghost" onClick={() => dispatch({ type: "USE_WALLET" })} data-testid="use-wallet">
-                  Use a wallet signature (plain EOA wallets only)
-                </Button>
-              </div>
-            </div>
-          </details>
         </Frame>
       );
     case "backup":
-      return <BackupStep mnemonic={state.mnemonic} dispatch={dispatch} headingRef={headingRef} />;
-    case "confirm":
-      return <ConfirmStep state={state} dispatch={dispatch} headingRef={headingRef} />;
+      return <RecoveryKitStep mnemonic={state.mnemonic} saved={state.saved ?? false} dispatch={dispatch} headingRef={headingRef} />;
     case "restore":
       return <RestoreStep error={state.error} dispatch={dispatch} headingRef={headingRef} />;
     case "wallet":
@@ -215,124 +197,152 @@ function Step({ state, dispatch, headingRef }: StepProps) {
   }
 }
 
-function BackupStep({ mnemonic, dispatch, headingRef }: { mnemonic: string } & Omit<StepProps, "state">) {
+/**
+ * D-44, "save, don't memorise": the Keys step asks the user to SAVE a recovery kit (download a small text
+ * file, copy the phrase into a password manager, or show the words for paper), not to memorise the words or
+ * pass a quiz. The phrase is shown on this screen only; coming back from the Lock step doesn't show it again.
+ */
+function RecoveryKitStep({ mnemonic, saved, dispatch, headingRef }: { mnemonic: string; saved: boolean } & Omit<StepProps, "state">) {
+  const invite = useInvite().state;
+  const name = invite.kind === "pending" ? fullName(invite.label) : undefined;
+  const [createdAt] = useState(() => new Date());
   const [revealed, setRevealed] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [downloaded, setDownloaded] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
   const list = words(mnemonic);
+
+  if (saved) {
+    return (
+      <Frame
+        headingRef={headingRef}
+        title="Recovery kit saved"
+        lead="You already saved the recovery kit for these keys. It isn't shown again."
+        onBack={() => dispatch({ type: "BACK" })}
+      >
+        <Alert variant="info">
+          Continue to lock this device. If you didn't keep the kit, go back and start again: that makes new keys and a new kit.
+        </Alert>
+        <Button size="lg" className="w-full" onClick={() => dispatch({ type: "BACKED_UP" })}>
+          Continue
+        </Button>
+      </Frame>
+    );
+  }
+
+  const acted = downloaded || copied || revealed;
+  const filename = recoveryKitFilename(name, createdAt);
+  const download = () => {
+    downloadText(filename, recoveryKitText({ mnemonic, name, createdAt }));
+    setDownloaded(true);
+  };
+
   return (
     <Frame
       headingRef={headingRef}
-      title="Write down your recovery phrase"
-      lead="These 12 words are the one key to every payment you'll get, even if Soapay disappears. You'll see them once."
+      title="Save your recovery kit"
+      lead="Your recovery phrase is the one key to every payment you'll get, even if Soapay disappears. You don't need to remember it: just save it somewhere safe."
       onBack={() => dispatch({ type: "BACK" })}
     >
       <Alert variant="warning" title="Losing the seed loses the funds.">
-        Day to day you'll unlock with your passkey, so you only need these words on a new device or if this one is lost. Nobody can reset
-        them: not Soapay, not your employer. Write them on paper and keep them somewhere safe. Never type them into a website or share them.
+        Save the kit in your password manager, iCloud Keychain or Google Password Manager notes, or a file you keep. Day to day you unlock
+        with a passkey, so you only need the kit on a new device or if this one is lost. Nobody can reset it: not Soapay, not your
+        employer. Never share it.
       </Alert>
-      <div className="relative">
-        <ol
-          aria-label="Recovery phrase"
-          className={cn(
-            "grid grid-cols-2 gap-2 rounded-lg border bg-card p-3 sm:grid-cols-3",
-            !revealed && "pointer-events-none blur-md select-none",
-          )}
-          aria-hidden={!revealed}
-        >
+      <div className="actions">
+        <Button size="lg" onClick={download} data-testid="download-kit">
+          <Download className="size-4" aria-hidden /> Download recovery kit
+        </Button>
+        <CopyButton value={mnemonic} label="Copy phrase" onCopied={() => setCopied(true)} />
+        {!revealed && (
+          <Button variant="outline" onClick={() => setRevealed(true)}>
+            <Eye className="size-4" aria-hidden /> Show words
+          </Button>
+        )}
+      </div>
+      {downloaded && (
+        <p className="hint" data-testid="kit-downloaded">
+          <CheckCircle2 className="mr-1 inline size-4" aria-hidden /> Downloaded {filename}. Move it somewhere safe.
+        </p>
+      )}
+      {copied && (
+        <p className="hint" data-testid="kit-copied">
+          Copied. Paste it into a password manager note, then clear your clipboard (copy something else).
+        </p>
+      )}
+      {revealed && (
+        <ol aria-label="Recovery phrase" className="grid grid-cols-2 gap-2 rounded-lg border bg-card p-3 sm:grid-cols-3">
           {list.map((w, i) => (
             <li key={i} className="flex items-baseline gap-2 rounded-md bg-muted px-3 py-2 font-mono text-sm">
               <span className="w-5 text-right text-xs text-muted-foreground tabular-nums">{i + 1}</span>
-              <span>{revealed ? w : "••••"}</span>
+              <span>{w}</span>
             </li>
           ))}
         </ol>
-        {!revealed && (
-          <div className="absolute inset-0 grid place-items-center">
-            <Button variant="secondary" onClick={() => setRevealed(true)}>
-              <Eye className="size-4" aria-hidden /> Reveal phrase
-            </Button>
-          </div>
-        )}
-      </div>
-      <Checkbox checked={saved} onChange={setSaved} label="I wrote down all 12 words, in order" />
-      <Button
-        size="lg"
-        className="w-full"
-        disabled={!revealed || !saved}
-        onClick={() => dispatch({ type: "BACKED_UP", challenge: pickChallenge(list.length, 3) })}
-      >
+      )}
+      <Checkbox checked={confirmed} onChange={setConfirmed} label="I saved my recovery kit somewhere safe" />
+      <Button size="lg" className="w-full" disabled={!acted || !confirmed} onClick={() => dispatch({ type: "BACKED_UP" })}>
         Continue
       </Button>
-    </Frame>
-  );
-}
-
-function ConfirmStep({ state, dispatch, headingRef }: { state: Extract<OnboardingState, { step: "confirm" }> } & Omit<StepProps, "state">) {
-  const [answers, setAnswers] = useState(() => state.challenge.map(() => ""));
-  const first = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    if (state.error) first.current?.focus();
-  }, [state.error, state.attempts]);
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    dispatch({ type: "CONFIRM", answers });
-  };
-  return (
-    <Frame
-      headingRef={headingRef}
-      title="Check your backup"
-      lead="Enter the words at these positions from what you wrote down."
-      onBack={() => dispatch({ type: "BACK" })}
-    >
-      <form onSubmit={submit} className="space-y-4" noValidate>
-        <div className="grid gap-4 sm:grid-cols-3">
-          {state.challenge.map((idx, i) => (
-            <Field key={idx} label={`Word #${idx + 1}`}>
-              {({ id }) => (
-                <Input
-                  id={id}
-                  ref={i === 0 ? first : undefined}
-                  autoComplete="off"
-                  autoCapitalize="none"
-                  spellCheck={false}
-                  aria-invalid={Boolean(state.error) || undefined}
-                  value={answers[i]}
-                  onChange={(e) => setAnswers((a) => a.map((v, j) => (j === i ? e.target.value : v)))}
-                  className="font-mono"
-                />
-              )}
-            </Field>
-          ))}
-        </div>
-        {state.error && (
-          <p className="text-sm font-medium text-destructive" role="alert">
-            {state.error}
-          </p>
-        )}
-        <Button type="submit" size="lg" className="w-full" disabled={answers.some((a) => !a.trim())}>
-          Confirm backup
-        </Button>
-      </form>
+      {!acted && <p className="text-xs text-muted-foreground">Download, copy or show your recovery kit first.</p>}
     </Frame>
   );
 }
 
 function RestoreStep({ error, dispatch, headingRef }: { error: string | null } & Omit<StepProps, "state">) {
   const [phrase, setPhrase] = useState("");
+  const [fileError, setFileError] = useState<string | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   const submit = (e: FormEvent) => {
     e.preventDefault();
     const m = phrase.trim().toLowerCase().split(/\s+/).join(" ");
     dispatch({ type: "RESTORE_SUBMIT", mnemonic: m, valid: validateMnemonic(m) });
   };
+  const openKit = async (file: File | undefined) => {
+    setFileError(null);
+    if (!file) return;
+    try {
+      const m = parseRecoveryKit(await readFileText(file));
+      if (!m) {
+        setFileError("That file doesn't contain a valid recovery phrase. Open your Soapay recovery kit, or paste the words.");
+        return;
+      }
+      dispatch({ type: "RESTORE_SUBMIT", mnemonic: m, valid: true });
+    } catch (err) {
+      setFileError(errorMessage(err));
+    } finally {
+      if (fileInput.current) fileInput.current.value = "";
+    }
+  };
   return (
     <Frame
       headingRef={headingRef}
       title="Restore your account"
-      lead="Enter your 12 or 24 word recovery phrase. Every payment you ever received will be found again from the chain."
+      lead="Open your recovery kit, or enter your 12 or 24 word recovery phrase. Every payment you ever received will be found again from the chain."
       onBack={() => dispatch({ type: "BACK" })}
     >
+      <div className="stack-sm">
+        <input
+          ref={fileInput}
+          type="file"
+          accept=".txt,text/plain"
+          className="sr-only"
+          tabIndex={-1}
+          aria-label="Recovery kit file"
+          data-testid="kit-file"
+          onChange={(e) => void openKit(e.target.files?.[0])}
+        />
+        <Button variant="outline" size="lg" className="w-full" onClick={() => fileInput.current?.click()}>
+          <FileText className="size-4" aria-hidden /> Open recovery kit
+        </Button>
+        {fileError && (
+          <p className="text-sm font-medium text-destructive" role="alert" data-testid="kit-file-error">
+            {fileError}
+          </p>
+        )}
+      </div>
       <form onSubmit={submit} className="space-y-4" noValidate>
-        <Field label="Recovery phrase" error={error} hint="Words separated by spaces.">
+        <Field label="Recovery phrase" error={error} hint="Or paste the words, separated by spaces.">
           {({ id, describedBy, invalid }) => (
             <Textarea
               id={id}
@@ -352,14 +362,20 @@ function RestoreStep({ error, dispatch, headingRef }: { error: string | null } &
           Continue
         </Button>
       </form>
+      <div className="text-center">
+        <button type="button" className="btn-text text-xs" onClick={() => dispatch({ type: "USE_WALLET" })} data-testid="use-wallet">
+          Made your account with a wallet signature?
+        </button>
+      </div>
     </Frame>
   );
 }
 
 /**
- * The wallet-signature key option (plain EOAs only). The account's code is checked before any signature is
- * requested; then the wallet signs the Soapay message twice (it must sign identically). Mock mode offers a
- * throwaway demo EOA and a demo smart wallet (refused), so both outcomes can be clicked through.
+ * Recovering an account made from a wallet signature before D-45 (plain EOAs only; reachable from the Restore
+ * step only). The account's code is checked before any signature is requested; then the wallet signs the
+ * Soapay message twice (it must sign identically). Mock mode offers a throwaway demo EOA and a demo smart
+ * wallet (refused), so both outcomes can be clicked through.
  */
 function WalletStep({ error, dispatch, headingRef }: { error: string | null } & Omit<StepProps, "state">) {
   const svc = useServices();
@@ -395,13 +411,13 @@ function WalletStep({ error, dispatch, headingRef }: { error: string | null } & 
   return (
     <Frame
       headingRef={headingRef}
-      title="Create keys from a wallet signature"
-      lead="Your wallet signs one fixed message. The keys come from that signature and are stored in this browser, encrypted. Nothing goes on-chain."
+      title="Restore from a wallet signature"
+      lead="For accounts made with a wallet signature. Your wallet signs the same fixed message again; the keys come from that signature and are stored in this browser, encrypted. Nothing goes on-chain."
       onBack={() => dispatch({ type: "BACK" })}
     >
       <Alert variant="warning" title="Plain EOA wallets only">
-        Smart-account and passkey wallets (Coinbase Smart Wallet, Safe, 7702-delegated accounts) can't derive stable keys from a signature and
-        are refused. If you lose this wallet, the payments are gone: there's no phrase to fall back on.
+        Use the same wallet you made the account with. Smart-account and passkey wallets (Coinbase Smart Wallet, Safe, 7702-delegated
+        accounts) can't derive stable keys from a signature and are refused.
       </Alert>
       {error && (
         <Alert variant="destructive" title="Can't use this wallet">
@@ -425,14 +441,14 @@ function WalletStep({ error, dispatch, headingRef }: { error: string | null } & 
         )}
         {stage && <span className="status">{stage}</span>}
       </div>
-      <p className="hint">Changed your mind? Go back and create a recovery phrase instead: it's the default for a reason.</p>
+      <p className="hint">New accounts use a recovery kit instead. Once you're in, Name settings can move this account to a recovery phrase.</p>
     </Frame>
   );
 }
 
 const backupNote = (secret: KeySecret, lock: "passkey" | "passphrase") =>
   typeof secret === "string"
-    ? `The ${lock} only protects this device. Your recovery phrase is still the only backup.`
+    ? `The ${lock} only protects this device. Your recovery kit is still the only backup.`
     : `The ${lock} only protects this device. Signing again with the same wallet is your backup.`;
 
 /**

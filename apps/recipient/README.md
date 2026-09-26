@@ -30,10 +30,23 @@ CK's per-row "reveal private key" is gone. Each ledger row has **Send** (our gas
 offers Exit when the guard blocks). Plaintext key export exists only under **Settings → Advanced recovery**,
 behind a warning and a confirmation checkbox.
 
-## Keys: recovery phrase (default) or a wallet signature (plain EOAs only)
+## Keys: a recovery phrase, saved as a recovery kit
 
-Onboarding defaults to a BIP-39 recovery phrase. The welcome screen also offers **Use a wallet signature
-(plain EOA wallets only)**, CK's M1 derivation via SDK `keysFromWalletSignature`
+Onboarding creates a BIP-39 recovery phrase. The Keys step is **"Save your recovery kit"** (D-44, "save,
+don't memorise"): **Download recovery kit** (a `soapay-recovery-kit-<label or date>.txt` made in the browser
+with Blob + object URL + `<a download>`; no CSP change, `src/onboarding/recoveryKit.ts`), **Copy phrase**
+(for a password-manager note), or **Show words** (for paper). Continue needs one of those plus the "I saved my
+recovery kit somewhere safe" box; there is no word quiz. The kit holds only the phrase, the pay name (when an
+invite reserved one), the date and restore instructions (Soapay Restore, or `@soapay/sdk` `keysFromMnemonic`
+with the BIP-32 paths). The phrase is shown on that screen only: Back from Lock shows "Recovery kit saved".
+Restore takes a pasted phrase or **Open recovery kit** (a file input; `parseRecoveryKit` +
+`validateMnemonic`).
+
+### Older wallet-signature accounts (restore only)
+
+New accounts can't be made from a wallet signature any more (D-45, supersedes D-23). Accounts made that way
+still open, can move to a phrase account (below), and can be recovered from a quiet link on the Restore step,
+**Made your account with a wallet signature?**, CK's M1 derivation via SDK `keysFromWalletSignature`
 (`src/onboarding/walletKeys.ts`): connect an injected EIP-1193 wallet (no wagmi), read `eth_getCode` on the
 wallet's chain and on the payroll chain, and refuse any address with code (smart accounts, passkey wallets,
 7702 delegates) **before** asking for a signature. The wallet then signs SDK `SIGN_MESSAGE` twice; the two
@@ -41,10 +54,9 @@ signatures must be identical, and must be 65-byte ECDSA by that address, or the 
 
 The vault stores that signature (it is the key material) encrypted with the passphrase, in place of the
 phrase: `VaultData.walletKeys = { kind: "wallet-signature", signature, wallet }`, `mnemonic: ""`.
-`vaultKeys(data)` derives the keys on unlock. Recovery on another device = choose the same option and sign
-with the same wallet (the registry entry is already there, so registration is a no-op). Key rotation is not
-available for these keys (see TODO(clash) in `hooks/useRotation.ts`). Mock mode offers a demo EOA and a demo
-smart wallet (refused) instead of a browser wallet.
+`vaultKeys(data)` derives the keys on unlock. Recovery on another device = Restore → the wallet-signature
+link, and sign with the same wallet (the registry entry is already there, so registration is a no-op). Mock
+mode offers a demo EOA and a demo smart wallet (refused) instead of a browser wallet.
 
 ## What happens where
 
@@ -100,7 +112,7 @@ and write new components against these:
 | `ExitProvider`, `useExit()` | `exits` (per-leg state), `sources`, `estimate(selected, privacy)`, `start`, `withdrawNow`, `retry`; polls and resumes on its own while unlocked |
 | `useLabels()` | `rows`, `setLabel(address, label)`, `remove` |
 | `useSettings()` | `settings`, `save`, `addPayer`, `removePayer`, `exportBackup`, `exportRawKeys` (advanced recovery), `keySource`, `lock`, `wipe` |
-| `onboarding/machine.ts`, `onboarding/walletKeys.ts` | `reduce`, `resumeState`, `pickChallenge`; `deriveWalletKeys` for the EOA-only signature option: drive your own onboarding screens |
+| `onboarding/machine.ts`, `onboarding/recoveryKit.ts`, `onboarding/walletKeys.ts` | `reduce`, `resumeState`; `recoveryKitText`, `parseRecoveryKit`, `downloadText`; `deriveWalletKeys` to recover older EOA-signature accounts: drive your own onboarding screens |
 | `worldid/index.ts` | `HumanCheck` (one-line swap to `@soapay/worldid-react`), `sessionSignal`, `rotateSignal` |
 
 Mount order: `VaultProvider` → `ServicesProvider` → (once unlocked and `profile.onboardedAt` is set)
