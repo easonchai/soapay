@@ -1,6 +1,7 @@
 /**
  * `swap_in_place`: swap USDC held by ONE stealth address into another asset kept by the same
- * address (SDK `quoteSwapInPlace`, routed through `${API_URL}/uniswap`; one 7702 userOp, gas
+ * address (SDK `quoteSwapInPlace`: on-chain quote on Base Sepolia, a placeholder-swapper Trading API
+ * quote via `${API_URL}/uniswap` on Base mainnet; one 7702 userOp, gas
  * in USDC). Links nothing, so the guard isn't involved; the per-call cap still applies.
  */
 import { getAddress, isAddress, type Address } from "viem";

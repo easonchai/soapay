@@ -12,8 +12,9 @@ export type EnvConfig = {
   /** Ethereum Sepolia RPC, for the ENSv2 record write on rotation. */
   l1RpcUrl: string;
   /**
-   * Route Convert quotes through the Soapay API's Uniswap proxy (`${apiUrl}/uniswap`), which adds
-   * UNISWAP_API_KEY server-side. Off = the SDK's Universal Router fallback. The key is never in the bundle.
+   * Ask the Uniswap Trading API for Convert quotes through the Soapay API's proxy (`${apiUrl}/uniswap`),
+   * which adds UNISWAP_API_KEY server-side, with a placeholder swapper (never the stealth address; D-27).
+   * Only where the API routes (Base mainnet). Off = the SDK's on-chain path. The key is never in the bundle.
    */
   swapViaApi: boolean;
   /** The company (sender) app, for the top bar's "Pay" link (VITE_OTHER_APP_URL). */

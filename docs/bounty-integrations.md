@@ -5,7 +5,7 @@ A single page for checking each integration against the prize criteria. Status a
 | | ENSv2 | World ID (IDKit) | Uniswap API |
 | --- | --- | --- | --- |
 | Role in the product | Pay-by-name identity; the employee alone controls where salary goes | Self-service key rotation (salary-redirect protection) | Convert salary *in place* inside a stealth address |
-| Live on testnet | **Yes**, end to end | **Partly**: RP and action live, full proof flow not yet run live | **Yes** for swap-in-place (Base Sepolia); Trading API live on Base mainnet quotes |
+| Live on testnet | **Yes**, end to end | **Partly**: RP and action live, full proof flow not yet run live | **Yes** for swap-in-place (Base Sepolia, on-chain quote); Trading API live on Base mainnet (placeholder-swapper quote, executed on a fork) |
 | Deep docs | `contracts/ENSV2.md` | `docs/worldid.md` | `FEEDBACK.md` |
 
 ---
@@ -84,10 +84,12 @@ node -e 'import("viem").then(async({createPublicClient,http})=>{const{sepolia}=a
 
 **Why it fits:** the PRD's spending flow is "spend without linking". Swapping in place is the one kind of spend that needs no destination at all, so it's privacy-neutral by construction.
 
+**How the Trading API is used (D-27):** `/quote` only, with a fresh random **placeholder swapper** per quote. The SDK never calls `/swap`; it re-encodes the quoted V2/V3 route as Universal Router 2.1.2 commands paying the stealth address. A guard (`assertNoStealthAddress`) refuses any request that would carry the stealth address, so neither Uniswap nor our own API proxy ever sees it. Default on Base mainnet. On Base Sepolia (the API times out there), or for routes it can't rebuild exactly, the SDK quotes on-chain with QuoterV2 instead. Who sees what: [`docs/privacy-model.md`](privacy-model.md).
+
 **Where:**
-- `packages/sdk/src/swap.ts` (Trading API `/quote` → `/swap`, with a Universal Router V3 fallback; any quote whose recipient isn't the stealth address is rejected);
+- `packages/sdk/src/swap.ts` (placeholder-swapper `/quote`, route re-encoder, privacy guard, on-chain QuoterV2 path; any calldata that pays anyone but the stealth address is rejected);
 - `packages/sdk/src/spend.ts` (`executeFromStealth`);
-- `apps/api` `/uniswap/:endpoint` (a proxy so the API key never ships in the browser);
+- `apps/api` `POST /uniswap/quote` (a proxy so the API key never ships in the browser; `/swap` and `/check_approval` are closed);
 - the recipient app's Convert screen.
 
 **Proof (Base mainnet fork, real contracts, `packages/sdk/test/fork.e2e.test.ts`):**
@@ -96,9 +98,11 @@ node -e 'import("viem").then(async({createPublicClient,http})=>{const{sepolia}=a
 - every tokenOut transfer landed only at the stealth address, and allowances returned to 0;
 - the stealth address never held ETH.
 
-**Not yet live:** a swap on Base Sepolia (testnet liquidity may be thin) and a real Trading API call (no API key yet; the API path is tested against mocks, and the fork used the Router fallback).
+**Proof (live Trading API, 2026-09-26):** a real Base mainnet `/quote` through our proxy with a placeholder swapper, re-encoded locally and executed on a Base mainnet fork: 10 USDC → 0.00372 WETH and 10 USDC → 0.00372 native ETH at the stealth address, each above the quoted minimum; the only request body never contained the stealth address (`SWAP_API_URL=http://localhost:8787/uniswap FORK_E2E=1 …`).
 
-**Prize requirements:** `FEEDBACK.md` at the repo root, with line pointers and live-verified findings: Base Sepolia routing times out upstream; a quote works with a placeholder swapper; the apparent spec-vs-skill conflict on the `/swap` body resolved (both forms are valid); chain ids accept numbers too. The team must also submit the Uniswap feedback form with a link to FEEDBACK.md.
+**Not yet live:** a Trading API swap broadcast on Base mainnet itself (it runs on a mainnet fork; the testnet demo uses the on-chain quote).
+
+**Prize requirements:** `FEEDBACK.md` at the repo root, with line pointers and live-verified findings: Base Sepolia routing times out upstream; a quote works with a placeholder swapper (now our default); the apparent spec-vs-skill conflict on the `/swap` body resolved (both forms are valid); chain ids accept numbers too. The team must also submit the Uniswap feedback form with a link to FEEDBACK.md.
 
 **Verify yourself:** `FORK_E2E=1 pnpm --filter @soapay/sdk vitest run test/fork.e2e.test.ts`.
 
@@ -113,5 +117,5 @@ node -e 'import("viem").then(async({createPublicClient,http})=>{const{sepolia}=a
 ## Before judging: run these live
 
 1. A World ID Selfie Check session create → rotate, with a human (simulator or World App).
-2. A Uniswap swap-in-place on Base Sepolia, plus one real Trading API call with a key.
+2. A Uniswap swap-in-place on Base Sepolia (done, on-chain quote); the Trading API path is proven with a live mainnet quote on a fork.
 3. One compliant exit leg (needs a faucet top-up).

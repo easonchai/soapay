@@ -18,7 +18,7 @@ export type Settings = {
   knownPayers: { address: Address; name: string }[];
   /** Ethereum Sepolia JSON-RPC for the ENSv2 `stealth` record write during rotation. Empty = public RPC. */
   l1RpcUrl: string;
-  /** Convert via the Soapay API's Uniswap proxy (`${apiUrl}/uniswap`); off = Universal Router fallback. */
+  /** Trading API quotes via the Soapay API's Uniswap proxy (`${apiUrl}/uniswap`, placeholder swapper); off = on-chain path. */
   swapViaApi: boolean;
 };
 

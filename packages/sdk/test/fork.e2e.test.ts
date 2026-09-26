@@ -46,7 +46,7 @@ import {
   isDelegated,
   spendFromStealth,
 } from "../src/index.js";
-import { NATIVE_ETH, PERMIT2_ADDRESS, UNIVERSAL_ROUTER, WETH_BASE, permit2Abi, swapInPlace } from "../src/swap.js";
+import { NATIVE_ETH, PERMIT2_ADDRESS, UNIVERSAL_ROUTER, WETH_BASE, permit2Abi, swapInPlace, type SwapFetch } from "../src/swap.js";
 import { startAnvil, selfBundler, type Anvil } from "./helpers/fork.js";
 
 const env = (globalThis as unknown as { process: { env: Record<string, string | undefined> } }).process.env;
@@ -208,5 +208,32 @@ describe.skipIf(!enabled)("Base fork E2E: 7702 + EntryPoint v0.8 + Circle paymas
       });
     for (const t of wethTransfers) expect([ROUTER, stealth].map(getAddress)).toContain(getAddress(t.to));
     results.swapEth = { stealth, txHash: res.txHash, quoted: res.quote.amountOut, minOut: res.quote.minOut, ethGain };
+  }, 180_000);
+
+  // D-27, live: a real Trading API `/quote` (through the Soapay API proxy, which adds the key) with
+  // a placeholder swapper, re-encoded locally and executed on the fork. Needs a running API:
+  //   SWAP_API_URL=http://localhost:8787/uniswap FORK_E2E=1 pnpm --filter @soapay/sdk vitest run test/fork.e2e.test.ts
+  it.skipIf(!env.SWAP_API_URL).each([
+    ["WETH", WETH_BASE],
+    ["native ETH", NATIVE_ETH],
+  ] as const)("Trading API quote with a placeholder swapper, executed in place: USDC -> %s", async (label, tokenOut) => {
+    const stealthKey = generatePrivateKey();
+    const stealth = privateKeyToAccount(stealthKey).address;
+    await fundUsdc(stealth, 30_000_000n);
+    const bodies: string[] = [];
+    const g = globalThis as unknown as { fetch: SwapFetch };
+    const fetch: SwapFetch = (url, init) => {
+      bodies.push(url + init.body);
+      return g.fetch(url, init);
+    };
+    const balanceOut = () => (tokenOut === NATIVE_ETH ? publicClient.getBalance({ address: stealth }) : erc20(tokenOut, stealth));
+    const before = await balanceOut();
+    const res = await swapInPlace(client, { stealthKey, tokenOut, amountIn: 10_000_000n, slippageBps: 100, apiUrl: env.SWAP_API_URL!, source: "trading-api", fetch }, { wait: true });
+    expect(res.quote.source).toBe("trading-api");
+    expect(bodies.length).toBe(1);
+    expect(bodies[0]!.toLowerCase()).not.toContain(stealth.slice(2).toLowerCase());
+    const gain = (await balanceOut()) - before;
+    expect(gain).toBeGreaterThanOrEqual(res.quote.minOut);
+    results[`tradingApi${label.replace(/\W/g, "")}`] = { stealth, txHash: res.txHash, route: res.quote.route, quoted: res.quote.amountOut, minOut: res.quote.minOut, gain };
   }, 180_000);
 });
