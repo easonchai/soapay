@@ -36,6 +36,8 @@ export type BackupSyncApi = {
 const BackupContext = createContext<BackupSyncApi | null>(null);
 
 const DEBOUNCE_MS = 3_000;
+/** At most one upload a minute: scans rewrite the vault often, and the API allows 60 writes an hour. */
+const MIN_INTERVAL_MS = 60_000;
 
 /** Uploads `data` under the next version; on 409 refetches the stored version and retries once. */
 export async function uploadBackup(api: Pick<Api, "getBackup" | "putBackup">, keys: BackupKeys, data: VaultData) {
@@ -60,7 +62,15 @@ export async function uploadBackup(api: Pick<Api, "getBackup" | "putBackup">, ke
   return { address: keys.address, version, at: Date.now(), hash };
 }
 
-export function BackupSync({ children, debounceMs = DEBOUNCE_MS }: { children: ReactNode; debounceMs?: number }) {
+export function BackupSync({
+  children,
+  debounceMs = DEBOUNCE_MS,
+  minIntervalMs = MIN_INTERVAL_MS,
+}: {
+  children: ReactNode;
+  debounceMs?: number;
+  minIntervalMs?: number;
+}) {
   const vault = useVault();
   const svc = useServices();
   const [status, setStatus] = useState<BackupStatus>({ kind: "idle" });
@@ -155,13 +165,14 @@ export function BackupSync({ children, debounceMs = DEBOUNCE_MS }: { children: R
         return;
       }
       setStatus((s) => (s.kind === "syncing" ? s : { kind: "pending" }));
-      timer = setTimeout(() => void sync(), debounceMs);
+      const sinceLast = meta ? Date.now() - meta.at : Infinity;
+      timer = setTimeout(() => void sync(), Math.max(debounceMs, minIntervalMs - sinceLast));
     });
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [unlocked, data, keys, hasApi, vault.lockKind, canPasskey, debounceMs, sync]);
+  }, [unlocked, data, keys, hasApi, vault.lockKind, canPasskey, debounceMs, minIntervalMs, sync]);
 
   const api = useMemo<BackupSyncApi>(() => ({ status, persisted, syncNow: sync }), [status, persisted, sync]);
   return <BackupContext.Provider value={api}>{children}</BackupContext.Provider>;
