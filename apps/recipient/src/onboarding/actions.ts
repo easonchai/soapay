@@ -88,6 +88,8 @@ export async function claimName(p: {
   /** Invite code when the employer reserved this label (§7). */
   inviteCode?: Hex | undefined;
   now?: number;
+  /** Wait between retries (tests pass 0). */
+  retryDelayMs?: number;
 }): Promise<NameRecord> {
   const deadline = BigInt(Math.floor((p.now ?? Date.now()) / 1000)) + CLAIM_TTL_SECONDS;
   const signature = await signNameClaim({
@@ -98,7 +100,7 @@ export async function claimName(p: {
     chainId: p.chainId,
     registrantKey: p.keys.registrantKey,
   });
-  return p.api.claimName({
+  const body = {
     label: p.label,
     registrant: p.keys.registrantAddress,
     metaAddress: p.keys.metaAddressURI,
@@ -106,7 +108,25 @@ export async function claimName(p: {
     signature,
     ...sessionFields(p.session),
     ...(p.inviteCode ? { inviteCode: p.inviteCode } : {}),
-  });
+  };
+  // A claim is idempotent (same registrant + same record = recovered), so a dropped connection (an API
+  // redeploy mid-claim) or an issuance that timed out while its txs still landed is retried, not shown.
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await p.api.claimName(body);
+    } catch (e) {
+      if (attempt >= CLAIM_ATTEMPTS || !retryableClaimError(e)) throw e;
+      await new Promise((r) => setTimeout(r, p.retryDelayMs ?? 5_000));
+    }
+  }
+}
+
+const CLAIM_ATTEMPTS = 3;
+
+/** Network drops, gateway errors while the API restarts, and an issuance that failed part-way. */
+export function retryableClaimError(e: unknown): boolean {
+  if (!(e instanceof ApiError)) return false;
+  return e.status === 0 || e.status === 502 || e.status === 503 || e.status === 504 || e.code === "issue_failed";
 }
 
 export const fullName = (label: string) => `${label}.${PARENT_NAME}`;
