@@ -29,6 +29,18 @@ const INVITES = "invites";
 
 /** Bursts of important changes (a CSV enrolment, several invites) collapse into one wallet prompt. */
 export const BACKUP_DEBOUNCE_MS = 2_000;
+/**
+ * Automatic backups cost a wallet prompt each, and the invite poller and "Resolve names" rewrite the
+ * roster every few seconds (timestamps), so automatic backups run at most this often. Changes in
+ * between stay "waiting" in Settings; "Back up now" is never throttled.
+ */
+export const AUTO_BACKUP_MIN_INTERVAL_MS = 10 * 60_000;
+
+/** Structural equality for vault records (amounts are bigints, which JSON can't serialize by default). */
+const sameRecords = (a: unknown, b: unknown) => {
+  const enc = (v: unknown) => JSON.stringify(v, (_k, x) => (typeof x === "bigint" ? `${x}n` : x));
+  return enc(a) === enc(b);
+};
 /** A pay run is "recorded" once it reaches one of these. */
 const RECORDED: readonly RunStatus[] = ["complete", "partial", "failed", "exported"];
 
@@ -156,6 +168,8 @@ export function StoreProvider(props: {
   const lastRef = useRef<BackupOutcome | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const pendingBackup = useRef(false);
+  /** When the last automatic backup started (ms); throttles AUTO_BACKUP_MIN_INTERVAL_MS. */
+  const lastAutoBackup = useRef(0);
   const executingCount = useRef(0);
   const persistAsked = useRef(false);
   // Serialize writes so an older snapshot never lands after a newer one.
@@ -296,10 +310,12 @@ export function StoreProvider(props: {
     if (!client || !vault.current?.syncable) return;
     pendingBackup.current = true;
     clearTimeout(timer.current);
+    const wait = Math.max(BACKUP_DEBOUNCE_MS, lastAutoBackup.current + AUTO_BACKUP_MIN_INTERVAL_MS - Date.now());
     timer.current = setTimeout(() => {
       if (executingCount.current > 0) return; // executeRun re-schedules when it finishes
+      lastAutoBackup.current = Date.now();
       void runBackup(false);
-    }, BACKUP_DEBOUNCE_MS);
+    }, wait);
   }, [client, runBackup]);
 
   useEffect(() => () => clearTimeout(timer.current), []);
@@ -411,7 +427,9 @@ export function StoreProvider(props: {
 
   const updateEmployees = useCallback(
     async (fn: (e: Employee[]) => Employee[]) => {
-      const next = fn(employeesRef.current);
+      const prev = employeesRef.current;
+      const next = fn(prev);
+      if (sameRecords(next, prev)) return;
       employeesRef.current = next;
       setEmployees(next);
       await persist(ROSTER, next);
@@ -423,7 +441,9 @@ export function StoreProvider(props: {
 
   const updateInvites = useCallback(
     async (fn: (i: InvitedEmployee[]) => InvitedEmployee[]) => {
-      const next = fn(invitesRef.current);
+      const prev = invitesRef.current;
+      const next = fn(prev);
+      if (sameRecords(next, prev)) return;
       invitesRef.current = next;
       setInvites(next);
       await persist(INVITES, next);

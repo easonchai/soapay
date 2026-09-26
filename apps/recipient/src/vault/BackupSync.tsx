@@ -36,8 +36,8 @@ export type BackupSyncApi = {
 const BackupContext = createContext<BackupSyncApi | null>(null);
 
 const DEBOUNCE_MS = 3_000;
-/** At most one upload a minute: scans rewrite the vault often, and the API allows 60 writes an hour. */
-const MIN_INTERVAL_MS = 60_000;
+/** At most one upload every 5 minutes: scans rewrite the vault often, and the API allows 60 writes an hour. */
+const MIN_INTERVAL_MS = 5 * 60_000;
 
 /** Uploads `data` under the next version; on 409 refetches the stored version and retries once. */
 export async function uploadBackup(api: Pick<Api, "getBackup" | "putBackup">, keys: BackupKeys, data: VaultData) {
