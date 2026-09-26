@@ -1,6 +1,6 @@
 # Architecture
 
-How the apps, the SDK, the API and the contracts fit together, and where the ENS, World ID and Uniswap integrations sit in the product. Everything protocol-related lives in `@soapay/sdk`. The company app, the employee app, the CLI and the MCP server are thin shells on top of it, so a payer can be a company, a script or an agent, and a payee can be a person or an agent. The API only relays, issues names and verifies World ID; it never holds keys or funds.
+How the apps, the SDK, the API and the contracts fit together, and where the ENS and World ID integrations sit in the product. Everything protocol-related lives in `@soapay/sdk`. The company app, the employee app, the CLI and the MCP server are thin shells on top of it, so a payer can be a company, a script or an agent, and a payee can be a person or an agent. The API only relays, issues names and verifies World ID; it never holds keys or funds.
 
 Network: Base Sepolia for payments and spending, Ethereum Sepolia for ENSv2 and the Privacy Pools exit.
 
@@ -15,7 +15,7 @@ So anyone can try the whole platform without Circle's faucet, the Base Sepolia d
 | Funding | **Welcome drop**: a wallet that opens the company app gets 1,000,000 mock USDC once (`POST /faucet`); smart-wallet employers paying by EIP-5792 batch get their gas sponsored too | The company's own USDC and ETH |
 | Exit (Privacy Pools via CCTP) | **Hidden**: CCTP only moves Circle USDC, so the mock can't bridge. The code and tests stay | Available once a mainnet route is configured |
 
-The employee app has no Convert screen on any chain (D-53); the SDK's swap-in-place and the MCP `swap_in_place` tool remain. A mock USDC / WETH 0.05% pool exists on Base Sepolia (`0x820537A7…0b14`) but the product no longer depends on it.
+The employee app has no Convert screen on any chain (D-53); the SDK's swap-in-place and the MCP `swap_in_place` tool remain.
 
 ## The whole system
 
@@ -33,7 +33,7 @@ The same system step by step: onboard, pay, find and spend, recover, agents, and
 
 The source is [`diagrams/soapay-architecture.excalidraw`](diagrams/soapay-architecture.excalidraw); open it at excalidraw.com to edit.
 
-Blue borders are ENS, black World ID, pink Uniswap, navy our own code. The dashed red node is the adversary.
+Blue borders are ENS, black World ID, navy our own code. The dashed red node is the adversary.
 
 ```mermaid
 flowchart LR
@@ -57,7 +57,6 @@ flowchart LR
     ISSUER["ENSv2 name issuer<br/>+ invites"]
     WIDV["World ID verifier<br/>+ rotation attester"]
     IDX["Announcement indexer"]
-    QPROXY["Uniswap quote proxy<br/>(/quote only)"]
   end
 
   subgraph Base["Base Sepolia"]
@@ -66,7 +65,6 @@ flowchart LR
     SD["StealthDisperse<br/>(our only contract,<br/>no funds, no state)"]
     USDC["USDC<br/>(mock on Base Sepolia)"]
     AA["EntryPoint v0.8 +<br/>Simple7702Account +<br/>paymaster (Circle on Base,<br/>sponsored on Base Sepolia)"]
-    UR["Uniswap Universal Router<br/>+ Permit2"]
   end
 
   subgraph L1["Ethereum Sepolia"]
@@ -76,7 +74,6 @@ flowchart LR
 
   CCTP["Circle CCTP V2<br/>(bridge)"]
   WID["World ID<br/>Proof of Human"]
-  UAPI["Uniswap Trading API"]
 
   EMP --> SENDER
   EMP --> CLI
@@ -91,13 +88,11 @@ flowchart LR
   SDK --> ISSUER --> ENS
   SDK --> WIDV --> WID
   SDK --> IDX --> ANN
-  SDK --> QPROXY --> UAPI
   SDK -- "resolve + pin" --> ENS
   SDK -- "pay run" --> SD
   SD --> USDC
   SD --> ANN
   SDK -- "gasless spend" --> AA
-  AA --> UR
   AA -- "exit: burn" --> CCTP --> PP
 
   CW -. "sees every line,<br/>can't tell whose" .-> ANN
@@ -109,7 +104,6 @@ flowchart LR
   classDef adv stroke:#B3261E,stroke-dasharray: 4 3
   class ENS,ISSUER ens
   class WID,WIDV wid
-  class UR,UAPI,QPROXY uni
   class SDK,SENDER,RECIP,CLI,MCP,SD,RELAY,IDX own
   class CW adv
 ```
@@ -129,12 +123,6 @@ flowchart LR
 - **In the product:** the company app (and the CLI) accepts a changed meta-address automatically only with that attestation, from the attester it pinned. Without it, the line is blocked and the employer re-approves by hand.
 - **Why it's central:** ENS decides where salaries go, so a stolen key that rewrites the record is the real risk. It matters most for pseudonymous contributors (a DAO paying a handle), where there's no phone number to call. Details: [docs/worldid.md](worldid.md).
 - **Code:** `packages/worldid-react`, `packages/sdk/src/rotation.ts`, `pins.ts`, `apps/api` World ID routes.
-
-### Uniswap (Trading API): convert your salary without breaking your privacy
-
-- **What we built:** swap in place. One EIP-7702 userOp from the stealth address does Permit2 plus the Universal Router swap, gas is paid in USDC by the paymaster, and the output stays at the same address (D-20). It lives in the SDK and the MCP `swap_in_place` tool; the employee web app's Convert screen was removed (D-53), and the Uniswap bounty is no longer targeted.
-- **Privacy detail:** quotes come from the Trading API with a placeholder swapper, through a proxy that forwards `/quote` only. The SDK rebuilds the V2/V3 route itself, so neither Uniswap nor our server sees the stealth address (D-27, D-32, D-33). On Base Sepolia it falls back to the on-chain QuoterV2.
-- **Proof:** [live swap on Base Sepolia](https://sepolia.basescan.org/tx/0x2bf66ce2b28b118becdd5aba49d612a444bcffaa006c33b09b92165b5ec55c81). Code: `packages/sdk/src/swap.ts`. Feedback: [FEEDBACK.md](../FEEDBACK.md).
 
 ## The flows
 
@@ -215,25 +203,7 @@ sequenceDiagram
   E->>E: accept automatically, or block and alert
 ```
 
-### 5. Convert in place (Uniswap; SDK and MCP only since D-53)
-
-```mermaid
-sequenceDiagram
-  autonumber
-  participant R as Employee app
-  participant Q as Quote proxy
-  participant T as Uniswap API
-  participant X as Stealth address
-  participant UR as Universal Router
-  R->>Q: quote (placeholder swapper)
-  Q->>T: /quote only
-  T-->>R: V2/V3 route
-  R->>R: rebuild calldata itself
-  R->>X: one userOp: Permit2 + swap
-  X->>UR: swap, output stays in X
-```
-
-### 6. Compliant exit (Privacy Pools + CCTP)
+### 5. Compliant exit (Privacy Pools + CCTP)
 
 ```mermaid
 sequenceDiagram
@@ -253,7 +223,7 @@ sequenceDiagram
 
 Fees are roughly fixed per leg, so the Exit screen shows the whole cost and "you receive ≈ X of Y" before starting (D-48). On testnet the relayer charges about 21.5 USDC per withdrawal, so small exits withdraw directly, with the destination paying a little Sepolia ETH.
 
-### 7. Use a dApp from one payment address (WalletConnect, D-61)
+### 6. Use a dApp from one payment address (WalletConnect, D-61)
 
 The employee app is also a WalletConnect wallet (Reown WalletKit), so a salary address can use Aave, Morpho or any other dApp directly, gaslessly, without first moving the money to a wallet that would link it.
 
@@ -276,10 +246,10 @@ sequenceDiagram
 - **Where the logic lives.** Signing, call decoding and the privacy check are in the SDK (`packages/sdk/src/dapp.ts`: `signMessageAsStealth`, `signTypedDataAsStealth`, `decodeDappCall`, `checkDappPrivacy`, `waitForStealthExecution`); execution is the SDK's `executeFromStealth`. The app only routes requests (`apps/recipient/src/features/walletconnect/`).
 - **Privacy guard.** ERC-20 transfers in the calls go through `planSpend` exactly like Send. Any other place the request names an address (Aave's `onBehalfOf`, a typed-data field, a signed message) is matched against your other stealth addresses and every identifiable address; a match blocks until you tick the override. Transfers you approve are recorded as guard links.
 - **No ETH.** Stealth addresses hold none, so any request with `value` is refused. `eth_sign` and `eth_signTransaction` are refused too.
-- **Gas.** Base mainnet: Circle paymaster, fee in USDC from the address, any target. Base Sepolia: the API's `/paymaster` only sponsors allow-listed targets (pay token, Permit2, Universal Router, StealthDisperse, Announcer). A dApp contract works there only after the operator adds it to `PAYMASTER_EXTRA_TARGETS` (an explicit opt-in that already exists; nothing was widened).
+- **Gas.** Base mainnet: Circle paymaster, fee in USDC from the address, any target. Base Sepolia: the API's `/paymaster` only sponsors allow-listed targets (pay token, StealthDisperse, Announcer and the swap contracts). A dApp contract works there only after the operator adds it to `PAYMASTER_EXTRA_TARGETS` (an explicit opt-in that already exists; nothing was widened).
 - **Leaks this doesn't hide.** The dApp learns the one address and everything it does. WalletConnect's session store (IndexedDB, outside the encrypted vault) records which address is connected to which dApp. The relay sees the browser's IP, like the RPC and bundler (out of scope for v1).
 
-### 8. Get your account back with a synced passkey (D-63)
+### 7. Get your account back with a synced passkey (D-63)
 
 The employee app keeps its vault (keys, name, World ID session, labels, settings) encrypted in the browser. Clearing site data or opening a new device used to leave only the recovery phrase. Passkeys already sync (iCloud Keychain, Google Password Manager), so the vault now follows them:
 
@@ -429,8 +399,6 @@ Beyond the qualification checklist in [docs/bounty-integrations.md](bounty-integ
 
 We don't enter "World ID for Agents". Our agents are payees, and no agent action there needs a human's approval.
 
-**Uniswap: "Best Uniswap Stack Contribution".** No longer targeted (owner, 09-26; D-53): the employee app's Convert screen is gone. The SDK still uses the **Uniswap API** for quotes and executes on **v2/v3 pools** through the Universal Router and Permit2 (MCP `swap_in_place`), and `FEEDBACK.md` keeps the live findings.
-
 ## FAQ
 
 **How is the company app different from `soapay distribute` (CLI)?** Same SDK, same on-chain path (StealthDisperse, announcements, pins, the World ID rule). The **company app** is for a payroll team: wallet login, invites, a roster that's resolved and pinned with visible alerts, a review screen, smart-wallet and Safe paths, history. The **CLI** is for scripts: a CSV in, presets (`payroll`, `dividend`, `grant`, `vesting`), a key from the environment, pins in `.soapay/pins.json`, and exit code 3 when a name changed without World ID.
@@ -462,7 +430,6 @@ We don't enter "World ID for Agents". Our agents are payees, and no agent action
 | Coworker | The whole pay run on-chain: every line, every amount | Which line is whose. Lines are fresh, sorted by address and split into standard chunks |
 | Employer | Everything (trusted by design): name → address → amount | The employee's keys |
 | Soapay API | Registrations, names, World ID proofs, public announcements; encrypted vault backups under an unlinked backup address (size, update times) | Stealth addresses in swaps (quote-only), keys, funds, what's inside a backup or whose it is |
-| Uniswap | A quote's pair and amount | The address that swaps |
 | Employee | Only their own lines, found with their viewing key | Other people's lines |
 
 More detail: [docs/privacy-model.md](privacy-model.md). Every decision referenced here (D-xx) is in [docs/decision-log.md](decision-log.md).

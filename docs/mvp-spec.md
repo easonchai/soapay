@@ -139,13 +139,7 @@ Owner decision (2026-09-25, supersedes the earlier two-moment design):
 - **Where it's essential:** DAO contributors are often pseudonymous, so the payer has no out-of-band channel to confirm a change; World ID is the only continuity signal that keeps the contributor pseudonymous. For known employees it automates what HR would otherwise confirm by phone.
 - Proofs are verified server-side in `apps/api`. We store the linked session id per name, each used session nullifier, and every RP nonce we signed (marked used), never identity. The session is RP-scoped, so it can't be linked across apps. Session requests take no action.
 
-## 6. Uniswap: convert salary in place
-
-- The recipient app lets an employee convert part of a stealth address's USDC into another asset **inside the same stealth address**: one 7702 userOp does `approve` + a Uniswap API swap calldata, with gas paid in USDC by the paymaster. No funds move between addresses, so no clusters merge.
-- The conversion preference is **local** to the recipient app (never a public record, which could fingerprint someone).
-- `FEEDBACK.md` at the repo root, and the Uniswap feedback form, are required for the prize.
-
-## 7. Invite links (owner decision, 2026-09-25)
+## 6. Invite links (owner decision, 2026-09-25)
 
 Lets the employer pre-assign the label so the employee's onboarding is: open the link, back up the seed, tap Create.
 
@@ -157,7 +151,7 @@ Lets the employer pre-assign the label so the employee's onboarding is: open the
 - **Sender app:** "Invite employee" (label, amount, optional org name) → sign → POST /invites → show the link plus a QR code. The roster row stays "Invited (pending)" until the invite is claimed, then auto-enrolls by resolving and pinning with the normal checks. The code is kept only in the employer's encrypted vault.
 - **Recipient app:** on `#/join?...`, prefill and lock the label and show "Invited by <org>". POST /names includes `inviteCode`. Expired or claimed invites show a clear error and let the employee pick their own label.
 
-## 8. MCP server: agents as ENSv2 namespaces (owner decision, 2026-09-26)
+## 7. MCP server: agents as ENSv2 namespaces (owner decision, 2026-09-26)
 
 `apps/mcp` (`@soapay/mcp`) is a stdio MCP server over the SDK and API (PRD M5, pulled forward for the ENSv2 prize's "agents as namespaces" bonus).
 - **Agent identity:** each agent gets `<label>.soapay.eth` through the normal onboarding (sponsored ERC-6538 registration, then POST /names). It carries ENSIP-26 agent text records, and an ENSIP-25 registry binding if the spec supports it without a live registry. Only the agent's registrant key can change its `stealth` record (the same EAC model as employees).
@@ -167,7 +161,7 @@ Lets the employer pre-assign the label so the employee's onboarding is: open the
   - `pay`: names and amounts, as one pay run through StealthDisperse or a batch;
   - `scan` / `balance`;
   - `spend`: to an address or a name, with guard-checked 7702 + paymaster;
-  - `swap_in_place`: through the Uniswap proxy;
+  - `swap_in_place`: convert inside the stealth address;
   - `create_agent_identity` (optionally with an employer `invite` link or code, which sets the label and marks the invite joined; D-56).
 - **Guardrails:**
   - per-call and per-day USDC caps (env);
@@ -177,7 +171,7 @@ Lets the employer pre-assign the label so the employee's onboarding is: open the
   - keys only from env or files, never returned by any tool.
 - **Keys:** `AGENT_MNEMONIC` (the agent as recipient) and `AGENT_PAYER_PRIVATE_KEY` (the agent as payer, an EOA with USDC).
 
-## 9. Compliant exit through Privacy Pools (owner decision, 2026-09-26)
+## 8. Compliant exit through Privacy Pools (owner decision, 2026-09-26)
 
 Research, addresses and sources are in `docs/exit-research.md`. The production chain is deliberately undecided, so the SDK is chain-agnostic, with a config per chain. The testnet demo route is Base Sepolia → Ethereum Sepolia (0xbow USDC pool).
 

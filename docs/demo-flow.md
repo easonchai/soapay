@@ -5,7 +5,7 @@ The demo slot is 4 minutes. A teammate pitches for the first minute (see [What t
 - **ENSv2:** the name *is* how the employer pays you. Sections 2, 3 and 4.
 - **World IDKit (Proof of Human):** it's what lets you recover your pay, and what stops a thief from redirecting it. Sections 2 and 7.
 
-Uniswap is no longer targeted (D-53), and the testnet has no exit (D-52), so neither appears. Everything runs live on **Base Sepolia with Soapay's mock USDC**, with ENSv2 names on Sepolia.
+The testnet has no exit (D-52), so it does not appear. Everything runs live on **Base Sepolia with Soapay's mock USDC**, with ENSv2 names on Sepolia.
 
 **Cast:** the laptop (company app, Claude Code, a terminal, mirrored to the screen) and one phone ("Alex", the employee app, mirrored too). The company is **Meridian Labs**.
 
