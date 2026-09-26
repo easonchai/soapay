@@ -1,4 +1,4 @@
-# Soapay: one name, infinite addresses
+# Soapay: privacy infrastructure for payments on chain
 
 [![Base](https://img.shields.io/badge/Base-Mainnet%208453-0052ff)](https://basescan.org/address/0x55649E01B5Df198D18D95b5cc5051630cfD45564)
 [![ERC-5564](https://img.shields.io/badge/ERC--5564-Stealth%20Addresses-111111)](https://eips.ethereum.org/EIPS/eip-5564)
@@ -12,11 +12,29 @@
 
 **Live demo:** [soapay.up.railway.app](https://soapay.up.railway.app/) (company app) · [soapay.up.railway.app/app/](https://soapay.up.railway.app/app/) (employee app), on Base Sepolia.
 
-**Soapay lets you get paid on-chain without publishing your bank statement.** An employee shares one ENS name. Every salary payment lands on a fresh stealth address that only they can open and spend from, and a coworker reading the same payroll batch can't tell which line is theirs.
+**Soapay is privacy infrastructure for payments on chain**: every payment lands on a fresh address that only you can open, and you can spend it without a trace. A recipient shares one ENS name. Each payment to it goes to a new ERC-5564 stealth address, so a coworker reading the same payroll batch sees a list of never-before-seen addresses and can't tell which line is theirs.
 
-Our first use case is **recurring payroll on Base**. Today one batch transaction shows every recipient and every amount next to each other. With Soapay, coworkers see a list of never-before-seen addresses.
+## Who sees what you earn?
 
-**Navigate:** [PRD](PRD.md) · [Threat model](#threat-model) · [Privacy model](docs/privacy-model.md) · [How it works](#how-it-works) · [Uniswap](#uniswap-integration) · [StealthDisperse plan](contracts/PLAN.md) · [PRD analysis](docs/prd-analysis.md) · [Roadmap](#roadmap) · [Getting started](#getting-started) · [Repository](#repository)
+On a public chain, everyone with a browser: one payroll batch on Base shows every recipient and every amount next to each other, readable forever. Your colleagues too: at Gitcoin DAO a contributor started from their own pay address and put names to fifteen salaries. So companies walk away, and the fixes built for them (Base Ledgers, Tempo Zones, Toku on Aleo) are private ledgers for enterprises: not for everyone, since you apply for access, and not fully private, since the operator sees everything. Everyone else still pays in public.
+
+Three apps on open standards, and nothing of ours holds money. The full argument, with sources, is in the [pitch deck](pitch/README.md).
+
+## Built for payroll. Ready for any payout.
+
+Payroll is the first use case because it is where public payments hurt most: one payer, many recipients who know each other, every month. But nothing in the rail is specific to salaries. Any payment that goes from one place to many names works the same way today: resolve the names, derive a fresh address per line, pay and announce in one transaction.
+
+- Dividends and revenue share
+- Token and equity allocations: vesting unlocks, stock and option settlements, investor distributions
+- Vendor and supplier payments
+- Grants and bounties
+- Prizes and airdrops
+- Tips, donations and creator payouts
+- Agents paying agents by name ([Agents](#agents-mcp))
+
+The SDK already treats these as one thing. [`packages/sdk/src/distribute.ts`](packages/sdk/src/distribute.ts) plans any distribution from a payer and a list of recipients, with presets for `payroll`, `dividend` (pro rata by largest remainder, so the allocations sum exactly to the total) and `grant` (checked against a budget), with `vesting` as a kind planned the same way. [`soapay distribute`](apps/cli) runs one from a CSV, dry run by default, and [`examples/dividend-run.ts`](examples/dividend-run.ts) and [`examples/grant-round.ts`](examples/grant-round.ts) show the same rail paying a cap table and a grant round.
+
+**Navigate:** [Pitch](pitch/README.md) · [PRD](PRD.md) · [Threat model](#threat-model) · [Privacy model](docs/privacy-model.md) · [How it works](#how-it-works) · [Uniswap](#uniswap-integration) · [StealthDisperse plan](contracts/PLAN.md) · [PRD analysis](docs/prd-analysis.md) · [Roadmap](#roadmap) · [Getting started](#getting-started) · [Repository](#repository)
 
 ## What's here
 
