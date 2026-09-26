@@ -174,6 +174,14 @@ const MIGRATIONS: string[] = [
   ALTER TABLE name_sessions_v2 RENAME TO name_sessions;
   CREATE INDEX name_sessions_nullifier ON name_sessions(nullifier);
   `,
+  // D-59 (supersedes D-58): back to World ID sessions. Production enforces one uniqueness proof
+  // per person per action, so D-58's link-then-recover can't work; a session (on an RP that
+  // supports sessions) can be proved again and again. A name's link is `session_id` again;
+  // `nullifier` stays (migrations are append-only) but is unused, and a nullifier-only row
+  // counts as unlinked. `session_id` stays non-unique: one session may back several names.
+  `
+  CREATE INDEX name_sessions_session ON name_sessions(session_id);
+  `,
 ];
 
 export function migrate(db: Db): void {

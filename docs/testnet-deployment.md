@@ -33,7 +33,7 @@ Public addresses only. Private keys live in the git-ignored `apps/api/.env` and 
 
 ## World ID
 
-App `app_0cc7167efe114ac2e0ef7d9827098353`, RP `rp_3ede5fe1cab9af48` (registered in production and staging). Attester address `0x62377F8ad1151f5b1917708FFD67220F37dF2574` (pin it in the sender app as `VITE_ATTESTER`).
+World ID app and RP come from the api's environment (`WORLD_APP_ID`, `WORLD_RP_ID`, `WORLD_RP_SIGNING_KEY`; no defaults in code). Since D-59: app `app_c47a43da4fea435146d14ae5e9f503ea`, RP `rp_25e1826d2548c1d9` (the first app/RP, `app_0cc7…` / `rp_3ede5fe1cab9af48`, didn't support sessions). Attester address `0x62377F8ad1151f5b1917708FFD67220F37dF2574` (pin it in the sender app as `VITE_ATTESTER`).
 
 ## Verified live
 
@@ -158,7 +158,7 @@ EXIT_LIVE=1 EMPLOYER_KEY=$DEPLOYER_PRIVATE_KEY PAY_AMOUNT=18000000 EXIT_LIVE_MIN
 | Gas top-up to the stolen registrant (Sepolia, from the `soapay.eth` owner) | | [0x1eb7…dce5](https://sepolia.etherscan.io/tx/0x1eb79e84d2c965db30bd2e35ea95811740b32abddefc3bdfb877cab6af40dce5) |
 | **Attack:** ENS `setText(stealth)` → attacker meta, from the stolen registrant key | success | [0xc156…7646](https://sepolia.etherscan.io/tx/0xc1566a093999556cfa5e8624a51397d0d80ff9b209608e276232cbc99e577646) |
 | **Attack:** ERC-6538 `registerKeys` → attacker meta (Base Sepolia) | success | [0x14e2…dac2](https://sepolia.basescan.org/tx/0x14e212ca212570e4c61b7a7b3f80eef31580e1207bde6416563d1ac34e92dac2) |
-| `POST /names/sam-demo/rotation` (valid RotationClaim, no World ID proof) | **409 `no_session`** (renamed `no_worldid_link` in D-58), no attestation | — |
+| `POST /names/sam-demo/rotation` (valid RotationClaim, no World ID proof) | **409 `no_session`**, no attestation (D-58 briefly renamed it `no_worldid_link`; D-59 restored it) | — |
 | Re-check | SDK **`blocked`**, attestation `missing` ("No World ID re-verification on record for this change"); CLI **exit 3** (ALERT, nothing sent) | — |
 | **Restore:** ENS `setText(stealth)` → victim meta | success | [0x43be…3431](https://sepolia.etherscan.io/tx/0x43be4fadc4f44ddc4006413c079e5d4640a56f7057646170790c30dc35593431) |
 | **Restore:** ERC-6538 `registerKeys` → victim meta | success | [0x373f…dc0d](https://sepolia.basescan.org/tx/0x373f79fe194e321ffbe906b9ea97af84d85447a63faedec997c27388113bdc0d) |
