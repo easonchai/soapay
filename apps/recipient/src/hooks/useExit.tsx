@@ -9,7 +9,9 @@ import { getAddress, type Address } from "viem";
 import { estimateExit, validateExit, type ExitEstimate } from "../features/exit/planner.js";
 import { activeLegs, patchRecords, tickExits, type LegPatch } from "../features/exit/runner.js";
 import type { ExitKeys } from "../features/exit/sdk.js";
-import { isTerminal, loadLeg, storeLeg, type ExitLeg, type ExitPrivacy, type ExitRecord } from "../features/exit/types.js";
+import { isTerminal, loadLeg, storeLeg, type ExitFeeQuote, type ExitLeg, type ExitPrivacy, type ExitRecord, type ExitWithdrawVia } from "../features/exit/types.js";
+import { EXIT_QUOTE_TTL_MS } from "../features/exit/config.js";
+import { connectDestinationWallet } from "../features/exit/wallet.js";
 import { useServices } from "../services/ServicesProvider.js";
 import { stealthKeyFor } from "../spend/flow.js";
 import { errorMessage } from "../ui/kit.js";
@@ -24,7 +26,10 @@ export const DEFAULT_PRIVACY: ExitPrivacy = { randomDelay: true, roundWithdrawal
 
 export type ExitView = { record: ExitRecord; legs: ExitLeg[]; finished: boolean };
 
-export type StartExit = { sources: Address[]; destination: string; privacy: ExitPrivacy };
+export type StartExit = { sources: Address[]; destination: string; privacy: ExitPrivacy; withdrawVia?: ExitWithdrawVia };
+
+/** The planner's fee inputs: a live quote once it arrives, the route's estimates until then. */
+export type ExitQuoteState = { status: "loading" | "live" | "partial" | "estimate"; quote: ExitFeeQuote | null };
 
 export type ExitApi = {
   ready: boolean;
@@ -38,10 +43,17 @@ export type ExitApi = {
   errors: Readonly<Record<string, string>>;
   /** Every stealth address with a balance, as exit sources (full balance per leg). */
   sources: { stealthAddress: Address; amount: bigint }[];
-  estimate(selected: Address[], privacy: ExitPrivacy): ExitEstimate | null;
+  estimate(selected: Address[], privacy: ExitPrivacy, via?: ExitWithdrawVia): ExitEstimate | null;
+  /** Live fee quotes for the planner (refreshed every few minutes while the provider runs). */
+  quote: ExitQuoteState;
   start(input: StartExit): Promise<{ id: string } | { error: string }>;
   /** Skip the rest of the random delay and withdraw on the next tick. */
   withdrawNow(exitId: string, legId: string): Promise<void>;
+  /**
+   * Withdraw an approved leg directly from the destination wallet (injected, it pays ETH gas), for
+   * when the relayer fee is unreasonable. Switches the leg to direct for good.
+   */
+  withdrawDirect(exitId: string, legId: string): Promise<void>;
   /** Re-run a failed leg's current step. */
   retry(exitId: string, legId: string): Promise<void>;
   /** Run one polling round now. */
@@ -182,24 +194,49 @@ export function ExitProvider({ children, random }: { children: ReactNode; random
     [wallet.balances, busy],
   );
 
+  // Live fee quotes (Iris, the relayer, Sepolia gas), refreshed while the provider runs. Until one
+  // arrives (or if every source fails) the planner uses the route's estimates, and says so.
+  const [quote, setQuote] = useState<ExitQuoteState>({ status: "loading", quote: null });
+  useEffect(() => {
+    if (!service.ready || !service.config) return;
+    let alive = true;
+    const load = () =>
+      service
+        .quoteFees()
+        .then((q) => {
+          if (!alive) return;
+          const n = Object.values(q.sources).filter(Boolean).length;
+          setQuote({ status: n === 0 ? "estimate" : n === Object.keys(q.sources).length ? "live" : "partial", quote: q });
+        })
+        .catch(() => alive && setQuote((s) => (s.quote ? s : { status: "estimate", quote: null })));
+    void load();
+    const t = setInterval(() => void load(), EXIT_QUOTE_TTL_MS);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, [service]);
+  const live = quote.quote?.live;
+
   const estimate = useCallback(
-    (selected: Address[], privacy: ExitPrivacy) => {
+    (selected: Address[], privacy: ExitPrivacy, via: ExitWithdrawVia = "relayer") => {
       if (!service.config) return null;
       const set = new Set(selected.map((a) => a.toLowerCase()));
       return estimateExit(
         sources.filter((s) => set.has(s.stealthAddress.toLowerCase())),
         service.config,
-        { roundWithdrawals: privacy.roundWithdrawals },
+        { roundWithdrawals: privacy.roundWithdrawals, via, ...(live ? { live } : {}) },
       );
     },
-    [service.config, sources],
+    [service.config, sources, live],
   );
 
   const start = useCallback(
     async (input: StartExit): Promise<{ id: string } | { error: string }> => {
       if (!service.ready || !service.config) return { error: service.unavailableReason ?? "Exit isn't available." };
       const cfg = service.config;
-      const all = estimateExit(sources, cfg, { roundWithdrawals: input.privacy.roundWithdrawals });
+      const via = input.withdrawVia ?? "relayer";
+      const all = estimateExit(sources, cfg, { roundWithdrawals: input.privacy.roundWithdrawals, via, ...(live ? { live } : {}) });
       const err = validateExit({
         destination: input.destination,
         selected: input.sources,
@@ -214,7 +251,14 @@ export function ExitProvider({ children, random }: { children: ReactNode; random
         let id = "";
         await write((d) => {
           const first = d.profile.nextExitPoolIndex ?? 0;
-          const plan = service.planExit({ sources: legSources, destination, firstPoolIndex: first });
+          const plan = service.planExit({
+            sources: legSources,
+            destination,
+            firstPoolIndex: first,
+            withdrawVia: via,
+            roundWithdrawals: input.privacy.roundWithdrawals,
+            ...(live ? { live } : {}),
+          });
           const now = Date.now();
           id = `exit-${now.toString(36)}`;
           const record: ExitRecord = {
@@ -224,6 +268,7 @@ export function ExitProvider({ children, random }: { children: ReactNode; random
             destChainId: cfg.dest,
             destination,
             privacy: input.privacy,
+            ...(via === "direct" ? { withdrawVia: via } : {}),
             legs: plan.legs.map(storeLeg),
             holdUntil: {},
           };
@@ -246,7 +291,7 @@ export function ExitProvider({ children, random }: { children: ReactNode; random
         return { error: errorMessage(e) };
       }
     },
-    [service, sources, wallet.balances, state.matches, write, chainId, random],
+    [service, sources, wallet.balances, state.matches, write, chainId, random, live],
   );
 
   const startNow = useCallback(
@@ -270,6 +315,28 @@ export function ExitProvider({ children, random }: { children: ReactNode; random
       await tick();
     },
     [save, tick],
+  );
+
+  const withdrawDirect = useCallback(
+    async (exitId: string, legId: string) => {
+      const record = exitsOf(dataRef.current, chainId).find((r) => r.id === exitId);
+      const stored = record?.legs.find((l) => l.id === legId);
+      if (!record || !stored) return;
+      const leg = loadLeg(stored);
+      try {
+        const sender = await connectDestinationWallet(record.destination, record.destChainId);
+        const next = await service.withdrawDirect(leg, keysFor(leg), {
+          destination: record.destination,
+          roundWithdrawals: record.privacy.roundWithdrawals,
+          persist: (l) => save(exitId, legId, { leg: storeLeg(l) }),
+        }, sender);
+        onError(legId, null);
+        await save(exitId, legId, { leg: storeLeg(next) });
+      } catch (e) {
+        onError(legId, errorMessage(e));
+      }
+    },
+    [chainId, service, keysFor, save, onError],
   );
 
   const retry = useCallback(
@@ -312,8 +379,10 @@ export function ExitProvider({ children, random }: { children: ReactNode; random
     errors,
     sources,
     estimate,
+    quote,
     start,
     withdrawNow,
+    withdrawDirect,
     retry,
     tick,
     queuedAt,

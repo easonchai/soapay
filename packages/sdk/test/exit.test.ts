@@ -16,6 +16,21 @@ import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import {
   CCTP_FORWARD_HOOK_DATA,
   EXIT_BASE_SEPOLIA_TO_SEPOLIA as CONFIG,
+  EXIT_DEST_FEE_CEILING,
+  EXIT_HIGH_FEE_SHARE_BPS,
+  bpsToPercent,
+  checkRelayQuote,
+  defaultDestFeeCap,
+  exitLegCost,
+  fetchExitFeeQuote,
+  isRelayable,
+  minRelayableWithdrawal,
+  paymasterPrefundUsdc,
+  relayFeeBpsOf,
+  relayFeeCap,
+  relayFeeFor,
+  withdrawDirect,
+  type DirectWithdrawSender,
   ENTRYPOINT_V08,
   SNARK_SCALAR_FIELD,
   advanceExitLeg,
@@ -79,11 +94,17 @@ describe("planning helpers", () => {
     expect(cctpMaxFee(10n, { finalityThreshold: 2000, minimumFee: 0 }, "med")).toBe(0n);
   });
 
-  it("round partial withdrawals", () => {
-    expect(planRoundWithdrawals(11_880_000n, { unit: 1_000_000n })).toEqual([5_000_000n, 5_000_000n, 1_880_000n]);
-    expect(planRoundWithdrawals(11_880_000n, { unit: 1_000_000n, leaveChange: true })).toEqual([5_000_000n, 5_000_000n]);
+  it("withdrawal parts: exactly `parts` withdrawals, the change folded into the last unless it stays in the pool", () => {
+    // Default 1 part: everything at once. Live 2026-09-26: 9.95 USDC was split into 9 + 0.95 even with
+    // withdrawParts 1, and a sub-1 USDC part can't be relayed at a fixed ≈ 21.5 USDC relayer fee.
+    expect(planRoundWithdrawals(9_950_000n, { unit: 1_000_000n, parts: 1, min: 100n })).toEqual([9_950_000n]);
+    expect(planRoundWithdrawals(11_880_000n, { unit: 1_000_000n })).toEqual([11_880_000n]);
+    expect(planRoundWithdrawals(11_880_000n, { unit: 1_000_000n, parts: 2 })).toEqual([5_000_000n, 6_880_000n]);
+    expect(planRoundWithdrawals(11_880_000n, { unit: 1_000_000n, parts: 2, leaveChange: true })).toEqual([5_000_000n, 5_000_000n]);
+    expect(planRoundWithdrawals(11_880_000n, { unit: 1_000_000n, leaveChange: true })).toEqual([11_000_000n]);
     expect(planRoundWithdrawals(900_000n, { unit: 1_000_000n })).toEqual([900_000n]);
     const parts = planRoundWithdrawals(12_345_678n, { unit: 1_000_000n, parts: 3 });
+    expect(parts).toHaveLength(3);
     expect(parts.reduce((a, b) => a + b, 0n)).toBe(12_345_678n);
   });
 
@@ -104,7 +125,7 @@ describe("planning helpers", () => {
     expect(legs[0]).toMatchObject({ status: "planned", amount: "14000000", destination: DEST_WALLET, source: SRC, dest: DST });
     expect(JSON.parse(JSON.stringify(legs))).toEqual(legs);
     expect(fees.total).toBeGreaterThan(0n);
-    expect(fees.estimatedReceived).toBeLessThan(25_500_000n);
+    expect(fees.estimatedReceived).toBe(0n); // the relayer's fixed ≈ 21.5 USDC eats both legs
     expect(warnings.some((w) => w.includes("link to each other"))).toBe(true);
     expect(warnings.some((w) => w.includes(b) && w.includes("minimum"))).toBe(true);
     expect(() => planExit({ sources: [{ stealthAddress: a, amount: 1n }, { stealthAddress: a, amount: 1n }], destination: DEST_WALLET, config: CONFIG })).toThrow(/twice/);
@@ -367,7 +388,8 @@ describe("advanceExitLeg (mocked chain, ASP and relayer)", () => {
   it("happy path through every state, resumable from JSON at each step", async () => {
     const { stealthKey, world, leg: planned } = freshLeg();
     const { w } = world;
-    const ctx = makeCtx(world, stealthKey);
+    // Two parts (the default is one), to walk the change commitment through a second withdrawal.
+    const ctx = makeCtx(world, stealthKey, { withdrawParts: 2 });
 
     let leg = await step(ctx, planned);
     expect(leg.status).toBe("burning");
@@ -604,46 +626,371 @@ describe("advanceExitLeg (mocked chain, ASP and relayer)", () => {
 });
 
 describe("exitLegMinimum (the real leg minimum)", () => {
-  /** The step machine's arithmetic at a given source balance, with the estimated prefunds. */
+  const m = (f: bigint) => f + f / 10n;
+  /** The step machine's arithmetic at a given source balance, with the estimated prefunds: the deposit. */
   const simulate = (balance: bigint) => {
-    const m = (f: bigint) => f + f / 10n;
     const burn = balance - m(CONFIG.estimates.sourceGas);
     const minted = burn - (burn * 130n + 999_999n) / 1_000_000n - CONFIG.estimates.forwardFee;
     return minted - CONFIG.ragequitReserve - m(CONFIG.estimates.destGas);
   };
+  const inPool = (deposit: bigint) => deposit - (deposit * CONFIG.pool.vettingFeeBps) / 10_000n;
 
-  it("testnet: ≈ 16.4 USDC (pool minimum + CCTP fee + forward fee + paymaster prefunds), exact at the edge", () => {
-    const { minimum, breakdown } = exitLegMinimum(CONFIG);
-    expect(minimum).toBeGreaterThan(16_300_000n);
-    expect(minimum).toBeLessThan(16_600_000n);
-    expect(minimum).toBeGreaterThan(12_660_000n); // the old, underestimated planner minimum
+  it("testnet via the relayer: ≈ 81.3 USDC, set by its fixed ≈ 21.5 USDC fee and the pool's 30% limit; exact at the edge", () => {
+    const min = exitLegMinimum(CONFIG);
+    expect(min.relayBound).toBe(true);
+    expect(min.minimum).toBe(81_288_244n);
+    // The smallest withdrawal the pool lets the relayer take its fee from: fee ≤ 30%.
+    expect(min.withdrawal).toBe(71_906_357n);
+    expect(isRelayable(CONFIG, min.withdrawal)).toBe(true);
+    expect(isRelayable(CONFIG, min.withdrawal - 1n)).toBe(false);
+    expect(min.breakdown.relayFee * 10_000n).toBeLessThanOrEqual(min.withdrawal * 3000n);
+    expect(inPool(simulate(min.minimum))).toBeGreaterThanOrEqual(min.withdrawal);
+    expect(inPool(simulate(min.minimum - 1n))).toBeLessThan(min.withdrawal);
+    expect(min.breakdown.destGas).toBe(m(CONFIG.estimates.destGas)); // 5.8 USDC prefund + 10%
+    // Round withdrawals (change left in the pool) need a whole-USDC withdrawal of 72.
+    expect(exitLegMinimum(CONFIG, {}, { roundTo: CONFIG.withdrawUnit }).withdrawal).toBe(72_000_000n);
+  });
+
+  it("direct withdrawal (no relayer): ≈ 18.6 USDC, the pool minimum + bridge fees + paymaster prefunds", () => {
+    const { minimum, breakdown, relayBound } = exitLegMinimum(CONFIG, {}, { via: "direct" });
+    expect(relayBound).toBe(false);
+    expect(minimum).toBe(18_647_418n);
+    expect(minimum).toBeGreaterThan(16_400_000n); // D-42's 16.4 assumed a 3.75 USDC deposit prefund
     expect(simulate(minimum)).toBeGreaterThanOrEqual(CONFIG.pool.minDeposit);
     expect(simulate(minimum - 1n)).toBeLessThan(CONFIG.pool.minDeposit);
-    expect(breakdown.minDeposit).toBe(10_000_000n);
-    expect(breakdown.destGas).toBe(CONFIG.estimates.destGas + CONFIG.estimates.destGas / 10n);
+    expect(breakdown.relayFee).toBe(0n);
     expect(breakdown.minDeposit + breakdown.destGas + breakdown.forwardFee + breakdown.cctpProtocolFee + breakdown.sourceGas).toBe(minimum);
   });
 
-  it("follows live quotes: pricier gas or forwarding raises it, a standard (free) transfer lowers it", () => {
-    const base = exitLegMinimum(CONFIG).minimum;
-    const pricier = exitLegMinimum(CONFIG, { destGas: 5_000_000n }).minimum; // +1.25 prefund, +10% headroom, + its CCTP bps
-    expect(pricier - base).toBeGreaterThanOrEqual(1_375_000n);
-    expect(pricier - base).toBeLessThan(1_376_000n);
-    expect(exitLegMinimum(CONFIG, { forwardFee: 1_530_000n }).minimum).toBeLessThan(base);
+  it("follows live quotes: pricier gas, forwarding or relayer raise it; a standard (free) transfer lowers it", () => {
+    const base = exitLegMinimum(CONFIG, {}, { via: "direct" }).minimum;
+    const pricier = exitLegMinimum(CONFIG, { destGas: 7_000_000n }, { via: "direct" }).minimum; // +1.2 prefund, +10%, + its CCTP bps
+    expect(pricier - base).toBeGreaterThanOrEqual(1_320_000n);
+    expect(pricier - base).toBeLessThan(1_321_000n);
+    expect(exitLegMinimum(CONFIG, { forwardFee: 1_530_000n }).minimum).toBeLessThan(exitLegMinimum(CONFIG).minimum);
     const standard = exitLegMinimum({ ...CONFIG, cctp: { ...CONFIG.cctp, minFinalityThreshold: 2000 } });
     expect(standard.breakdown.cctpProtocolFee).toBe(0n);
     expect(exitLegMinimum(CONFIG, { cctpMinimumFeeBps: 0 }).minimum).toBe(standard.minimum);
+    // A cheaper relayer (2.7 USDC of gas, as the brief first assumed) leaves the pool minimum in charge.
+    expect(exitLegMinimum(CONFIG, { relayGas: 2_700_000n }).relayBound).toBe(false);
+    expect(exitLegMinimum(CONFIG, { relayGas: 30_000_000n }).minimum).toBeGreaterThan(exitLegMinimum(CONFIG).minimum);
   });
 
-  it("planExit flags legs below it (and passes the ones at it)", () => {
+  it("planExit flags legs below it (and passes the ones at it), and offers the direct minimum", () => {
     const min = exitLegMinimum(CONFIG).minimum;
     const a = privateKeyToAccount(generatePrivateKey()).address;
     const b = privateKeyToAccount(generatePrivateKey()).address;
     const plan = planExit({ sources: [{ stealthAddress: a, amount: min }, { stealthAddress: b, amount: min - 1n }], destination: DEST_WALLET, config: CONFIG });
     expect(plan.minimum).toBe(min);
     expect(plan.belowMinimum).toEqual([b]);
-    expect(plan.warnings.some((w) => w.includes(b) && w.includes(`below the ${min}`))).toBe(true);
+    expect(plan.warnings.some((w) => w.includes(b) && w.includes(`below the ${min}`) && w.includes("withdraw directly") && w.includes("18647418"))).toBe(true);
     expect(plan.warnings.some((w) => w.includes(a) && w.includes("below"))).toBe(false);
+  });
+});
+
+describe("fees: what an exit costs, and the caps", () => {
+  it("exitLegCost: the relayer's fixed fee dominates small exits; direct skips it", () => {
+    // The live run's 18 USDC: nothing would reach the destination through the relayer.
+    const small = exitLegCost(CONFIG, 18_000_000n);
+    expect(small.withdrawals).toEqual([9_259_141n]);
+    expect(small.relayFee).toBe(21_509_260n);
+    expect(small.relayable).toBe(false);
+    expect(small.received).toBe(0n);
+    expect(small.feeShareBps).toBe(10_000n);
+    const smallDirect = exitLegCost(CONFIG, 18_000_000n, { via: "direct" });
+    expect(smallDirect).toMatchObject({ relayFee: 0n, relayable: true, received: 9_259_141n, withdrawals: [9_259_141n] });
+    // 100 USDC: relayable, but fees are ≈ 31%.
+    const hundred = exitLegCost(CONFIG, 100_000_000n);
+    expect(hundred).toMatchObject({ relayable: true, relayFee: 21_590_429n, received: 68_838_158n, feeShareBps: 3117n });
+    expect(hundred.cctpProtocolFee + hundred.forwardFee + hundred.sourceGas + hundred.destGas + hundred.vettingFee + hundred.relayFee).toBe(hundred.totalFees);
+    // 500 USDC with round withdrawals: the change stays in the pool and is not a fee.
+    const big = exitLegCost(CONFIG, 500_000_000n, { leaveChange: true });
+    expect(big).toMatchObject({ withdrawals: [486_000_000n], leftInPool: 377_107n, received: 464_014_000n, feeShareBps: 713n });
+    expect(big.received + big.leftInPool + big.totalFees).toBe(500_000_000n);
+    // Two parts pay the fixed fee twice.
+    expect(exitLegCost(CONFIG, 500_000_000n, { withdrawParts: 2 }).relayFee).toBeGreaterThan(2n * CONFIG.estimates.relayGas);
+  });
+
+  it("relayer fee helpers", () => {
+    expect(relayFeeFor(CONFIG, 100_000_000n)).toBe(100_000n + 21_500_000n);
+    expect(relayFeeFor(CONFIG, 0n)).toBe(0n);
+    expect(relayFeeFor(CONFIG, 100_000_000n, { relayFeeBps: 0n, relayGas: 1n })).toBe(1n);
+    expect(relayFeeBpsOf(100_000_000n, 21_500_000n)).toBe(2150n);
+    expect(minRelayableWithdrawal(CONFIG)).toBe(71_906_357n);
+    expect(relayFeeCap(21_600_000n)).toBe(32_400_000n); // +50%
+    expect(relayFeeCap(100_000n)).toBe(1_100_000n); // at least +1 USDC
+    expect(bpsToPercent(2150n)).toBe("21.5%");
+    expect(bpsToPercent(225_233n)).toBe("2252.3%");
+  });
+
+  it("checkRelayQuote judges the quote in USDC: more than the withdrawal, over the pool limit, over the accepted fee", () => {
+    // Live quotes 2026-09-26: 225,233 bps on 0.95 USDC, 21,517 on 9.95, 2,150 on 100.
+    expect(checkRelayQuote(CONFIG, 950_000n, 225_233n)).toMatch(/asks 21\.39 USDC \(2252\.3%\) to withdraw 0\.95 USDC, more than the withdrawal itself.*withdraw directly/);
+    expect(checkRelayQuote(CONFIG, 9_950_000n, 21_517n)).toMatch(/more than the withdrawal itself/);
+    expect(checkRelayQuote(CONFIG, 100_000_000n, 2150n)).toBeNull();
+    expect(checkRelayQuote(CONFIG, 50_000_000n, 4310n)).toMatch(/asks 21\.55 USDC \(43\.1%\).*above the 30\.0% limit the pool enforces/);
+    expect(checkRelayQuote(CONFIG, 100_000_000n, 2150n, { maxUsdc: 20_000_000n })).toMatch(/above the 20\.00 USDC accepted for this exit/);
+    expect(checkRelayQuote(CONFIG, 100_000_000n, 2150n, { maxBps: 500n })).toMatch(/above the 5\.0% limit;/);
+  });
+
+  it("destination paymaster cap: 2× the estimate, or 2× a live gas-price estimate, ≤ 15 USDC", () => {
+    expect(paymasterPrefundUsdc(1_030_000_000n)).toBe(5_562_000n); // the live run's 5.1–5.8 USDC
+    expect(defaultDestFeeCap(CONFIG)).toBe(11_600_000n);
+    expect(defaultDestFeeCap(CONFIG, 1_030_000_000n)).toBe(11_600_000n);
+    expect(defaultDestFeeCap(CONFIG, 1_200_000_000n)).toBe(12_960_000n);
+    expect(defaultDestFeeCap(CONFIG, 2_000_000_000n)).toBe(EXIT_DEST_FEE_CEILING);
+    // The live deposit's 5.1–5.8 USDC fee passes the default, the old 5 USDC cap did not.
+    expect(defaultDestFeeCap(CONFIG)).toBeGreaterThan(5_800_000n);
+  });
+
+  it("planExit: fee share and the suggestion to exit more; the relayer cap stored on the leg", () => {
+    const a = privateKeyToAccount(generatePrivateKey()).address;
+    const plan = planExit({ sources: [{ stealthAddress: a, amount: 100_000_000n }], destination: DEST_WALLET, config: CONFIG });
+    expect(plan.feeShareBps).toBe(3117n);
+    expect(plan.fees.estimatedReceived).toBe(68_838_158n);
+    expect(plan.warnings.some((w) => /Fees take about 31\.2% of this exit.*exit more at once/.test(w))).toBe(true);
+    expect(plan.legs[0]!.feeLimits).toEqual({ relayFee: relayFeeCap(21_590_429n).toString() });
+    const big = planExit({ sources: [{ stealthAddress: a, amount: 5_000_000_000n }], destination: DEST_WALLET, config: CONFIG });
+    expect(big.feeShareBps).toBeLessThan(EXIT_HIGH_FEE_SHARE_BPS);
+    expect(big.warnings.some((w) => w.includes("Fees take"))).toBe(false);
+    const direct = planExit({ sources: [{ stealthAddress: a, amount: 20_000_000n }], destination: DEST_WALLET, config: CONFIG, withdrawVia: "direct" });
+    expect(direct.belowMinimum).toEqual([]);
+    expect(direct.legs[0]!.withdrawVia).toBe("direct");
+    expect(direct.legs[0]!.feeLimits).toBeUndefined();
+    expect(direct.fees.relayFee).toBe(0n);
+  });
+
+  it("fetchExitFeeQuote: live Iris, relayer and gas; each part falls back on its own", async () => {
+    const calls: string[] = [];
+    const ok = (body: unknown) => ({ ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body) });
+    const live = await fetchExitFeeQuote(CONFIG, {
+      now: () => 5,
+      fetch: async (url, init) => {
+        calls.push(`${init?.method ?? "GET"} ${url}`);
+        if (url.includes("/v2/burn/USDC/fees/6/0?forward=true"))
+          return ok([{ finalityThreshold: 1000, minimumFee: 1.3, forwardFee: { low: 1_481_257, med: 1_817_385, high: 2_153_512 } }]);
+        if (url.endsWith("/relayer/quote")) {
+          expect(JSON.parse(init!.body!)).toMatchObject({ chainId: DST, amount: "100000000", asset: CONFIG.pool.asset });
+          return ok({ baseFeeBPS: "10", feeBPS: "2160", gasPrice: "1030000000" });
+        }
+        throw new Error(url);
+      },
+    });
+    expect(live.sources).toEqual({ cctp: true, relayer: true, destGas: true });
+    expect(live.live).toEqual({ cctpMinimumFeeBps: 1.3, forwardFee: 1_817_385n, relayFeeBps: 10n, relayGas: 21_500_000n, destGas: 5_562_000n });
+    expect(live.relayQuote).toEqual({ amount: 100_000_000n, feeBps: 2160n, baseFeeBps: 10n, gasPriceWei: 1_030_000_000n });
+    expect(live.errors).toEqual([]);
+    expect(live.at).toBe(5);
+    expect(calls).toHaveLength(2);
+    // With these quotes the leg minimum is what the planner shows.
+    expect(exitLegMinimum(CONFIG, live.live).minimum).toBeGreaterThan(80_000_000n);
+
+    const down = await fetchExitFeeQuote(CONFIG, {
+      fetch: async (url) => (url.includes("/relayer/") ? { ok: false, status: 502, json: async () => ({}), text: async () => "" } : ok([])),
+    });
+    expect(down.sources).toEqual({ cctp: false, relayer: false, destGas: false });
+    expect(down.live).toEqual({});
+    expect(down.errors.join(" ")).toMatch(/CCTP fee quote.*relayer quote: POST .*502/);
+    // A known destination gas price still gives a live deposit estimate without the relayer.
+    const gasOnly = await fetchExitFeeQuote(CONFIG, { destGasPriceWei: 2_000_000_000n, fetch: async () => { throw new Error("offline"); } });
+    expect(gasOnly.live).toEqual({ destGas: paymasterPrefundUsdc(2_000_000_000n) });
+  });
+});
+
+describe("step machine fee caps", () => {
+  async function approvedLeg(over: Partial<ExitContext> = {}, amount = 14_000_000n) {
+    const { stealthKey, world, leg: planned } = freshLeg(amount);
+    const ctx = makeCtx(world, stealthKey, over);
+    let leg = await toPendingAsp(ctx, world, planned);
+    world.w.aspLeaves = [1n, world.w.label, 2n];
+    const pp = await loadPrivacyPoolsSdk();
+    world.w.latestRoot = pp.generateMerkleProof(world.w.aspLeaves, world.w.label).root;
+    leg = await step(ctx, leg);
+    expect(leg.status).toBe("approved");
+    ctx.clock.t += 1_000;
+    return { ctx, world, leg };
+  }
+  /** The relayer quotes `bps` (as the testnet one does, its fixed gas folded in). */
+  const quoting = (ctx: ExitContext, bps: bigint) => {
+    const f = ctx.fetch!;
+    ctx.fetch = async (url, init) => {
+      if (!url.endsWith("/relayer/quote")) return f(url, init);
+      const body = JSON.parse(init!.body!) as { recipient: Address };
+      const withdrawalData = encodeAbiParameters(parseAbiParameters("address, address, uint256"), [body.recipient, FEE_RECEIVER, bps]);
+      const q = { baseFeeBPS: "10", feeBPS: bps.toString(), feeCommitment: { expiration: 0, withdrawalData, signedRelayerCommitment: "0x12" } };
+      return { ok: true, status: 200, json: async () => q, text: async () => "" };
+    };
+  };
+
+  it("a relayer fee above the withdrawal or the pool's limit waits (leg stays approved, nothing relayed)", async () => {
+    const { ctx, world, leg } = await approvedLeg();
+    quoting(ctx, 21_517n);
+    const waiting = await step(ctx, leg);
+    expect(waiting.status).toBe("approved");
+    expect(waiting.error).toMatch(/more than the withdrawal itself/);
+    quoting(ctx, 3001n);
+    expect((await step(ctx, waiting)).error).toMatch(/above the 30\.0% limit the pool enforces/);
+    expect(world.w.relays).toHaveLength(0);
+    // A normal quote goes through on the next attempt.
+    quoting(ctx, 10n);
+    expect((await step(ctx, waiting)).status).toBe("withdrawing");
+    expect(world.w.relays).toHaveLength(1);
+  });
+
+  it("the USDC fee accepted at planning time caps the relayer; the context can override it", async () => {
+    const { ctx, world, leg } = await approvedLeg();
+    const capped: ExitLeg = { ...leg, feeLimits: { relayFee: "1000000" } }; // 1 USDC accepted
+    quoting(ctx, 2000n); // 20% of a ≈ 5 USDC withdrawal ≈ 1.06 USDC
+    expect((await step(ctx, capped)).error).toMatch(/above the 1\.00 USDC accepted for this exit/);
+    ctx.maxRelayFeeUsdc = 5_000_000n;
+    expect((await step(ctx, capped)).status).toBe("withdrawing");
+    expect(world.w.relays).toHaveLength(1);
+  });
+
+  it("deposits under the default destination cap (2× the estimate), or the live gas-price one", async () => {
+    const caps: bigint[] = [];
+    const { stealthKey, world, leg: planned } = freshLeg(30_000_000n);
+    const record = (async (c: SpendClient, p: ExecuteParams, o?: SpendOptions) => {
+      if (c.chainId === DST) caps.push(p.maxFeeUsdc!);
+      return world.execute(c, p, o);
+    }) as never;
+    const ctx = makeCtx(world, stealthKey, { execute: record });
+    await toPendingAsp(ctx, world, planned);
+    expect(caps).toEqual([11_600_000n]);
+    // With a readable Sepolia gas price of 2 gwei: 2 × 10.8 USDC, clamped to the 15 USDC ceiling.
+    const second = freshLeg(30_000_000n);
+    const dst = second.world.client(DST);
+    const pc = dst.publicClient as unknown as Record<string, unknown>;
+    const ctx2 = makeCtx(second.world, second.stealthKey, {
+      execute: (async (c: SpendClient, p: ExecuteParams, o?: SpendOptions) => {
+        if (c.chainId === DST) caps.push(p.maxFeeUsdc!);
+        return second.world.execute(c, p, o);
+      }) as never,
+      spendClients: { [SRC]: second.world.client(SRC), [DST]: { ...dst, publicClient: { ...pc, getGasPrice: async () => 2_000_000_000n } } as unknown as SpendClient },
+    });
+    await toPendingAsp(ctx2, second.world, second.leg);
+    expect(caps).toEqual([11_600_000n, EXIT_DEST_FEE_CEILING]);
+  });
+});
+
+describe("direct withdrawal (no relayer; the destination wallet pays ETH gas)", () => {
+  const SPENT = 888n;
+  const signals = ["5", String(SPENT), "9", "0", "0", "0", "0", "0"];
+
+  async function approvedDirect(sender: (world: World) => DirectWithdrawSender | undefined) {
+    const { stealthKey, world, leg: planned } = freshLeg(20_000_000n);
+    const contexts: bigint[] = [];
+    const ctx = makeCtx(world, stealthKey, {
+      prover: {
+        proveWithdrawal: async (_c, input) => {
+          contexts.push(input.context);
+          return { proof: { pi_a: ["1", "2", "1"], pi_b: [["3", "4"], ["5", "6"], ["1", "0"]], pi_c: ["7", "8", "1"] }, publicSignals: signals };
+        },
+        proveCommitment: async () => ({ proof: { pi_a: ["1", "2"], pi_b: [["3", "4"], ["5", "6"]], pi_c: ["7", "8"] }, publicSignals: ["1", "2", "3", "4"] }),
+      },
+    });
+    const s = sender(world);
+    if (s) ctx.directWithdraw = s;
+    let leg = await toPendingAsp(ctx, world, { ...planned, withdrawVia: "direct" });
+    world.w.aspLeaves = [1n, world.w.label, 2n];
+    const pp = await loadPrivacyPoolsSdk();
+    world.w.latestRoot = pp.generateMerkleProof(world.w.aspLeaves, world.w.label).root;
+    leg = await step(ctx, leg);
+    expect(leg.status).toBe("approved");
+    ctx.clock.t += 1_000;
+    return { ctx, world, leg, contexts };
+  }
+
+  /** The destination wallet: records the tx; `lost` = it lands but the hash never comes back. */
+  function wallet(world: World, opts: { lost?: boolean; reject?: boolean } = {}) {
+    const sent: { to: Address; data: Hex; chainId: number }[] = [];
+    const sender: DirectWithdrawSender = {
+      address: DEST_WALLET,
+      async sendTransaction(t) {
+        if (opts.reject) throw Object.assign(new Error("User rejected the request."), { code: 4001 });
+        sent.push(t);
+        const hash = tx(world.w.txCounter++);
+        world.w.receipts.set(hash, { status: "success", logs: [] });
+        world.w.spentNullifiers.add(SPENT);
+        world.w.withdrawnLogs.push({ tx: hash, nullifier: SPENT });
+        if (opts.lost) throw new Error("connection closed");
+        return hash;
+      },
+    };
+    return { sender, sent };
+  }
+
+  it("the destination sends PrivacyPool.withdraw for everything in one part, bound to (destination, 0x, scope)", async () => {
+    let w!: ReturnType<typeof wallet>;
+    const { ctx, world, leg, contexts } = await approvedDirect((world) => (w = wallet(world)).sender);
+    expect(leg.withdrawPlan).toHaveLength(1);
+    const before = ctx.persisted.length;
+    const out = await step(ctx, leg);
+    expect(out.status).toBe("withdrawing");
+    expect(world.w.relays).toHaveLength(0);
+    expect(w.sent).toHaveLength(1);
+    expect(getAddress(w.sent[0]!.to)).toBe(getAddress(CONFIG.pool.pool));
+    expect(w.sent[0]!.chainId).toBe(DST);
+    const { functionName, args } = decodeFunctionData({ abi: ppPoolAbi, data: w.sent[0]!.data });
+    expect(functionName).toBe("withdraw");
+    const [withdrawal, proof] = args as unknown as [{ processooor: Address; data: Hex }, { pubSignals: readonly bigint[] }];
+    expect(withdrawal).toEqual({ processooor: DEST_WALLET, data: "0x" });
+    expect(proof.pubSignals).toEqual(signals.map(BigInt));
+    const pp = await loadPrivacyPoolsSdk();
+    expect(contexts[0]).toBe(BigInt(pp.calculateContext({ processooor: DEST_WALLET, data: "0x" }, CONFIG.pool.scope as never)));
+    // Saved with the marker before the wallet was asked.
+    expect(ctx.persisted[before]!.pendingWithdraw).toMatchObject({ spentNullifier: String(SPENT), amount: leg.remaining });
+    expect(out.withdrawals).toEqual([{ amount: leg.remaining, child: 0, tx: out.txs.withdraw }]);
+    const done = await step(ctx, out);
+    expect(done.status).toBe("done");
+    expect(done.remaining).toBe("0");
+  });
+
+  it("without the destination wallet it waits quietly; the wrong wallet is refused", async () => {
+    const { ctx, world, leg } = await approvedDirect(() => undefined);
+    expect(await advanceExitLeg(ctx, leg)).toBe(leg);
+    ctx.directWithdraw = { address: FEE_RECEIVER, sendTransaction: async () => tx(1) };
+    const wrong = await step(ctx, leg);
+    expect(wrong.error).toMatch(/connect the destination wallet/);
+    expect(world.w.relays).toHaveLength(0);
+  });
+
+  it("withdrawDirect switches a relayer leg to direct", async () => {
+    const { stealthKey, world, leg: planned } = freshLeg(20_000_000n);
+    const ctx = makeCtx(world, stealthKey, {
+      prover: { ...makeCtx(world, stealthKey).prover!, proveWithdrawal: async () => ({ proof: { pi_a: ["1", "2"], pi_b: [["3", "4"], ["5", "6"]], pi_c: ["7", "8"] }, publicSignals: signals }) },
+    });
+    let leg = await toPendingAsp(ctx, world, planned);
+    world.w.aspLeaves = [1n, world.w.label, 2n];
+    const pp = await loadPrivacyPoolsSdk();
+    world.w.latestRoot = pp.generateMerkleProof(world.w.aspLeaves, world.w.label).root;
+    leg = await step(ctx, leg);
+    expect(leg.withdrawVia).toBeUndefined();
+    const w = wallet(world);
+    ctx.directWithdraw = w.sender;
+    const r = await withdrawDirect(ctx, leg);
+    expect(r).toMatchObject({ via: "direct", relayFeeBps: 0n, amount: BigInt(leg.remaining!) });
+    expect(r.leg.withdrawVia).toBe("direct");
+    expect(w.sent).toHaveLength(1);
+    await expect(withdrawDirect(ctx, r.leg)).rejects.toThrow(/not approved/);
+  });
+
+  it("lost response: resume adopts the landed Withdrawn tx and never sends again; a rejected signature clears the marker", async () => {
+    let w!: ReturnType<typeof wallet>;
+    const { ctx, world, leg } = await approvedDirect((world) => (w = wallet(world, { lost: true })).sender);
+    const crashed = await step(ctx, leg);
+    expect(crashed.status).toBe("approved");
+    expect(crashed.pendingWithdraw?.spentNullifier).toBe(String(SPENT));
+    const resumed = await step(ctx, ctx.persisted.at(-1)!);
+    expect(resumed.status).toBe("withdrawing");
+    expect(resumed.txs.withdraw).toBe(world.w.withdrawnLogs[0]!.tx);
+    expect(w.sent).toHaveLength(1);
+
+    const rejected = await approvedDirect((world) => wallet(world, { reject: true }).sender);
+    const r = await step(rejected.ctx, rejected.leg);
+    expect(r.status).toBe("approved");
+    expect(r.pendingWithdraw).toBeUndefined();
+    expect(r.error).toMatch(/not sent: User rejected/);
   });
 });
 

@@ -4,6 +4,8 @@ Research date: 2026-09-25. Every address below was checked with `eth_getCode` (n
 
 **Verdict:** an end-to-end exit is demoable on testnet this week. 0xbow Privacy Pools runs a **USDC pool on Ethereum Sepolia** with a working testnet ASP that approves deposits in about 10 to 12 minutes, and a public relayer charges 0.1%. Circle CCTP V2 and the Circle Paymaster v0.8 both run on Base Sepolia and Ethereum Sepolia. With these, a stealth address can bridge, deposit and exit while only ever holding USDC.
 
+> **Correction (2026-09-26, D-48):** the testnet relayer is not 0.1%. `/relayer/details` reports `feeBPS 10`, but `/relayer/quote` adds a fixed ≈ 21.5 USDC for its gas (650k gas), e.g. 21,517 bps on 9.95 USDC and 2,150 on 100; the pool caps relayer fees at 30% (`maxRelayFeeBPS` 3000). The Sepolia deposit's paymaster fee is ≈ 5.1–5.8 USDC. Below ≈ 81 USDC per leg the SDK withdraws directly from the destination wallet instead (it pays Sepolia ETH gas).
+
 ## 1. 0xbow Privacy Pools
 
 Sources:

@@ -1,19 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
-import { ClusterGraph, exitLegMinimum, generateMnemonic, planSpend } from "@soapay/sdk";
-import type { Address } from "viem";
+import { ClusterGraph, checkRelayQuote, exitLegCost, exitLegMinimum, generateMnemonic, planSpend, relayFeeCap } from "@soapay/sdk";
+import { getAddress, type Address } from "viem";
 import { TESTNET_EXIT_CONFIG } from "../src/features/exit/config.js";
 import { exitPrefill, offersExit } from "../src/features/exit/entry.js";
-import { createMockExitService } from "../src/features/exit/mock.js";
-import { estimateExit, estimateLeg, minLegAmount, noEligibleMessage, validateExit } from "../src/features/exit/planner.js";
+import { MOCK_FEE_QUOTE, createMockExitService } from "../src/features/exit/mock.js";
+import { connectDestinationWallet } from "../src/features/exit/wallet.js";
+import { estimateExit, estimateLeg, fmtPercent, fmtUsdcUp, minLegAmount, noEligibleMessage, validateExit } from "../src/features/exit/planner.js";
 import { nextAction, patchRecords, tickExits, type LegPatch } from "../src/features/exit/runner.js";
 import { buildCtx, createSdkExitService, destBundlerUrl, type ExitSdkModule, type ExitService } from "../src/features/exit/sdk.js";
 import { timelineOf } from "../src/features/exit/timeline.js";
 import type { ExitLeg, ExitRecord } from "../src/features/exit/types.js";
 import { ExitProvider, useExit, type ExitApi } from "../src/hooks/useExit.js";
 import { QueueProvider } from "../src/hooks/useQueue.js";
-import { Exit } from "../src/screens/Exit.js";
+import { DirectNote, Exit, FeeSummary, relayTooExpensive } from "../src/screens/Exit.js";
 import { ExitOffer } from "../src/screens/ExitOffer.js";
 import { ServicesProvider, buildServices } from "../src/services/ServicesProvider.js";
 import { VaultProvider, useVault, type VaultApi } from "../src/vault/VaultProvider.js";
@@ -28,51 +29,88 @@ const USDC = 1_000_000n;
 const cfg = TESTNET_EXIT_CONFIG;
 
 describe("exit planner: minimum and fees", () => {
-  it("fee math for a 500 USDC leg (worst case, round withdrawal)", () => {
+  it("fee math for a 500 USDC leg matches the SDK's exitLegCost (relayed, round withdrawal)", () => {
     const l = estimateLeg({ stealthAddress: A, amount: 500n * USDC }, cfg, { roundWithdrawals: true });
+    const c = exitLegCost(cfg, 500n * USDC, { withdrawParts: 1, leaveChange: true });
     expect(l.eligible).toBe(true);
-    expect(l.forwardFeeHigh).toBe(2_210_000n + 64_993n); // forward fee (high tier) + 1.3 bps CCTP on the burn
-    expect(l.forwardFeeLow).toBe(1_530_000n + 64_993n);
-    // The paymaster prefunds (+10% headroom): 0.05 USDC on Base Sepolia, 3.75 USDC on Ethereum Sepolia.
-    expect(l.gas).toBe(55_000n + 4_125_000n);
-    expect(l.deposit).toBe(493_545_007n);
-    expect(l.vettingFee).toBe(4_935_450n); // 1%
-    expect(l.withdraw).toBe(488_000_000n); // round: whole USDC
-    expect(l.leftInPool).toBe(609_557n);
-    expect(l.relayerFee).toBe(488_000n); // 0.1%
-    expect(l.receive).toBe(487_512_000n);
-    expect(l.receiveHigh).toBe(488_511_000n); // with the low forward fee
-    expect(estimateLeg({ stealthAddress: A, amount: 500n * USDC }, cfg, { roundWithdrawals: false }).receiveHigh).toBe(488_793_474n);
+    expect(l.bridgeFee).toBe(2_210_000n + 64_993n); // forward fee (high tier, the estimate) + 1.3 bps CCTP on the burn
+    // The paymaster prefunds (+10% headroom): 0.05 USDC on Base Sepolia, 5.8 USDC on Ethereum Sepolia.
+    expect(l.gas).toBe(55_000n + 6_380_000n);
+    expect(l.deposit).toBe(c.deposit);
+    expect(l.vettingFee).toBe(c.vettingFee); // 1%
+    expect(l.withdraw).toBe(486_000_000n); // round: whole USDC
+    expect(l.leftInPool).toBe(c.leftInPool);
+    expect(l.relayerFee).toBe(21_500_000n + 486_000n); // fixed ≈ 21.5 USDC gas + 0.1%
+    expect(l.receive).toBe(464_014_000n);
+    expect(l.totalFees + l.receive + l.leftInPool).toBe(500n * USDC);
+    expect(l.relayerFeeCap).toBe(relayFeeCap(l.relayerFee));
   });
 
-  it("full withdrawal leaves nothing in the pool", () => {
+  it("full withdrawal leaves nothing in the pool; direct pays no relayer", () => {
     const l = estimateLeg({ stealthAddress: A, amount: 500n * USDC }, cfg, { roundWithdrawals: false });
     expect(l.leftInPool).toBe(0n);
-    expect(l.withdraw).toBe(488_609_557n);
-    expect(l.relayerFee).toBe(488_610n); // rounded up
+    expect(l.withdraw).toBe(486_377_107n);
+    const d = estimateLeg({ stealthAddress: A, amount: 500n * USDC }, cfg, { roundWithdrawals: true, via: "direct" });
+    expect(d).toMatchObject({ relayerFee: 0n, relayerFeeCap: 0n, leftInPool: 0n, withdraw: 486_377_107n, receive: 486_377_107n });
   });
 
-  it("leg minimum = the SDK's (≈ 16.4 USDC on testnet, not 12.6); below it the leg is disabled with the shortfall", () => {
+  it("uses live quotes when given (relayer gas, forwarding, Sepolia gas)", () => {
+    const live = MOCK_FEE_QUOTE.live;
+    const l = estimateLeg({ stealthAddress: A, amount: 500n * USDC }, cfg, { roundWithdrawals: false, live });
+    const c = exitLegCost(cfg, 500n * USDC, { live, withdrawParts: 1 });
+    expect(l.bridgeFee).toBe(c.forwardFee + c.cctpProtocolFee);
+    expect(c.forwardFee).toBe(1_817_385n);
+    expect(l.gas).toBe(55_000n + 5_562_000n + 556_200n);
+    expect(l.receive).toBe(c.received);
+    expect(estimateExit([{ stealthAddress: A, amount: 500n * USDC }], cfg, { roundWithdrawals: false, live }).relayGas).toBe(21_500_000n);
+  });
+
+  it("relayed legs need ≈ 81 USDC (the relayer's fixed fee under the pool's 30% limit); direct ≈ 18.6", () => {
     const min = minLegAmount(cfg);
     expect(min).toBe(exitLegMinimum(cfg).minimum);
-    expect(min).toBeGreaterThan(16_300_000n);
-    expect(min).toBeLessThan(16_600_000n);
-    const at = estimateLeg({ stealthAddress: A, amount: min }, cfg, { roundWithdrawals: true });
+    expect(min).toBeGreaterThan(81_000_000n);
+    expect(min).toBeLessThan(81_500_000n);
+    expect(minLegAmount(cfg, { roundWithdrawals: true })).toBe(exitLegMinimum(cfg, {}, { roundTo: cfg.withdrawUnit }).minimum);
+    const direct = minLegAmount(cfg, { via: "direct" });
+    expect(direct).toBe(exitLegMinimum(cfg, {}, { via: "direct" }).minimum);
+    expect(direct).toBeGreaterThan(18_600_000n);
+    expect(direct).toBeLessThan(18_700_000n);
+    const at = estimateLeg({ stealthAddress: A, amount: direct }, cfg, { roundWithdrawals: true, via: "direct" });
     expect(at.eligible).toBe(true);
     expect(at.deposit).toBeGreaterThanOrEqual(cfg.pool.minDeposit);
-    expect(at.shortBy).toBe(0n);
-    const below = estimateLeg({ stealthAddress: A, amount: min - 1n }, cfg, { roundWithdrawals: true });
-    expect(below.eligible).toBe(false);
-    expect(below.shortBy).toBe(1n);
-    expect(below.reason).toMatch(/exit minimum: a leg needs at least 16\.\d\d USDC \(the pool's 10\.00 USDC minimum deposit.*holds 16\.\d\d\. Add 0\.01 USDC/);
-    expect(below.receive).toBe(0n);
-    // 12.2 USDC (what the deployer wallet held on 2026-09-26) can't exit: 4.20 short.
-    expect(estimateLeg({ stealthAddress: A, amount: 12_200_000n }, cfg, { roundWithdrawals: true }).reason).toMatch(/holds 12\.20\. Add 4\.\d\d USDC/);
+    const below = estimateLeg({ stealthAddress: A, amount: direct - 1n }, cfg, { roundWithdrawals: true, via: "direct" });
+    expect(below).toMatchObject({ eligible: false, shortBy: 1n, receive: 0n });
+    expect(below.reason).toMatch(/exit minimum: a leg needs at least 18\.\d\d USDC \(the pool's 10\.00 USDC minimum deposit.*Add 0\.01 USDC/);
+  });
+
+  it("says when the relayer would take more than the exit is worth, and offers the direct withdrawal", () => {
+    // The live run's 18 USDC: nothing would arrive through the relayer; 9.26 would, directly.
+    const l = estimateLeg({ stealthAddress: A, amount: 18_000_000n }, cfg, { roundWithdrawals: true });
+    expect(l.eligible).toBe(false);
+    expect(l.directWouldWork).toBe(false); // 18 < 18.65: short even for a direct exit
+    expect(l.reason).toMatch(/relayer would take more than this exit is worth: it charges about 21\.50 USDC per withdrawal.*above 30% of the withdrawal.*at least 81\.\d\d USDC.*holds 18\.00\. A direct withdrawal .* needs 18\.\d\d USDC/);
+    const fifty = estimateLeg({ stealthAddress: A, amount: 50n * USDC }, cfg, { roundWithdrawals: true });
+    expect(fifty).toMatchObject({ eligible: false, directWouldWork: true });
+    expect(fifty.reason).toMatch(/Withdraw directly instead/);
+    const none = estimateExit([{ stealthAddress: A, amount: 50n * USDC }], cfg, { roundWithdrawals: true });
+    expect(noEligibleMessage(none)).toMatch(/relayer would take more than any of these exits is worth.*Withdraw directly instead.*18\.\d\d USDC/);
+    const direct = estimateExit([{ stealthAddress: A, amount: 50n * USDC }], cfg, { roundWithdrawals: true, via: "direct" });
+    expect(direct.eligible).toHaveLength(1);
+    expect(direct.totals.receive).toBe(40_935_022n);
+  });
+
+  it("flags fees above 15% and reports the share; a large exit doesn't", () => {
+    const hundred = estimateExit([{ stealthAddress: A, amount: 100n * USDC }], cfg, { roundWithdrawals: false });
+    expect(hundred.feeShareBps).toBe(3117n);
+    expect(hundred.highFees).toBe(true);
+    expect(fmtPercent(hundred.feeShareBps)).toBe("31%");
+    const big = estimateExit([{ stealthAddress: A, amount: 5_000n * USDC }], cfg, { roundWithdrawals: false });
+    expect(big.highFees).toBe(false);
   });
 
   it("says so up front when no address can exit", () => {
-    const none = estimateExit([{ stealthAddress: DUST, amount: 12_200_000n }, { stealthAddress: B, amount: USDC }], cfg, { roundWithdrawals: true });
-    expect(noEligibleMessage(none)).toMatch(/None of your addresses can exit yet.*at least 16\.\d\d USDC.*largest holds 12\.20 USDC/);
+    const none = estimateExit([{ stealthAddress: DUST, amount: 12_200_000n }, { stealthAddress: B, amount: USDC }], cfg, { roundWithdrawals: true, via: "direct" });
+    expect(noEligibleMessage(none)).toMatch(/None of your addresses can exit yet.*at least 18\.\d\d USDC.*largest holds 12\.20 USDC/);
     expect(noEligibleMessage(estimateExit([], cfg, { roundWithdrawals: true }))).toBeNull();
     expect(noEligibleMessage(estimateExit([{ stealthAddress: A, amount: 500n * USDC }], cfg, { roundWithdrawals: true }))).toBeNull();
   });
@@ -90,7 +128,7 @@ describe("exit planner: minimum and fees", () => {
     expect(est.legs).toHaveLength(3);
     expect(est.eligible.map((l) => l.stealthAddress)).toEqual([A, B].map((a) => est.legs.find((l) => l.stealthAddress.toLowerCase() === a)!.stealthAddress));
     expect(est.totals.amount).toBe(1_000n * USDC);
-    expect(est.totals.receive).toBe(2n * 487_512_000n);
+    expect(est.totals.receive).toBe(2n * 464_014_000n);
   });
 
   it("validation", () => {
@@ -100,7 +138,80 @@ describe("exit planner: minimum and fees", () => {
     expect(validateExit({ ...base, destination: "nope" })).toMatch(/0x address/);
     expect(validateExit({ ...base, destination: A })).toMatch(/one of your stealth addresses/);
     expect(validateExit({ ...base, selected: [] })).toMatch(/at least one/);
-    expect(validateExit({ ...base, selected: [DUST] })).toMatch(/exit minimum/);
+    expect(validateExit({ ...base, selected: [DUST] })).toMatch(/relayer would take more/);
+  });
+});
+
+describe("exit fee summary and direct-withdrawal UI", () => {
+  it("shows bridge + gas + pool + relayer = total, 'you receive X of Y (Z%)', and the high-fee suggestion", () => {
+    const est = estimateExit([{ stealthAddress: A, amount: 100n * USDC }], cfg, { roundWithdrawals: false });
+    render(<FeeSummary est={est} destination={MAIN} />);
+    expect(screen.getByTestId("fee-bridge").textContent).toMatch(/−2\.22/);
+    expect(screen.getByTestId("fee-gas").textContent).toMatch(/−6\.43/);
+    expect(screen.getByTestId("fee-relayer").textContent).toMatch(/Relayer \(21\.50 USDC gas \+ 0\.1%\).*−21\.59/);
+    expect(screen.getByTestId("fee-total").textContent).toMatch(/Total fees.*−31\.16\d* USDC \(31%\)/);
+    expect(screen.getByTestId("exit-receive").textContent).toMatch(/You receive.*≈ 68\.8\d of 100(\.00)? USDC \(69%\)/);
+    expect(screen.getByTestId("relayer-cap").textContent).toMatch(/more than 32\.3\d USDC/);
+    expect(screen.getByTestId("exit-fee-warning").textContent).toMatch(/Fees take 31% of this exit.*exiting later.*combining chunks.*direct withdrawal also skips/);
+  });
+
+  it("no warning for a large exit; direct mode shows no relayer fee and the ETH-source note", () => {
+    const big = estimateExit([{ stealthAddress: A, amount: 5_000n * USDC }], cfg, { roundWithdrawals: false });
+    const { unmount } = render(<FeeSummary est={big} destination={MAIN} />);
+    expect(screen.queryByTestId("exit-fee-warning")).toBeNull();
+    unmount();
+    const direct = estimateExit([{ stealthAddress: A, amount: 50n * USDC }], cfg, { roundWithdrawals: false, via: "direct" });
+    render(
+      <>
+        <FeeSummary est={direct} destination={MAIN} />
+        <DirectNote />
+      </>,
+    );
+    expect(screen.getByTestId("fee-relayer").textContent).toMatch(/none.*ETH gas/);
+    expect(screen.queryByTestId("relayer-cap")).toBeNull();
+    expect(screen.getByTestId("exit-receive").textContent).toMatch(/≈ 40\.9\d of 50(\.00)? USDC \(82%\)/);
+    expect(screen.getByTestId("exit-fee-warning").textContent).toMatch(/Fees take 18%/);
+    expect(screen.getByTestId("exit-direct-note").textContent).toMatch(/source not linked to you, such as a public faucet or an exchange/);
+  });
+
+  it("recognises a relayer refusal on price", () => {
+    expect(relayTooExpensive(checkRelayQuote(cfg, 9_950_000n, 21_517n) ?? undefined)).toBe(true);
+    expect(relayTooExpensive(checkRelayQuote(cfg, 100_000_000n, 2150n, { maxUsdc: 1n }) ?? undefined)).toBe(true);
+    expect(relayTooExpensive("Soapay exit: ASP root not on-chain yet")).toBe(false);
+    expect(relayTooExpensive(undefined)).toBe(false);
+  });
+
+  it("destination wallet: connects, checks the account, switches chain, sends from the destination", async () => {
+    const calls: { method: string; params?: unknown[] }[] = [];
+    const provider = {
+      async request(a: { method: string; params?: unknown[] }) {
+        calls.push(a);
+        if (a.method === "eth_requestAccounts") return [MAIN.toLowerCase()];
+        if (a.method === "eth_chainId") return "0x14a34";
+        if (a.method === "eth_sendTransaction") return "0xabc";
+        return null;
+      },
+    };
+    const sender = await connectDestinationWallet(MAIN, 11155111, provider);
+    expect(sender.address).toBe(MAIN);
+    expect(await sender.sendTransaction({ to: FRESH, data: "0x12", chainId: 11155111 })).toBe("0xabc");
+    expect(calls.map((c) => c.method)).toEqual(["eth_requestAccounts", "eth_chainId", "wallet_switchEthereumChain", "eth_sendTransaction"]);
+    expect(calls[2]!.params).toEqual([{ chainId: "0xaa36a7" }]);
+    expect(calls[3]!.params).toEqual([{ from: MAIN, to: FRESH, data: "0x12" }]);
+    await expect(connectDestinationWallet(FRESH, 11155111, provider)).rejects.toThrow(/Connect the destination wallet/);
+    await expect(connectDestinationWallet(MAIN, 11155111, null)).rejects.toThrow(/No browser wallet/);
+  });
+
+  it("the mock service quotes the measured testnet fees and withdraws directly from the destination only", async () => {
+    const svc = createMockExitService({ now: () => 7 });
+    expect((await svc.quoteFees()).live.relayGas).toBe(21_500_000n);
+    const [leg] = svc.planExit({ sources: [{ stealthAddress: A, amount: 50n * USDC }], destination: MAIN, firstPoolIndex: 0, withdrawVia: "direct" }).legs;
+    expect(leg!.withdrawVia).toBe("direct");
+    const approved = { ...leg!, status: "approved" as const, updatedAt: 0 };
+    expect(await svc.advance(approved, { stealthKey: () => "0x01", spendingKey: "0x02" }, { destination: MAIN, roundWithdrawals: true })).toBe(approved);
+    await expect(svc.withdrawDirect(approved, { stealthKey: () => "0x01", spendingKey: "0x02" }, { destination: MAIN, roundWithdrawals: true }, { address: FRESH, sendTransaction: async () => "0x01" })).rejects.toThrow(/connect the destination wallet/);
+    const out = await svc.withdrawDirect(approved, { stealthKey: () => "0x01", spendingKey: "0x02" }, { destination: MAIN, roundWithdrawals: true }, { address: MAIN, sendTransaction: async () => "0x01" });
+    expect(out).toMatchObject({ status: "withdrawing", withdrawVia: "direct" });
   });
 });
 
@@ -371,11 +482,63 @@ describe("useExit", () => {
     expect(refundStep.querySelector("a")?.textContent).toMatch(/Etherscan Sepolia/);
     const burnLink = [...refunded.querySelectorAll("a")].find((a) => a.textContent?.includes("Basescan Sepolia"));
     expect(burnLink?.getAttribute("href")).toMatch(/^https:\/\/sepolia\.basescan\.org\/tx\/0x/);
-    // Below-minimum source shows why it's disabled.
-    expect(screen.getByTestId("below-minimum").textContent).toMatch(/exit minimum.*Add \d+\.\d\d USDC/);
-    expect(screen.getByTestId("exit-minimum").textContent).toMatch(/^16\.\d\d USDC$/);
-    // Testnet (D-47): pay runs default to 5 USDC chunks, so the screen says how to fund one exit line.
-    expect(screen.getByTestId("exit-testnet-hint").textContent).toMatch(/5 USDC chunks.*at least 16\.\d\d USDC/);
+    // The minimum follows the (mock) live quote: the relayer's ≈ 21.5 USDC fixed fee sets it.
+    await waitFor(() => expect(screen.getByTestId("exit-quote").dataset.status).toBe("live"));
+    const shown = fmtUsdcUp(exitLegMinimum(cfg, MOCK_FEE_QUOTE.live, { via: "relayer", roundTo: cfg.withdrawUnit }).minimum);
+    expect(screen.getByTestId("exit-minimum").textContent).toBe(`${shown} USDC`);
+    // Below-minimum source shows why it's disabled: the relayer would take more than it's worth.
+    expect(screen.getByTestId("below-minimum").textContent).toMatch(/relayer would take more than this exit is worth.*A direct withdrawal/);
+  });
+
+  it("a 50 USDC address: the relayer costs more than it's worth, so the planner offers the direct withdrawal; the approved leg withdraws from the destination wallet", async () => {
+    const vaultRef: { current: VaultApi | null } = { current: null };
+    const exitRef: { current: ExitApi | null } = { current: null };
+    const svc = createMockExitService({ durations: { planned: 0, burning: 0, "awaiting-mint": 0, minted: 0, depositing: 0, "pending-asp": 0, withdrawing: 0 }, pollMs: 10, delayRangeMs: [0, 0] });
+    render(
+      <VaultProvider>
+        <Harness exitSvc={svc} vaultRef={vaultRef} exitRef={exitRef} screen />
+      </VaultProvider>,
+    );
+    await waitFor(() => expect(["empty", "locked"]).toContain(vaultRef.current?.status));
+    if (vaultRef.current!.status === "locked") await act(() => vaultRef.current!.wipe());
+    await waitFor(() => expect(vaultRef.current?.status).toBe("empty"));
+    await act(() => vaultRef.current!.create(generateMnemonic(), PASS));
+    await act(async () => {
+      await vaultRef.current!.update((d) => {
+        const cs = chainState(d);
+        return { ...d, settings: { ...d.settings, queueWindowHours: [0, 0] }, chains: { ...d.chains, [String(d.settings.chainId)]: { ...cs, balances: [BAL(A, 50n * USDC)] } } };
+      });
+    });
+    await waitFor(() => expect(screen.getByTestId("exit-quote").dataset.status).toBe("live"));
+    expect(screen.getByTestId("exit-none-eligible").textContent).toMatch(/relayer would take more than any of these exits is worth.*Withdraw directly instead/);
+    fireEvent.click(screen.getByTestId("exit-use-direct"));
+    await waitFor(() => expect(screen.queryByTestId("exit-none-eligible")).toBeNull());
+    expect(screen.getByTestId("exit-minimum").textContent).toMatch(/^18\.\d\d USDC$/);
+    fireEvent.click(screen.getByLabelText(`Exit from ${getAddress(A)}`));
+    expect(screen.getByTestId("fee-relayer").textContent).toMatch(/none/);
+    expect(screen.getByTestId("exit-fee-warning").textContent).toMatch(/Fees take \d+% of this exit/);
+
+    const r = await act(() => exitRef.current!.start({ sources: [A], destination: MAIN, privacy: { randomDelay: false, roundWithdrawals: true }, withdrawVia: "direct" }));
+    const id = (r as { id: string }).id;
+    expect(chainState(vaultRef.current!.data!).exits![0]!.withdrawVia).toBe("direct");
+    // It walks to approved and waits there for the destination wallet.
+    await waitFor(() => expect(exitRef.current!.exits[0]!.legs[0]!.status).toBe("approved"), { timeout: 10_000 });
+    const offer = await screen.findByTestId("exit-direct-offer");
+    expect(offer.textContent).toMatch(/withdraws directly.*public faucet or an exchange/);
+    // The injected destination wallet.
+    (globalThis as { ethereum?: unknown }).ethereum = {
+      async request(a: { method: string }) {
+        if (a.method === "eth_requestAccounts") return [MAIN];
+        if (a.method === "eth_chainId") return "0xaa36a7";
+        return "0x01";
+      },
+    };
+    try {
+      await act(() => exitRef.current!.withdrawDirect(id, exitRef.current!.exits[0]!.legs[0]!.id));
+      await waitFor(() => expect(exitRef.current!.exits[0]!.legs[0]!.status).toBe("done"), { timeout: 10_000 });
+    } finally {
+      delete (globalThis as { ethereum?: unknown }).ethereum;
+    }
   });
 
   it("queues each leg's deposit in its own window (D-28); Start now overrides", async () => {

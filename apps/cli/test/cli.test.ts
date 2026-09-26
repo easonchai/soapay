@@ -1,19 +1,22 @@
 import { describe, expect, it } from "vitest";
 import { decodeFunctionData, erc20Abi, hexToBytes, numberToHex, type Address, type Hash, type Hex } from "viem";
-import { privateKeyToAddress } from "viem/accounts";
+import { privateKeyToAccount, privateKeyToAddress } from "viem/accounts";
 import {
   buildMetadata77,
   CHAINS,
   derivePayRun,
   generateMnemonic,
   keysFromMnemonic,
+  metaRotationTypedData,
+  type MetaRotationAttestation,
+  type RotationAttestationSource,
   type AnnouncementRecord,
   type NameResolver,
   type RegisteredChain,
 } from "@soapay/sdk";
 import { parseCli, UsageError } from "../src/args.js";
 import { parseCsv } from "../src/csv.js";
-import { run, type CliIo, type PayerChain } from "../src/cli.js";
+import { defaultPinFile, run, type CliIo, type PayerChain } from "../src/cli.js";
 
 const USDC_SEPOLIA = CHAINS[84532].usdc;
 const PAYER = "0x1111111111111111111111111111111111111111" as Address;
@@ -34,6 +37,9 @@ function io(files: Record<string, string>, env: Record<string, string> = {}, ext
       const f = files[p];
       if (f === undefined) throw new Error(`ENOENT ${p}`);
       return f;
+    },
+    writeFile: async (p, content) => {
+      files[p] = content;
     },
     randomEphemeralKey: counterKeys(),
     ...extra,
@@ -304,5 +310,130 @@ describe("soapay distribute --execute", () => {
     const dry = io({ "h.csv": csv }, {}, { resolver });
     expect(await run(["distribute", "--csv", "h.csv", "--asset", "usdc", "--preset", "dividend", "--total", "1"], dry.cli)).toBe(0);
     expect(dry.out.join("\n")).toContain("recipients  3 (3 names checked against ERC-6538)");
+  });
+});
+
+describe("soapay distribute: meta-address pins (D-49)", () => {
+  const attester = privateKeyToAccount(`0x${"a1".repeat(32)}`);
+  const forger = privateKeyToAccount(`0x${"b2".repeat(32)}`);
+  const PIN_FILE = "payroll/.soapay/pins.json";
+  const CSV = "payroll/run.csv";
+  const csv = `recipient,amount\nalice.soapay.eth,10\nbob.soapay.eth,5\n${metas[2]},1\n`;
+  const base = ["distribute", "--csv", CSV, "--asset", "usdc", "--attester", attester.address];
+
+  /** An ENS stand-in whose answers the test can change between runs (a rotation). */
+  function names(initial: Record<string, string>) {
+    const current = { ...initial };
+    const resolver: NameResolver = {
+      name: "fixture-ens",
+      canResolve: () => true,
+      resolve: async (id) => (id.startsWith("st:") ? { metaAddressURI: id, source: "meta-address" } : { metaAddressURI: current[id]!, source: "ens" }),
+    };
+    return { resolver, current };
+  }
+  const attestations: Record<string, MetaRotationAttestation[]> = {};
+  const source: RotationAttestationSource = async (label) => (attestations[label]?.length ? { attester: forger.address, items: attestations[label]! } : null);
+  async function attest(signer: typeof attester, label: string, oldMeta: string, newMeta: string) {
+    const verifiedAt = 1_790_000_000n;
+    const signature = await signer.signTypedData(metaRotationTypedData({ label, oldMeta, newMeta, verifiedAt, chainId: 84532 }));
+    attestations[label] = [{ label, oldMeta, newMeta, verifiedAt: verifiedAt.toString(), signature }];
+  }
+  const fresh = () => keysFromMnemonic(generateMnemonic()).metaAddressURI;
+
+  it("defaults the pin file to .soapay/pins.json next to the CSV", () => {
+    expect(defaultPinFile("payroll/run.csv")).toBe(PIN_FILE);
+    expect(defaultPinFile("run.csv")).toBe(".soapay/pins.json");
+    expect(parseCli([...base, "--pins", "p.json", "--accept-change", "alice.soapay.eth", "--accept-change", "bob.soapay.eth", "--api", "http://localhost:8787"])).toMatchObject({
+      pins: "p.json",
+      acceptChange: ["alice.soapay.eth", "bob.soapay.eth"],
+      api: "http://localhost:8787",
+      attester: attester.address,
+    });
+    expect(() => parseCli([...base, "--attester", "0x12"])).toThrow(/--attester/);
+    expect(() => parseCli([...base, "--api", "ftp://x"])).toThrow(/--api/);
+  });
+
+  it("pins names on first resolve, passes unchanged names, and stops the run on a change", async () => {
+    const alice = fresh();
+    const bob = fresh();
+    const { resolver, current } = names({ "alice.soapay.eth": alice, "bob.soapay.eth": bob });
+    const files: Record<string, string> = { [CSV]: csv };
+    let payers = 0;
+    const extra = { resolver, attestationSource: source, now: () => 1_000, payerChain: () => (payers++, {} as PayerChain) };
+
+    const first = io(files, {}, extra);
+    expect(await run(base, first.cli)).toBe(0);
+    const book = JSON.parse(files[PIN_FILE]!);
+    expect(Object.keys(book.pins).sort()).toEqual(["alice.soapay.eth", "bob.soapay.eth"]); // the raw meta-address isn't pinned
+    expect(book.pins["alice.soapay.eth"]).toMatchObject({ metaAddressURI: alice, source: "ens", pinnedAt: 1_000 });
+    expect(first.out.join("\n")).toContain(`pins        2 names checked against pinned meta-addresses (2 newly pinned), ${PIN_FILE}`);
+
+    const second = io(files, {}, extra);
+    const before = files[PIN_FILE];
+    expect(await run(base, second.cli)).toBe(0);
+    expect(second.out.join("\n")).toContain("(2 unchanged)");
+    expect(files[PIN_FILE]).toBe(before);
+
+    // A stolen registrant key repoints bob: the run stops before planning, sending or re-pinning.
+    current["bob.soapay.eth"] = fresh();
+    const blocked = io(files, { PAYER_PRIVATE_KEY: `0x${"42".repeat(32)}` }, extra);
+    expect(await run([...base, "--execute"], blocked.cli)).toBe(3);
+    const alert = blocked.err.join("\n");
+    expect(alert).toContain("ALERT: the meta-address behind 1 recipient changed since it was pinned");
+    expect(alert).toContain(`pinned    ${bob}`);
+    expect(alert).toContain(`now       ${current["bob.soapay.eth"]}`);
+    expect(alert).toContain("No World ID re-verification on record for this change");
+    expect(alert).toContain("--accept-change bob.soapay.eth");
+    expect(blocked.out).toEqual([]);
+    expect(payers).toBe(0);
+    expect(files[PIN_FILE]).toBe(before);
+
+    // A forged attestation (right transition, wrong signer) doesn't unblock it.
+    await attest(forger, "bob", bob, current["bob.soapay.eth"]!);
+    const forged = io(files, {}, extra);
+    expect(await run(base, forged.cli)).toBe(3);
+    expect(forged.err.join("\n")).toContain("isn't signed by the pinned Soapay attester");
+  });
+
+  it("moves the pin on a valid World ID attestation, or on --accept-change", async () => {
+    const alice = fresh();
+    const bob = fresh();
+    const { resolver, current } = names({ "alice.soapay.eth": alice, "bob.soapay.eth": bob });
+    const files: Record<string, string> = { [CSV]: csv };
+    const extra = { resolver, attestationSource: source, now: () => 2_000 };
+    expect(await run(base, io(files, {}, extra).cli)).toBe(0);
+
+    current["alice.soapay.eth"] = fresh();
+    await attest(attester, "alice", alice, current["alice.soapay.eth"]!);
+    const rotated = io(files, {}, extra);
+    expect(await run(base, rotated.cli)).toBe(0);
+    expect(rotated.out.join("\n")).toContain("note: alice.soapay.eth rotated its keys; re-verified by World ID");
+    const book = JSON.parse(files[PIN_FILE]!);
+    expect(book.pins["alice.soapay.eth"].metaAddressURI).toBe(current["alice.soapay.eth"]);
+    expect(book.pins["alice.soapay.eth"].history.map((h: { reason: string }) => h.reason)).toEqual(["pinned", "rotated-world-id"]);
+
+    current["bob.soapay.eth"] = fresh();
+    const accepted = io(files, {}, extra);
+    expect(await run([...base, "--accept-change", "Bob.soapay.eth", "--accept-change", "carol.soapay.eth", "--json"], accepted.cli)).toBe(0);
+    const plan = JSON.parse(accepted.out[0]!);
+    expect(plan.pins).toMatchObject({ file: PIN_FILE, ok: 1, accepted: 1, unusedAccepts: ["carol.soapay.eth"] });
+    expect(plan.pins.changes).toEqual([{ recipient: "bob.soapay.eth", via: "accept-change", from: bob, to: current["bob.soapay.eth"] }]);
+    expect(JSON.parse(files[PIN_FILE]!).pins["bob.soapay.eth"].metaAddressURI).toBe(current["bob.soapay.eth"]);
+    // Accepted once: the next run is back to plain pin checks.
+    const after = io(files, {}, extra);
+    expect(await run(base, after.cli)).toBe(0);
+    expect(after.out.join("\n")).toContain("(2 unchanged)");
+  });
+
+  it("honours --pins and refuses a corrupt pin file", async () => {
+    const { resolver } = names({ "alice.soapay.eth": fresh(), "bob.soapay.eth": fresh() });
+    const files: Record<string, string> = { [CSV]: csv };
+    expect(await run([...base, "--pins", "elsewhere/pins.json"], io(files, {}, { resolver }).cli)).toBe(0);
+    expect(files["elsewhere/pins.json"]).toBeDefined();
+    expect(files[PIN_FILE]).toBeUndefined();
+    files[PIN_FILE] = "{ not json";
+    const bad = io(files, {}, { resolver });
+    expect(await run(base, bad.cli)).toBe(1);
+    expect(bad.err.join()).toContain(`${PIN_FILE}: pin file is not valid JSON`);
   });
 });

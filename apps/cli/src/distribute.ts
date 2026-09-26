@@ -1,7 +1,10 @@
 // `soapay distribute`: CSV → resolved recipients → preset amounts → DistributionPlan → text/JSON.
 import { formatUnits, parseUnits } from "viem";
 import {
+  applyPinDecision,
   assertDistributable,
+  checkMetaPin,
+  pinKey,
   denominated,
   dividend,
   getChain,
@@ -12,8 +15,11 @@ import {
   type DistributionInput,
   type DistributionPlan,
   type NameResolver,
+  type PinBook,
+  type PinDecision,
   type Recipient,
   type RegisteredChain,
+  type RotationAttestationLookup,
 } from "@soapay/sdk";
 import { UsageError, type DistributeArgs } from "./args.js";
 import { parseCsv } from "./csv.js";
@@ -28,7 +34,83 @@ export type BuiltDistribution = {
   symbol: string;
   /** How recipients were resolved: resolver kind → count (e.g. { ens: 3, "meta-address": 1 }). */
   resolvedBy: Record<string, number>;
+  /** Pin check result, when pins were checked. */
+  pins?: PinSummary;
 };
+
+/** Pin inputs: the stored book, the attestation check, and the payer's explicit overrides. */
+export type PinCheckDeps = {
+  book: PinBook;
+  lookup?: RotationAttestationLookup;
+  /** Identifiers passed with --accept-change. */
+  accept?: readonly string[];
+  now: number;
+};
+
+export type PinSummary = {
+  /** The book after this run (new pins, moved pins). */
+  book: PinBook;
+  /** True when `book` differs from the stored one and must be written. */
+  changed: boolean;
+  counts: { new: number; ok: number; rotated: number; accepted: number };
+  changes: { identifier: string; decision: Extract<PinDecision, { state: "rotated" | "accepted" }>; to: string }[];
+  /** --accept-change names that had nothing to accept. */
+  unusedAccepts: string[];
+};
+
+/** A pinned meta-address changed without a valid attestation or an explicit --accept-change. */
+export class PinChangedError extends Error {
+  readonly blocked: { identifier: string; from: string; to: string; reason: string }[];
+  constructor(blocked: PinChangedError["blocked"], pinFile?: string) {
+    const lines = [
+      `ALERT: the meta-address behind ${blocked.length === 1 ? "1 recipient" : `${blocked.length} recipients`} changed since it was pinned${pinFile ? ` (${pinFile})` : ""}. Nothing was sent.`,
+    ];
+    for (const b of blocked) {
+      lines.push(`  ${b.identifier}`, `    pinned    ${b.from}`, `    now       ${b.to}`, `    World ID  ${b.reason}`);
+    }
+    lines.push(
+      "This can be a salary redirect: whoever holds the name's registrant key can repoint it. Confirm the new",
+      "keys with the recipient out of band, then re-run with " + blocked.map((b) => `--accept-change ${b.identifier}`).join(" ") + ".",
+    );
+    super(lines.join("\n"));
+    this.name = "PinChangedError";
+    this.blocked = blocked;
+  }
+}
+
+/** Checks every resolved name against its pin; throws PinChangedError listing ALL blocked ones. */
+export async function checkPins(
+  resolved: readonly { identifier: string; metaAddressURI: string; registrant?: `0x${string}`; source: string }[],
+  deps: PinCheckDeps,
+  pinFile?: string,
+): Promise<PinSummary> {
+  const accept = new Set((deps.accept ?? []).map(pinKey));
+  const used = new Set<string>();
+  let book = deps.book;
+  const counts = { new: 0, ok: 0, rotated: 0, accepted: 0 };
+  const changes: PinSummary["changes"] = [];
+  const blocked: PinChangedError["blocked"] = [];
+  for (const r of resolved) {
+    // A raw meta-address is the key itself; there is nothing behind it that could change.
+    if (r.source === "meta-address") continue;
+    const key = pinKey(r.identifier);
+    const params: Parameters<typeof checkMetaPin>[0] = { identifier: r.identifier, pin: deps.book.pins[key], resolvedMeta: r.metaAddressURI, acceptChange: accept.has(key) };
+    if (deps.lookup) params.lookup = deps.lookup;
+    const decision = await checkMetaPin(params);
+    if (decision.state === "blocked") {
+      blocked.push({ identifier: r.identifier, from: decision.from, to: decision.to, reason: decision.attestation.reason });
+      continue;
+    }
+    if (decision.state === "accepted") used.add(key);
+    counts[decision.state]++;
+    if (decision.state === "rotated" || decision.state === "accepted") changes.push({ identifier: r.identifier, decision, to: r.metaAddressURI });
+    const res: { metaAddressURI: string; registrant?: `0x${string}`; source: string } = { metaAddressURI: r.metaAddressURI, source: r.source };
+    if (r.registrant) res.registrant = r.registrant;
+    book = applyPinDecision(book, { identifier: r.identifier, resolved: res, decision, now: deps.now });
+  }
+  if (blocked.length) throw new PinChangedError(blocked, pinFile);
+  return { book, changed: book !== deps.book, counts, changes, unusedAccepts: [...accept].filter((a) => !used.has(a)) };
+}
 
 function units(value: string, decimals: number, what: string): bigint {
   if (!/^\d+(\.\d+)?$/.test(value)) throw new UsageError(`${what}: "${value}" is not a positive decimal number`);
@@ -40,7 +122,7 @@ function units(value: string, decimals: number, what: string): bigint {
 export async function buildDistribution(
   args: DistributeArgs,
   csvText: string,
-  deps: { resolver: NameResolver; randomEphemeralKey?: () => Uint8Array },
+  deps: { resolver: NameResolver; randomEphemeralKey?: () => Uint8Array; pins?: PinCheckDeps; pinFile?: string },
 ): Promise<BuiltDistribution> {
   const chain = getChain(args.chainId);
   const asset = resolveAsset(args.chainId, args.asset);
@@ -53,6 +135,7 @@ export async function buildDistribution(
   const rows = parseCsv(csvText, ["recipient", valueColumn]);
 
   const resolved: { metaAddressURI: string; value: string; id: string }[] = [];
+  const forPins: Parameters<typeof checkPins>[0][number][] = [];
   const seen = new Map<string, number>();
   const resolvedBy: Record<string, number> = {};
   for (const row of rows) {
@@ -66,7 +149,12 @@ export async function buildDistribution(
     seen.set(meta.metaAddressURI, row.line);
     resolvedBy[meta.source] = (resolvedBy[meta.source] ?? 0) + 1;
     resolved.push({ metaAddressURI: meta.metaAddressURI, value: row.values[valueColumn] ?? "", id: row.values.id || identifier });
+    const p: (typeof forPins)[number] = { identifier: identifier.trim(), metaAddressURI: meta.metaAddressURI, source: meta.source };
+    if (meta.registrant) p.registrant = meta.registrant;
+    forPins.push(p);
   }
+  // Pins before anything is planned: a changed name stops the whole run.
+  const pins = deps.pins ? await checkPins(forPins, deps.pins, deps.pinFile) : undefined;
 
   let input: DistributionInput;
   if (args.preset === "dividend") {
@@ -81,7 +169,9 @@ export async function buildDistribution(
   if (args.chunk !== undefined) params.split = denominated(units(args.chunk, decimals, "--chunk"));
   if (args.maxLines !== undefined) params.maxLinesPerTx = args.maxLines;
   if (deps.randomEphemeralKey) params.randomEphemeralKey = deps.randomEphemeralKey;
-  return { plan: planDistribution(params), chain, decimals, symbol, resolvedBy };
+  const built: BuiltDistribution = { plan: planDistribution(params), chain, decimals, symbol, resolvedBy };
+  if (pins) built.pins = pins;
+  return built;
 }
 
 const RESOLUTION_LABELS: Record<string, [string, string]> = {
@@ -98,7 +188,14 @@ function describeResolution(by: Record<string, number>): string {
   return parts.length ? ` (${parts.join(", ")})` : "";
 }
 
-export function formatPlan(b: BuiltDistribution, opts: { showLines: boolean; execute: boolean; stealthDisperse?: string }): string {
+function describePins(p: PinSummary): string {
+  const { counts: c } = p;
+  const total = c.new + c.ok + c.rotated + c.accepted;
+  const parts = [c.ok && `${c.ok} unchanged`, c.new && `${c.new} newly pinned`, c.rotated && `${c.rotated} re-verified by World ID`, c.accepted && `${c.accepted} accepted by --accept-change`].filter(Boolean);
+  return `${total} ${total === 1 ? "name" : "names"} checked against pinned meta-addresses${parts.length ? ` (${parts.join(", ")})` : ""}`;
+}
+
+export function formatPlan(b: BuiltDistribution, opts: { showLines: boolean; execute: boolean; stealthDisperse?: string; pinFile?: string }): string {
   const { plan, chain, decimals, symbol } = b;
   const amt = (v: bigint) => `${formatUnits(v, decimals)} ${symbol}`;
   const out: string[] = [];
@@ -111,7 +208,16 @@ export function formatPlan(b: BuiltDistribution, opts: { showLines: boolean; exe
   out.push(`  txs         ${plan.chunks.length} (lines per tx: ${plan.chunks.map((c) => c.length).join(", ")}; max ${plan.maxLinesPerTx})`);
   out.push(`  gas         ${plan.estimate.totalGas} total, planning estimate (${plan.estimate.perTx.map((t) => t.gas).join(", ")} per tx)`);
   out.push(`  pay path    ${opts.stealthDisperse ? `StealthDisperse ${opts.stealthDisperse}` : "none on this chain (pass --disperse, or use the SDK's EIP-5792 batch path)"}`);
+  if (b.pins) out.push(`  pins        ${describePins(b.pins)}${opts.pinFile ? `, ${opts.pinFile}` : ""}`);
   for (const w of plan.warnings) out.push(`warning: ${w}`);
+  for (const ch of b.pins?.changes ?? []) {
+    out.push(
+      ch.decision.state === "rotated"
+        ? `note: ${ch.identifier} rotated its keys; re-verified by World ID on ${new Date(ch.decision.verifiedAt * 1000).toISOString()}, so the pin moved to the new meta-address.`
+        : `warning: ${ch.identifier} changed its meta-address with no valid World ID attestation (${ch.decision.attestation.reason}); paying the new one because of --accept-change.`,
+    );
+  }
+  for (const u of b.pins?.unusedAccepts ?? []) out.push(`warning: --accept-change ${u}: no changed meta-address to accept for that name in this run.`);
   if (opts.showLines) {
     out.push("", "  #    stealth address                              amount                recipient");
     plan.lines.forEach((l, i) => out.push(`  ${String(i).padEnd(4)} ${l.stealthAddress}  ${amt(l.amount).padEnd(20)}  ${l.recipientId}`));
@@ -121,9 +227,16 @@ export function formatPlan(b: BuiltDistribution, opts: { showLines: boolean; exe
 }
 
 /** JSON view of a plan (bigints as decimal strings). Omits ephemeral keys, which are public anyway. */
-export function planJson(b: BuiltDistribution, stealthDisperse?: string) {
+export function planJson(b: BuiltDistribution, stealthDisperse?: string, pinFile?: string) {
   const { plan } = b;
+  const pins = b.pins && {
+    file: pinFile ?? null,
+    ...b.pins.counts,
+    changes: b.pins.changes.map((c) => ({ recipient: c.identifier, via: c.decision.state === "rotated" ? "world-id" : "accept-change", from: c.decision.from, to: c.to })),
+    unusedAccepts: b.pins.unusedAccepts,
+  };
   return {
+    ...(pins ? { pins } : {}),
     kind: plan.kind,
     chainId: b.chain.id,
     asset: { address: plan.asset.address, symbol: b.symbol, decimals: b.decimals },
