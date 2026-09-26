@@ -342,7 +342,7 @@ Base Sepolia, chain `84532` (the live demo; [docs/testnet-deployment.md](docs/te
 | Chain and contract constants | [`packages/sdk/src/constants.ts`](packages/sdk/src/constants.ts) |
 | Architecture, flows and both diagrams | [`docs/architecture.md`](docs/architecture.md) |
 | World ID design and debrief | [`docs/worldid.md`](docs/worldid.md) |
-| Stage demo scripts and Q&A | [`docs/demos/`](docs/demos/README.md) (the older [`docs/demo-flow.md`](docs/demo-flow.md) is superseded) |
+| Stage demo scripts and Q&A | [`docs/demos/`](docs/demos/README.md) (the older [`docs/demos/README.md`](docs/demos/README.md) is superseded) |
 | Each integration against its prize criteria | [`docs/bounty-integrations.md`](docs/bounty-integrations.md) |
 
 ```text

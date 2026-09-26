@@ -34,4 +34,25 @@ Links: company app https://soapay.up.railway.app/ · employee app https://soapay
 - **The API allows 3 registrations per IP per hour.** Don't rehearse sign-ups from the venue network in the last hour.
 - **Offline fallback:** `pnpm --filter @soapay/recipient dev:mock` runs the employee app on mock data.
 
-The older scripts ([demo-desktop.md](../demo-desktop.md), [demo-flow.md](../demo-flow.md)) are superseded by these.
+
+## Live links and references
+
+| What | Link |
+| --- | --- |
+| Company (sender) app + landing | https://soapay.up.railway.app/ |
+| Employee (recipient) app | https://soapay.up.railway.app/app/ |
+| API | https://soapay.up.railway.app/api (`/health`, `/names/:label`, `/worldid/config`) |
+| Mock USDC (Base Sepolia) | https://sepolia.basescan.org/address/0x028D969c20b740582428f5043954c380686214Bb |
+| `StealthDisperse` (Base Sepolia) | https://sepolia.basescan.org/address/0x6B7a1cC570Af2DDd427DA694351438F0FE8039CA |
+| Canonical ERC-5564 Announcer | https://sepolia.basescan.org/address/0x55649E01B5Df198D18D95b5cc5051630cfD45564 |
+| Live pay run (2 stealth addresses, 3.0 + 2.5 USDC) | https://sepolia.basescan.org/tx/0x24f23d610d1917905d3896e282243b07a038afb2bf266f94f11f31ea9e5b492d |
+| Live gasless 7702 spend, sponsored (mock USDC) | https://sepolia.basescan.org/tx/0x15ea6dcd7f489ff829365c6e9dfef0b86859aba4cdc97e0a010fa761e418265c |
+| CLI + agent run: 12 lines incl. the agent (D-43) | https://sepolia.basescan.org/tx/0xf7fb06dfa47313fbeab80fe6e01cc0d003d38d221819ad35d09bfcad9051ce0e |
+| The agent's gasless spend from that run | https://sepolia.basescan.org/tx/0x3517202141e4f1ad9849aa40f04ec3d7e332bd8d38a72d991d64d1e4b4d3f3e2 |
+| Agent name with ENSIP-26 records | `mcp-agent-7c1e.soapay.eth` (`agent-context`, `agent-endpoint[web]`) |
+
+**CLI recording (pitch only):** `DEMO_REPLAY=1 scripts/demo-pluggable.sh` replays the recorded "plug it into anything" run ([`demo-screens/beat4-pluggable-live.txt`](../demo-screens/beat4-pluggable-live.txt)); `DEMO_DRY=1` plans without sending.
+
+**Exit (roadmap evidence, not shown on the testnet demo):** the 2026-09-26 live exit with Circle USDC: [pay](https://sepolia.basescan.org/tx/0xbd9d0001b4fe5fbee969003921b43a82608e7e3d0748a3fcd347f33244a3799b) → [burn](https://sepolia.basescan.org/tx/0x78fa2c713458f30879096a4d79a024f4fc0eab55aceffc8789111beaf19b6c89) → [mint](https://sepolia.etherscan.io/tx/0x5feec0c529b0b424b98c3b4c28f00191d20e7ca25b52b5d8d41627e7779436ab) → [deposit](https://sepolia.etherscan.io/tx/0xa7c6ff5f59c0c231b53df82859fca712798d398e9a907aefba778a5495d013e0) → [direct withdrawal](https://sepolia.etherscan.io/tx/0xed9235c87f7643bde048cd9e29c8abebe989a64016a628c85faa7ed5724fc672). Details: [testnet-deployment.md](../testnet-deployment.md).
+
+**Recovery scripts (D-55):** `scripts/demo-setup-recovery.ts`, `scripts/demo-attacker.ts` (`--restore`, `DEMO_DRY=1`), `scripts/demo-recovery-check.ts`. Env: `API_URL` (default the Railway API), `ENS_RPC_URL`, `RPC_URL`, `SOAPAY_DEMO_FILE` (the phrase file), `SOAPAY_ENV_ROOT` (where the git-ignored `contracts/.env` and `apps/api/.env` live, for the stolen registrant's gas top-up). Nothing prints a phrase or a key. Honest line if asked: World ID protects **future** salary; a stolen phrase can still spend what sam already received, so move funds and rotate as soon as a leak is suspected.

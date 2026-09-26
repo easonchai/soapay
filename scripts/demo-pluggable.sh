@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Demo beat "plug it into anything", LIVE on Base Sepolia (docs/demo-flow.md):
+# Demo beat "plug it into anything", LIVE on Base Sepolia (docs/demos/README.md):
 #   1. an AI agent claims invoice-agent.soapay.eth over MCP (ENSIP-26 records);
 #   2. ONE revenue-share run pays three people, a raw meta-address and the agent, with one CLI command;
 #   3. one of the people scans with her recovery phrase and finds only her lines;

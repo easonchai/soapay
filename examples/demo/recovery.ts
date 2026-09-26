@@ -1,4 +1,4 @@
-// The World ID recovery beat (docs/demo-flow.md): a thief with a stolen recovery phrase rewrites the
+// The World ID recovery beat (docs/demos/README.md): a thief with a stolen recovery phrase rewrites the
 // victim's ENS `stealth` record directly, bypassing Soapay, and the payer's pin check still blocks
 // the line because no World ID attestation covers the change.
 //
