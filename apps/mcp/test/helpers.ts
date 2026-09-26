@@ -10,7 +10,7 @@ import {
   type SwapQuote,
 } from "@soapay/sdk";
 import { loadConfig } from "../src/config.js";
-import type { Api, Chain, Ctx } from "../src/context.js";
+import type { Api, Chain, Ctx, FaucetResult } from "../src/context.js";
 import { Caps, PlanStore } from "../src/guardrails.js";
 import type { Logger } from "../src/log.js";
 import { memoryStateStore } from "../src/state.js";
@@ -126,7 +126,7 @@ export function makeCtx(opts: { env?: Record<string, string>; keys?: boolean; pa
     }),
     getName: vi.fn(async (label: string) => registry.get(label) ?? null),
     announcements: vi.fn(async () => opts.announcements ?? []),
-    faucet: vi.fn(async (address: Address) => ({
+    faucet: vi.fn(async (address: Address): Promise<FaucetResult> => ({
       status: "sent" as const,
       address,
       usdc: { amount: "1000000000000", txHash: hash() },
