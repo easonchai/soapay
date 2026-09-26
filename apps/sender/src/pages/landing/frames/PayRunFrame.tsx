@@ -1,12 +1,18 @@
-import { NavyPanel, Pill, Stagger, StaggerItem, Toggle } from "@soapay/ui";
+import { useRef } from "react";
+import { NavyPanel, Pill, Toggle } from "@soapay/ui";
 import { ROSTER, RUN } from "../sample.js";
+import { useRiseIn } from "../motion.js";
 
 const COLS = "32px 1.5fr 1fr 60px 1fr";
 
 /** Static picture of the Pay run page: roster table left, denomination + run total right. */
 export function PayRunFrame() {
+  const frameRef = useRef<HTMLDivElement>(null);
+
+  useRiseIn(frameRef, "[data-rise]", { duration: 0.4, stagger: 0.04, y: 8 });
+
   return (
-    <div className="show-main">
+    <div className="show-main" ref={frameRef}>
       <div className="pagehead">
         <div className="text">
           <span className="eyebrow">Pay run · draft · {RUN.salaries} recipients</span>
@@ -29,9 +35,9 @@ export function PayRunFrame() {
               <span className="r">Token</span>
               <span className="r">Resolution</span>
             </div>
-            <Stagger>
+            <div>
               {ROSTER.map((r, i) => (
-                <StaggerItem key={r.name} index={i} className="tr" style={{ gridTemplateColumns: COLS, display: "grid" }}>
+                <div key={r.name} className="tr" style={{ gridTemplateColumns: COLS, display: "grid" }} data-rise>
                   <span className="idx">{i + 1}</span>
                   <span className="mono" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                     <span>{r.name}</span>
@@ -44,9 +50,9 @@ export function PayRunFrame() {
                   <span style={{ display: "flex", justifyContent: "flex-end" }}>
                     <Pill tone={r.status === "Verified" ? "ok" : "muted"}>{r.status}</Pill>
                   </span>
-                </StaggerItem>
+                </div>
               ))}
-            </Stagger>
+            </div>
           </div>
           <div className="between">
             <span className="ink2">

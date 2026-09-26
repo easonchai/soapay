@@ -1,4 +1,6 @@
-import { Dots, InView } from "@soapay/ui";
+import { useRef } from "react";
+import { Dots } from "@soapay/ui";
+import { useRiseOnScroll } from "./motion.js";
 import "./trust.css";
 
 export type CtaBandProps = {
@@ -10,11 +12,13 @@ export type CtaBandProps = {
 
 /** Landing · closing navy band. The footer stays in Landing. */
 export function CtaBand({ onLogin, disabled, label, employeeUrl }: CtaBandProps) {
+  const root = useRef<HTMLElement>(null);
+  useRiseOnScroll(root, "[data-rise]", { y: 10 });
   return (
-    <section className="land-section cta-band" aria-labelledby="cta-title">
+    <section className="land-section cta-band" aria-labelledby="cta-title" ref={root}>
       <Dots mode="right" animate color="255,255,255" className="cta-dots" />
       <div className="land-wrap">
-        <InView className="cta-body" y={10}>
+        <div className="cta-body" data-rise>
           <h2 id="cta-title" className="cta-h2">
             Paying a team? Paste names, sign once.
           </h2>
@@ -27,7 +31,7 @@ export function CtaBand({ onLogin, disabled, label, employeeUrl }: CtaBandProps)
               Getting paid? Open your payments
             </a>
           </div>
-        </InView>
+        </div>
       </div>
     </section>
   );

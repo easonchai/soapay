@@ -1,5 +1,6 @@
 import { useRef } from "react";
-import { CountUp, InView, useVisible } from "@soapay/ui";
+import { useVisible } from "@soapay/ui";
+import { useCountUp, useRiseOnScroll } from "./motion.js";
 import "./trust.css";
 
 const ITEMS = [
@@ -26,31 +27,49 @@ const FACTS: readonly { value: number | string; label: string }[] = [
 
 const whole = (n: number) => String(Math.round(n));
 
-/** Landing · three guarantees and a facts strip. Numbers count up the first time the strip scrolls into view. */
+/** A numeric fact: the figure counts up (GSAP) the first time the strip is on screen. */
+function NumberFact({ value, label, active }: { value: number; label: string; active: boolean }) {
+  const figure = useRef<HTMLSpanElement>(null);
+  useCountUp(figure, value, whole, { duration: 1.4, active });
+  return (
+    <div className="guar-cell">
+      <span className="figure" ref={figure}>
+        {whole(0)}
+      </span>
+      <span className="guar-label">{label}</span>
+    </div>
+  );
+}
+
+/** Landing · three guarantees and a facts strip. Items rise in on scroll; numbers count up once the strip is visible. */
 export function Guarantees() {
+  const root = useRef<HTMLElement>(null);
   const stripRef = useRef<HTMLDivElement>(null);
   const visible = useVisible(stripRef, 0.5);
+  useRiseOnScroll(root, "[data-rise]", { y: 10, stagger: 0.1 });
   return (
-    <section className="land-section guar" aria-label="Guarantees">
+    <section className="land-section guar" aria-label="Guarantees" ref={root}>
       <div className="land-wrap">
         <div className="guar-grid">
-          {ITEMS.map((it, i) => (
-            <InView key={it.title} className="guar-item" delay={i * 0.1} y={10}>
+          {ITEMS.map((it) => (
+            <div key={it.title} className="guar-item" data-rise>
               <span className="guar-sq" aria-hidden />
               <h3 className="guar-title">{it.title}</h3>
               <p className="guar-body">{it.body}</p>
-            </InView>
+            </div>
           ))}
         </div>
         <div className="guar-facts" ref={stripRef}>
-          {FACTS.map((f) => (
-            <div className="guar-cell" key={f.label}>
-              <span className="figure">
-                {typeof f.value === "number" ? <CountUp value={visible ? f.value : 0} format={whole} duration={1.4} /> : f.value}
-              </span>
-              <span className="guar-label">{f.label}</span>
-            </div>
-          ))}
+          {FACTS.map((f) =>
+            typeof f.value === "number" ? (
+              <NumberFact key={f.label} value={f.value} label={f.label} active={visible} />
+            ) : (
+              <div className="guar-cell" key={f.label}>
+                <span className="figure">{f.value}</span>
+                <span className="guar-label">{f.label}</span>
+              </div>
+            ),
+          )}
         </div>
         <p className="guar-note">Compliant exit via Privacy Pools is on testnet; gateway mode is on the roadmap.</p>
       </div>

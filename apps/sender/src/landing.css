@@ -8,8 +8,9 @@
 .land-h3 { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.15; margin: 0; }
 .land-body { font-size: 16px; color: var(--ink2); line-height: 1.55; text-wrap: pretty; margin: 0; }
 /* The hero fills the screen under the 60px bar (owner decision 2026-09-26); type and dots scale with the viewport. */
-.land-hero { min-height: calc(100dvh - 60px); gap: clamp(16px, 1.6vw, 28px); padding-left: clamp(20px, 4vw, 64px); padding-right: clamp(20px, 4vw, 64px); }
-.land-h1 { font-size: clamp(40px, 6.4vw, 112px); line-height: 0.98; letter-spacing: -0.04em; max-width: none; }
+/* --hero-halfline is half the longest headline state ("Private distribution.", about 8.4em); the diamonds hang off it. */
+.land-hero { --hero-size: clamp(40px, 6.4vw, 112px); --hero-halfline: calc(var(--hero-size) * 4.2); --dots-gap: 28px; min-height: calc(100dvh - 60px); gap: clamp(16px, 1.6vw, 28px); padding-left: clamp(20px, 4vw, 64px); padding-right: clamp(20px, 4vw, 64px); }
+.land-h1 { font-size: var(--hero-size); line-height: 0.98; letter-spacing: -0.04em; max-width: none; }
 .land-h1 .line { display: block; }
 /* The headline word "Private" is drawn as the hero's dot material; the text underneath stays for readers and tests. */
 .dot-word { position: relative; display: inline-block; }
@@ -23,8 +24,9 @@
 .land-sub { font-size: clamp(16px, 1.3vw, 22px); max-width: 34em; }
 .land-hero .hint { font-size: clamp(12px, 0.85vw, 14px); }
 .land-hero .dots { width: clamp(300px, min(24vw, 52vh), 520px); height: clamp(300px, min(24vw, 52vh), 520px); }
-.land-hero .dots.l { left: max(-70px, -4vw); }
-.land-hero .dots.r { right: max(-70px, -4vw); }
+/* The diamonds frame the headline with a fixed gap from its longest state instead of hugging the screen edges (owner request 2026-09-26). */
+.land-hero .dots.l { left: auto; right: calc(50% + var(--hero-halfline) + var(--dots-gap)); }
+.land-hero .dots.r { right: auto; left: calc(50% + var(--hero-halfline) + var(--dots-gap)); }
 .land-bar .links a { cursor: pointer; }
 .land-bar .links a:hover { color: var(--ink); }
 @media (max-width: 1024px) {
@@ -40,4 +42,22 @@
 @media (max-width: 700px) {
   .land-bar .links { gap: 16px; }
   .land-bar .links a:not(.link-with-mark) { display: none; }
+}
+
+/* Illustrated columns shared by How it works, the batch comparison and What the chain sees: a hairline-ruled
+   grid, a mono tag or numeral, line art (.art), a short title and one plain sentence. */
+.art-cols { display: grid; grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr)); border-top: 1px solid var(--line); margin-top: 8px; }
+.art-col { position: relative; padding: 40px 32px 48px 0; }
+.art-col + .art-col { padding-left: 40px; border-left: 1px solid var(--hairline); }
+.art-tag { font: 500 14px/1 var(--mono); color: var(--accent); letter-spacing: 0.02em; }
+.art-tag.muted { color: var(--ink-disabled); }
+.art { display: block; width: 100%; max-width: 360px; height: auto; margin: 36px 0 32px; overflow: visible; }
+.art-t { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; margin: 0 0 10px; }
+.art-d { font-size: 16px; line-height: 1.55; color: var(--ink2); max-width: 34em; margin: 0; text-wrap: pretty; }
+.art-arrow { position: absolute; top: 44px; right: -10px; width: 20px; height: 8px; color: var(--ink-disabled); }
+@media (max-width: 900px) {
+  .art-cols { grid-template-columns: 1fr; }
+  .art-col { padding: 28px 0 32px; }
+  .art-col + .art-col { padding-left: 0; border-left: 0; border-top: 1px solid var(--hairline); }
+  .art-arrow { display: none; }
 }
