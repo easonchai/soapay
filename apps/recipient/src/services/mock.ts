@@ -22,6 +22,8 @@ import {
   derivePayRun,
   getChainConfig,
   isValidLabel,
+  SESSION_LOOKUP_MAX_TTL_SECONDS,
+  sessionLookupTypedData,
   splitIntoDenominations,
   dappTransfers,
   type PayRunLine,
@@ -31,7 +33,18 @@ import {
 import type { DappExecution, DappService } from "./dapp.js";
 import { secp256k1 } from "@noble/curves/secp256k1.js";
 import { keccak_256 } from "@noble/hashes/sha3.js";
-import { bytesToHex, encodeAbiParameters, encodeEventTopics, getAddress, keccak256, toHex, type Address, type Hex } from "viem";
+import {
+  bytesToHex,
+  encodeAbiParameters,
+  encodeEventTopics,
+  getAddress,
+  isAddressEqual,
+  keccak256,
+  recoverTypedDataAddress,
+  toHex,
+  type Address,
+  type Hex,
+} from "viem";
 import type { ApiFetch } from "../api/client.js";
 import type { SendProgress, SpendQuote, SpendService } from "./spend.js";
 import type { SpendParams, SpendResult } from "@soapay/sdk";
@@ -66,8 +79,8 @@ const state: {
   world: World | null;
   names: Map<string, { label: string; registrant: Address; metaAddress: string; deadline: string }>;
   rotations: { label: string; oldMeta: string; newMeta: string; verifiedAt: string }[];
-  /** label → World ID session id (mock of the API's session binding). */
-  sessions: Map<string, string>;
+  /** label → World ID session (mock of the API's name_sessions). */
+  sessions: Map<string, { sessionId: string; attachedAt: number; via: "enroll" | "attach" }>;
   /** Invite code hashes already used. */
   claimedInvites: Set<string>;
   registered: Set<string>;
@@ -270,8 +283,39 @@ export function createMockFetch(chainId: number): ApiFetch {
       if (!sessionId || !/^session_[0-9a-f]+$/i.test(sessionId)) return err(403, "proof_missing", "worldIdResult must be an IDKit session result");
       if (state.sessions.has(label)) return err(409, "session_exists", "this name already has a World ID session");
       const attachedAt = Math.floor(Date.now() / 1000);
-      state.sessions.set(label, sessionId);
+      state.sessions.set(label, { sessionId, attachedAt, via: "attach" });
       return respond(201, { label, sessionId, attachedAt, rotationAllowedFrom: attachedAt + 72 * 3600 });
+    }
+
+    // D-64: the registrant reads its name's session id back (e.g. after a recovery-phrase restore).
+    const lookup = /^\/names\/([^/]+)\/session\/lookup$/.exec(path);
+    if (method === "POST" && lookup) {
+      const label = decodeURIComponent(lookup[1]!);
+      const row = state.names.get(label);
+      if (!row) return err(404, "not_found", "name not found");
+      const body = JSON.parse(String(init?.body ?? "{}")) as { signature?: Hex; deadline?: string };
+      if (!body.signature || !body.deadline || !/^\d+$/.test(body.deadline)) return err(400, "invalid_body", "deadline and signature are required");
+      const now = BigInt(Math.floor(Date.now() / 1000));
+      const deadline = BigInt(body.deadline);
+      if (deadline <= now) return err(400, "expired", "deadline has passed");
+      if (deadline > now + BigInt(SESSION_LOOKUP_MAX_TTL_SECONDS)) return err(400, "deadline_too_far", "deadline is too far out");
+      let signer: Address | null = null;
+      try {
+        signer = await recoverTypedDataAddress({ ...sessionLookupTypedData({ label, deadline, chainId }), signature: body.signature });
+      } catch {
+        // malformed signature
+      }
+      if (!signer || !isAddressEqual(signer, row.registrant)) {
+        return err(401, "bad_signature", "SessionLookup signature does not recover to the name's registrant");
+      }
+      const bound = state.sessions.get(label);
+      if (!bound) return err(404, "no_session", "this name has no World ID session");
+      return respond(200, {
+        label,
+        sessionId: bound.sessionId,
+        attachedAt: bound.attachedAt,
+        rotationAllowedFrom: bound.attachedAt + (bound.via === "attach" ? 72 * 3600 : 0),
+      });
     }
 
     const rotation = /^\/names\/([^/]+)\/rotation$/.exec(path);
@@ -291,7 +335,7 @@ export function createMockFetch(chainId: number): ApiFetch {
       }
       const bound = state.sessions.get(label);
       if (!bound) return err(409, "no_session", "this name has no World ID session; the employer must approve changes");
-      if (body.worldIdResult?.session_id !== bound) return err(403, "session_mismatch", "not the session enrolled for this name");
+      if (body.worldIdResult?.session_id !== bound.sessionId) return err(403, "session_mismatch", "not the session enrolled for this name");
       if (BigInt(body.deadline) <= BigInt(Math.floor(Date.now() / 1000))) return err(400, "expired", "deadline has passed");
       const oldMeta = row.metaAddress.toLowerCase();
       const newMeta = body.newMeta.toLowerCase();
@@ -343,7 +387,7 @@ export function createMockFetch(chainId: number): ApiFetch {
           return respond(200, present({ label, registrant: MOCK_SPAMMER, metaAddress: "st:eth:0x", deadline: "0" }));
         }
         const row = state.names.get(label);
-        return row ? respond(200, present(row)) : err(404, "not_found", "name not found");
+        return row ? respond(200, present(row, state.sessions.get(label))) : err(404, "not_found", "name not found");
       }
       if (method === "POST" && !nameMatch[1]) {
         const body = JSON.parse(String(init?.body ?? "{}")) as {
@@ -362,6 +406,9 @@ export function createMockFetch(chainId: number): ApiFetch {
         if (existing && existing.registrant.toLowerCase() !== body.registrant.toLowerCase()) {
           return err(409, "label_taken", "label is already taken");
         }
+        if (existing && body.worldIdSession) {
+          return err(400, "use_session_route", "attach a session to an existing name with POST /names/:label/session");
+        }
         const row = { label: body.label, registrant: body.registrant, metaAddress: body.metaAddress, deadline: body.deadline };
         const reserved = Object.values(MOCK_INVITES).find((i) => i.label === body.label);
         if (reserved && !state.claimedInvites.has(keccak256(reserved.code).toLowerCase())) {
@@ -371,17 +418,20 @@ export function createMockFetch(chainId: number): ApiFetch {
           state.claimedInvites.add(keccak256(reserved.code).toLowerCase());
         }
         state.names.set(body.label, row);
-        if (body.worldIdSession?.session_id) state.sessions.set(body.label, body.worldIdSession.session_id);
-        return respond(201, present(row));
+        if (body.worldIdSession?.session_id) {
+          state.sessions.set(body.label, { sessionId: body.worldIdSession.session_id, attachedAt: Math.floor(Date.now() / 1000), via: "enroll" });
+        }
+        return respond(existing ? 200 : 201, present(row, state.sessions.get(body.label)));
       }
     }
     return err(404, "not_found", "Route not found");
   };
 }
 
-function present(row: { label: string; registrant: Address; metaAddress: string; deadline: string }) {
+function present(row: { label: string; registrant: Address; metaAddress: string; deadline: string }, session?: { attachedAt: number }) {
   const now = new Date().toISOString();
-  return { ...row, name: `${row.label}.soapay.eth`, txHash: null, createdAt: now, updatedAt: now };
+  // Like the API: whether a session backs the name, never the session id.
+  return { ...row, name: `${row.label}.soapay.eth`, txHash: null, createdAt: now, updatedAt: now, worldIdSession: session ? { attachedAt: session.attachedAt } : null };
 }
 
 const ANNOUNCER: Address = "0x55649E01B5Df198D18D95b5cc5051630cfD45564";

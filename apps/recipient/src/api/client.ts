@@ -2,6 +2,7 @@
  * Soapay API client (docs/mvp-spec.md §4). Only public data and signatures go over the wire: the
  * registrant signs locally, the relayer submits. Spending and viewing keys are never sent.
  */
+import type { SessionLookupResult } from "@soapay/sdk";
 import type { Address, Hex } from "viem";
 
 export type ApiFetch = (input: string, init?: RequestInit) => Promise<Response>;
@@ -65,6 +66,14 @@ export type AttachSessionResult = {
   rotationAllowedFrom: number;
 };
 
+/**
+ * POST /names/:label/session/lookup (D-64): the registrant reads back the World ID session id linked
+ * to its name, e.g. after restoring from the recovery phrase. `signature` is the registrant's EIP-712
+ * SessionLookup (SDK `signSessionLookup`).
+ */
+export type SessionLookupBody = { deadline: string; signature: Hex };
+export type { SessionLookupResult } from "@soapay/sdk";
+
 /** POST /names/:label/rotation (docs/mvp-spec.md §2.1). */
 export type RotationBody = {
   newMeta: string;
@@ -100,6 +109,8 @@ export type NameRecord = {
   txHash: Hex | null;
   createdAt: string | number;
   updatedAt: string | number;
+  /** Whether a World ID session backs rotations of this name (the API never serves the id here). */
+  worldIdSession?: { attachedAt: number } | null;
 };
 
 function base(apiUrl: string): string {
@@ -149,6 +160,15 @@ export function createApi(apiUrl: string, fetchFn: ApiFetch = (i, init) => fetch
     claimName: (body: NameClaimBody) => call<NameRecord>(fetchFn, `${root}/names`, json(body)),
     attachSession: (label: string, body: AttachSessionBody) =>
       call<AttachSessionResult>(fetchFn, `${root}/names/${encodeURIComponent(label)}/session`, json(body)),
+    /** null when the name has no World ID session (404 no_session). */
+    async lookupSession(label: string, body: SessionLookupBody): Promise<SessionLookupResult | null> {
+      try {
+        return await call<SessionLookupResult>(fetchFn, `${root}/names/${encodeURIComponent(label)}/session/lookup`, json(body));
+      } catch (e) {
+        if (e instanceof ApiError && e.code === "no_session") return null;
+        throw e;
+      }
+    },
     rotate: (label: string, body: RotationBody) =>
       call<RotationResult>(fetchFn, `${root}/names/${encodeURIComponent(label)}/rotation`, json(body)),
     /** The API's current wait (seconds) before a late-linked World ID session can back a rotation; null if unknown. */

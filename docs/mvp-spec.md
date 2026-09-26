@@ -118,7 +118,9 @@ Name claim, EIP-712 (`metaAddress` is signed in canonical lowercase `st:eth:0x�
 | `POST /register` | `{registrant, metaAddress, signature}` → simulate, then send `registerKeysOnBehalf` from `RELAYER_PRIVATE_KEY` → `{txHash}`. Rate limit per IP and registrant; refuse if the registry already holds the same meta-address. |
 | `POST /relay` | CK's M1 shape `{registrant, schemeId: 1, stealthMetaAddress, signature}` → `{txHash}` \| `{error}`, through the same relayer path as `/register`. |
 | `POST /names` | `{label, registrant, metaAddress, deadline, signature}` → verify the EIP-712 NameClaim, check `stealthMetaAddressOf(registrant,1) == metaAddress`, check the label is free and valid (`[a-z0-9-]{3,32}`) → store |
-| `GET /names/:label` | Public record, for debugging |
+| `GET /names/:label` | Public record, for debugging. Says whether a World ID session backs the name (`worldIdSession: {attachedAt}`), never the session id |
+| `POST /names/:label/session` | `{deadline, signature, worldIdResult}`: attach a World ID session to a name claimed without one; `signature` is the registrant's EIP-712 AttachSession (§5, docs/worldid.md) |
+| `POST /names/:label/session/lookup` | `{deadline, signature}` → `{label, sessionId, attachedAt, rotationAllowedFrom}`: the registrant reads back the name's World ID session id (EIP-712 `SessionLookup(string label, uint256 deadline)`, "Soapay Names" domain; deadline ≤ 1 h ahead; rate-limited per IP). `404 no_session` when none. Lets an account restored from its recovery phrase keep World ID rotation (D-64) |
 | `GET /announcements?from=&to=&cursor=` | All Announcer events, scheme 1, paginated. The indexer backfills from `ERC5564_StartBlocks` in chunks, then polls the tip. No filtering by recipient. |
 
 `POST /register` and `POST /names` call a pluggable `HumanVerifier` (World ID, §5) and `POST /names` calls a pluggable `NameIssuer` (ENSv2, §2).

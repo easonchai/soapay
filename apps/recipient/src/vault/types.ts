@@ -96,6 +96,10 @@ export type Profile = {
     attachedTo?: string;
     /** Unix seconds. Set for a session attached after the claim: the API's cooldown (72 h by default). */
     rotationAllowedFrom?: number;
+    /** Read back from the API after a recovery-phrase restore (D-64), not linked on this device. */
+    restored?: boolean;
+    /** Name settings has shown "World ID link restored" (it's shown once). */
+    restoredNoticeShown?: boolean;
   };
   /** The user chose not to set up recovery during onboarding. */
   recoverySkipped?: boolean;

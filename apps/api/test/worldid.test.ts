@@ -1,6 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import { getAddress, verifyTypedData, type Address, type Hash, type Hex, type PrivateKeyAccount } from "viem";
-import { attachSessionTypedData, nameClaimTypedData, rotationClaimTypedData, rotationSignal, sessionSignal, worldIdSignalHash } from "@soapay/sdk";
+import {
+  attachSessionTypedData,
+  nameClaimTypedData,
+  rotationClaimTypedData,
+  rotationSignal,
+  sessionLookupTypedData,
+  sessionSignal,
+  worldIdSignalHash,
+} from "@soapay/sdk";
 import { hashSignal } from "@worldcoin/idkit-core/hashing";
 import type { Fetch } from "../src/worldid/portal.js";
 import { topUpRegistrant, type L1Funder } from "../src/topup.js";
@@ -291,6 +299,98 @@ describe("POST /names/:label/session (attach later)", () => {
     expect((await j(early)).error.code).toBe("session_cooldown");
     t.setNow(NOW + 259_200);
     expect((await rotate(t, await rotationBody(t, { deadline: BigInt(NOW + 259_200 + 600) }))).status).toBe(201);
+  });
+});
+
+describe("POST /names/:label/session/lookup (D-64: restore after a recovery-phrase restore)", () => {
+  async function lookupBody(o: { signer?: PrivateKeyAccount; label?: string; deadline?: bigint } = {}) {
+    const deadline = o.deadline ?? BigInt(NOW + 600);
+    const signature = await (o.signer ?? registrant).signTypedData(
+      sessionLookupTypedData({ label: o.label ?? "alice", deadline, chainId: CHAIN_ID }),
+    );
+    return { deadline: deadline.toString(), signature };
+  }
+  const lookup = (t: T, body: unknown, label = "alice") => t.post(`/names/${label}/session/lookup`, body);
+
+  it("returns the enrolled session id to the registrant, with no cooldown and no World ID call", async () => {
+    const t = setup();
+    await enrollWithSession(t);
+    const calls = t.portal.calls.length;
+    const res = await lookup(t, await lookupBody());
+    expect(res.status).toBe(200);
+    expect(await j(res)).toEqual({ label: "alice", sessionId: SESSION_A, attachedAt: NOW, rotationAllowedFrom: NOW });
+    expect(t.portal.calls).toHaveLength(calls);
+    // The public record still never serves it.
+    expect(JSON.stringify(await j(await t.app.request("/names/alice")))).not.toContain(SESSION_A);
+  });
+
+  it("reports the attach cooldown for a session linked after the claim", async () => {
+    const t = setup();
+    await t.post("/names", await claimBody());
+    const deadline = BigInt(NOW + 600);
+    const signature = await registrant.signTypedData(attachSessionTypedData({ label: "alice", sessionId: SESSION_B, deadline, chainId: CHAIN_ID }));
+    const attach = await t.post("/names/alice/session", {
+      deadline: deadline.toString(),
+      signature,
+      worldIdResult: sessionResult({ nonce: await t.rpNonce(), signal: sessionSignal("alice", registrant.address), sessionId: SESSION_B }),
+    });
+    expect(attach.status).toBe(201);
+    t.setNow(NOW + 100);
+    const res = await lookup(t, await lookupBody({ deadline: BigInt(NOW + 700) }));
+    expect(await j(res)).toEqual({ label: "alice", sessionId: SESSION_B, attachedAt: NOW, rotationAllowedFrom: NOW + 259_200 });
+  });
+
+  it("refuses a signature by anyone but the registrant", async () => {
+    const t = setup();
+    await enrollWithSession(t);
+    await expectCode(lookup(t, await lookupBody({ signer: other })), 401, "bad_signature");
+    // A SessionLookup for another label doesn't carry over.
+    await expectCode(lookup(t, await lookupBody({ label: "bob" })), 401, "bad_signature");
+    // Nor does another signature type over the same domain (an AttachSession).
+    const deadline = BigInt(NOW + 600);
+    const attachSig = await registrant.signTypedData(attachSessionTypedData({ label: "alice", sessionId: SESSION_A, deadline, chainId: CHAIN_ID }));
+    await expectCode(lookup(t, { deadline: deadline.toString(), signature: attachSig }), 401, "bad_signature");
+  });
+
+  it("refuses an expired deadline and one too far out", async () => {
+    const t = setup();
+    await enrollWithSession(t);
+    await expectCode(lookup(t, await lookupBody({ deadline: BigInt(NOW) })), 400, "expired");
+    await expectCode(lookup(t, await lookupBody({ deadline: BigInt(NOW + 3_601) })), 400, "deadline_too_far");
+    expect((await lookup(t, await lookupBody({ deadline: BigInt(NOW + 3_600) }))).status).toBe(200);
+  });
+
+  it("404s no_session for a name without a session (or a D-58 nullifier-only link), not_found for no name", async () => {
+    const t = setup();
+    await t.post("/names", await claimBody());
+    await expectCode(lookup(t, await lookupBody()), 404, "no_session");
+    t.db.prepare("INSERT INTO name_sessions (label, session_id, nullifier, attached_at, via) VALUES ('alice', NULL, '123', ?, 'enroll')").run(NOW);
+    await expectCode(lookup(t, await lookupBody()), 404, "no_session");
+    await expectCode(lookup(t, await lookupBody({ label: "carol" }), "carol"), 404, "not_found");
+  });
+
+  it("is rate-limited per IP", async () => {
+    const t = setup({ env: { RATE_LIMIT_NAMES_PER_IP: "2" } });
+    await enrollWithSession(t);
+    const body = await lookupBody();
+    expect((await lookup(t, body)).status).toBe(200);
+    expect((await lookup(t, body)).status).toBe(200);
+    expect((await lookup(t, body)).status).toBe(429);
+    t.setIp("10.0.0.9");
+    expect((await lookup(t, body)).status).toBe(200);
+  });
+
+  it("still works with World ID disabled (the link is read from the database)", async () => {
+    const t = setup();
+    await enrollWithSession(t);
+    const off = makeTestApp({ env: { WORLD_ID_DISABLED: "true" } });
+    // Same database contents: copy the rows the lookup needs.
+    const name = t.db.prepare("SELECT * FROM names WHERE label = 'alice'").get() as Record<string, unknown>;
+    off.db.prepare(`INSERT INTO names (${Object.keys(name).join(",")}) VALUES (${Object.keys(name).map(() => "?").join(",")})`).run(...(Object.values(name) as never[]));
+    off.db.prepare("INSERT INTO name_sessions (label, session_id, nullifier, attached_at, via) VALUES ('alice', ?, NULL, ?, 'enroll')").run(SESSION_A, NOW);
+    const res = await off.post("/names/alice/session/lookup", await lookupBody());
+    expect(res.status).toBe(200);
+    expect((await j(res)).sessionId).toBe(SESSION_A);
   });
 });
 

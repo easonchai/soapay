@@ -2,7 +2,7 @@ import { useEffect, useMemo, useReducer, useRef, useState, type FormEvent, type 
 import { REGISTRY_ADDRESS, generateMnemonic, getChainConfig, validateMnemonic } from "@soapay/sdk";
 import { Lockup, Steps, TopBar } from "@soapay/ui";
 import { CheckCircle2, Download, Eye, FileText, Loader2, ShieldAlert } from "lucide-react";
-import { createPublicClient, http } from "viem";
+import { createPublicClient, http, isAddressEqual } from "viem";
 import { chainName } from "../config.js";
 import { demoEoaWallet, demoSmartWallet, deriveWalletKeys, injectedKeyWallet, injectedProvider, type KeyWallet } from "./walletKeys.js";
 import { useServices } from "../services/ServicesProvider.js";
@@ -16,7 +16,9 @@ import { initialState, progressOf, reduce, resumeState, words, type OnboardingSt
 import { downloadText, parseRecoveryKit, readFileText, recoveryKitFilename, recoveryKitText } from "./recoveryKit.js";
 import { useLabelAvailability } from "./useLabelAvailability.js";
 import { useInvite } from "../hooks/useInvite.js";
-import { settingsOf, type KeySecret } from "../vault/types.js";
+import { settingsOf, type KeySecret, type Profile } from "../vault/types.js";
+import { attachSession } from "../features/recovery/attach.js";
+import { fetchLinkedSession } from "../features/recovery/restore.js";
 import { withInvitePayer } from "./invite.js";
 
 /** "Invited by <org>", or why the invite can't be used. Renders nothing without an invite link. */
@@ -645,34 +647,87 @@ function PassphraseStep({
   );
 }
 
+/**
+ * Where the chosen label stands at the API (D-64): `new` (claim it, optionally with a World ID session),
+ * `yours` (already this registrant's, e.g. after a recovery-phrase restore; a session is attached
+ * after the claim), or `linked` (yours and the API already has its World ID session: read it back
+ * instead of linking again, which the API would refuse).
+ */
+type LabelStanding = "checking" | "new" | "yours" | "linked";
+
 function RecoveryStep({ label, inviteCode, dispatch, headingRef }: { label: string; inviteCode?: `0x${string}` | undefined } & Omit<StepProps, "state">) {
   const vault = useVault();
   const invite = useInvite();
   const svc = useServices();
   const keys = vault.keys!;
+  const chainId = svc.settings.chainId;
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [standing, setStanding] = useState<LabelStanding>("checking");
 
-  /** Claims the name, with the World ID session when there is one. */
+  useEffect(() => {
+    let live = true;
+    svc.api.getName(label).then(
+      (rec) => {
+        if (!live) return;
+        const mine = rec !== null && isAddressEqual(rec.registrant, keys.registrantAddress);
+        setStanding(!mine ? "new" : rec.worldIdSession ? "linked" : "yours");
+      },
+      // Can't tell: behave as before (a claim still works; the API refuses anything it shouldn't).
+      () => live && setStanding("new"),
+    );
+    return () => {
+      live = false;
+    };
+  }, [svc.api, label, keys.registrantAddress]);
+
+  /** Claims the name, then links or restores World ID recovery as `standing` requires. */
   const claim = async (session: HumanCheckResult | undefined) => {
     setBusy(true);
     setError(null);
     try {
-      const rec = await claimName({ api: svc.api, keys, chainId: svc.settings.chainId, label, session, inviteCode });
-      const sessionId = sessionIdOf(session);
+      // A retry after the claim landed (e.g. the attach below failed) doesn't claim again.
+      const claimed = vault.data?.profile.name?.label === label;
+      const rec = claimed
+        ? null
+        : await claimName({ api: svc.api, keys, chainId, label, session: standing === "new" ? session : undefined, inviteCode });
       // The inviting employer becomes a known payer (its payroll isn't "Unknown payer").
       const inv = invite.state.kind === "pending" && inviteCode && invite.state.code === inviteCode ? invite.state : null;
-      await vault.update((d) => ({
-        ...d,
-        ...(inv ? { settings: withInvitePayer(settingsOf(d), inv) } : {}),
-        profile: {
-          ...d.profile,
-          name: { label, name: rec.name ?? fullName(label), at: Date.now() },
-          ...(sessionId
-            ? { recovery: { kind: "world-id" as const, at: Date.now(), sessionId, attachedTo: label } }
-            : { recoverySkipped: true }),
-        },
-      }));
+      const saveName = (extra: Partial<Profile>) =>
+        vault.update((d) => ({
+          ...d,
+          ...(inv ? { settings: withInvitePayer(settingsOf(d), inv) } : {}),
+          profile: {
+            ...d.profile,
+            name: d.profile.name?.label === label ? d.profile.name : { label, name: rec?.name ?? fullName(label), at: Date.now() },
+            ...extra,
+          },
+        }));
+
+      let extra: Partial<Profile>;
+      if (standing === "linked") {
+        // Read the existing session back (D-64). If that fails, Layout/Name settings retry later.
+        const recovery = await fetchLinkedSession({
+          api: svc.api,
+          chainId,
+          label,
+          registrant: keys.registrantAddress,
+          registrantKey: keys.registrantKey,
+        }).catch(() => null);
+        extra = recovery ? { recovery, recoverySkipped: false } : {};
+      } else if (session && standing === "yours") {
+        // POST /names refuses a session for an existing name: attach it after the claim instead.
+        await saveName({});
+        const res = await attachSession({ api: svc.api, chainId, label, result: session, registrantKey: keys.registrantKey });
+        extra = {
+          recovery: { kind: "world-id", at: Date.now(), sessionId: res.sessionId, attachedTo: label, rotationAllowedFrom: res.rotationAllowedFrom },
+          recoverySkipped: false,
+        };
+      } else {
+        const sessionId = sessionIdOf(session);
+        extra = sessionId ? { recovery: { kind: "world-id", at: Date.now(), sessionId, attachedTo: label } } : { recoverySkipped: true };
+      }
+      await saveName(extra);
       if (inviteCode) invite.dismiss();
       dispatch({ type: "NAMED" });
     } catch (e) {
@@ -681,6 +736,39 @@ function RecoveryStep({ label, inviteCode, dispatch, headingRef }: { label: stri
       setBusy(false);
     }
   };
+
+  const progress = busy && (
+    <p className="hint" role="status" data-testid="claim-progress">
+      {standing === "linked" ? `Restoring ${fullName(label)}…` : `Creating ${fullName(label)} on Ethereum. This takes about 15 seconds while the transactions are mined.`}
+    </p>
+  );
+  const errorAlert = error && (
+    <Alert variant="destructive" title="That didn't work">
+      {error}
+    </Alert>
+  );
+
+  if (standing === "linked") {
+    return (
+      <Frame
+        headingRef={headingRef}
+        onBack={() => dispatch({ type: "BACK" })}
+        title="Restore your name"
+        lead={
+          <>
+            <span className="font-mono">{fullName(label)}</span> is already yours, and World ID recovery is linked to it. We'll restore that link on
+            this device. No new World ID check is needed.
+          </>
+        }
+      >
+        {errorAlert}
+        <Button size="lg" className="w-full" onClick={() => void claim(undefined)} loading={busy} data-testid="restore-name">
+          Restore {fullName(label)}
+        </Button>
+        {progress}
+      </Frame>
+    );
+  }
 
   return (
     <Frame
@@ -694,18 +782,20 @@ function RecoveryStep({ label, inviteCode, dispatch, headingRef }: { label: stri
         </>
       }
     >
-      <HumanCheck
-        mode="create-session"
-        apiUrl={svc.settings.apiUrl}
-        signal={sessionSignal(label, keys.registrantAddress)}
-        onError={(e) => setError(errorMessage(e))}
-        onResult={(r) => claim(r)}
-      />
-      {error && (
-        <Alert variant="destructive" title="That didn't work">
-          {error}
-        </Alert>
+      {standing === "checking" ? (
+        <p className="hint" role="status" data-testid="name-standing-checking">
+          <Loader2 className="mr-1 inline size-3 animate-spin" aria-hidden /> Checking {fullName(label)}…
+        </p>
+      ) : (
+        <HumanCheck
+          mode="create-session"
+          apiUrl={svc.settings.apiUrl}
+          signal={sessionSignal(label, keys.registrantAddress)}
+          onError={(e) => setError(errorMessage(e))}
+          onResult={(r) => claim(r)}
+        />
       )}
+      {errorAlert}
       <Alert variant="info">
         Without it you can still change keys later, but your employer has to approve the change by hand before paying you again. You can
         also add World ID later from Name settings (it then needs 72 hours before it can back a key change).
@@ -713,11 +803,7 @@ function RecoveryStep({ label, inviteCode, dispatch, headingRef }: { label: stri
       <Button variant="ghost" className="w-full" onClick={() => void claim(undefined)} loading={busy}>
         Skip and claim {fullName(label)}
       </Button>
-      {busy && (
-        <p className="hint" role="status" data-testid="claim-progress">
-          Creating {fullName(label)} on Ethereum. This takes about 15 seconds while the transactions are mined.
-        </p>
-      )}
+      {progress}
     </Frame>
   );
 }

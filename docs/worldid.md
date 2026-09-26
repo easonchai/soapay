@@ -2,7 +2,7 @@
 
 Soapay uses World ID 4.0 (IDKit 4.3) at **one trust moment: account recovery (key rotation)**, with the **Proof of Human** credential, in a **World ID session**. A name's meta-address decides where future salary goes. When an employee changes it, World ID lets the payer's app accept the change automatically, because the same person who set up the name has confirmed it.
 
-Spec: `docs/mvp-spec.md` §2.1 (rotation, formats) and §5 (World ID). Code: `apps/api/src/worldid/`, `apps/api/src/routes/rotation.ts`, `packages/sdk/src/rotation.ts`, `packages/worldid-react`. Decisions: D-13, D-16, D-54, D-57, D-58 (a detour, superseded), **D-59** (the current mechanism).
+Spec: `docs/mvp-spec.md` §2.1 (rotation, formats) and §5 (World ID). Code: `apps/api/src/worldid/`, `apps/api/src/routes/rotation.ts`, `packages/sdk/src/rotation.ts`, `packages/worldid-react`. Decisions: D-13, D-16, D-54, D-57, D-58 (a detour, superseded), **D-59** (the current mechanism), D-64 (restoring the link after a phrase restore).
 
 ## How it works (D-59)
 
@@ -69,6 +69,24 @@ Nothing in Soapay depends on World ID being available. It only decides whether a
 `scripts/demo-attacker.ts` (D-55) plays the thief with a stolen recovery phrase. It derives the victim's registrant key, rewrites the victim's `stealth` record on its own PermissionedResolver (and the ERC-6538 entry on Base, so the name still resolves cleanly), then asks `POST /names/:label/rotation` for an attestation with a valid `RotationClaim` signature but no World ID proof. The API refuses (`409 no_session` for a name without a session; `403 proof_missing` for one with a session; a proof of the thief's own session gets `403 session_mismatch`), so the sender app's pin check blocks the line. `scripts/demo-recovery-check.ts` asserts the whole path live: pin → attack → **blocked, attestation `missing`** (SDK `checkMetaPin`) and `soapay distribute` exit 3 → restore. Run on 2026-09-26: docs/testnet-deployment.md, "Recovery beat". Stage steps: docs/demo-flow.md, section 7 ("Recovery: the real World ID moment").
 
 What it shows, and what it doesn't: World ID protects **future** salary, because the payer follows a record change only with the same person's session proof. A stolen phrase still controls funds already received; the recovery kit's safety (keep the phrase offline, move funds and rotate on any suspicion) covers that.
+
+## Restoring from the recovery phrase (D-64)
+
+The recovery phrase recreates every key, including the registrant key, but not the vault, and the vault is where the app kept the World ID `sessionId`. `IDKit.proveSession` needs that id, so before D-64 a restored account silently lost World ID recovery: its rotations fell back to the employer's manual approval, and linking again was refused (`409 session_exists`, a name keeps its first session).
+
+The API still has the id, so the registrant reads it back:
+
+- `POST /names/:label/session/lookup` with `{deadline, signature}`, where `signature` is the name's registrant signing the EIP-712 `SessionLookup(string label, uint256 deadline)` in the same "Soapay Names" domain as NameClaim / AttachSession (SDK `sessionLookupTypedData`, `signSessionLookup`).
+- The API checks the name exists, the signer is its registrant, and the deadline is in the future and at most `SESSION_LOOKUP_MAX_TTL_SECONDS` (1 h) away; the app signs for 10 minutes. It is rate-limited per IP like the other name routes (`RATE_LIMIT_NAMES_PER_IP`).
+- It answers `{label, sessionId, attachedAt, rotationAllowedFrom}` (`attachedAt` for a session created with the name, plus the current `WORLD_ATTACH_COOLDOWN_SECONDS` for one attached later), or `404 no_session` (including a D-58 nullifier-only link). It works with World ID disabled, because it only reads `name_sessions`.
+- `GET /names/:label` is unchanged: it says whether a session exists (`worldIdSession: {attachedAt}`), never which. Serving the id publicly would show which names share one human.
+
+In the recipient app:
+
+- **Onboarding.** When the name step finds the label "already yours" and the API shows a session, the recovery step becomes "Restore your name": it re-claims the name without a World ID session (a second link would be refused) and stores the looked-up session. For a name that is yours but has no session, a World ID session made there is attached after the claim (`POST /names/:label/session`, with its cooldown), because `POST /names` refuses a session for an existing name.
+- **Self-heal.** On every unlock (the app shell) and in Name settings, a claimed name whose session id isn't in the vault is checked against `GET /names/:label`; if a session backs it, the app looks it up and stores `recovery: {kind: "world-id", at: attachedAt*1000, sessionId, attachedTo: label, rotationAllowedFrom, restored: true}`. Name settings then shows "World ID link restored" once.
+
+A stolen registrant key can read the session id too. That gives the thief nothing: proving the session still takes the employee's own World ID.
 
 ## Sequences
 
@@ -155,7 +173,7 @@ sequenceDiagram
 
 ## What we store
 
-Per name: the World ID **`session_id`** it's linked to, when, and how (`enroll` or `attach`), in `name_sessions`. The table still has D-58's `nullifier` column (migrations are append-only); it's unused, and a row with only a nullifier counts as unlinked. Per proof: its `session_nullifier`, so it can't be replayed. Globally: every RP nonce we signed, its `bind` signal and when a proof used it (pruned a day after expiry). Per rotation: the attestation, with the proof's session nullifier. We never store or see identity, and the session id is never served by `GET /names/:label`.
+Per name: the World ID **`session_id`** it's linked to, when, and how (`enroll` or `attach`), in `name_sessions`. The table still has D-58's `nullifier` column (migrations are append-only); it's unused, and a row with only a nullifier counts as unlinked. Per proof: its `session_nullifier`, so it can't be replayed. Globally: every RP nonce we signed, its `bind` signal and when a proof used it (pruned a day after expiry). Per rotation: the attestation, with the proof's session nullifier. We never store or see identity, and the session id is never served by `GET /names/:label`; only the name's registrant can read it back, with a signed `SessionLookup` (D-64).
 
 ## Integration debrief
 
