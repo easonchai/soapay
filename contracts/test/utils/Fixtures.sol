@@ -69,35 +69,78 @@ abstract contract Fixtures is Test {
         }
     }
 
-    function _ephemeralKey(uint256 seed) internal pure returns (bytes memory) {
-        bytes32 x = keccak256(abi.encode("eph", seed));
-        return abi.encodePacked(seed % 2 == 0 ? bytes1(0x02) : bytes1(0x03), x);
+    /// @dev Unpacked view of one line, for building batches and asserting on them.
+    struct Line {
+        address stealthAddress;
+        uint256 amount;
+        bytes1 viewTag;
+        bytes1 keyPrefix;
+        bytes32 keyX;
     }
 
-    function _viewTag(uint256 seed) internal pure returns (bytes1) {
-        return bytes1(uint8(uint256(keccak256(abi.encode("tag", seed)))));
+    /// @dev Reference encoder, same formula as the SDK's `encodeHead` (docs/mvp-spec.md §1).
+    function _encodeHead(address stealth, uint256 amount, bytes1 viewTag, bytes1 keyPrefix)
+        internal
+        pure
+        returns (uint256)
+    {
+        require(amount < 2 ** 80, "amount >= 2^80");
+        return (uint256(uint160(stealth)) << 96) | (amount << 16) | (uint256(uint8(viewTag)) << 8)
+            | uint256(uint8(keyPrefix));
+    }
+
+    function _pack(Line memory l) internal pure returns (StealthDisperse.PackedPayment memory) {
+        return StealthDisperse.PackedPayment(_encodeHead(l.stealthAddress, l.amount, l.viewTag, l.keyPrefix), l.keyX);
+    }
+
+    function _pack(Line[] memory ls) internal pure returns (StealthDisperse.PackedPayment[] memory ps) {
+        ps = new StealthDisperse.PackedPayment[](ls.length);
+        for (uint256 i; i < ls.length; ++i) {
+            ps[i] = _pack(ls[i]);
+        }
+    }
+
+    /// @dev The 33-byte compressed key the contract passes to announce().
+    function _ephemeralKey(Line memory l) internal pure returns (bytes memory) {
+        return abi.encodePacked(l.keyPrefix, l.keyX);
+    }
+
+    function _line(address stealth, uint256 amount, uint256 seed) internal pure returns (Line memory) {
+        return Line(
+            stealth,
+            amount,
+            bytes1(uint8(uint256(keccak256(abi.encode("tag", seed))))),
+            seed % 2 == 0 ? bytes1(0x02) : bytes1(0x03),
+            keccak256(abi.encode("eph", seed))
+        );
+    }
+
+    /// @dev `n` valid ascending lines. `amountEach == 0` means pseudo-random amounts in [1, 1e12].
+    function _lines(uint256 n, uint256 seed, uint256 amountEach)
+        internal
+        pure
+        returns (Line[] memory ls, uint256 total)
+    {
+        address[] memory addrs = _sortedAddresses(n, seed);
+        ls = new Line[](n);
+        for (uint256 i; i < n; ++i) {
+            uint256 amt = amountEach == 0 ? 1 + (uint256(keccak256(abi.encode("amt", seed, i))) % 1e12) : amountEach;
+            ls[i] = _line(addrs[i], amt, uint256(keccak256(abi.encode(seed, i))));
+            total += amt;
+        }
     }
 
     function _batch(uint256 n, uint256 seed, uint256 amountEach)
         internal
         pure
-        returns (StealthDisperse.Payment[] memory ps, uint256 total)
+        returns (StealthDisperse.PackedPayment[] memory ps, uint256 total)
     {
-        address[] memory addrs = _sortedAddresses(n, seed);
-        ps = new StealthDisperse.Payment[](n);
-        for (uint256 i; i < n; ++i) {
-            uint256 amt = amountEach == 0 ? 1 + (uint256(keccak256(abi.encode("amt", seed, i))) % 1e12) : amountEach;
-            uint256 lineSeed = uint256(keccak256(abi.encode(seed, i)));
-            ps[i] = StealthDisperse.Payment(addrs[i], amt, _ephemeralKey(lineSeed), _viewTag(lineSeed));
-            total += amt;
-        }
+        Line[] memory ls;
+        (ls, total) = _lines(n, seed, amountEach);
+        ps = _pack(ls);
     }
 
-    function _expectedMetadata(address token, StealthDisperse.Payment memory p, address payer)
-        internal
-        pure
-        returns (bytes memory)
-    {
-        return abi.encodePacked(p.viewTag, bytes4(0xa9059cbb), token, p.amount, payer);
+    function _expectedMetadata(address token, Line memory l, address payer) internal pure returns (bytes memory) {
+        return abi.encodePacked(l.viewTag, bytes4(0xa9059cbb), token, l.amount, payer);
     }
 }

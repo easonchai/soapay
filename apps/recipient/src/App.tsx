@@ -1,39 +1,86 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Shell } from '@soapay/ui';
-import { createRecipientStore, browserStorage, type RecipientState } from '@soapay/sdk';
-import { chainConfig, OTHER_APP_URL } from './config.js';
-import { Wizard } from './Wizard.js';
-import { Dashboard } from './Dashboard.js';
-import { Settings } from './Settings.js';
+import { HashRouter, Navigate, Route, Routes } from "react-router";
+import { Loader2 } from "lucide-react";
+import { ScannerProvider } from "./hooks/scanner.js";
+import { InviteProvider, useInvite } from "./hooks/useInvite.js";
+import { Onboarding } from "./onboarding/Onboarding.js";
+import { Convert } from "./screens/Convert.js";
+import { Exit } from "./screens/Exit.js";
+import { ExitProvider } from "./hooks/useExit.js";
+import { QueueProvider } from "./hooks/useQueue.js";
+import { Home } from "./screens/Home.js";
+import { Labels } from "./screens/Labels.js";
+import { Layout } from "./screens/Layout.js";
+import { NameSettings } from "./screens/NameSettings.js";
+import { Settings } from "./screens/Settings.js";
+import { Spend } from "./screens/Spend.js";
+import { Unlock } from "./screens/Unlock.js";
+import { ServicesProvider } from "./services/ServicesProvider.js";
+import { Alert } from "./ui/kit.js";
+import { VaultProvider, useVault } from "./vault/VaultProvider.js";
 
-type View = 'receive' | 'settings';
+/**
+ * Vault gate: loading → onboarding (no vault / unfinished) → unlock (locked) → the app.
+ * An invite link (`#/join?code=…`) is read once by InviteProvider and followed through any of these.
+ */
+function Gate() {
+  const vault = useVault();
+  const invite = useInvite().state;
+  switch (vault.status) {
+    case "loading":
+      return (
+        <div className="grid min-h-dvh place-items-center" aria-busy>
+          <Loader2 className="size-6 animate-spin text-muted-foreground" aria-label="Loading" />
+        </div>
+      );
+    case "error":
+      return (
+        <div className="mx-auto max-w-md p-6">
+          <Alert variant="destructive" title="Can't open this browser's storage">
+            {vault.error}
+          </Alert>
+        </div>
+      );
+    case "empty":
+      return <Onboarding />;
+    case "locked":
+      return <Unlock />;
+    case "unlocked":
+      if (!vault.data?.profile.onboardedAt) return <Onboarding />;
+      // An existing account opened an invite link: unlock (above), then claim the reserved name.
+      if (invite.kind === "pending" && !vault.data.profile.name) return <Onboarding claimInvite />;
+      return (
+        <ScannerProvider>
+          <QueueProvider>
+          <ExitProvider>
+            <HashRouter>
+              <Routes>
+                <Route element={<Layout />}>
+                  <Route index element={<Home />} />
+                  <Route path="spend" element={<Spend />} />
+                  <Route path="convert" element={<Convert />} />
+                  <Route path="exit" element={<Exit />} />
+                  <Route path="labels" element={<Labels />} />
+                  <Route path="name" element={<NameSettings />} />
+                  <Route path="settings" element={<Settings />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Route>
+              </Routes>
+            </HashRouter>
+          </ExitProvider>
+          </QueueProvider>
+        </ScannerProvider>
+      );
+  }
+}
 
 export function App() {
-  const [view, setView] = useState<View>('receive');
-  const store = useMemo(() => createRecipientStore(browserStorage(), chainConfig.chainId), []);
-  const [state, setState] = useState<RecipientState | null | undefined>(undefined);
-  useEffect(() => {
-    setState(store.get());
-  }, [store]);
-
   return (
-    <Shell
-      chainName={chainConfig.chain.name}
-      tabs={[
-        { label: 'Receive', active: view === 'receive', onSelect: () => setView('receive') },
-        { label: 'Pay', href: OTHER_APP_URL },
-        { label: 'Settings', active: view === 'settings', onSelect: () => setView('settings') },
-      ]}
-    >
-      {view === 'settings' ? (
-        <Settings />
-      ) : state === undefined ? (
-        <p className="muted">Loading…</p>
-      ) : !state ? (
-        <Wizard onDone={() => setState(store.get())} />
-      ) : (
-        <Dashboard onReset={() => setState(null)} />
-      )}
-    </Shell>
+    <VaultProvider>
+      <ServicesProvider>
+        <InviteProvider>
+          <Gate />
+        </InviteProvider>
+      </ServicesProvider>
+    </VaultProvider>
   );
 }

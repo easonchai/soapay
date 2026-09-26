@@ -12,7 +12,7 @@
 
 Our first use case is **recurring payroll on Base**. Today one batch transaction shows every recipient and every amount next to each other. With Soapay, coworkers see a list of never-before-seen addresses.
 
-**Navigate:** [PRD](PRD.md) · [Threat model](#threat-model) · [How it works](#how-it-works) · [StealthDisperse plan](contracts/PLAN.md) · [PRD analysis](docs/prd-analysis.md) · [Roadmap](#roadmap) · [Getting started](#getting-started) · [Repository](#repository)
+**Navigate:** [PRD](PRD.md) · [Threat model](#threat-model) · [Privacy model](docs/privacy-model.md) · [How it works](#how-it-works) · [Uniswap](#uniswap-integration) · [StealthDisperse plan](contracts/PLAN.md) · [PRD analysis](docs/prd-analysis.md) · [Roadmap](#roadmap) · [Getting started](#getting-started) · [Repository](#repository)
 
 ## What's here
 
@@ -26,7 +26,7 @@ This is the monorepo before M1:
 
 ## Threat model
 
-The team's agreed model. Where it differs from the PRD, this model wins ([`CLAUDE.md`](CLAUDE.md#agreed-threat-model-overrides-prdmd-where-they-differ)).
+The team's agreed model. Where it differs from the PRD, this model wins ([`CLAUDE.md`](CLAUDE.md#agreed-threat-model-overrides-prdmd-where-they-differ)). Who sees what, and what is and isn't guaranteed: [`docs/privacy-model.md`](docs/privacy-model.md).
 
 | Party | Trusted? | What they must not learn |
 | --- | --- | --- |
@@ -59,6 +59,107 @@ flowchart LR
 - **Find payments.** The scanner filters Announcer events by view tag, recomputes each stealth address, and reads the real balance. It never trusts the token or amount in the metadata.
 - **Spend without linking.** A stealth address delegates to an audited 4337 account through EIP-7702 on its first spend, and a USDC paymaster pays the gas.
 
+## Uniswap integration
+
+**Convert salary in place.** An employee can turn part of a stealth address's USDC into WETH or ETH **inside that same address**. Moving funds to a "swap wallet" would link the two addresses, and a coworker who spots the link can tie a salary line to a person. So the swap runs where the money already is, and nothing leaves the address.
+
+- **One userOp per address.** The stealth address delegates to `Simple7702Account` (EIP-7702) on first use and runs one batch: exact `USDC.approve(Permit2)`, then exact `Permit2.approve(UniversalRouter)`, then the Universal Router swap, then a `BALANCE_CHECK_ERC20` floor. Both allowances end at zero.
+- **Gas in USDC.** The Circle Paymaster takes gas from the same USDC balance, so the address never needs ETH, which would itself have to come from somewhere linkable.
+- **Quotes never reveal the address** (D-27). On Base mainnet the SDK asks the Uniswap Trading API `/quote` for a **random placeholder swapper**, then re-encodes the quoted V2/V3 route itself as Universal Router 2.1.2 commands paying the stealth address; it never calls `/swap`, and a guard refuses any request containing the stealth address. On Base Sepolia (where the API times out), or without a key, it quotes on-chain with QuoterV2.
+- **Nothing pays a third party.** The SDK decodes every Universal Router command, v4 actions included, and refuses to sign if any output could go anywhere but the stealth address: a transfer, a fee portion, or a different recipient.
+- **Preferences stay local.** The conversion preference lives only in the recipient app, never in a public record ([spec §6](docs/mvp-spec.md#6-uniswap-convert-salary-in-place)).
+
+| What | Code |
+| --- | --- |
+| `quoteSwapInPlace`, `swapInPlace`, placeholder-swapper Trading API client, calldata checks | [`packages/sdk/src/swap.ts`](packages/sdk/src/swap.ts) (Trading API [L577-L840](packages/sdk/src/swap.ts#L577-L840), in-place checks [L350-L487](packages/sdk/src/swap.ts#L350-L487)) |
+| `executeFromStealth`: one 7702 userOp, any calls, gas in USDC | [`packages/sdk/src/spend.ts` L414-L497](packages/sdk/src/spend.ts#L414-L497) |
+| Base mainnet fork E2E | [`packages/sdk/test/fork.e2e.test.ts`](packages/sdk/test/fork.e2e.test.ts) |
+| Developer feedback for Uniswap | [`FEEDBACK.md`](FEEDBACK.md) |
+
+The fork E2E starts its own anvil fork of Base and plays the bundler, so it needs [Foundry](https://getfoundry.sh) but no keys. It runs a first spend (delegation plus USDC gas), USDC to WETH in place, and USDC to native ETH in place:
+
+```bash
+FORK_E2E=1 pnpm --filter @soapay/sdk vitest run test/fork.e2e.test.ts
+# optional: FORK_RPC_URL=<Base RPC>, default https://mainnet.base.org
+```
+
+With a running API that has a key, the same suite also takes a live Base mainnet `/quote` (placeholder swapper) and executes the locally built swap on the fork: `SWAP_API_URL=http://localhost:8787/uniswap FORK_E2E=1 …`. Keep the key server-side: the API proxies only `POST /uniswap/quote` with `UNISWAP_API_KEY` ([`apps/api/src/routes/uniswap.ts`](apps/api/src/routes/uniswap.ts)), so apps pass `apiUrl: "<api>/uniswap"`. Without a key the proxy answers 503 `uniswap_disabled` and the SDK falls back to the on-chain quote.
+
+## ENSv2 integration
+
+**Employees share a name, not an address.** A salary goes to `alice.soapay.eth`. The name is a real ENSv2 subname on Ethereum Sepolia, and its `stealth` text record holds Alice's stealth meta-address. The sender app resolves the name once, pins the meta-address, and derives a fresh stealth address for every payment. The name has no `addr` record, so a plain wallet can't pay a static address by mistake.
+
+ENSv2 is what makes this work without a trusted gateway. Its per-resource access control (EAC) lets us give each actor exactly one power:
+
+- **The employee controls their own record.** Each subname gets its own `PermissionedResolver`. The registrant key holds `ROLE_SET_TEXT` on the `stealth` key and nothing else, so only the employee can rotate their meta-address. Roles are per text key across the whole resolver, which is why every employee needs a separate resolver.
+- **The API can issue names and do nothing else.** Its key holds only `ROLE_REGISTRAR` on the `soapay.eth` subname registry. It can't edit or revoke existing names.
+- **Names are non-transferable and revocable.** The subname token carries an empty role bitmap. The company, which owns `soapay.eth`, keeps `ROLE_UNREGISTER`.
+- **Records land atomically.** The resolver is deployed through the `VerifiableFactory` with its records and roles set in `initialize`, before the name is registered.
+- **Standard resolution.** viem's `getEnsText` through the ENSv2 Universal Resolver, with no custom client code.
+
+A stolen registrant key can rewrite `stealth` but can't redirect pay: the sender app accepts a changed pin only with a World ID re-verification attestation or the employer's approval ([spec §2.1](docs/mvp-spec.md#21-key-rotation-under-option-a-owner-decision-2026-09-25)).
+
+| What | Code |
+| --- | --- |
+| Addresses, roles, call builders, `createEnsV2NameIssuer` | [`packages/sdk/src/ensv2.ts`](packages/sdk/src/ensv2.ts) |
+| Deployment set, role model, exact calls, trust analysis, runbook | [`contracts/ENSV2.md`](contracts/ENSV2.md) |
+| Sepolia fork test against the live ENSv2 contracts | [`contracts/test/ENSv2Names.fork.t.sol`](contracts/test/ENSv2Names.fork.t.sol) |
+| Scripts: register the parent, set it up, issue and rotate | [`contracts/tools/ensv2-*.ts`](contracts/tools) |
+
+The fork test buys the parent through the real `ETHRegistrar`, issues a name, resolves it through the Universal Resolver, rotates the record as the registrant, checks that a coworker and the issuer can't write it, and revokes it:
+
+```bash
+cd contracts
+SEPOLIA_RPC_URL=https://ethereum-sepolia-rpc.publicnode.com forge test --match-contract ENSv2 -vv
+```
+
+The scripts run against real Sepolia or an anvil fork of it. Use fresh keys: the public anvil keys are 7702-delegated on Sepolia and can't receive ENSv2 names. Full runbook in [`contracts/ENSV2.md` §6](contracts/ENSV2.md#6-team-runbook-real-sepolia).
+
+```bash
+cd contracts
+export SEPOLIA_RPC_URL=... PARENT_OWNER_PRIVATE_KEY=0x... ISSUER_ADDRESS=0x...
+pnpm ensv2:register-parent                           # commit/reveal soapay.eth
+pnpm ensv2:setup-parent                              # subname registry + issuer role
+ISSUER_PRIVATE_KEY=0x... pnpm ensv2:issue-demo alice # issue, resolve, rotate, resolve
+```
+
+## Agents (MCP)
+
+**Agents are namespaces too.** An AI agent gets a Soapay name exactly the way an employee does: `ledger-bot.soapay.eth` is a real ENSv2 subname with its own resolver, a `stealth` record that only the agent's registrant key can rotate, and a meta-address in the ERC-6538 registry. Anyone can pay it privately by name. The agent can pay other names from its own wallet too.
+
+[`apps/mcp`](apps/mcp) is a stdio MCP server over the SDK and API. Add it to Claude Code with `claude mcp add soapay -- node /abs/path/apps/mcp/dist/index.js`:
+
+- `create_agent_identity` registers the agent and claims its name with **ENSIP-26** records: `agent-context` (what the agent does and how to pay it) and `agent-endpoint[mcp|a2a|web]`. The ENSv2 issuer writes them atomically in the resolver's `initialize`, beside `stealth`. The same `agent` field accepts **ENSIP-25** `agent-registration[registry][id]` bindings for when a registry lists the agent.
+- `pay`, `scan`, `balance`, `spend` and `swap_in_place` cover the whole flow: pay names through StealthDisperse, find payments, send them on through 7702 + a USDC paymaster, and swap in place through Uniswap.
+- **Guardrails:**
+  - every value move is a dry run, then a confirm of a single-use plan that expires in 10 minutes;
+  - per-call and per-day USDC caps;
+  - an optional payee allowlist;
+  - pinned meta-addresses;
+  - the consolidation guard's `block` can't be overridden;
+  - keys never leave the process.
+
+Live on Base Sepolia and ENSv2 Sepolia (2026-09-25): an agent created `mcp-agent-7c1e.soapay.eth` with ENSIP-26 records, received 0.3 USDC through StealthDisperse, found it with `scan`, and spent 0.1 USDC to another name through the bundler and paymaster. Details in [`apps/mcp/README.md`](apps/mcp/README.md).
+
+## World ID integration
+
+**One trust moment: key rotation.** A name's meta-address decides where future salary goes, and the registrant key can change it. When an employee sets up their name, they may create a World ID **session** with the **Selfie Check** credential. To rotate keys later, they prove that same session. The API verifies the proof and signs a `MetaRotation` attestation, and the payer's app then auto-accepts the new meta-address with a "re-verified by World ID" badge. A stolen key alone gets no attestation, so the line is blocked until the employer approves it by hand. There's no World ID gate on onboarding and no Orb requirement.
+
+- **Why Selfie Check:** rotation asks "is this the same person who enrolled?", which is continuity, not uniqueness. Sessions answer it, and the World docs recommend them for repeated verification. Proof of Human would add an Orb visit without answering it any better.
+- **Where it matters most:** pseudonymous DAO contributors. The payer has no phone number or face on file, so World ID is the only continuity signal, and it never reveals who the contributor is.
+- **Rotation also relays** the employee's ERC-6538 re-registration for the new meta-address and tops up their Sepolia gas for their own `setText`.
+
+| What | Code |
+| --- | --- |
+| Design, sequences (accepted and denied), Portal setup, debrief | [`docs/worldid.md`](docs/worldid.md) |
+| Session verification: nonce, signal, credential, environment, replay, Developer Portal | [`apps/api/src/worldid/verifier.ts`](apps/api/src/worldid/verifier.ts), [`portal.ts`](apps/api/src/worldid/portal.ts) |
+| Routes: RP context, attach session, rotation + attestation + ERC-6538 relay + top-up | [`apps/api/src/routes/worldid.ts`](apps/api/src/routes/worldid.ts), [`rotation.ts`](apps/api/src/routes/rotation.ts) |
+| Typed data (RotationClaim, MetaRotation, AttachSession) and signals | [`packages/sdk/src/rotation.ts`](packages/sdk/src/rotation.ts) |
+| `<HumanCheck mode="create-session" \| "rotate">` over `IDKitSessionWidget` | [`packages/worldid-react`](packages/worldid-react) |
+| Tests with a mocked Developer Portal | [`apps/api/test/worldid.test.ts`](apps/api/test/worldid.test.ts) |
+
+App `app_0cc7167efe114ac2e0ef7d9827098353`, RP `rp_3ede5fe1cab9af48`, `WORLD_ENV=staging` for the demo. Setup is in [`apps/api/README.md`](apps/api/README.md) and [`apps/api/.env.example`](apps/api/.env.example).
+
 ## Roadmap
 
 | Milestone | Delivers | Status |
@@ -85,7 +186,7 @@ git submodule update --init --recursive
 nvm use
 pnpm install
 pnpm build && pnpm test      # SDK tests + forge test
-pnpm dev                     # recipient :5173 · sender :5174 · gateway :8787
+pnpm dev                     # recipient :5173 · sender :5174 · api :8787
 ```
 
 Contracts:
@@ -98,7 +199,7 @@ cd contracts && pnpm derive --demo 5     # sorted Payment lines + a cast tuple
 ```
 
 > [!NOTE]
-> `@scopelift/stealth-address-sdk` can't be loaded by plain Node. The apps bundle it with Vite, the tests inline it in Vitest, the gateway bundles it with esbuild, and `derive.ts` runs under tsx.
+> `@scopelift/stealth-address-sdk` can't be loaded by plain Node. The apps bundle it with Vite, the tests inline it in Vitest, the MCP server bundles it with esbuild, and `derive.ts` runs under tsx.
 
 ## Contracts
 
@@ -117,6 +218,7 @@ Base, chain `8453`.
 | --- | --- |
 | Product requirements | [`PRD.md`](PRD.md) |
 | Threat model, design decisions, sender-app invariants | [`CLAUDE.md`](CLAUDE.md) |
+| Who sees what; guaranteed vs not guaranteed | [`docs/privacy-model.md`](docs/privacy-model.md) |
 | `StealthDisperse` spec, invariants, test matrix, deploy | [`contracts/PLAN.md`](contracts/PLAN.md) |
 | PRD review and open questions | [`docs/prd-analysis.md`](docs/prd-analysis.md) |
 | Shared decision memory | [`.claude/memory/MEMORY.md`](.claude/memory/MEMORY.md) |
@@ -125,7 +227,7 @@ Base, chain `8453`.
 ```text
 apps/recipient    Recipient app: keys, onboarding, scanner, ledger, spend
 apps/sender       Sender app: pay runs via StealthDisperse or an EIP-5792 batch
-apps/gateway      CCIP-Read gateway stub (gateway mode proposed cut)
+apps/api          Registration relayer, ENSv2 subname issuer, World ID checks, announcement indexer
 packages/sdk      @soapay/sdk: derivation, registry, announce, scan, spend
 contracts         @soapay/contracts: Foundry, StealthDisperse, tools/derive.ts
 docs              PRD analysis

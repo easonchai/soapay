@@ -1,0 +1,10 @@
+**/node_modules
+**/dist
+**/.turbo
+**/.env
+**/data
+.git
+.claude
+contracts
+apps/recipient
+apps/sender

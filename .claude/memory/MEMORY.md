@@ -1,8 +1,15 @@
-- [App stack](decision-app-stack.md) — pnpm+turbo, Vite React SPAs, Hono gateway, Foundry contracts pkg, SDK-only code paths
-- [Naming](decision-naming.md) — offchain *.soapay.eth subnames; resolve once at enrollment and pin the meta-address
+- [Build status](build-status.md) — checkpoint log of the multi-agent build; read first when resuming
+- [MVP scope](decision-mvp-scope.md) — full PRD minus gateway derivation (deferred); compliant exit IN; packed calldata; Sepolia first
+- [App stack](decision-app-stack.md) — pnpm+turbo, Vite React SPAs, Hono api, Foundry contracts pkg, SDK-only code paths
+- [Naming](decision-naming.md) — ENSv2 on-chain subnames on Sepolia, EAC-scoped stealth record; sender pins meta-address
 - [Pay-run paths](decision-atomic-batch.md) — StealthDisperse for EOAs, EIP-5792 batch for smart accounts; ≤350 lines, global sort
-- [v1 scope](decision-scope-v1.md) — USDC on Base only; seed format BIP-39 pending confirmation
-- [Gateway mode](decision-gateway-announce.md) — out of scope under the coworker threat model; announce-at-resolve dormant
+- [v1 scope](decision-scope-v1.md) — USDC on Base only; keys = recovery phrase saved as a recovery kit (D-44); no wallet-signature onboarding (D-45)
+- [Gateway mode](decision-gateway-announce.md) — DEFERRED to the roadmap (PRD tier 2); announce-at-resolve design kept for later
 - [ScopeLift ESM quirk](scopelift-sdk-esm-quirk.md) — bundle/inline/tsx the SDK; plain Node can't load it
 - [Open questions](prd-open-questions.md) — items not already tracked in CLAUDE.md or contracts/PLAN.md
-- [Frontend M1](decision-frontend-m1.md) — signature-derived keys, relayer in gateway, three sender modes, bounded scanner, UI tokens
+- [Bounties](decision-bounties.md) — ENSv2 + World IDKit + Uniswap API; Intercepta rejected (needs agents)
+- [CK's UI](team-ui-ck.md) — teammate CK builds a separate UI; keep ours simple with logic in hooks for a later merge/compare
+- [CK integration](decision-ck-integration.md) — CK's UI + our engine; keys, spend, sender-mode, backend and names decisions for the merge
+- [Privacy roadmap](decision-privacy-roadmap.md) — timing fix + swap-proxy fix; shielded rail post-hackathon (D-31); IDKit only; pre-submission order
+- [Decision log](../../docs/decision-log.md) — D-xx entries with PRD ref, decider, why, commits; trace mistakes here first
+- [Frontend M1](decision-frontend-m1.md) — CK's M1 as built (signature keys, gateway relayer, 3 sender modes); superseded by CK integration where they differ

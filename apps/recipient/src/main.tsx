@@ -1,27 +1,18 @@
-import { StrictMode, useState } from 'react';
-import { createRoot } from 'react-dom/client';
-import { WagmiProvider } from 'wagmi';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import '@soapay/ui';
-import { wagmiConfig } from './wagmi.js';
-import { KeysProvider } from './KeysProvider.js';
-import { App } from './App.js';
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import { MotionConfig } from "framer-motion";
+// Ledger design tokens, IBM Plex (self-hosted) and base styles; index.css adds layout utilities after it.
+import "@soapay/ui";
+import { App } from "./App.js";
+import "./index.css";
 
-function Root() {
-  const [qc] = useState(() => new QueryClient());
-  return (
-    <WagmiProvider config={wagmiConfig}>
-      <QueryClientProvider client={qc}>
-        <KeysProvider>
-          <App />
-        </KeysProvider>
-      </QueryClientProvider>
-    </WagmiProvider>
-  );
-}
+/** `?motion=off` disables every animation (QA, screenshots, automation), as in CK's sender. */
+const motionOff = typeof location !== "undefined" && new URLSearchParams(location.search).get("motion") === "off";
 
-createRoot(document.getElementById('root')!).render(
+createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <Root />
+    <MotionConfig reducedMotion={motionOff ? "always" : "user"}>
+      <App />
+    </MotionConfig>
   </StrictMode>,
 );

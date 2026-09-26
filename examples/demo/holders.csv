@@ -1,0 +1,8 @@
+# Revenue-share register for the Soapay demo (public data only): three people, one raw meta-address, one AI agent.
+# recipient = a soapay name (resolved on ENSv2, cross-checked against ERC-6538) or a raw meta-address.
+recipient,holdings,id
+dividend-ana.soapay.eth,4000,ana
+dividend-ben.soapay.eth,2500,ben
+dividend-cleo.soapay.eth,1500,cleo
+st:eth:0x02ac1fddee6e96a3f3864001d06e3399bb5db5c2ecd4ee7b9a3518099c5e054dfe033b80615e6ecf9c3d925d6fb0233528506066aac14bddec9f089d9e8414473755,500,dana
+invoice-agent.soapay.eth,1500,invoice-agent

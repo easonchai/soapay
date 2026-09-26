@@ -34,23 +34,24 @@ contract StealthDisperseForkTest is Fixtures {
     }
 
     function test_fork_payUSDC() public {
-        (StealthDisperse.Payment[] memory ps, uint256 total) = _batch(5, 42, 1_000e6);
-        for (uint256 i; i < ps.length; ++i) {
+        (Line[] memory ls, uint256 total) = _lines(5, 42, 1_000e6);
+        StealthDisperse.PackedPayment[] memory ps = _pack(ls);
+        for (uint256 i; i < ls.length; ++i) {
             vm.expectEmit(true, true, true, true, ANNOUNCER_ADDR);
             emit IERC5564Announcer.Announcement(
                 1,
-                ps[i].stealthAddress,
+                ls[i].stealthAddress,
                 address(disperse),
-                ps[i].ephemeralPubKey,
-                _expectedMetadata(address(USDC), ps[i], employer)
+                _ephemeralKey(ls[i]),
+                _expectedMetadata(address(USDC), ls[i], employer)
             );
         }
         uint256 before = USDC.balanceOf(employer);
         vm.prank(employer);
         disperse.pay(USDC, ps);
         assertEq(before - USDC.balanceOf(employer), total);
-        for (uint256 i; i < ps.length; ++i) {
-            assertEq(USDC.balanceOf(ps[i].stealthAddress), 1_000e6);
+        for (uint256 i; i < ls.length; ++i) {
+            assertEq(USDC.balanceOf(ls[i].stealthAddress), 1_000e6);
         }
     }
 
@@ -60,7 +61,7 @@ contract StealthDisperseForkTest is Fixtures {
         uint256 pk = 0xA11CE;
         address owner = vm.addr(pk);
         deal(address(USDC), owner, 10_000e6);
-        (StealthDisperse.Payment[] memory ps, uint256 total) = _batch(2, 77, 100e6);
+        (StealthDisperse.PackedPayment[] memory ps, uint256 total) = _batch(2, 77, 100e6);
         bytes32 structHash = keccak256(
             abi.encode(
                 keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"),
@@ -84,12 +85,18 @@ contract StealthDisperseForkTest is Fixtures {
     function test_fork_gasPerLineUSDC() public {
         uint256[3] memory sizes = [uint256(10), 100, 300];
         for (uint256 k; k < 3; ++k) {
-            (StealthDisperse.Payment[] memory ps,) = _batch(sizes[k], 1000 + k, 100e6);
+            (StealthDisperse.PackedPayment[] memory ps,) = _batch(sizes[k], 1000 + k, 100e6);
             vm.prank(employer);
             uint256 g0 = gasleft();
             disperse.pay(USDC, ps);
             uint256 exec = g0 - gasleft();
+            uint256 cd;
+            bytes memory data = abi.encodeCall(StealthDisperse.pay, (USDC, ps));
+            for (uint256 i; i < data.length; ++i) {
+                cd += data[i] == 0 ? 4 : 16;
+            }
             console.log("USDC lines", sizes[k], "exec gas/line", exec / sizes[k]);
+            console.log("  calldata gas/line", cd / sizes[k], "tx gas/line", (21_000 + cd + exec) / sizes[k]);
         }
     }
 }

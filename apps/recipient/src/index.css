@@ -1,0 +1,162 @@
+@import "tailwindcss";
+
+/*
+ * Presentation: CK's Direction A · Ledger design from @soapay/ui (imported in main.tsx; its tokens and
+ * base rules are unlayered, so they win over Tailwind's layers). Tailwind stays for layout utilities
+ * only; its colour names below point straight at the Ledger tokens, so existing `text-muted-foreground`,
+ * `bg-card`, `border` etc. render in the Ledger palette. Light only, like the rest of the Ledger system.
+ *
+ * Don't define --accent / --muted / --border here: @soapay/ui owns those names.
+ */
+@theme inline {
+  --color-background: var(--canvas);
+  --color-foreground: var(--ink);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--ink);
+  --color-muted: var(--hairline);
+  --color-muted-foreground: var(--ink2);
+  --color-primary: var(--accent);
+  --color-primary-foreground: #fff;
+  --color-secondary: var(--canvas);
+  --color-secondary-foreground: var(--ink);
+  --color-accent: var(--accent-soft);
+  --color-accent-foreground: var(--st-received-fg);
+  --color-destructive: var(--danger);
+  --color-destructive-foreground: #fff;
+  --color-warning: var(--st-warning-fg);
+  --color-warning-bg: var(--st-warning-bg);
+  --color-success: var(--st-ready-fg);
+  --color-border: var(--line);
+  --color-input: var(--line-strong);
+  --color-ring: var(--accent);
+  --radius-sm: 2px;
+  --radius-md: 2px;
+  --radius-lg: 2px;
+  --radius-xl: 2px;
+  --font-sans: var(--sans);
+  --font-mono: var(--mono);
+}
+
+@layer base {
+  * {
+    border-color: var(--line);
+  }
+  html {
+    color-scheme: light;
+  }
+}
+
+/* Additions to the Ledger set for states the employee app needs (same token vocabulary). */
+.notice-info {
+  background: var(--st-received-bg);
+  color: var(--st-received-fg);
+}
+.notice {
+  display: flex;
+  gap: 10px;
+}
+.notice .notice-title {
+  font-weight: 500;
+}
+.notice .notice-body {
+  color: var(--ink);
+}
+.btn-sm {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+.btn-destructive {
+  background: var(--danger);
+  color: #fff;
+  border-color: var(--danger);
+}
+.btn-destructive:hover:not(:disabled) {
+  background: var(--st-error-fg);
+  border-color: var(--st-error-fg);
+}
+input[type="password"],
+input[type="url"],
+input[type="search"] {
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  padding: 0 10px;
+  height: 34px;
+  outline: none;
+}
+input[type="password"]:focus,
+input[type="url"]:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+input[type="checkbox"] {
+  accent-color: var(--accent);
+}
+input[aria-invalid="true"],
+textarea[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+select {
+  font: inherit;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+}
+.seed {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.seed li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  border: 1px solid var(--line);
+  padding: 8px 10px;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+.seed li .n {
+  color: var(--ink-disabled);
+  font-size: 11px;
+  width: 18px;
+  text-align: right;
+}
+.onb {
+  max-width: 720px;
+}
+.section-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+  margin: 28px 0 10px;
+}
+tr.expanded td {
+  background: var(--canvas);
+}
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,0 +1,33 @@
+/* Sender-only additions to @soapay/ui (Direction A · Ledger). Tokens come from the ui package. */
+input[type='password'],
+input[type='email'],
+select {
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  padding: 0 10px;
+  height: 34px;
+  outline: none;
+}
+input[type='password']:focus,
+select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+.notice-info { background: var(--st-received-bg); color: var(--st-received-fg); }
+.notice > b { font-weight: 600; }
+.banners { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+.invite-card { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
+.invite-card img { border: 1px solid var(--line); }
+.invite-link { font-family: var(--mono); font-size: 12px; word-break: break-all; background: var(--canvas); padding: 8px 10px; }
+.gate { max-width: 460px; margin: 48px auto; }
+.pill-accent { background: var(--st-received-bg); color: var(--st-received-fg); }
+.row-actions { display: flex; gap: 4px; justify-content: flex-end; flex-wrap: wrap; }
+.table .tr.auto { height: auto; min-height: 38px; padding-top: 8px; padding-bottom: 8px; }
+.connectors { display: flex; flex-direction: column; gap: 6px; }
+.wrap-cell { white-space: normal; word-break: break-all; }
+@media (max-width: 900px) {
+  .grid-2, .split { grid-template-columns: 1fr !important; }
+}

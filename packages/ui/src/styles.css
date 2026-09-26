@@ -1,4 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+/* IBM Plex is self-hosted (@fontsource, imported in index.ts): no request to Google Fonts, and the
+   recipient app's CSP (font-src 'self') holds. */
 
 /* Soapay · Direction A · Ledger. Tokens from tokens/soapay-1a-ledger.tokens.json. */
 :root {

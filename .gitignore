@@ -9,3 +9,11 @@ coverage/
 .DS_Store
 # Claude: shared memory is committed, local settings are not
 .claude/settings.local.json
+.claude/worktrees/
+.gstack/
+apps/mcp/.state/
+.exit-live.json
+# Demo secrets and state (scripts/demo-pluggable.sh)
+scripts/*.local.json
+scripts/*.local.env
+scripts/.demo-state/
