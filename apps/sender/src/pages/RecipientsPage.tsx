@@ -87,7 +87,7 @@ export function RecipientsPage(p: RecipientsPageProps) {
           <button type="submit" className="btn-primary" disabled={roster.busy || !name || !amount}>
             {roster.busy ? "Resolving…" : "Resolve and pin"}
           </button>
-          <span className="hint">The record is resolved once and pinned. A later change is paid only with a World ID re-verification or your re-approval.</span>
+          <span className="hint">Pinned once; changes need World ID re-verification or your re-approval.</span>
         </form>
 
         {p.invitesPanel}
@@ -95,7 +95,7 @@ export function RecipientsPage(p: RecipientsPageProps) {
         <NavyPanel className="stack-sm">
           <div style={{ fontWeight: 500 }}>Addresses live in History.</div>
           <p className="body" style={{ maxWidth: 240 }}>
-            A recipient is a name. Every run derives fresh addresses; past ones are kept only for your audit trail and never paid again.
+            A recipient is a name. Fresh addresses every run; past ones kept for audit, never paid again.
           </p>
         </NavyPanel>
       </div>
@@ -123,9 +123,9 @@ export function RecipientsPage(p: RecipientsPageProps) {
             {employees.length === 0 ? (
               <div className="panel" style={{ padding: "48px 24px" }}>
                 <span className="eyebrow">Nobody yet</span>
-                <h2 style={{ fontSize: 22, marginTop: 12, letterSpacing: "-0.02em" }}>Invite your team, or add them by name.</h2>
+                <h2 style={{ fontSize: 22, marginTop: 12, letterSpacing: "-0.02em" }}>Invite your team, or add by name.</h2>
                 <p className="ink2 pretty" style={{ marginTop: 8 }}>
-                  A recipient is a name. Every run derives fresh addresses for them; past ones are kept only for your audit trail.
+                  Names are resolved once and pinned.
                 </p>
               </div>
             ) : (
@@ -162,7 +162,7 @@ export function RecipientsPage(p: RecipientsPageProps) {
                   })}
                 </Stagger>
                 <div className="foot">
-                  <span>&quot;Blocked&quot; means the name now points to new keys without a World ID re-verification; confirm with the person, then re-approve.</span>
+                  <span>&quot;Blocked&quot;: new keys, no World ID re-verification. Confirm with the person, then re-approve.</span>
                 </div>
               </div>
             )}
@@ -248,11 +248,10 @@ function EmployeeDetail(p: RecipientsPageProps & { e: Employee }) {
 
       {pc && (
         <div className="notice notice-danger stack-sm" role="alert">
-          <b>Blocked: the record changed since you pinned it.</b>
+          <b>Blocked: record changed since pinned.</b>
           <span>
             {e.ensName} now points to <span className="mono">{short(pc.metaAddressURI, 10)}</span> (detected {fmtDate(pc.detectedAt)}).{" "}
-            {describeAttestation(pc.attestation)}. This could be a salary redirect: confirm with the person through another channel before
-            re-approving.
+            {describeAttestation(pc.attestation)}. Possible salary redirect: confirm with the person on another channel first.
           </span>
           <div className="actions">
             <button className="btn-primary" disabled={roster.busy} onClick={() => void roster.reapprove(e.id)}>
@@ -376,7 +375,7 @@ function EmployeeDetail(p: RecipientsPageProps & { e: Employee }) {
           })}
         </Stagger>
         <div className="foot">
-          <span>Live balances are read from the chain. A stored address is a record, never a payment target.</span>
+          <span>Balances read from chain. Stored addresses are records, never payment targets.</span>
           <FreshLegend />
         </div>
       </div>

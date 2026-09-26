@@ -5,15 +5,15 @@ import "./trust.css";
 const ITEMS = [
   {
     title: "Fresh address, every time",
-    body: "Your team's names stay the same. The address under each salary is new every run and only their keys can open it.",
+    body: "Same name every month, new address every run; nothing ties runs together.",
   },
   {
     title: "No custody, one contract",
-    body: "StealthDisperse pulls USDC and announces each line in the same transaction. It holds no funds and keeps no state.",
+    body: "StealthDisperse pulls USDC and announces each line in one transaction. It holds no funds, keeps no state.",
   },
   {
     title: "Keys and roster stay in your browser",
-    body: "Spending keys never leave the device. The roster and run history are encrypted locally; nothing is sent to a server.",
+    body: "Spending keys never leave the device; roster and history are encrypted locally, never sent to a server.",
   },
 ] as const;
 
@@ -52,7 +52,7 @@ export function Guarantees() {
             </div>
           ))}
         </div>
-        <p className="guar-note">Compliant exit through Privacy Pools runs on testnet today. Gateway mode is on the roadmap.</p>
+        <p className="guar-note">Compliant exit via Privacy Pools is on testnet; gateway mode is on the roadmap.</p>
       </div>
     </section>
   );

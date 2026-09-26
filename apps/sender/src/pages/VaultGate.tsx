@@ -32,7 +32,7 @@ export type VaultGateProps = {
   onUnlock(passphrase?: string): void;
 };
 
-const FOOT = "The roster (names and amounts) and run history are encrypted here. Nothing is sent to a server.";
+const FOOT = "Encrypted here; nothing is sent to a server.";
 
 /** Create or unlock the encrypted roster + history vault. One centred column, one thing to press. */
 export function VaultGate(p: VaultGateProps) {
@@ -82,7 +82,7 @@ export function VaultGate(p: VaultGateProps) {
           <Rise delay={0.6} leaving={leaving}>
             <span className="eyebrow">Payroll vault · locked</span>
             <h1 style={{ marginTop: 8 }}>Unlock your payroll</h1>
-            <p className="lead">Your roster and run history are encrypted in this browser.</p>
+            <p className="lead">Your roster and history stay in this browser.</p>
           </Rise>
           <Rise delay={0.85} leaving={leaving} className="card">
             {device ? (
@@ -90,7 +90,7 @@ export function VaultGate(p: VaultGateProps) {
                 <button ref={primary} className={`btn-primary btn-xl full${leaving ? "" : " pulse"}`} disabled={leaving} onClick={() => proceed(() => p.onUnlock())}>
                   Unlock on this device
                 </button>
-                <p className="foot">Uses a key stored in this browser. Nothing leaves your device.</p>
+                <p className="foot">Key stored in this browser; nothing leaves your device.</p>
               </>
             ) : (
               <form
@@ -124,7 +124,7 @@ export function VaultGate(p: VaultGateProps) {
         <Rise delay={0.6} leaving={leaving}>
           <span className="eyebrow">Payroll vault · new</span>
           <h1 style={{ marginTop: 8 }}>Set up the payroll vault</h1>
-          <p className="lead">Choose how this browser unlocks your roster and history.</p>
+          <p className="lead">Choose how this browser unlocks the vault.</p>
         </Rise>
         <Rise delay={0.85} leaving={leaving}>
         <form
@@ -149,7 +149,7 @@ export function VaultGate(p: VaultGateProps) {
               <span>
                 <span className="t">Passphrase</span>
                 <span className="d" style={{ display: "block" }}>
-                  Survives clearing site data. Needed if you move to another device.
+                  Survives cleared site data; works on another device.
                 </span>
               </span>
             </button>

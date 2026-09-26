@@ -12,11 +12,10 @@ export function ReviewFrame() {
         <div className="stack-lg">
           <span className="eyebrow">Review · {RUN.label}</span>
           <h1>
-            {RUN.total} USDC to {RUN.salaries} people, on {RUN.fresh} fresh addresses.
+            {RUN.total} USDC to {RUN.salaries} people.
           </h1>
           <p className="ink2 pretty">
-            One transaction. Each recipient&apos;s addresses are new and known only to them. On chain this looks like {RUN.lines} payments of {RUN.chunk} USDC
-            to {RUN.lines} strangers.
+            One transaction, {RUN.fresh} fresh addresses. On chain: {RUN.lines} payments of {RUN.chunk} USDC to {RUN.lines} strangers.
           </p>
           <NavyPanel dots={false}>
             <span className="label">Total</span>

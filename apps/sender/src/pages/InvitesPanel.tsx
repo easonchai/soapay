@@ -61,7 +61,7 @@ export function InvitesPanel(p: InvitesPanelProps) {
             <QrCode value={p.created.link} size={148} />
             <div className="stack-sm" style={{ flex: 1, minWidth: 160 }}>
               <span className="pretty">
-                Link for <b>{p.created.label}.{p.parentName}</b>. It contains the invite code: share it only with them.
+                Link for <b>{p.created.label}.{p.parentName}</b>. Contains the invite code; share it only with them.
               </span>
               <span className="invite-link">{p.created.link}</span>
               <div className="actions">

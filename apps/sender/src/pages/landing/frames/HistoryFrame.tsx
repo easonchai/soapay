@@ -10,8 +10,8 @@ export function HistoryFrame() {
       <div className="pagehead">
         <div className="text">
           <span className="eyebrow">History · {HISTORY_STATS.runs} runs since Oct 2025</span>
-          <h1>Every run this wallet has signed</h1>
-          <p className="lead">Your audit trail. Names, amounts and the fresh addresses each run created. Encrypted in this browser.</p>
+          <h1>Every run this wallet signed</h1>
+          <p className="lead">Your audit trail, encrypted in this browser.</p>
         </div>
         <div className="actions">
           <span className="btn">Export CSV</span>

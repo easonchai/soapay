@@ -9,9 +9,9 @@ import "./showcase.css";
 type TabId = "pay" | "review" | "history";
 
 const TABS: { id: TabId; title: string; copy: string; appTab: (typeof APP_TABS)[number]; url: string }[] = [
-  { id: "pay", title: "Pay run", copy: "Names and amounts. Denominated by default so the batch reads as identical transfers.", appTab: "Pay run", url: "pay.soapay.eth/#/pay" },
-  { id: "review", title: "Review & sign", copy: "How many fresh addresses, the total, the gas. One signature.", appTab: "Pay run", url: "pay.soapay.eth/#/pay/review" },
-  { id: "history", title: "History", copy: "Every run with its names, amounts and transaction, kept in your browser.", appTab: "History", url: "pay.soapay.eth/#/history" },
+  { id: "pay", title: "Pay run", copy: "Names and amounts, denominated by default into identical transfers.", appTab: "Pay run", url: "pay.soapay.eth/#/pay" },
+  { id: "review", title: "Review & sign", copy: "Fresh addresses, total, gas. One signature.", appTab: "Pay run", url: "pay.soapay.eth/#/pay/review" },
+  { id: "history", title: "History", copy: "Every run and its transaction, in your browser.", appTab: "History", url: "pay.soapay.eth/#/history" },
 ];
 
 /** How long each tab holds before the showcase moves on. Matches the progress hairline in showcase.css. */
@@ -96,10 +96,10 @@ export function Showcase() {
           <div className="text">
             <span className="eyebrow">The company app</span>
             <h2 className="land-h2" id="show-title">
-              Built like a back office, not a crypto app.
+              A back office, not a crypto app.
             </h2>
             <p className="land-body">
-              Paste your roster, review the batch, sign once. History keeps names and amounts as your audit trail; addresses are never stored.
+              Roster, review, history. Names and amounts are kept as your audit trail; addresses never are.
             </p>
           </div>
         </div>

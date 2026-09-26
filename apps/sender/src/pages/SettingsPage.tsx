@@ -32,12 +32,12 @@ export function SettingsPage(p: SettingsPageProps) {
   const [chunk, setChunk] = useState(p.chunk ?? defaultChunk);
   return (
     <div className="stack-lg" style={{ maxWidth: 760, margin: "0 auto" }}>
-      <PageHead eyebrow="Settings" title="Where this app points, and what it keeps" line="Network values can be overridden per browser. The roster and history stay encrypted here." />
+      <PageHead eyebrow="Settings" title="Where this app points, and what it keeps" line="Network overrides are per browser. Roster and history stay encrypted here." />
 
       <h2>Company</h2>
       <div className="panel panel-pad">
         <label className="field" style={{ maxWidth: 420 }}>
-          <span>Company name, shown in the top bar and prefilled on invites</span>
+          <span>Company name (top bar, invites)</span>
           <div className="actions">
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Meridian Labs" style={{ flex: 1 }} />
             <button
@@ -52,7 +52,7 @@ export function SettingsPage(p: SettingsPageProps) {
           </div>
         </label>
         <label className="field" style={{ maxWidth: 420, marginTop: 16 }}>
-          <span>Chunk size for denominated payouts, the same for every employee</span>
+          <span>Chunk size (denominated payouts, company-wide)</span>
           <div className="actions">
             <div className="addon" style={{ flex: 1 }}>
               <input className="mono-in" aria-label="Chunk size" value={chunk} inputMode="decimal" onChange={(e) => setChunk(e.target.value.replace(/[^\d.]/g, ""))} />
@@ -70,9 +70,9 @@ export function SettingsPage(p: SettingsPageProps) {
               Save
             </button>
           </div>
-          <span className="hint">Every full line in a run is this amount; each salary&apos;s remainder is one smaller line. Default {defaultChunk} USDC
+          <span className="hint">Every full line is this amount; each remainder is one smaller line. Default {defaultChunk} USDC
             {testnet
-              ? " on this testnet, where faucet USDC is scarce. A recipient's exit needs about 16.4 USDC on one address, so pay that line with denominations off or a larger chunk."
+              ? " on this testnet (faucet USDC is scarce). An exit needs about 16.4 USDC on one address: use a larger chunk or denominations off for that line."
               : "."}</span>
         </label>
       </div>
@@ -101,7 +101,7 @@ export function SettingsPage(p: SettingsPageProps) {
           <dt>ENS RPC</dt>
           <dd>
             <input style={{ width: "100%" }} placeholder="Public default" value={p.form.ensRpcUrl} onChange={(e) => p.set("ensRpcUrl", e.target.value)} />
-            <span className="note">Used only to resolve names ({app.ensChain.name}).</span>
+            <span className="note">Name resolution only ({app.ensChain.name}).</span>
           </dd>
         </dl>
         <ErrorLine error={p.error} />
@@ -122,8 +122,8 @@ export function SettingsPage(p: SettingsPageProps) {
           <dd>{app.stealthDisperse ? <span className="mono">{app.stealthDisperse}</span> : <span className="ink2">Not configured: EIP-5792 batches and Safe exports only.</span>}</dd>
           <dt>Pinned attester</dt>
           <dd className="mono">
-            {app.demo ? "mock attester (demo)" : app.mockEns ? "mock attester (dev)" : app.attester ?? <span className="ink2">None: every key rotation needs your manual approval.</span>}
-            <span className="note">A changed record is auto-accepted only with a World ID re-verification signed by this address.</span>
+            {app.demo ? "mock attester (demo)" : app.mockEns ? "mock attester (dev)" : app.attester ?? <span className="ink2">None: every key rotation needs your approval.</span>}
+            <span className="note">Changed records auto-accept only with a World ID re-verification signed here.</span>
           </dd>
           <dt>Soapay API</dt>
           <dd className="mono">{app.demo ? <span className="ink2">demo: in-memory invites</span> : app.apiUrl ?? <span className="ink2">not set (no invites)</span>}</dd>
@@ -147,14 +147,13 @@ export function SettingsPage(p: SettingsPageProps) {
       <h2>Stored in this browser</h2>
       <p className="ink2 pretty">
         Encrypted vault ({p.vaultMode ?? "none"}): {p.counts.employees} pinned {p.counts.employees === 1 ? "employee" : "employees"}, {p.counts.invites} invite
-        {p.counts.invites === 1 ? "" : "s"} and {p.counts.runs} run record{p.counts.runs === 1 ? "" : "s"} (which fresh address each person was paid into).
-        Records are never reused as payment targets.
+        {p.counts.invites === 1 ? "" : "s"} and {p.counts.runs} run record{p.counts.runs === 1 ? "" : "s"}. Stored addresses are never reused as payment targets.
       </p>
       <div className="actions">
         <button onClick={p.onLock}>Lock vault</button>
         <button
           className="btn-danger"
-          onClick={() => confirm("Delete the roster, invites and all run history from this browser? This can't be undone.") && p.onDestroyVault()}
+          onClick={() => confirm("Delete roster, invites and run history from this browser? This can't be undone.") && p.onDestroyVault()}
         >
           Delete vault
         </button>

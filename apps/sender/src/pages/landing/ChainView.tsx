@@ -25,15 +25,15 @@ const START_MS = ROWS.reduce<number[]>((acc, r, i) => {
 }, []);
 
 const CAN_SEE = [
-  "Every stealth address and amount in the batch, in address order.",
+  "Every stealth address and amount, in address order.",
   "Your company as the payer.",
-  "The batch total and, with denominations on, the chunk size.",
+  "The batch total and, if denominated, chunk size.",
 ] as const;
 const CANNOT_LEARN = [
-  "Which line or address belongs to which colleague.",
-  "Any link between one person's payments, across lines or across months.",
-  "A link to anyone's main wallet: no ETH is ever sent to a stealth address.",
-  "With denominations on, how many chunks each person received.",
+  "Which address belongs to which colleague.",
+  "Any link between one person's payments, across months.",
+  "Anyone's main wallet: no ETH ever reaches a stealth address.",
+  "If denominated, how many chunks each person received.",
 ] as const;
 
 /**
@@ -115,11 +115,10 @@ export function ChainView() {
           <InView className="chain-text" y={10}>
             <span className="eyebrow">What the chain sees</span>
             <h3 id="chain-title" className="land-h3 chain-h3">
-              One announcement per payment. Meaningful only to the recipient.
+              One announcement per payment.
             </h3>
             <p className="land-body">
-              One announcement per payment, readable by everyone, meaningful only to the recipient. Trying every announcement
-              against your keys is how the app finds your money — and why nobody else can.
+              Public, yet meaningful only to the recipient. Matching it against your keys is how the app finds your money.
             </p>
           </InView>
           <InView delay={0.1} y={10}>

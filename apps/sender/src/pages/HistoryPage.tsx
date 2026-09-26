@@ -45,15 +45,15 @@ export function HistoryPage({ runs, openRunId, onOpenRun, onStartRun, onExportCs
   if (runs.length === 0) {
     return (
       <div className="stack-lg">
-        <PageHead eyebrow="History · no runs yet" title="Every run this wallet has signed" line="Your audit trail. Names, amounts and the fresh addresses each run created." />
+        <PageHead eyebrow="History · no runs yet" title="Every run this wallet has signed" line="Your audit trail: names, amounts, fresh addresses per run." />
         <div className="panel" style={{ padding: "48px 24px", maxWidth: 520 }}>
           <span className="eyebrow">Nothing sent yet</span>
           <h2 style={{ fontSize: 22, marginTop: 12, letterSpacing: "-0.02em" }}>Your first pay run will appear here.</h2>
           <p className="ink2 pretty" style={{ marginTop: 8 }}>
-            Each run keeps who was paid, how much, and which fresh addresses were created, so you can audit it later.
+            Runs are kept here, encrypted in this browser, for audit.
           </p>
           <button className="btn-primary btn-lg" style={{ marginTop: 20 }} onClick={onStartRun}>
-            Start a pay run
+            Start pay run
           </button>
         </div>
       </div>
@@ -65,7 +65,7 @@ export function HistoryPage({ runs, openRunId, onOpenRun, onStartRun, onExportCs
       <PageHead
         eyebrow={`History · ${plural(runs.length, "run")}${first ? ` since ${fmtDate(first).slice(3)}` : ""}`}
         title="Every run this wallet has signed"
-        line="Your audit trail. Names, amounts and the fresh addresses each run created. Encrypted in this browser."
+        line="Your audit trail, encrypted in this browser. Addresses derived fresh every run."
         actions={<button onClick={onExportCsv}>Export CSV</button>}
       />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
@@ -168,7 +168,7 @@ export function HistoryPage({ runs, openRunId, onOpenRun, onStartRun, onExportCs
                         {run.excluded.length ? ` Left out: ${run.excluded.map((x) => x.name).join(", ")}.` : ""}
                       </span>
                       <button className="btn-text" onClick={() => onOpenRun(run.id)}>
-                        Open run details →
+                        Open run →
                       </button>
                     </div>
                   </div>

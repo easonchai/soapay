@@ -53,7 +53,7 @@ export function Faucet({ chainId, demo, usdcBalance = null, onFaucet }: FaucetPr
       )}
       <span className="ink2" style={{ fontSize: 12 }}>
         <a href={CIRCLE_FAUCET_URL} target="_blank" rel="noreferrer">
-          Get test USDC from Circle&apos;s faucet ↗
+          Circle&apos;s USDC faucet ↗
         </a>{" "}
         ({FAUCET_USDC_PER_DRIP} USDC per address every 2 hours) ·{" "}
         <a href={BASE_SEPOLIA_ETH_FAUCET_URL} target="_blank" rel="noreferrer">

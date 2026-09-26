@@ -11,7 +11,7 @@ export function PayRunFrame() {
         <div className="text">
           <span className="eyebrow">Pay run · draft · {RUN.salaries} recipients</span>
           <h1>Pay run</h1>
-          <p className="lead">Every name is re-checked against the record you pinned. Nothing is sent until you sign.</p>
+          <p className="lead">Nothing is sent until you sign.</p>
         </div>
         <div className="actions">
           <span className="btn">Recipients</span>
@@ -62,7 +62,7 @@ export function PayRunFrame() {
               <span style={{ fontWeight: 500 }}>Denominate in {RUN.chunk} USDC chunks</span>
               <Toggle on onChange={() => {}} label={`Denominate in ${RUN.chunk} USDC chunks`} />
             </div>
-            <p className="ink2 pretty">Splits every salary into the same company-wide chunk, so amounts on chain don&apos;t identify people.</p>
+            <p className="ink2 pretty">One chunk size company-wide, so amounts identify nobody.</p>
           </div>
           <NavyPanel>
             <span className="label">This run</span>
@@ -79,16 +79,16 @@ export function PayRunFrame() {
               </div>
               <div>
                 <span className="k">Fresh addresses</span>
-                <span>{RUN.fresh} fresh addresses</span>
+                <span>{RUN.fresh}</span>
               </div>
               <div>
                 <span className="k">Transactions</span>
-                <span>{RUN.txs} transaction</span>
+                <span>{RUN.txs}</span>
               </div>
             </div>
           </NavyPanel>
           <span className="btn btn-primary btn-lg">Review {RUN.lines} lines</span>
-          <p className="hint">Every Resolve reads the chain. A changed record is paid only after your re-approval.</p>
+          <p className="hint">Resolve re-reads the chain; changed records need re-approval.</p>
         </div>
       </div>
     </div>

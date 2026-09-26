@@ -32,7 +32,7 @@ afterEach(() => {
 describe("HowItWorks", () => {
   it("renders the header, the four flow nodes and the six steps", () => {
     render(<HowItWorks />);
-    expect(screen.getByRole("heading", { level: 2, name: "Paste names. Sign once. Nobody can read it back." })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "One signature. Nobody can read it back." })).toBeInTheDocument();
     for (const tag of ["Roster · in your browser", "Derivation · on your device", "One transaction · StealthDisperse", "Fresh addresses · on chain"]) {
       expect(screen.getByText(tag)).toBeInTheDocument();
     }

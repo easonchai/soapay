@@ -18,7 +18,7 @@ export function CtaBand({ onLogin, disabled, label, employeeUrl }: CtaBandProps)
           <h2 id="cta-title" className="cta-h2">
             Paying a team? Paste names, sign once.
           </h2>
-          <p className="cta-sub">Works with your Safe. No addresses ever stored.</p>
+          <p className="cta-sub">Works with your Safe.</p>
           <div className="cta-actions">
             <button type="button" className="btn btn-xl cta-btn" disabled={disabled} onClick={onLogin} data-testid="cta-login">
               {label}

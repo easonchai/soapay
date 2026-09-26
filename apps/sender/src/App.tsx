@@ -236,15 +236,15 @@ function Banners() {
   if (!app.stealthDisperse) {
     items.push(
       <Notice key="5792" tone="warn">
-        <b>EIP-5792 path only.</b> No StealthDisperse address is configured for {app.chain.name} (VITE_STEALTH_DISPERSE or Settings), so plain EOA
-        wallets can&apos;t pay. Connect a smart wallet with atomic batching, or export the run for a Safe.
+        <b>EIP-5792 path only.</b> No StealthDisperse on {app.chain.name} (Settings or VITE_STEALTH_DISPERSE). EOAs can&apos;t pay: use a
+        batching smart wallet or a Safe export.
       </Notice>,
     );
   }
   if (app.demo) {
     items.push(
       <Notice key="demo" tone="info">
-        <b>Demo mode</b> · sample data, nothing is sent on-chain. Balances reset when you close the tab.{" "}
+        <b>Demo mode</b> · sample data, nothing on-chain. Balances reset when the tab closes.{" "}
         <button className="btn-text" onClick={exitDemo}>
           Exit demo
         </button>
@@ -254,15 +254,14 @@ function Banners() {
   if (app.mockEns && !app.demo) {
     items.push(
       <Notice key="mock" tone="info">
-        Dev mock mode: names resolve to generated demo keys; the demo wallet can&apos;t sign. Invites are signed by a throwaway key and flip to
-        claimed after a few seconds.
+        Dev mock: names resolve to demo keys; the demo wallet can&apos;t sign. Invites use a throwaway key and flip to claimed in seconds.
       </Notice>,
     );
   }
   if (wallet.wrongChain) {
     items.push(
       <Notice key="chain" tone="warn">
-        Your wallet is on another chain. Payments target {app.chain.name}.
+        Wallet on another chain; payments target {app.chain.name}.
       </Notice>,
     );
   }

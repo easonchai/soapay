@@ -113,8 +113,7 @@ export function Landing({ wallet, onLogin, employeeUrl }: LandingProps) {
         </Reveal>
         <Reveal delay={0.2}>
           <p className="land-sub">
-            Soapay gives your team one name each. Every salary lands on fresh addresses only they can open, so on a block explorer the
-            payroll shows new addresses, not your team's wallets.
+            One name per person; every salary lands on a fresh address only they can open.
           </p>
         </Reveal>
         <Reveal delay={0.28} className="land-cta">
@@ -137,18 +136,18 @@ export function Landing({ wallet, onLogin, employeeUrl }: LandingProps) {
           </div>
         )}
         <p className="hint">
-          {wallet.connectError ?? "For companies: your wallet is your login. Nothing to sign up for."}{" "}
+          {wallet.connectError ?? "Companies: your wallet is your login."}{" "}
           <a href="?demo=1" data-testid="demo-door" style={{ fontWeight: 500, textDecoration: "underline" }}>
-            Or try the demo with sample data
+            Or try the demo
           </a>
           .
         </p>
         <p className="hint" data-testid="employee-door">
-          Getting paid with Soapay?{" "}
+          Getting paid?{" "}
           <a href={employeeUrl} style={{ fontWeight: 500, textDecoration: "underline" }}>
             Open your payments
           </a>
-          . An invite link from your employer takes you straight there.
+          , or follow your employer's invite link.
         </p>
         <div className={`scroll-cue${scrolled ? " hidden" : ""}`} aria-hidden>
           <span>Scroll</span>

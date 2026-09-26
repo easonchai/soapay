@@ -27,12 +27,12 @@ const COPY = {
   before: {
     title: "Without Soapay · what any block explorer shows",
     tx: "tx 0x8b1e…c47a",
-    foot: "Same address every month. Names resolve publicly. Anyone can read who earns what, forever.",
+    foot: "Same address every month, names public, readable forever.",
   },
   after: {
     title: "With Soapay · the same batch",
     tx: "tx 0x2f90…11de",
-    foot: "337 fresh addresses, 500 USDC each, no names. The recipients know which are theirs. Nobody else does.",
+    foot: "337 fresh addresses, 500 USDC each, no names. Only the recipients know theirs.",
   },
 } as const;
 
@@ -164,7 +164,7 @@ export function Compare() {
           <div className="text">
             <span className="eyebrow">The same payroll, twice</span>
             <h2 className="land-h2" id="cmp-h2">One batch. Two ways to read it.</h2>
-            <p className="land-body">Pay the same five salaries with a normal wallet and with Soapay, then look at both on a block explorer.</p>
+            <p className="land-body">Plain wallet, then Soapay, as a block explorer shows it.</p>
           </div>
           <Dots mode="field" animate className="dots" />
         </InView>

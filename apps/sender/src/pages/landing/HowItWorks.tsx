@@ -8,11 +8,11 @@ type Column = { tag: string; title: string; steps: Step[]; foot: string };
 const COLUMNS: Column[] = [
   {
     tag: "For your company",
-    title: "Pay a team in one signature",
+    title: "Pay a team",
     steps: [
-      { title: "Paste names and amounts", body: "From a spreadsheet. Names resolve live; failures are shown before you sign." },
-      { title: "Review the batch", body: "How many fresh addresses, total, gas. Optionally split into equal chunks." },
-      { title: "Sign once, or export to Safe", body: "History keeps names and amounts as your audit trail. No addresses stored." },
+      { title: "Paste names and amounts", body: "From a spreadsheet; names resolve live, failures show before signing." },
+      { title: "Review the batch", body: "Optionally split into equal chunks. Nothing sent yet." },
+      { title: "Sign once, or export to Safe", body: "The batch goes out as one transaction." },
     ],
     foot: "41 names → 337 fresh addresses → 1 transaction",
   },
@@ -20,11 +20,11 @@ const COLUMNS: Column[] = [
     tag: "For your team",
     title: "Get paid privately",
     steps: [
-      { title: "Create keys, back up twelve words", body: "Your keys never leave your device. The words are the only recovery." },
-      { title: "Claim a name", body: "alice.soapay.eth, or link an ENS name you already own. Registered once, on chain." },
+      { title: "Create keys, back up twelve words", body: "The twelve words are the only recovery." },
+      { title: "Claim a name", body: "alice.soapay.eth or your own ENS name, registered once on chain." },
       {
         title: "Share the name, spend from the app",
-        body: "Each payment arrives on a fresh address. Spend without gas top-ups; exit via pool when the destination knows you.",
+        body: "No gas top-ups. Exit via pool when the destination knows you.",
       },
     ],
     foot: "alice.soapay.eth → 0x7a3F…9c1E, 0x3b8E…71aD, …",
@@ -40,10 +40,10 @@ export function HowItWorks() {
           <div className="text">
             <span className="eyebrow">How it works</span>
             <h2 className="land-h2" id="how-title">
-              Paste names. Sign once. Nobody can read it back.
+              One signature. Nobody can read it back.
             </h2>
             <p className="land-body">
-              No new chain, no token, no bridge you haven't heard of. A name, a derivation, and a fresh address per payment.
+              No new chain, token or bridge. A name, a derivation, a fresh address per payment.
             </p>
           </div>
           <Dots mode="right" className="dots" animate />

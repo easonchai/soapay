@@ -108,18 +108,18 @@ export function PayRunPage({ run, roster, wallet, payPath, chainName, onReview, 
   if (rows.length === 0) reviewLabel = "Review — add recipients first";
   else if (!checked) reviewLabel = "Review — resolve names first";
   else if (payable.length === 0) reviewLabel = "Review — nobody is payable";
-  else if (denomError) reviewLabel = "Review — fix the chunk size in Settings";
+  else if (denomError) reviewLabel = "Review — fix chunk size";
   const canReview = checked && payable.length > 0 && !denomError && !verifying;
 
   const summary = (() => {
-    if (rows.length === 0) return "Add people on Recipients, or paste rows.";
+    if (rows.length === 0) return "Add recipients, or paste rows.";
     const parts = [`${plural(payable.length, "recipient")}${checked ? " payable" : ""}.`];
     if (changed.length) {
-      parts.push(`${plural(changed.length, "record")} changed without a World ID re-verification: blocked until you re-approve (confirm with the person first).`);
+      parts.push(`${plural(changed.length, "record")} changed without World ID re-verification: confirm with the person, then re-approve.`);
     }
     const other = blocked.filter((r) => r.payability && !r.payability.payable && r.payability.reason === "error");
-    if (other.length) parts.push(`${plural(other.length, "name")} failed to resolve and will be left out.`);
-    if (!checked && !verifying) parts.push("Press Resolve to re-check every name against its pinned record.");
+    if (other.length) parts.push(`${plural(other.length, "name")} failed to resolve; left out.`);
+    if (!checked && !verifying) parts.push("Resolve names to continue.");
     return parts.join(" ");
   })();
 
@@ -134,7 +134,7 @@ export function PayRunPage({ run, roster, wallet, payPath, chainName, onReview, 
       <PageHead
         eyebrow={`Pay run · draft · ${plural(rows.filter((r) => r.employee.active).length, "recipient")}`}
         title="Pay run"
-        line="Every name is re-checked against the record you pinned. Nothing is sent until you sign."
+        line="Names re-checked against pinned records. Nothing sent until you sign."
         actions={
           <>
             <button onClick={onOpenRecipients}>Recipients</button>
@@ -143,7 +143,7 @@ export function PayRunPage({ run, roster, wallet, payPath, chainName, onReview, 
         }
       />
 
-      {wallet.wrongChain && <Notice tone="danger">Your wallet is on another chain. Every payment targets {chainName}; your wallet will ask to switch.</Notice>}
+      {wallet.wrongChain && <Notice tone="danger">Wallet on another chain. Payments target {chainName}; it will ask to switch.</Notice>}
       <ErrorLine error={err ?? run.error ?? roster.error} />
 
       <div className="grid-2">
@@ -156,12 +156,11 @@ export function PayRunPage({ run, roster, wallet, payPath, chainName, onReview, 
                   <span className="eyebrow">Nothing to send yet</span>
                 </Reveal>
                 <Reveal delay={0.55}>
-                  <h2>Add your team, then pay them in one run.</h2>
+                  <h2>Add your team, pay in one run.</h2>
                 </Reveal>
                 <Reveal delay={0.7}>
                   <p className="ink2 pretty" style={{ maxWidth: 440 }}>
-                    One person per line: their Soapay or ENS name, a comma, and the salary in USDC. Each name is resolved once and its
-                    record pinned; every run re-checks it.
+                    One line per person: name, salary in USDC. Pinned once, re-checked every run.
                   </p>
                 </Reveal>
                 <Reveal delay={0.85} className="actions" style={{ marginTop: 8 }}>
@@ -177,7 +176,7 @@ export function PayRunPage({ run, roster, wallet, payPath, chainName, onReview, 
                   ref={textRef}
                   value={paste}
                   onChange={(e) => setPaste(e.target.value)}
-                  placeholder={`alice.soapay.eth, ${exA}\nbram.soapay.eth, ${exB}, Bram (design)\n\nOne person per line: name, amount in USDC, optional label.`}
+                  placeholder={`alice.soapay.eth, ${exA}\nbram.soapay.eth, ${exB}, Bram (design)\n\nOne per line: name, amount, optional label.`}
                   aria-label="Recipients and amounts"
                   style={{ minHeight: 96 }}
                 />
@@ -209,8 +208,7 @@ export function PayRunPage({ run, roster, wallet, payPath, chainName, onReview, 
                 {/* Roster only (owner decision 2026-09-26): this box bulk-imports `name, salary` into the pinned
                     roster; raw st:eth meta-addresses and plain addresses are rejected (lib/csv.ts payeeRejection). */}
                 <span className="hint">
-                  Every payee is a pinned, verified ENS name. Pasted names join the roster and the amount becomes their salary for every run;
-                  meta-addresses and plain addresses are rejected.
+                  Every payee is a pinned, verified ENS name; the amount becomes their salary. Meta-addresses and plain addresses are rejected.
                 </span>
               </div>
             )}
@@ -272,7 +270,7 @@ export function PayRunPage({ run, roster, wallet, payPath, chainName, onReview, 
                       <AttestedBadge e={e} />
                       <RecordStatus e={e} payability={r.payability} pending={verifying && e.active} lines={linesFor.get(e.id)} />
                       {isChanged && (
-                        <button className="btn-inline" disabled={roster.busy} onClick={() => void reapprove(e.id)} title="Only after confirming the new record with the person">
+                        <button className="btn-inline" disabled={roster.busy} onClick={() => void reapprove(e.id)} title="Confirm with the person first">
                           Re-approve
                         </button>
                       )}
@@ -312,9 +310,9 @@ export function PayRunPage({ run, roster, wallet, payPath, chainName, onReview, 
               <span style={{ fontWeight: 500 }}>Denominated payouts</span>
               <Toggle on={denomOn} onChange={setDenomOn} label="Denominated payouts" />
             </div>
-            <p className="ink2 pretty">Splits every salary into the same company-wide chunk, so amounts on chain don&apos;t identify people. Costs more gas.</p>
+            <p className="ink2 pretty">Same-size chunks for every salary, so on-chain amounts identify nobody. Costs more gas.</p>
             {!denomOn && (
-              <span className="st-warn">Off for this run: each line is someone&apos;s whole salary, which coworkers can read on chain.</span>
+              <span className="st-warn">Off for this run: each line is a whole salary, readable by coworkers.</span>
             )}
             <div style={{ borderTop: "1px solid var(--hairline)", paddingTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
               <div className="between num" style={{ fontSize: 12 }}>
@@ -344,7 +342,7 @@ export function PayRunPage({ run, roster, wallet, payPath, chainName, onReview, 
               </div>
               <div className="between num" style={{ fontSize: 12 }}>
                 <span style={{ fontFamily: "var(--sans)" }} className="ink2">
-                  Becomes lines
+                  Lines
                 </span>
                 <span>
                   <CountUp value={preview.lines} format={(n) => String(Math.round(n))} duration={0.35} />
@@ -374,7 +372,7 @@ export function PayRunPage({ run, roster, wallet, payPath, chainName, onReview, 
             </div>
           </NavyPanel>
           {faucet}
-          {!enough && <Notice tone="warn">Wallet USDC is below the total. A Safe export pays from the Safe instead.</Notice>}
+          {!enough && <Notice tone="warn">Wallet USDC below the total. A Safe export pays from the Safe.</Notice>}
           {smallTeam && <Notice tone="warn">{smallTeam}</Notice>}
 
           <button className="btn-primary btn-lg" onClick={review} disabled={!canReview} style={{ position: "relative", overflow: "hidden" }}>
@@ -384,7 +382,7 @@ export function PayRunPage({ run, roster, wallet, payPath, chainName, onReview, 
               </motion.span>
             </Presence>
           </button>
-          <p className="hint">Every Resolve reads the chain; a changed record is paid only with a World ID re-verification or your re-approval. Sending from {wallet.address ? short(wallet.address) : "your wallet"}.</p>
+          <p className="hint">Sending from {wallet.address ? short(wallet.address) : "your wallet"}.</p>
         </div>
       </div>
     </div>

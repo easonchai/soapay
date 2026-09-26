@@ -64,7 +64,7 @@ describe("Landing · Compare", () => {
     expect(screen.getByText("The same payroll, twice")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "One batch. Two ways to read it." })).toBeInTheDocument();
     expect(
-      screen.getByText("Pay the same five salaries with a normal wallet and with Soapay, then look at both on a block explorer."),
+      screen.getByText("Plain wallet, then Soapay, as a block explorer shows it."),
     ).toBeInTheDocument();
     expect(screen.getByText("Without Soapay · what any block explorer shows")).toBeInTheDocument();
     expect(screen.getByText(/Same address every month/)).toBeInTheDocument();

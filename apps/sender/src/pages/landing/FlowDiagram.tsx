@@ -187,13 +187,13 @@ export function FlowDiagram() {
           ))}
         </Node>
         <Connector index={0} live={live} />
-        <Node tag="Derivation · on your device" caption="Fresh key per line. Sorted by address, never by person.">
+        <Node tag="Derivation · on your device" caption="Fresh key per line, sorted by address, not person.">
           {DERIVED.map(([k, v], i) => (
             <TypedRow key={k} k={k} v={v} chars={charsAt(i)} />
           ))}
         </Node>
         <Connector index={1} live={live} />
-        <Node tag="One transaction · StealthDisperse" caption="Transfer and announcement in the same transaction. The contract holds nothing.">
+        <Node tag="One transaction · StealthDisperse" caption="Every transfer and its announcement, together.">
           <div className="how-stats">
             <div className="how-stat">
               <span className="how-fig">
@@ -210,7 +210,7 @@ export function FlowDiagram() {
           </div>
         </Node>
         <Connector index={2} live={live} />
-        <Node tag="Fresh addresses · on chain" caption="Only the recipient's keys can open them.">
+        <Node tag="Fresh addresses · on chain" caption="None carries a name.">
           <div className="how-grid" data-testid="how-grid" aria-label={`${filled} of ${CELLS} fresh addresses funded`}>
             {Array.from({ length: CELLS }, (_, i) => (
               <span key={i} className={i < filled ? "how-cell on" : "how-cell"} />

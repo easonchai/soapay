@@ -32,7 +32,7 @@ describe("Landing sections", () => {
   it("renders the sections in order under the hero", () => {
     const { container } = mount();
     const heads = [...container.querySelectorAll("h1, h2")].map((h) => h.textContent);
-    const order = ["Every wallet address is a public bank statement.", "One batch. Two ways to read it.", "Paste names. Sign once. Nobody can read it back.", "Built like a back office, not a crypto app.", "Paying a team? Paste names, sign once."];
+    const order = ["Every wallet address is a public bank statement.", "One batch. Two ways to read it.", "One signature. Nobody can read it back.", "A back office, not a crypto app.", "Paying a team? Paste names, sign once."];
     const idx = order.map((t) => heads.findIndex((h) => h?.includes(t)));
     expect(idx.every((i) => i >= 0)).toBe(true);
     expect([...idx].sort((a, b) => a - b)).toEqual(idx);
