@@ -21,6 +21,7 @@ import { wagmiRecheckDeps } from "../lib/wallet.js";
 import { demoRecheckDeps } from "../lib/demoChain.js";
 import { reverifyEmployees } from "./usePayRun.js";
 import { useStore } from "./store.js";
+import { usePayPath } from "./usePayPath.js";
 
 export type RunView = {
   run: RunRecord;
@@ -54,6 +55,7 @@ export function useRunActions(runId: string | null): RunActions {
   const { runs, executing, employees, services, updateEmployees, upsertRun, executeRun, app } = useStore();
   const config = useConfig();
   const { address } = useAccount();
+  const payPath = usePayPath();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const run = runs.find((r) => r.id === runId) ?? null;
@@ -111,10 +113,23 @@ export function useRunActions(runId: string | null): RunActions {
         const pinned = new Map(rows.map((r) => [r.employee.id, r.employee.pin.metaAddressURI]));
         const plan = planRetry(obligations, pinned);
         const attempt = attemptFromPlan(plan, run.attempts.length, Date.now());
-        const next: RunRecord = { ...run, attempts: [...run.attempts, attempt] };
+        // Retry on the path this wallet takes NOW, not the one saved with the run: a run saved as an
+        // EIP-5792 batch before StealthDisperse became the EOA path would rebuild the same batch
+        // (MetaMask: "Batch size cannot exceed 10").
+        const kind = payPath.probe?.path.kind;
+        const path = kind === "batch" || kind === "disperse" ? kind : run.path;
+        const { stealthDisperse: _old, ...rest } = run;
+        const base: RunRecord = {
+          ...rest,
+          path,
+          ...(path === "disperse" && (app.stealthDisperse ?? run.stealthDisperse)
+            ? { stealthDisperse: (app.stealthDisperse ?? run.stealthDisperse)! }
+            : {}),
+        };
+        const next: RunRecord = { ...base, attempts: [...run.attempts, attempt] };
         await executeRun(next, attempt.index, plan, address);
       }),
-    [address, app.chainId, employees, executeRun, guard, run, services, updateEmployees],
+    [address, app.chainId, app.stealthDisperse, employees, executeRun, guard, payPath.probe, run, services, updateEmployees],
   );
 
   return {
