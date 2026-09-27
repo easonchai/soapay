@@ -14,6 +14,7 @@
 // Writes (all git-ignored; phrases and keys are never printed):
 //   scripts/.demo-company.local.json       phrases, mode 0600
 //   scripts/maya-ml.recovery-kit.local.txt  the coworker persona's kit (the employee app's own format)
+//   scripts/lena-ml.recovery-kit.local.txt  the employee persona's kit (shown as "My view")
 //   scripts/.demo-roster.local.csv         the company app's roster import (name,amount,label)
 // --dry only checks availability and prints the plan; it writes nothing.
 import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -40,8 +41,11 @@ const DRY = process.argv.includes("--dry");
 const COMPANY = "Meridian Labs";
 const COMPANY_FILE = process.env.SOAPAY_COMPANY_FILE ?? resolve(REPO, "scripts/.demo-company.local.json");
 const ROSTER_FILE = resolve(REPO, "scripts/.demo-roster.local.csv");
-/** The coworker persona: the presenter restores her kit in a second browser profile. */
-const COWORKER = "maya";
+/** The personas the presenter restores in their own browser profiles: the employee ("My view") and the coworker. */
+const PERSONAS = [
+  { key: "lena", role: "the employee" },
+  { key: "maya", role: "the coworker" },
+] as const;
 
 /**
  * Monthly salaries in whole USDC. All multiples of 250: with 500 USDC chunks every line is 500 except a
@@ -186,11 +190,15 @@ const kit = (await import(kitModule)) as {
   recoveryKitText: (i: { mnemonic: string; name?: string; createdAt: Date }) => string;
   parseRecoveryKit: (text: string) => string | null;
 };
-const coworker = file.employees.find((e) => e.key === COWORKER)!;
-const kitText = kit.recoveryKitText({ mnemonic: coworker.phrase, name: `${coworker.label}.${PARENT_NAME}`, createdAt: new Date() });
-if (kit.parseRecoveryKit(kitText) !== coworker.phrase) throw new Error("recovery kit does not round-trip through parseRecoveryKit");
-const KIT_FILE = resolve(REPO, `scripts/${coworker.label}.recovery-kit.local.txt`);
-writePrivate(KIT_FILE, kitText);
+const kits: { label: string; role: string; path: string }[] = [];
+for (const persona of PERSONAS) {
+  const who = file.employees.find((e) => e.key === persona.key)!;
+  const kitText = kit.recoveryKitText({ mnemonic: who.phrase, name: `${who.label}.${PARENT_NAME}`, createdAt: new Date() });
+  if (kit.parseRecoveryKit(kitText) !== who.phrase) throw new Error("recovery kit does not round-trip through parseRecoveryKit");
+  const path = resolve(REPO, `scripts/${who.label}.recovery-kit.local.txt`);
+  writePrivate(path, kitText);
+  kits.push({ label: who.label, role: persona.role, path });
+}
 
 // 4. The roster CSV, in the company app's import format (apps/sender/src/lib/csv.ts).
 // No comment lines: the importer reads the first row as the header. alex-demo and billing-agent are
@@ -209,13 +217,15 @@ console.log(c.bold("Summary"));
 console.log(`  created  ${created.length ? created.join(", ") : c.dim("none")}`);
 console.log(`  skipped  ${skipped.length ? skipped.join(", ") : c.dim("none")} ${skipped.length ? c.dim("(already claimed)") : ""}`);
 console.log(`  roster   ${ROSTER_FILE}  (${salaries.length} rows, ${total.toLocaleString("en-US")} USDC)`);
-console.log(`  kit      ${KIT_FILE}  (${coworker.label}, the coworker)`);
+for (const k of kits) console.log(`  kit      ${k.path}  (${k.label}, ${k.role})`);
 console.log(`  phrases  ${COMPANY_FILE}  ${c.dim("(git-ignored, 0600, never printed)")}`);
 printBatchAdvice();
 console.log(c.bold("Next"));
 console.log("  1. Employer profile → company app → Pay run → Import CSV → the roster file above (resolve + pin each name).");
 console.log(`  2. Settings → chunk size ${RECOMMENDED_CHUNK} USDC (the testnet default of 5 would split this payroll into thousands of lines).`);
-console.log(`  3. Coworker profile → employee app → Restore → "Open recovery kit" → the kit file above (${coworker.label}).`);
+kits.forEach((k, i) =>
+  console.log(`  ${3 + i}. ${k.role === "the coworker" ? "Coworker" : "Employee"} profile → employee app → Restore → "Open recovery kit" → ${k.label}'s kit file above.`),
+);
 
 function printBatchAdvice(): void {
   console.log("");

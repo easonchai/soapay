@@ -37,15 +37,19 @@ The product story: a company pays its people and an AI agent in USDC, and no cow
 - **Do:** back in the company app, `billing-agent.soapay.eth` appears in **Recipients** within ~5 s.
 - **Fallback:** `pnpm demo:agent join` (same MCP tools, scripted, no model). Last resort: the pre-joined agent from rehearsal: "it joined before we came on."
 
-## 4. Pay run (1:30–2:05)
+## 4. Pay run and two views (1:30–2:15)
 
 - **Do:** **Start pay run** → **Resolve names** (every row **Verified**) → **Review**.
 - **Say (read the headline):** "About 60,000 USDC to 12 people, on about 125 fresh addresses. On chain it's 125 payments of about 500 USDC to 125 strangers."
 - **Do:** **Approve and send** → MetaMask twice (approve, then pay) → open the Basescan link.
 - **Say:** "One transaction. Anyone can see it, and nobody can tell whose salary is whose."
-- **Fallback:** the rehearsal run's Basescan tab.
+- **Do (Employee profile, Lena):** **Payments → Rescan → Pay runs → Two views → My view**.
+- **Say:** "This is Lena. Her key finds her lines in that transaction and lights them up."
+- **Do (Coworker profile, Maya):** same run → **Coworker view**.
+- **Say:** "This is Maya, a coworker in the same batch. She sees every line and every amount, and the owner of each one is unknown. She knows her own pay and still can't find Lena's."
+- **Fallback:** the rehearsal run's Basescan tab and its Two views.
 
-## 5. The agent spends (2:05–2:45)
+## 5. The agent spends (2:15–2:45)
 
 - **Do (agent terminal):** `pnpm demo:agent-live spend 0.5 maya-ml`.
 - **Say:** "The agent scans the pay run and finds its two lines among everyone's. Now it pays Maya, by name, 0.5 USDC."
