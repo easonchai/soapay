@@ -19,7 +19,7 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: ^2.1.1
-        version: 2.1.1(hono@4.13.9)
+        version: 2.1.1(hono@4.13.21)
       '@scopelift/stealth-address-sdk':
         specifier: 1.0.0-beta.5
         version: 1.0.0-beta.5(graphql@16.14.2)(typescript@7.0.2)(zod@4.6.5)
@@ -30,8 +30,8 @@ importers:
         specifier: ^1.1.1
         version: 1.1.1
       hono:
-        specifier: ^4.13.9
-        version: 4.13.9
+        specifier: ^4.13.16
+        version: 4.13.21
       viem:
         specifier: ^2.56.9
         version: 2.56.9(typescript@7.0.2)(zod@4.6.5)
@@ -2622,8 +2622,8 @@ packages:
   hastscript@9.0.1:
     resolution: {integrity: sha512-g7df9rMFX/SPi34tyGCyUBREQoKkapwdY/T04Qn9TDWfHhAYt4/I0gMVirzK5wEzeUqIjEB+LXC/ypb7Aqno5w==}
 
-  hono@4.13.9:
-    resolution: {integrity: sha512-7dMkQmZoC4E6F7AtaQSPhlWAdnBti+j7rreMZl8QB4jFiEhP9TWbGWUMi8WYzBCgmgulxuvLQupKqo+Co6Omyg==}
+  hono@4.13.21:
+    resolution: {integrity: sha512-h9UsguqfVk4kjUwLvQpHOmOaJpW10jz9lp8bvKUUa04wJG/fabKFBqXZ06D6LFaeKQZtUZRVeg0gfkTTEsX7Mw==}
     engines: {node: '>=16.9.0'}
 
   hoopy@0.1.4:
@@ -4536,9 +4536,9 @@ snapshots:
       gsap: 3.15.0
       react: 19.3.0
 
-  '@hono/node-server@2.1.1(hono@4.13.9)':
+  '@hono/node-server@2.1.1(hono@4.13.21)':
     dependencies:
-      hono: 4.13.9
+      hono: 4.13.21
 
   '@iden3/bigarray@0.0.2': {}
 
@@ -4674,7 +4674,7 @@ snapshots:
 
   '@modelcontextprotocol/sdk@1.30.1(zod@4.6.5)':
     dependencies:
-      '@hono/node-server': 2.1.1(hono@4.13.9)
+      '@hono/node-server': 2.1.1(hono@4.13.21)
       ajv: 8.20.0
       ajv-formats: 3.0.1(ajv@8.20.0)
       content-type: 1.0.5
@@ -4684,7 +4684,7 @@ snapshots:
       eventsource-parser: 3.1.1
       express: 5.2.1
       express-rate-limit: 8.7.0(express@5.2.1)
-      hono: 4.13.9
+      hono: 4.13.21
       jose: 6.2.12
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
@@ -6453,7 +6453,7 @@ snapshots:
       property-information: 7.2.0
       space-separated-tokens: 2.0.2
 
-  hono@4.13.9: {}
+  hono@4.13.21: {}
 
   hoopy@0.1.4: {}
 
